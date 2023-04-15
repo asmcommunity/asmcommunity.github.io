@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>What is the kernel32 address on the top of the stack at proc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9476" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9476">What is the kernel32 address on the top of the stack at proc</a></p>
+   <div class="post" id="post-70089">
+    <div class="subject"><a href="#post-70089">What is the kernel32 address on the top of the stack at proc</a></div>
+    <div class="body"><em>I just realized that my original post was much too big and complex for what was necessary for my real question, so here is the edited short version instead :):</em><br /><br />I have seen some win32 assembly programs that assume that there is a pointer, pointing into the code of a kernel32.dll function, located at the top of the stack (i.e. at ) immediately when any win32 process starts execution.<br /><br />Does anyone know if this is always the case, in all 32-bit Windows versions?<br /><br />Which kernel32 function's code is located at this address? Is it always the same function in all 32-bit Windows versions?<br /><br />Any info regarding this would be very cool.<br /><br />Thanks!</div>
+    <div class="meta">Posted on 2002-12-09 16:27:54 by dELTA</div>
+   </div>
+   <div class="post" id="post-70103">
+    <div class="subject"><a href="#post-70103">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">That address points into CreateProcess inside Kernel32.</div>
+    <div class="meta">Posted on 2002-12-09 18:30:46 by david</div>
+   </div>
+   <div class="post" id="post-70104">
+    <div class="subject"><a href="#post-70104">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">dELTA,<br />Very very very SLOWWWWWW<br /><pre><code><br />Start&#58;<br />            Call    Get_Kernel   ; 4 mops-&gt; 2 clocks  <br />            ...			 ; and 4 mops-&gt; 2 clocks for Ret<br />            ...			 ; total at least 4 clocks  waste Why?	<br />Get_Kernel&#58;<br />            Mov     Ecx,&#91;Esp+4&#93; ; get kerneladdr from stack<br />		                ; wrong- must be get address from stack	 <br />Kernel_Loop&#58;<br />            Xor     Edx,Edx        	      ; D0 p01-1 mops-&gt; prepare for dx usage - 1Clock<br />			                      ; but why it is in the loop?		<br />            Dec     Ecx		              ; D1 p01-1 mops-&gt;VERY BAD &#40;see note&#41;<br />            Mov     Dx,&#91;Ecx+3Ch&#93;	      ; D0 p2-1 mops &#40;it is not D2 -&gt;Ecx-&gt;dependent&#41;-1Clock<br />            Test    Dx,0F800H	              ; D0 p01-1mops &#40;it is not D1-&gt;Edx-&gt;dependent&#41;-1Clock<br />            Jnz     Kernel_Loop	              ; D1 p1 - 1 mops <br />            Cmp     Ecx,&#91;Ecx+Edx+34H&#93;         ; D0 p01,p2-2 mops-&gt;1 Clock <br />            Jnz     Kernel_Loop               ; D1 p1-1 mops<br />            Mov     &#91;Ebp+Offset _Kernel&#93;,Ecx  ; D0 p3,p4 - 2 mops-&gt;1 Clock<br />            Mov     &#91;Ebp+Offset _Default&#93;,Ecx ; D0 p3,p4 - 2 mops-&gt;1 Clock<br />	    ; where is Xor Edx, Edx before return?     	                                            <br />            Ret		;  p1, p01, p2 - 4 mops - 2 Clocks<br /><br />Note&#58; must be sub ecx, 1000h !!!</code></pre><br /><br />U can use:<pre><code><br />Start&#58;<br />	mov	eax, &#91;esp&#93;	; Return address of call from CreateProcess<br />  	mov	ecx, 0FFFFF800h	; searching mask<br />  	and	eax, 0FFFF1000h	; the last three are zeros always <br />KrLoop&#58;				; Get Kernel32 module base address<br />  	mov	edx, &#91;eax-1000h+3Ch&#93; ;D0 p2 1mops 1 clock; edx-&gt;beginning of PE header<br />  	sub	eax, 1000h	     ;D1 - p01 1 mops; Scan backward<br />  	test	edx, ecx	     ;D0 - p01 1 mops 1 clock -&gt;edx&#40;dep&#41;; Is it a PE header?<br />  	jnz	KrLoop	             ;D1 - p1 1 mops ; No, search again<br />  	cmp	eax, &#91;eax+edx+34h&#93;   ; compare current address with the<br />  	jnz     KrLoop		     ; address that PE should be loaded at<br />	mov	KernelBase, eax	     ;</code></pre><br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2002-12-09 18:38:10 by lingo12</div>
+   </div>
+   <div class="post" id="post-70112">
+    <div class="subject"><a href="#post-70112">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Ah, thanks David, strange that I didn't find that when looking at the kernel32.dll exports. :confused:<br /><br />(and thanks for the optimization lingo12, even though it was only a piece of example code :))</div>
+    <div class="meta">Posted on 2002-12-09 20:04:56 by dELTA</div>
+   </div>
+   <div class="post" id="post-70173">
+    <div class="subject"><a href="#post-70173">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">It's actually called CreateProcessInternalW, that's all I know about it. ( for NT/2k/XP, win9x I don't know )<br />I guess it's not an application-callable api, as the title suggest.</div>
+    <div class="meta">Posted on 2002-12-10 04:31:25 by david</div>
+   </div>
+   <div class="post" id="post-70213">
+    <div class="subject"><a href="#post-70213">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Faster solution (WinNT,2k,XP) is:<pre><code><br />		assume	 fs&#58;nothing<br />		mov eax, fs&#58;&#91;30h&#93;  ; eax-&gt;PEB base		<br />		mov eax, &#91;eax+0Ch&#93; ; eax-&gt;PEB_LDR_DATA	<br />		mov eax, &#91;eax+1Ch&#93; ; eax-&gt;the first entry in the  InitOrderModuleList	<br />		mov eax, &#91;eax&#93;	   ; eax-&gt;go forwards		<br />		mov eax, &#91;eax+08h&#93; ; eax-&gt;Kernel image base</code></pre><br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2002-12-10 08:08:00 by lingo12</div>
+   </div>
+   <div class="post" id="post-70235">
+    <div class="subject"><a href="#post-70235">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Cool. :)</div>
+    <div class="meta">Posted on 2002-12-10 10:27:00 by dELTA</div>
+   </div>
+   <div class="post" id="post-70309">
+    <div class="subject"><a href="#post-70309">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Not bad guys but here is the world champion in speed and size :)<br /><br /><pre><code><br />   mov eax, fs&#58;&#91;30h&#93;    ; *PEB<br />   mov eax, &#91;eax+34h&#93;<br />   mov eax, &#91;eax+0b8h&#93;    ; now eax should be kernel's imagebase<br /></code></pre><br /><br />and ofcourse it all win32 compatabile</div>
+    <div class="meta">Posted on 2002-12-10 18:38:02 by Mikky</div>
+   </div>
+   <div class="post" id="post-70311">
+    <div class="subject"><a href="#post-70311">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Hi Mikky,<br /><br />Where did you find all the reference for TIB block on segment register fs:xx??? I know there was a thread here posted reference for a first few values of this block but a complete foolproof reference would be really nice and handy..<br /><br />Thanx,<br />crUs</div>
+    <div class="meta">Posted on 2002-12-10 18:41:39 by crusader</div>
+   </div>
+   <div class="post" id="post-70326">
+    <div class="subject"><a href="#post-70326">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Hi crusader,<br />actually this is not my code and I know just about nothing about TIB, I will learn about it when I get some time, anyway AFAIK there is not much documentation about this topic, so one need to goooooogle very hard to find somthing useful<br />so currently I cant help you with this, sorry :(</div>
+    <div class="meta">Posted on 2002-12-10 19:23:58 by Mikky</div>
+   </div>
+   <div class="post" id="post-70328">
+    <div class="subject"><a href="#post-70328">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">Mikky said:<br />------<br />Not bad guys but here is the world champion in speed and size<br />-------<br /><br />Cool!<br /><br />Last summer I did torture myself with these kind of PE-related stuff,<br />and sweated through trying to understand all these sources I collected through the web. (much like Lingo's but uncommented)<br />I never found something like this though, pity you didn't post this earlier.<br /><br />Like Crusader said, if somebody has info, please explain... =)<br /><br />(sorry for useless posting, I just wanted to point out my interest in knowing about this too)</div>
+    <div class="meta">Posted on 2002-12-10 20:04:08 by david</div>
+   </div>
+   <div class="post" id="post-70353">
+    <div class="subject"><a href="#post-70353">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body"><div class="quote"><br />Not bad guys but here is the world champion in speed and size :)<br /><br /><pre><code><br />   mov eax, fs&#58;&#91;30h&#93;    ; *PEB<br />   mov eax, &#91;eax+34h&#93;<br />   mov eax, &#91;eax+0b8h&#93;    ; now eax should be kernel's imagebase<br /></code></pre><br /><br />and ofcourse it all win32 compatabile </div><br /><br />Doesn't work here ( Win XP )</div>
+    <div class="meta">Posted on 2002-12-10 23:31:00 by Axial</div>
+   </div>
+   <div class="post" id="post-70462">
+    <div class="subject"><a href="#post-70462">What is the kernel32 address on the top of stack at process</a></div>
+    <div class="body">The info and include files in <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=2172">this thread</a> might help in understanding these techniques (read all the posts of the thread first, since some info is updated/corrected during the thread). I myself was unable to determine which of those structs/fields corresponded to the ones used in the code above, but if someone understands it, you are very welcome to explain it here.<br /><br />Also, david, this stuff is not really &quot;PE-related&quot; per se, it has more to do with internal operating system data structures, and that might be why you did not find anything about it while studying the PE stuff.<br /><br />And Axial, it is mentioned it that thread that some of the structures are changed in WinXP. If someone can determine the corresponding offsets for XP (e.g. by looking in the XP specific include files in that thread) you are very welcome to explain/post it here too.</div>
+    <div class="meta">Posted on 2002-12-11 10:00:07 by dELTA</div>
+   </div>
+  </div>
+ </body>
+</html>

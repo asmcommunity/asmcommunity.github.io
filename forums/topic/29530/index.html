@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Seg fault while save/restore registers (nasm, linux amd64, core2duo) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29530" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=117">Unix</a> &raquo; <a href="../?id=29530">Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></p>
+   <div class="post" id="post-208558">
+    <div class="subject"><a href="#post-208558">Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body">Hi, guys,<br /><br />I&#039;m trying to save/restore some registers while calling the C prinf functon from the asm (I don&#039;t know a better way to write a floating point number to the console). Now, I&#039;ve got this piece of code:<br /><br /><pre><code><br />printf_number:<br />	push rdi<br />	push rax<br />	push rsi<br />	;push rax<br /><br />	mov edi, floatformat<br />	mov eax, 1<br />	call printf<br />	<br />	;pop rax<br />	pop rsi<br />	pop rax<br />	pop rdi<br />ret; printf_number<br /></code></pre><br /><br />This code produces a segmentation fault. But if I uncomment the push/pop pair, everything goes fine. I noticed that it doesn&#039;t depend depend on the number of pushes/pops, just on the fact that it&#039;s odd/even. Does this have something to do with the stack alignment? <br />Any explanation, please?<br /><br />Thanks,<br />Igor</div>
+    <div class="meta">Posted on 2009-08-28 00:57:09 by ideruga</div>
+   </div>
+   <div class="post" id="post-208560">
+    <div class="subject"><a href="#post-208560">Re: Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body">Shouldn&#039;t rdi be rdx? And shouldn&#039;t the stack be 16-byte aligned?</div>
+    <div class="meta">Posted on 2009-08-28 05:07:48 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-208567">
+    <div class="subject"><a href="#post-208567">Re: Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body"><div class="quote"><br />Shouldn&#039;t rdi be rdx? And shouldn&#039;t the stack be 16-byte aligned?<br /></div><br /><br />Well, no, rdi shouldn&#039;t be rdx: I&#039;m using edi, so I want to save and then restore it. Why would I want to use rdx instead?<br /><br />As for stack alignment, thanks for the hint! It might be the problem... Any resources/articles about it?<br /><br />Thanks!<br />Igor</div>
+    <div class="meta">Posted on 2009-08-29 00:42:04 by ideruga</div>
+   </div>
+   <div class="post" id="post-208571">
+    <div class="subject"><a href="#post-208571">Re: Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body"><div class="quote">Why would I want to use rdx instead?</div><br />Uhm, because the function expects it? ;p And if it&#039;s 64-bit, it should be rcx, rdx, etc. I really don&#039;t know why are you setting eax and edi before calling printf. It this MSVCRT&#039;s printf or some custom printf function?<br /><br /><br /><div class="quote">As for stack alignment, thanks for the hint! It might be the problem... Any resources/articles about it?</div><br />Look at <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=29531.0">links in this topic</a>.</div>
+    <div class="meta">Posted on 2009-08-29 04:55:25 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-209457">
+    <div class="subject"><a href="#post-209457">Re: Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body">Your segfault is caused due to printf requiring you to clean up the stack after the call because of the &#039;push eax&#039;. When you put in the extra pop, you are affectively cleaning up the stack. You could have also used &#039;add esp, 4&#039;.<br /><br /><pre><code>printf_number:<br />	push rdi<br />	push rax<br />	push rsi<br /><br />	mov edi, floatformat<br />	mov eax, 1<br />	call printf<br />	add esp, 4<br /><br />	pop rsi<br />	pop rax<br />	pop rdi<br />ret; printf_number</code></pre><br /><br />Remember your stack layout, if you leave the stack unbalanced after that call then RET will pop that value off and try to return to it.</div>
+    <div class="meta">Posted on 2009-11-02 14:27:12 by Synfire</div>
+   </div>
+   <div class="post" id="post-209461">
+    <div class="subject"><a href="#post-209461">Re: Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body">I&#039;m not very familiar (not at all, in fact) with 64-bit code, but I doubt that &quot;add esp, 4&quot; is gonna work. If he had pushed a parameter to printf (which he didn&#039;t AFAICS) he&#039;d want &quot;add rsp, 8&quot;, no? I&#039;m guessing the stack alignment is the problem.<br /><br />While you guys are (apparently) rearranging the board, you might want to consider a separate section for 64-bit - maybe two, &#039;cause Windows and Linux are different. It&#039;s a &quot;whole new ballgame&quot;, I&#039;m starting to understand... Just a thought...<br /><br />64-bit tutorial here:<br /><br />http://www.vikaskumar.org/wiki/index.php?title=X86-64_Tutorial<br /><br />Dunno if it&#039;s any good...<br /><br />&quot;It this MSVCRT&#039;s printf or some custom printf function?&quot; - &#039;scuse me, I&#039;ve gotta wipe the coffee off my monitor. :)<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2009-11-02 16:04:28 by fbkotler</div>
+   </div>
+   <div class="post" id="post-209472">
+    <div class="subject"><a href="#post-209472">Re: Seg fault while save/restore registers (nasm, linux amd64, core2duo)</a></div>
+    <div class="body">Lol, I really shouldn&#039;t post in the middle of the night. XD<br /><br />I didn&#039;t even notice it was 64-bit code, and from my memory I thought he was pushing EAX.<br /><br />All that being the case. When you call printf you set eax to the number of floating point arguments you are passing. For example:<br /><br /><pre><code>	mov rsi, <br />	mov edi, fmtFloat<br />	mov eax, 1<br />	call printf</code></pre><br /><br />This leads me to believe that you are calling the &#039;printf_number&#039; like this:<br /><br /><pre><code>	mov rsi, <br />	call printf_number</code></pre><br /><br />Given this assumption your code &quot;should&quot; work. The only reason it should be crashing is if you&#039;ve unbalanced the stack before the call to where RET is popping off something other than the return address. Could you post more code?</div>
+    <div class="meta">Posted on 2009-11-03 09:36:15 by Synfire</div>
+   </div>
+  </div>
+ </body>
+</html>

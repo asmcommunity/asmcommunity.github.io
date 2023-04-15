@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How this for constructing a vtable in memory? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6108" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6108">How this for constructing a vtable in memory?</a></p>
+   <div class="post" id="post-43769">
+    <div class="subject"><a href="#post-43769">How this for constructing a vtable in memory?</a></div>
+    <div class="body">I'm constructing the ddraw.dll vtable:<br /><pre><code><br />	invoke DirectDrawCreate, 0,ADDR lpDD ,0<br /><br />	lea edx, lpDD<br />	mov edx, &#91;edx&#93;;not to sure about this part<br />	mov edx, &#91;edx&#93;<br />	<br />	mov eax, edx;store vtable address in eax<br /><br />	mov edx, &#91;edx&#93;;start storing the table!!!<br />	mov &#91;lpDD+4&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov edx, &#91;edx&#93;<br />	mov &#91;lpDD+8&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov edx, &#91;edx&#93;<br />	mov &#91;lpDD+12&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br />.<br />.<br />.<br />or would this be better?&#58;<br /><br />	invoke DirectDrawCreate, 0,ADDR lpDD ,0<br /><br />	lea edx, lpDD<br />	mov eax, &#91;edx&#93;;not to sure about this part<br />	mov edx, &#91;eax&#93;<br />	<br />	mov eax, edx;store vtable address in eax<br />   <br />	mov ecx, &#91;edx&#93;;Using another reg this time<br />	mov &#91;lpDD+4&#93;, ecx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov ecx, &#91;edx&#93;<br />	mov &#91;lpDD+8&#93;, ecx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov ecx, &#91;edx&#93;<br />	mov &#91;lpDD+12&#93;, ecx<br />	add eax, 4<br />	mov edx, eax	<br />.<br />.<br /></code></pre><br />I know this is a silly place to optomize, as It is only done on startup.  I would like to know if there are and what kind of penalties there are between version 1 and version 2.  Would like to learn a little something about more in-depth otomization.<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2002-06-17 08:48:21 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-43778">
+    <div class="subject"><a href="#post-43778">How this for constructing a vtable in memory?</a></div>
+    <div class="body">Just discovered TEXTEQU<br /><pre><code><br />QueryInterface			TEXTEQU&lt;lpDD+4&gt;<br />AddRef				TEXTEQU&lt;lpDD+8&gt;<br />Release				TEXTEQU&lt;lpDD+12&gt;<br /><br /><br />         mov edx, &#91;edx&#93;<br />	mov &#91;QueryInterface&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov edx, &#91;edx&#93;<br />	mov &#91;Addref&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov edx, &#91;edx&#93;<br />	mov &#91;Release&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-17 09:43:23 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-43781">
+    <div class="subject"><a href="#post-43781">How this for constructing a vtable in memory?</a></div>
+    <div class="body">I don't know what your trying to do, but it doesn't look right? :tongue:  Why not just use the indirection?  Store just the interface pointer - it is required for the call.</div>
+    <div class="meta">Posted on 2002-06-17 09:55:55 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-43845">
+    <div class="subject"><a href="#post-43845">How this for constructing a vtable in memory?</a></div>
+    <div class="body">I'm string the address to call for each of the DirectDraw funtions in order.   I have no inc file for the funtions in the vtable. I'm using the ddraw.inc that comes with MASM32, which provides no functionality to call the vtable functions without traversing the pointer to the address to call for each function.  Since I have to find the address myself, I might as well just rebuild the table.  Then I can use real names(remember no inc to provide this):<br /><pre><code><br />_QueryInterface	dword 0;&#40;lpDD+QueryInterface&#41;<br />_AddRef		dword 0<br />_Release		dword 0<br /></code></pre><br />Yes, I probably could just use the vtable provided by the dll, but I think I can make the code cleaner this way.  I've tested my vtable and the calls work, using call indirect.  I guess my real question is about register usage:<br /><pre><code><br />invoke DirectDrawCreate, 0,ADDR lpDD ,0<br /><br />	lea edx, lpDD<br /><br />	mov edx, &#91;edx&#93;<br />	mov edx, &#91;edx&#93;;is there some sort of penalty for using<br />	                        ;regs this way? same reg again and<br />	mov eax, edx   ;again? Is it better totry to use <br />	mov edx, &#91;edx&#93;; different regs? <br /></code></pre><br /><br />Thanks.</div>
+    <div class="meta">Posted on 2002-06-17 21:26:35 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-43867">
+    <div class="subject"><a href="#post-43867">How this for constructing a vtable in memory?</a></div>
+    <div class="body"><strong>cleaner</strong> code? :rolleyes:<br />With code like<br /><pre><code><br />mov &#91;lpDD+4&#93;, edx<br /></code></pre><br />You're 'trashing' memory after the lpDD variable. If you *really* want<br />to avoid vtable lookup on method calls, and only do single indirection<br />(as if the few extra cycles mattered at all), you ought to do it more<br />cleanly - have variables set aside to store the method pointers... or<br />perhaps use an array.<br /><br />If your intention is to put the method pointers inside the lpDD object<br />(sorta &quot;move it out of the vtable and into the object&quot;), then go take<br />some medication ;).</div>
+    <div class="meta">Posted on 2002-06-18 01:34:29 by f0dder</div>
+   </div>
+   <div class="post" id="post-43870">
+    <div class="subject"><a href="#post-43870">How this for constructing a vtable in memory?</a></div>
+    <div class="body">f0dder, I'm trying to learn how to make cleaner code.  I am trying to find a good clean style that works for me.  With the , I'm doing something dirty.  This explains it:<br /><pre><code><br />.data<br />align 16<br /><br />lpDD		dword 0;&#91;lpDD&#93;<br />_QueryInterface	dword 0;&#91;lpDD+4&#93;<br />_AddRef		dword 0;etc<br />_Release		dword 0<br />_Compact		dword 0<br />.<br />.<br /></code></pre><br />I'm taking advantage of the fact that it will assemble like an array of dwords,  without the syntax overhead.   This method seems logical to me,  but I'm still not convinced it is the best way yet.  Thanks for the criticism.  Do I still need medication? :confused: :grin:</div>
+    <div class="meta">Posted on 2002-06-18 01:47:34 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-43871">
+    <div class="subject"><a href="#post-43871">How this for constructing a vtable in memory?</a></div>
+    <div class="body">Nah, no medication :). What you're doing is OK, really... Imo you could<br />make the source a bit prettier and clearer doing something like this:<br /><br /><pre><code><br />.data<br />align 16<br /><br />lpDD		dword 0;&#91;lpDD&#93;<br />METHODS label dword<br />_QueryInterface	dword 0;&#91;lpDD+4&#93;<br />_AddRef		dword 0;etc<br />_Release		dword 0<br />_Compact		dword 0<br />...<br /></code></pre><br /><br />And referring to METHODS+xx instead of lpDD+xx.<br />Also, you could do a memcopy instead of the manual method moving.</div>
+    <div class="meta">Posted on 2002-06-18 01:50:58 by f0dder</div>
+   </div>
+   <div class="post" id="post-43878">
+    <div class="subject"><a href="#post-43878">How this for constructing a vtable in memory?</a></div>
+    <div class="body"><div class="quote">And referring to METHODS+xx instead of lpDD+xx. <br />Also, you could do a memcopy instead of the manual method moving.</div><br /><br />Reminds me of my recent post in the MASM section when I discoverd I could use labels in the data section.<br /><br />You may just be right about using  METHODS+xx....   Using TEXTEQU  seems more like something for general program usage, whereas METHODS+xx explains better just what the code if for:<br /><pre><code><br />         mov edx, &#91;edx&#93;<br />	mov &#91;QueryInterface&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /><br />	mov edx, &#91;edx&#93;<br />	mov &#91;Addref&#93;, edx<br />	add eax, 4<br />	mov edx, eax	<br /></code></pre><br />Using real names in the initilization code does not explain very well what the code does.   METHODS+xx explains, and(I need time later to code this)may make for shorter, thus cleaner code.  Thanks for the tip f0dder:alright:</div>
+    <div class="meta">Posted on 2002-06-18 02:57:31 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-43880">
+    <div class="subject"><a href="#post-43880">How this for constructing a vtable in memory?</a></div>
+    <div class="body">I'd use &quot;METHODS+xx&quot; (or rather, a single reference to METHODS<br />in a copymem call) in the initialization, and &quot;nice names&quot; during the code.<br />I still don't see what the big fuzz about the extra indirection is about,<br />but oh well, things probably wont break by using your method, and<br />then it doesn't really matter :).<br /><br />Well, breakage *could* happen in the (wildly unlikely, imo) event<br />vtables are patched later on in memory...</div>
+    <div class="meta">Posted on 2002-06-18 03:04:59 by f0dder</div>
+   </div>
+   <div class="post" id="post-43894">
+    <div class="subject"><a href="#post-43894">How this for constructing a vtable in memory?</a></div>
+    <div class="body">Much cleaner.......<br /><pre><code><br />	invoke DirectDrawCreate, 0,ADDR lpDD ,0<br /><br />	mov edx, &#91;lpDD&#93;;change from lea edx, lpDD<br />	mov eax, &#91;edx&#93;; get vtable pointer<br />	<br />	mov edx, eax;uneeded copy of vtable pointer<br /><br />	mov edx, &#91;eax&#93;<br />	mov METHODS, edx<br />	mov edx, &#91;eax+4&#93;<br />	mov METHODS+4, edx<br />	mov edx, &#91;eax+8&#93;<br />	mov METHODS+8, edx	<br />.<br />.<br /></code></pre><br />Changing for lea to mov let me get rid of one pointer traversal.<br />Yes, I like the unrolled form.  It is only done once at startup.<br />I'm doing because I have no inc file and <em>I want nice names</em><br /> :grin:</div>
+    <div class="meta">Posted on 2002-06-18 04:25:56 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-43896">
+    <div class="subject"><a href="#post-43896">How this for constructing a vtable in memory?</a></div>
+    <div class="body">Create an inc file? :)</div>
+    <div class="meta">Posted on 2002-06-18 04:28:11 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

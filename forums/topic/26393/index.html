@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Tricking out a moving window - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26393" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26393">Tricking out a moving window</a></p>
+   <div class="post" id="post-191389">
+    <div class="subject"><a href="#post-191389">Tricking out a moving window</a></div>
+    <div class="body">I'm looking to trick move a toolwindow extended style window like so: instead of the window itself moving with the mouse click and drag, I want to draw a banding rectangle of where the window will be when released (kinda a cheap impersonation of DragNDrop).
+
+I first thought I could catch the WM_NCLBUTTONDOWN, WM_NCMOUSEMOVE and WM_NCLBUTTONUP messages, but curiously enough, WM_NCMOUSEMOVE and WM_NCLBUTTONUP are not sent during a drag move.
+
+Instead, I'm seeing these messages flying by:
+{other messages due to NCLBUTTONDOWN}
+WM_ENTERSIZEMOVE
+
+{whole series of these repeated during the drag-move}
+WM_WINDOWPOSCHANGING
+WM_GETMINMAXINFO
+WM_WINDOWPOSCHANGED
+WM_MOVE
+WM_MOVING
+
+{mixed into the end of the drag}
+WM_EXITSIZEMOVE
+
+So, plan 2 was to set a flag with WM_NCLBUTTONDOWN, reset it with WM_EXITSIZEMOVE, and use it to eat the WM_WINDOWPOSCHANGING message like so:
+
+    .ELSEIF uMsg == WM_WINDOWPOSCHANGING
+        DPrintValD tbLock, "WM_WINDOWPOSCHANGING"
+        .IF !tbLock
+            mov ecx, lParam
+            and (WINDOWPOS PTR ).flags, NOT SWP_NOMOVE
+        .ENDIF
+        invoke DefWindowProc,hWnd,uMsg,wParam,lParam  
+        mov eax, 1
+        ret
+
+I thought this would change how this message gets processed, but....
+
+Anyone have any thoughts on what I should try next? Did I miss something simple (like setting some NO_MOVE flag)?</div>
+    <div class="meta">Posted on 2001-01-24 11:01:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-191390">
+    <div class="subject"><a href="#post-191390">Tricking out a moving window</a></div>
+    <div class="body">That's interesting. I tried to do the same thing a while back and it worked using WM_NCLBUTTONDOWN and WM_MOUSEMOVE and WM_BCLBUTTONUP. After intercepting the WM_NCLBUTTONDOWN message, I used DrawFocusRect to draw a dotted line rectangle and upon WM_NCLBUTTONUP I moved the window.
+Maybe you did something wrong in your code.</div>
+    <div class="meta">Posted on 2001-01-24 12:41:00 by Hel </div>
+   </div>
+   <div class="post" id="post-191391">
+    <div class="subject"><a href="#post-191391">Tricking out a moving window</a></div>
+    <div class="body">Thanks Hel, I never thought of looking for client moves if I ate the NCMOUSEDOWN. When I tried THAT, I came up with a solution.
+
+Just a (few) complications: To keep the close button active, I only eat NCMOUSEDOWN when the mouse is over the caption, where the mouse is is saved by the DefWinProc using NCHITTEST to filter out hits.
+
+If the mouse is over the caption, the sequence starts off by setting a flag and capturing the mouse to the tool window. All drawing is done on the main window (hWnd = 0).
+
+I used a few more global vars then I prefer, but I need them as static in this proc, so I'm kinda stuck.
+
+
+;-------------------------------------------------------------------------------
+ToolTabProc PROC hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+
+.data 
+MainDC                  DWORD   0
+tbLock                  DWORD   0
+tbOnCaption             DWORD   0
+lastRect                RECT    { }
+tb_pt                   POINT   { }
+BAD_SCREEN_POS          EQU     8FFFFFFFH     
+hMainWindow             EQU     0
+
+.code
+;------------------------------------------------
+    .IF uMsg == WM_CREATE
+        ; init flags and such
+        mov tbLock, FALSE
+        mov tbOnCaption, FALSE
+        mov lastRect.top, BAD_SCREEN_POS
+;------------------------------------------------
+    .ELSEIF uMsg == WM_NCLBUTTONDOWN
+        .IF tbOnCaption == HTCAPTION
+            invoke SetCapture, hWnd
+            mov tbLock, TRUE
+         .ELSE
+            invoke DefWindowProc,hWnd,uMsg,wParam,lParam
+        .ENDIF
+;------------------------------------------------
+    .ELSEIF uMsg == WM_MOUSEMOVE
+        .IF tbLock
+            invoke GetDC, hMainWindow
+            mov MainDC, eax
+            ;see if we have to undraw last
+            .IF lastRect.top != BAD_SCREEN_POS
+                ; yep, undraw oldie
+                invoke DrawFocusRect,  MainDC, ADDR lastRect
+            .ELSE
+                ; we're starting a new drag
+                movsx eax, (packedDW PTR ).loword   ; get mouse X
+                mov tb_pt.x, eax
+                movsx eax, (packedDW PTR ).hiword   ; get mouse Y
+                mov tb_pt.y, eax
+            .ENDIF
+            ; compute new rect
+            invoke GetWindowRect, hWnd, ADDR lastRect
+            movsx eax, (packedDW PTR ).loword   ; get mouse X
+            sub eax, tb_pt.x
+            add lastRect.left, eax
+            add lastRect.right, eax
+            movsx eax, (packedDW PTR ).hiword   ; get mouse Y
+            sub eax, tb_pt.y
+            add lastRect.top, eax
+            add lastRect.bottom, eax
+                    invoke DrawFocusRect,  MainDC, ADDR lastRect
+            invoke ReleaseDC, hMainWindow, MainDC
+        .ENDIF
+;------------------------------------------------
+    .ELSEIF uMsg == WM_LBUTTONUP
+        .IF tbLock
+            ; clean-up: release the mouse capture & lock
+            mov tbLock, FALSE
+            invoke ReleaseCapture
+            ; undraw the last rect
+            invoke GetDC, hMainWindow
+            mov MainDC, eax
+            invoke DrawFocusRect,  MainDC, ADDR lastRect
+            invoke ReleaseDC, hMainWindow, MainDC
+            ; FINALLY.... move this window
+            mov eax, lastRect.top
+            sub lastRect.bottom, eax
+            mov eax, lastRect.left
+            sub lastRect.right, eax
+            invoke MoveWindow, hWnd, lastRect.left, lastRect.top, lastRect.right, lastRect.bottom, TRUE
+            ; reset the lastRect 
+            mov lastRect.top, BAD_SCREEN_POS
+        .ENDIF
+;------------------------------------------------
+    .ELSE
+        .IF uMsg == WM_NCHITTEST
+            invoke DefWindowProc,hWnd,uMsg,wParam,lParam
+            mov tbOnCaption, eax
+        .ELSE
+            invoke DefWindowProc,hWnd,uMsg,wParam,lParam
+        .ENDIF
+        ret
+;------------------------------------------------
+    .ENDIF
+    xor eax,eax
+    ret
+ToolTabProc ENDP
+
+;-------------------------------------------------------------------------------</div>
+    <div class="meta">Posted on 2001-01-24 14:54:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

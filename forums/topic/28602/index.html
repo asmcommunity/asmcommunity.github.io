@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>again the stack - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28602" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28602">again the stack</a></p>
+   <div class="post" id="post-202224">
+    <div class="subject"><a href="#post-202224">again the stack</a></div>
+    <div class="body">the topic has been discussed a lot, but once again I wonder myself what it all means...
+
+I tell my linker to reserve 1MB stack and to commit 4K for my exe. OK.
+I read in the win docu:
+<div class="quote">By default, each thread uses 1 MB of reserved memory, and one page of committed memory. The system will commit one page blocks from the reserved stack memory as needed, until the stack cannot grow any father. </div>
+OK.
+I use a large local, or push more than 4K -> page guard access violation exception -> not OK!
+
+What for should the 1 MB be, if I absolutly cannot access it? When does windows commit some more? Maybe I must call an API function ("CommitStack" or something)??</div>
+    <div class="meta">Posted on 2001-07-02 13:04:00 by beaster</div>
+   </div>
+   <div class="post" id="post-202225">
+    <div class="subject"><a href="#post-202225">again the stack</a></div>
+    <div class="body">well let me explain it to you
+
+Windows uses a Flat memory model with PAGEING ... this means that memory is managed in chunks called pages..it so happens a page=4K...
+this is done for all memory that windows uses...now you sure dont have 2Gigabytes of RAM on your machine, do you? 
+(if you have i will be jalouse :D )
+
+Whenever a virtual page is accesed OS (actually microprocessor) searces the page in "the pagefile" ..IF the page is not found then a page violation trap is generate and the OS goes for that page either from RAM or from HDD(slow)...
+
+This is the BIG picture (details are a little more complicated)
+
+Now back to the Stack... 
+
+for some reason the Win OS belives that stack can only grow 4K at a time, so if it detects a request for page 3 from your stack BEFORE a request for page 1 was ever done...pooof Access Violation ERROR...but if you go less... say 2k at a time SKY is the limit....(or 1M whatever is bigger)
+
+
+botom line either use objects that are smaller then 4K on the stack or... ;) prealocate the stack pages by first accessing a series of 2K objects ;)
+
+but face it: haveing large (>4K) objects on the stack  its dubitable :P
+
+
+
+This message was edited by BogdanOntanu, on 7/2/2001 6:36:40 PM</div>
+    <div class="meta">Posted on 2001-07-02 18:33:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-202226">
+    <div class="subject"><a href="#post-202226">again the stack</a></div>
+    <div class="body">beaster,
+
+Bogdan has explained how the stack works, simplest approach is to
+use the /STACK options with the reserve and commit parameters and
+make sure that the minimum you set is large enough to handle the
+local variables you use.
+
+Some of the memory measuring programs are a bit misleading in what
+they report and the way to test it is to run a large number of
+programs that have a known stack size set and then have a look at
+the reported memory usage globally. What you will find in 9x systems
+is that you don't get the same stack size multiplied by the number of
+programs running so the memory is not being wasted.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-07-02 20:16:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-202227">
+    <div class="subject"><a href="#post-202227">again the stack</a></div>
+    <div class="body">At the lowest level of memory allocation (VirtualAlloc), allocated memory has two states: reserved and committed.
+
+Committed memory is usable memory, but it comes at a price: it can be paged out to the HDD, wasting time and reducing the HDD space.  
+
+Reserved memory is unusable, but it prevents fragmentation, which allows (relatively) efficient stack management.</div>
+    <div class="meta">Posted on 2001-07-03 00:08:00 by tank</div>
+   </div>
+   <div class="post" id="post-202228">
+    <div class="subject"><a href="#post-202228">again the stack</a></div>
+    <div class="body">Hmm.
+I changed my local array (yes I can do it without locals, but I like to understand this) from:
+<pre><code>
+	mov	eax, dwChars
+	imul	eax, sizeof GLYPH_DATA       (= 24)
+	sub	esp, eax
+	mov	lpxGlyphs, esp
+
+</code></pre>
+to:
+<pre><code>
+	mov	ecx, dwChars
+Stacky:	sub	esp, sizeof GLYPH_DATA
+	loop	Stacky
+	mov	lpxGlyphs, esp
+
+</code></pre>
+But still the same result (exception).
+Then I tried (I get more tricky :) ):
+<pre><code>
+	xor	eax, eax
+	mov	ecx, dwChars
+Stacky:	push	eax
+	push	eax
+	push	eax
+	push	eax
+	push	eax
+	loop	Stacky
+	mov	lpxGlyphs, esp
+</code></pre>
+But again an exception.
+I think, with this variations I do not skip over more than
+one page.</div>
+    <div class="meta">Posted on 2001-07-03 05:57:00 by beaster</div>
+   </div>
+   <div class="post" id="post-202229">
+    <div class="subject"><a href="#post-202229">again the stack</a></div>
+    <div class="body">If <strong>sizeof GLYPH_DATA</strong> is <strong>24</strong>, then shouldn't there be another push?  (Not that this will solve your problem - just an observation. ;)</div>
+    <div class="meta">Posted on 2001-07-03 10:41:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-202230">
+    <div class="subject"><a href="#post-202230">again the stack</a></div>
+    <div class="body">Hi, Beaster (kisses to Miracle if still there).
+I have tested this problem too:
+
+With a StackMin set at 0_1000h and a StackMax set at 0_10_0000h:
+
+
+>    hexprint esp           ; > 063FE3C
+>    mov eax esp
+> 
+>    mov ecx 0_2_0000       ; (020000h > 080000 Bytes)
+>L0: push eax | loop L0<
+>
+>    hexprint esp           ; > 5BFE3C (063FE3C-080000)
+>
+>    mov esp eax
+>
+>    Hexprint esp           ; OK
+
+
+
+This doesn't hang (SpAsm, you guess).
+
+
+Maybe you could verify this: Would you check that the Linker have done
+his job? You load your PE in an Hexa Editor, put the cursor on 'PE', go
+down 6 lines. Just there is StackMax dWord and StackMin dWord. Are they
+want you expect?
+
+
+
+betov.</div>
+    <div class="meta">Posted on 2001-07-03 13:01:00 by Betov</div>
+   </div>
+  </div>
+ </body>
+</html>

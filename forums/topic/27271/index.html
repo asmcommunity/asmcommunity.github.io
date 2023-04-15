@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Suggestion on how to implement this better. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27271" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27271">Suggestion on how to implement this better.</a></p>
+   <div class="post" id="post-195382">
+    <div class="subject"><a href="#post-195382">Suggestion on how to implement this better.</a></div>
+    <div class="body">Hi I'm wondering if anyone out there has any suggestions. I need an array of values, ideally any lenght but for now lets say 64 dwords. I want these to be arranged in order decreasing size. 
+
+Lets say I have the array arranged and I then change one of the values
+
+As far as I can tell, first I would have to remove the modified values and then cycle through all the elements following it and shift them up one.
+
+I would then have to start at element 0 and then cycles through the elements until I find one thats smaller than the one I changed and so I would insert it there, before doing that I would have to start at the last element and cycle backwards to free up space. for it.
+
+Those anyone know a better way of doing this?</div>
+    <div class="meta">Posted on 2001-03-17 11:45:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-195383">
+    <div class="subject"><a href="#post-195383">Suggestion on how to implement this better.</a></div>
+    <div class="body">Sure, there are several ways you could improve that.
+
+First off, since your list is already sorted, you need not run through every array element to find where to insert a new one. For a list of N items, it should take log2 (N) searches using interval halving, also called a binary search. This technique works like so:
+
+<pre><code>
+psudocode:
+
+Set LOW = 0
+Set HIGH = N
+Set ITEM = (HIGH - LOW)  / 2
+
+LOOP: 
+
+     Check the value of element ITEM. If your number matches, you're done.
+
+     If your number is less,  then  set HIGH = ITEM
+
+        Set ITEM = (HIGH - LOW)  / 2
+
+        goto LOOP
+
+     If your number is greater,  then  set LOW = ITEM  
+	
+        Set ITEM = (HIGH - LOW)  / 2
+
+        goto LOOP
+</code></pre>
+
+
+Finding a match this way can be very efficient. It's not just for math either, I once checked the overcurrent trip point of a power supply with an automated tester for load current using this same method (excepting there my MATCH criterion was slightly different).  Just be careful with division remainders, you don't want to check say element 7.5. Rounding down is probably OK, but play with numbers to be sure. You will also need an exit point check when HIGH = LOW + 1 for when you have an intermediate value not in the list "boxed in."
+
+OK, so you know you wish to change array element X1 to NEW_ELEMENT, and you search and find it's proper position is element X2. You find the position by a fast interval-halving search 
+
+
+You now have three cases:
+
+1)  X1 = X2.   Cool, store it and done, goodbye
+
+2)  X2 <  X1   Got some work to do
+
+
+<pre><code>
+psudocode:
+
+Set ITEM = X1
+	
+	LOOP:
+
+		mov element (ITEM -1) to element (ITEM)
+
+		dec ITEM
+
+
+		IF ITEM = X2 stop, or else goto LOOP
+
+	stop:
+ 
+	mov NEW_ELEMENT to element (X2)
+</code></pre>
+
+
+3)  X2 >  X1   Also got some work to do
+
+
+<pre><code>
+psudocode:
+
+Set ITEM = X1
+	
+	LOOP:
+
+		mov element (ITEM + 1) to element (ITEM)
+
+		inc ITEM
+
+		IF ITEM = X2 stop, or else goto LOOP
+
+	stop:
+ 
+	mov new element to element (X2)
+</code></pre>
+
+
+In both cases 2 and 3, you are only moving the elements that need moving, no sorting or anything else required. 
+
+
+-------------------------------------------
+The only danger in space is if we land on the terrible Planet of the Apes...wait a 
+minute...Statue of Liberty ... that was our planet! You maniacs! You blew it up! 
+Damn you! Damn you all to hell!</div>
+    <div class="meta">Posted on 2001-03-17 12:27:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-195384">
+    <div class="subject"><a href="#post-195384">Suggestion on how to implement this better.</a></div>
+    <div class="body">Just thought I'd mention using a binary-tree, since it seems like ALOT of work to keep shifting the elements along all the time.
+I actually had a situation like this and first used a similar method to that (shuffling the elements along), but it was just too slow.
+So then I tried with the binary-tree and the time taken was cut down to about 1/3.
+The only problem with this is when the list involves more lots of elements (1000s), it can become quite slow unless you go to the trouble of re-balancing the tree every now-and-again
+(or use a b*-tree -- which is probably getting a bit obsessive)
+
+So, just for anyone who doesn't know binary-trees, here's a brief explanation:
+
+Basically, a binary tree will look like this (ascii art is cool!)
+
+<pre><code>
+            root
+            /  \
+         node  node
+         / \   / \
+        :   : :   :
+     more nodes down here
+</code></pre>
+
+The idea is that at each node (including 'root') is made up like this:
+
+<pre><code>
+  ---------------
+  |    value    |
+  |-------------|
+  | less | more |
+  ---------------
+</code></pre>
+
+where VALUE is the number (or whatever else) to be stored, LESS points to the next node that is less than this one, and MORE points to the next node that is more than this one (note: the LESS and MORE pointers can be NULL to point to none)
+
+As for the actual building of the tree:
+
+First you start with the root node; just give this a value and initialise both LESS and MORE to NULL
+Then each time you want to insert a value, compare it with that value for root
+ - if (value_to_insert < value_for_root) insert the value at the LESS pointer
+ - if (value_to_insert > value_for_root) insert the value at the MORE pointer
+(if value=root then this is up to you what to do, but inserting it at one of the pointers is NOT a good idea - usually can just ignore it)
+
+Once you have found where to insert the new value, create a new node: 
+
+But what if there is a node already at one of the pointers??
+Well, you simply just do exactly the same again and compare to find which pointer the value should go in (but compare with the value for THAT node and not for the root)
+
+And that is it...... I probably should change the bit about it being a 'brief' explanation ;)
+
+Hopefully this will be use to someone, it depends if you think it worth the extra coding for the gains (and it also requires more memory to include the pointers)
+
+-- Tedd.</div>
+    <div class="meta">Posted on 2001-03-19 07:53:00 by tedd</div>
+   </div>
+   <div class="post" id="post-195385">
+    <div class="subject"><a href="#post-195385">Suggestion on how to implement this better.</a></div>
+    <div class="body">Thank you both for you replies, they’re both truly wonderful suggestions, unfortunately they’re also mutually exclusive.
+
+Ernie- I was actually depressed when I read your suggestion, only because I had discovered it for myself a couple of years ago and I can’t believe I had forgotten about it by the time it came to this problem.
+
+Tedd- Your idea seems to me to be excellent when adding a new value to the list. Let me just rephrase what you said into a method I can understand, i.e. a 1d array
+
+Each entry in the array consists of 3 dwords x, m and l and so they’re arranged in an array as the following
+
+XMLXMLXMLXMLXML…
+
+Plus you need a pointer to the biggest or first element, you can then scan through the array by the following method
+
+Use the pointer to load the 1st element
+
+Compare the value you wish to insert to it.
+
+If the value is smaller then use the L pointer associated with that element to find the next one and repeat the compare.
+
+If the value is bigger then 
+	Create a new entry at the end of the array
+	Set the X to the value you wish to inset
+	Set the M pointer to the element Just prior to the one you last checked
+	Set the L pointer to the element you just checked
+	Set the m pointer of the element just check to this new entry
+	Set the L point of the one prior to the one just checked to this new entry again.
+
+This may seem like a lot to do but its nothing compared to shifting 1000 elements around
+
+However as I said they are mutually exclusive. Ernie’s method relies on the fact that the layout of the array is ordered physically where as Tedds method relies on the layout to be virtual.
+
+I have no idea which of the two would be quicker. The second method is incredibly fast for adding or removing elements it is (as I understand it) painfully slow for scanning through them to find out where they should be inserted. Also It doesn’t allow you to for example access the 50th element, you must scan through them all until you stop at the correct element.
+
+Whereas Ernie’s method is beautifully efficient for find elements it as I said relies on the elements being arranged properly this means making any modification to the list is awkward.</div>
+    <div class="meta">Posted on 2001-03-19 12:10:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-195386">
+    <div class="subject"><a href="#post-195386">Suggestion on how to implement this better.</a></div>
+    <div class="body">Zadkiel, well.... I think you've got the right idea with my method, but maybe I should explain it a bit more
+..... with an example :>
+
+Okay, lets say we have a list of digits to store:
+
+ 38956........ (only a few or this example will turn out VERY long)
+
+So, first we have our empty array. And then put the first number to insert at the start:
+
+ ------------------------
+ | 3 | NULL | NULL |  .......
+ ------------------------
+
+Then we get the next number ('8')
+
+8 is more than 3 so:
+
+{i'll do this as a graph instead of array - easier to understand}
+
+<pre><code>
+       3
+     /   \
+  NULL   NULL
+</code></pre>
+
+- 8>3, so check MORE
+- MORE is empty, insert
+
+<pre><code>
+       3
+     /   \
+  NULL    8
+         / \
+      NULL NULL
+</code></pre>
+
+Then we have the '9':
+
+- 9>3, so check MORE
+- 9>8, so check MORE
+- empty, so insert
+
+<pre><code>
+       3
+     /   \
+  NULL    8
+         / \
+      NULL  9
+           / \
+        NULL  NULL
+</code></pre>
+
+Now, '5':
+
+- 5>3
+- 5<8, so check LESS
+- LESS empty, insert
+
+<pre><code>
+       3
+     /   \
+  NULL    8
+        /   \
+       5     9
+     /  \   /  \
+ NULL NULL NULL NULL
+</code></pre>
+
+.... '6'
+
+- 6>3
+- 6<8
+- 6>5
+
+<pre><code>
+       3
+     /   \
+  NULL    8
+        /   \
+       5     9
+     /  \   /  \
+ NULL   6  NULL NULL
+       / \
+    NULL NULL
+</code></pre>
+
+So, the array would look like this:
+
+<pre><code>
+ *1  (L)  (M)  *2            *3            *4            *5
+-------------------------------------------------------------------------
+| 3 | *0 | *2 | 8 | *4 | *3 | 9 | *0 | *0 | 5 | *0 | *5 | 6 | *0 | *0 |...
+-------------------------------------------------------------------------
+
+{* indicates the node position in the array}
+</code></pre>
+Hopefully, that example will explain it better :)
+
+Just to clear up a few things also.
+- You don't need to keep an extra pointer for the 'first' (root) because it is ALWAYS at the start of the array anyway
+- Yes it is very nice for adding elements, although removing them requires a little thought (what if want to remove node that has two more joining it? :> )
+- For searching: in the best case it comes out as good as Ernie's suggestion, on average it will probably take about 1.5 times as long, but in the worst case it will unfortunately be as bad as a serial list (although this is quite unlikely - depending)
+
+If you can get all of the numbers and sort them once, then Ernie's method will come out absolutely best.
+But, if you have to keep inserting numbers and dynamically changing the list, then you have to decide what to use.
+If you think about it, searching through a binary-tree IS the same as Ernie's Binary-chop search, since each compare will essentially cut the list in half,
+the problem for binary trees is that they can become one-sided, so a compare is more likely to cut off 1/4th of the list instead.
+
+Also, the binary-tree (as you said) is not very good if you want to access, say, the 4th element in the array; although you can cheat and count the node positions, or use a set of pointers (which would then need maintaning and defeat the point of using the tree in the first place)
+
+You can't really say that one is better than the other, unless you know what it is to be used for.
+
+Anyway, that's all from "tree-structures 101" for today :>
+
+Anymore questions, just ask :)
+
+-- Tedd</div>
+    <div class="meta">Posted on 2001-03-20 11:24:00 by Tedd</div>
+   </div>
+  </div>
+ </body>
+</html>

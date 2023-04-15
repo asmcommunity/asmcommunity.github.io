@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>creating array - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17163" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17163">creating array</a></p>
+   <div class="post" id="post-133070">
+    <div class="subject"><a href="#post-133070">creating array</a></div>
+    <div class="body">hey, can anybody help me, as to how to create an array<br />it needs to work with winsock, where there are multiple connections, and every time there's a new connection ( under FD_ACCEPT ), it needs to create/access it's specific index within the array, depending on the connection handle ( stored in wParam ) , then when data is received i need to access the array again by only knowing the socket handle which is in wParam<br />the array needs to be a string, about 128 long, to store a filename<br /><br />so basically, how do you create an array that can be accessed at anytime, and can create new indexes at anytime<br /><br />P.S. i've searched here for some help, but most stuff i found is too complictaed for me :confused:</div>
+    <div class="meta">Posted on 2004-02-10 05:03:26 by someone</div>
+   </div>
+   <div class="post" id="post-133074">
+    <div class="subject"><a href="#post-133074">creating array</a></div>
+    <div class="body">Hi someone, first off you should always use MAX_PATH (260) for filename buffers, it is the maximum allowable path+filename size in Windows. If you were just to create an array of elements all the same size it would be mostly empty space. You might think about doing it a little more efficiently.<br /><br />First allocate a buffer large enough to hold all of the elements, you can expand this if you need to:<br /><pre><code>; This will allocate 1MB of memory for paths<br />invoke VirtualAlloc, NULL, 100000h, MEM_COMMIT, PAGE_READWRITE<br />mov &#91;pPathArray&#93;,eax<br />mov &#91;ArrayPointer&#93;,eax</code></pre><br />As you can see I moved the base address into both the pointer and the index, the pointer is fixed and used to release the memory later, the index starts at the bottom of the array.<br /><br />Next every time you add a string you will have to copy it to the array then move the pointer to the next starting position. This is best done in a proc:<br /><pre><code>AddPath proc pPathString&#58;DWORD<br /><br />	invoke lstrcpy, &#91;ArrayPointer&#93;,&#91;pPathString&#93;<br />	push eax ; save the address that it starts at<br />	invoke lstrlen,&#91;pPathString&#93;<br />	inc eax ; NULL terminator<br />	add &#91;ArrayPointer&#93;,eax ; move the pointer to the start of the next string<br />	pop eax ; pop the start of the string that was just added and return it<br />	ret<br />AddPath endp</code></pre><br />Then every time you call AddPath it will add the path to the array and return a pointer to that string. If you want you can store these pointers in the lParam or create another array of DWORDs to store the pointers to the strings. If you elect to make another array, you store the pointers then when you want string 0 you get element 0 and it will contain the offset of the string in memory.<br /><br />Pretty simple method but it works very well.<br /><br />If you need more space later you call VirtualAlloc with the addess of the array + the size:<br /><br /><pre><code>; This will allocate another 1MB of memory for paths<br />mov eax,&#91;pPathArray&#93;<br />add eax,100000h ; the top of the old array, we will append to that<br />invoke VirtualAlloc, eax , 100000h, MEM_COMMIT, PAGE_READWRITE</code></pre><br /><br />When your done be sure to free the array:<br /><br /><pre><code>; 100000h = total size you have to increase this if you have added any new space<br />invoke VirtualFree,&#91;pPathArray&#93;,100000h,MEM_RELEASE</code></pre></div>
+    <div class="meta">Posted on 2004-02-10 07:13:35 by donkey</div>
+   </div>
+   <div class="post" id="post-133076">
+    <div class="subject"><a href="#post-133076">creating array</a></div>
+    <div class="body"><div class="quote"><br />Hi someone, first off you should always use MAX_PATH (260) for filename buffers, it is the maximum allowable path+filename size in Windows. If you were just to create an array of elements all the same size it would be mostly empty space. You might think about doing it a little more efficiently.<br /><br /> </div><br /><br />It was allways bugging me  260 MAX_PATH is windows trait or file system ??</div>
+    <div class="meta">Posted on 2004-02-10 07:27:49 by AceEmbler</div>
+   </div>
+   <div class="post" id="post-133078">
+    <div class="subject"><a href="#post-133078">creating array</a></div>
+    <div class="body">Well, since Windows doesn't care what IFS you are running it is a Windows imposed limitation and not one imposed by the file system. But since Windows is your only means of accessing the IFS it amounts to the same thing.</div>
+    <div class="meta">Posted on 2004-02-10 07:33:42 by donkey</div>
+   </div>
+   <div class="post" id="post-133083">
+    <div class="subject"><a href="#post-133083">creating array</a></div>
+    <div class="body">hi,<br />thanks, it worked, and i understand arrays now.<br />i'm still havin trouble though, with getting the winsock connections to find out which index of the array it has, i want it to store in somewhere like lParam like you said, but lParam has the socket window messages (e.g. FD_CONNECT, FD_ACCEPT, etc.), unless i've got it wrong ? how would that be done anyway.<br /><br />also it's only the filename (not the filepath) thats stored in the string, so i only made it 128, but i'll make it bigger<br /><br />thanks for your help, it's much appreciated</div>
+    <div class="meta">Posted on 2004-02-10 08:03:39 by someone</div>
+   </div>
+   <div class="post" id="post-143634">
+    <div class="subject"><a href="#post-143634">creating array</a></div>
+    <div class="body">I am not an expert, but I was using Donkey's Array Routines and having a problem with the FreeArray code.<br /><br />I am only posting this here incase someone else wants to use this coding example.<br /><br />The problem <br /><br /><pre><code><br />; 100000h = total size you have to increase this if you have added any new space<br />invoke VirtualFree,&#91;pPathArray&#93;,  &#91;COLOR=BLUE&#93;100000h&#91;/COLOR&#93;  ,&#91;COLOR=RED&#93;MEM_RELEASE &#91;/COLOR&#93; </code></pre><br /><br />I was receiving a 57h error = parameter is incorrect.<br /><br />Here is why.<br /><br />MEM_RELEASE<br />	Releases the specified region of reserved pages. If this flag is specified, the dwSize parameter must be zero, or the function fails.<br /><br />When the MEM_RELEASE flag is used then the Blue size parm MUST be 0h.<br /><br /><br />I changed it and now no error!<br /><br />No offense to Donkey is intended.<br /><br />StillLearning</div>
+    <div class="meta">Posted on 2004-06-12 23:42:16 by StillLearning</div>
+   </div>
+   <div class="post" id="post-143639">
+    <div class="subject"><a href="#post-143639">creating array</a></div>
+    <div class="body">Yup that's right, I had made a mistake in the first post, I corrected it somewhere else on the board, can't remember where though. I did not come back to this thread so I never noticed the error. I had typed it on the fly and copy and pasted it from one place to another, further multiplying the error. But rest assured that I don't do that in my applications.<br /><br />I am not so arrogant that I can't admit a mistake so obviously no offense could possibly be taken ;)</div>
+    <div class="meta">Posted on 2004-06-13 00:59:34 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

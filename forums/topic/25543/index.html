@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Arbitrary Inter-Object Messaging and Event Sinking - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25543" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25543">Arbitrary Inter-Object Messaging and Event Sinking</a></p>
+   <div class="post" id="post-186598">
+    <div class="subject"><a href="#post-186598">Arbitrary Inter-Object Messaging and Event Sinking</a></div>
+    <div class="body">My gamedev code is typically based apon several objects which work together to achieve their goals, and this leads to a high degree of &quot;object interdependancy&quot;, which imho is bad, because it means that the objects are no longer &#39;truly modular&#39; and are less portable between projects.<br />I needed some kind of mechanism which would pass Messages between arbitrary objects, freeing them of these interdependancies.<br />This mechanism would act as the &quot;glue&quot; which binds various objects together in my applications, while being totally naive as to the nature of the objects with which it is communicating, acting as a medium.<br /><br />I have attached a beta version of my MessageQueue object.<br />It is a very flexible and powerful mechanism which can be used for:<br />-inter-object messaging between arbitrary objects or groups of objects<br />-executing arbitrary code in response to arbitrary events (callbacks)<br />-linearly driving arbitrary series of code functions (VM and Scripting)<br />-indirectly calling methods of &#39;foreign objects&#39;<br />-delayed event execution (at some future Time)<br />There&#39;s probably many more uses that I haven&#39;t considered!<br /><br />This object forms the &#39;core&#39; of your engine as the other objects must &#39;register&#39; to receive one or more events and supply appropriate callback functions..&nbsp; it could very well drive the entire application !!<br /><br />Note that the code isn&#39;t totally optimized, I intend to rework it once I&#39;ve received a little feedback..<br />Please let me know if you have any suggestions for refinements or improvements, or if you find novel ways to use this object :)<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2166" target="_blank">MessageQueue.inc</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-11-17 20:01:33 by Homer</div>
+   </div>
+   <div class="post" id="post-186601">
+    <div class="subject"><a href="#post-186601">Re: Arbitrary Inter-Object Messaging and Event Sinking</a></div>
+    <div class="body">Sounds great!<br />If there could be some more specific examples that instantiate the objects in the MessageQueue.inc for beginners to easily give it a try, that would be perfect! <br /><br />Regards,<br />Guidry</div>
+    <div class="meta">Posted on 2006-11-17 23:15:55 by guidry</div>
+   </div>
+   <div class="post" id="post-186602">
+    <div class="subject"><a href="#post-186602">Re: Arbitrary Inter-Object Messaging and Event Sinking</a></div>
+    <div class="body">Uhm, a year or so ago I had pointed something like this out - my ATC &quot;HookVector&quot; :) . Such code (including your MessageQueue) is really handy ;)&nbsp; (been using it for quite some time). It really can drive a whole app beautifully, as you suggested ;) . <br />The &quot;dDelay&quot; is just useful for games. <br />But, making a new thread for the callback?! In more complex apps/games, this will later drag you down (eventually crashing apps without good thread sync). In games, I&#39;d recommend calling a method &quot;TrySendEvents&quot; of all MessageQueue (hold all event-objects in a DataCollection/ObjVector), in your main thread, in your game-loop. In apps, it&#39;s easy- you don&#39;t need the &quot;dDelay&quot;, so you call all callbacks (I call them &quot;hooks&quot;) right when the event is fired. <br />I&#39;ve had enough serious troubles with thread sync, thus I&#39;m doing everything possible to keep as few as possible :) .<br /><br />P.S: Just one dArg is not going to suffice. 4 are what one will need ;) </div>
+    <div class="meta">Posted on 2006-11-17 23:29:04 by Ultrano</div>
+   </div>
+   <div class="post" id="post-186627">
+    <div class="subject"><a href="#post-186627">Re: Arbitrary Inter-Object Messaging and Event Sinking</a></div>
+    <div class="body">Thanks for the responses, I appreciate them.<br /><br />In regards to the Worker processing messages in its own thread - this has one immediately obvious advantage in my mind : it means that the PROCESSING of Messages is performed asynchronously with respect to the thread(s) which POSTED those Messages, meaning that a &#39;caller&#39; never has to wait for an event to complete (a separate notification can be posted by the &#39;Callee&#39; to indicate Completion), basically I borrowed from the concepts behind IOCP, the main difference being that MessageQueue supports the notion of &#39;Permanent Messages&#39; (not automatically dequeued) whereas IOCP dequeues all Messages by default (GetQueuedCompletionStatus).<br />Since there is only ONE Worker thread, Messages are guaranteed to A) be processed in order and B) to COMPLETE processing in order.<br />Should we add more Worker Threads, a Message numbering system must be introduced.<br />Most importantly, having a dedicated Worker thread or threads means that we can implement a kind of &#39;lazy polling&#39; .. note the inclusion of a &#39;wakeup&#39; event, and the use of the WaitForSingleObject api... when theres no Messages pending, the Worker thread uses zero cpu time, so if you&#39;re purely using MessageQueue for event notifications (no Permanent messages), the Worker will automatically toggle between Wake and Sleep states on demand.<br /><br />In regards to Thread Synchronization, OA32 has a new calling mechanism (xOCall) which is designed specifically for this purpose - should it become desirable to enforce synchronization between the Worker and any other arbitrary threads, the calling convention can be modified to emulate xOCall.<br />In regards to the one parameter in the Message struct, if you need more, you can store a Pointer to a custom structure there, provided you note that your Callback is responsible for deallocating it.<br />Passing the entire Message structure to callbacks isn&#39;t the most efficient mechanism imagineable, but it&#39;s the most flexible and powerful .. for example it becomes possible to define a single Callback which is responsible for processing several Messages in a given object (rather than several callbacks for single Messages), it allows callbacks to identify who sent them Messages and thus implement Security schemes (should this be desirable), and it means that callbacks have a standard prototype which may assist in design and debugging.<br /><br />I&#39;d be happy to create a simple demo showing how this object MIGHT be used, but really no one example is going to do it justice.<br /><br />Note that this object becomes your &#39;official timekeeper&#39;, your main application queries the MessageQueue object in this respect.<br />One notable feature missing from the current version is the ability to define &#39;Pulsed&#39; Messages - those which do not expire, and which fire at a given ELAPSED time.<br /><br /></div>
+    <div class="meta">Posted on 2006-11-20 00:50:37 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

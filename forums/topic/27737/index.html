@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>couple of questions about .inc''s - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27737" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27737">couple of questions about .inc''s</a></p>
+   <div class="post" id="post-197754">
+    <div class="subject"><a href="#post-197754">couple of questions about .inc''s</a></div>
+    <div class="body">im trying to make my own include file but im having some difficulty with the conversion from .h to inc. the header file im converting is winnetwk.h and some of the contents im not sure how to convert.
+
+for example i converted this:
+<pre><code>
+DWORD APIENTRY
+WNetAddConnectionA(
+     IN LPCSTR   lpRemoteName,
+     IN LPCSTR   lpPassword,
+     IN LPCSTR   lpLocalName
+    );
+
+to this:
+
+WNetAddConnectionA DWORD
+     lpRemoteName  LPCSTR
+     lpPassword    LPCSTR
+     lpLocalName   LPCSTR
+WNetAddConnectionA ENDS
+
+=====================================================
+
+and not sure how to convert this:
+
+typedef UINT (FAR PASCAL *PFNGETPROFILEPATHA) (
+    LPCSTR    pszUsername,
+    LPSTR     pszBuffer,
+    UINT      cbBuffer
+    );
+
+</code></pre>
+hope someone can help.. maybe hutch or iczelion?
+
+smurf</div>
+    <div class="meta">Posted on 2001-04-21 16:32:00 by smurf</div>
+   </div>
+   <div class="post" id="post-197755">
+    <div class="subject"><a href="#post-197755">couple of questions about .inc''s</a></div>
+    <div class="body">smurf,
+
+The first one is reasonably straight forward, the 3 structure members are
+addresses so they can be set as DWORD. The DWORD after STRUCT sets the structure
+as DWORD aligned, the "?" after each member means that the structure
+members are uninitialised data. The following equate is so you can use
+the documented name without the "A" suffix.
+
+<pre><code>
+WNetAddConnectionA STRUCT DWORD
+    lpRemoteName  DWORD ?
+    lpPassword    DWORD ?
+    lpLocalName   DWORD ?
+WNetAddConnectionA ENDS
+
+WNetAddConnection equ <WNetAddConnectionA>
+</code></pre>
+
+The second one is a problem in that it appears to be a 16 bit windows
+structure,
+
+<pre><code>
+typedef UINT (FAR PASCAL *PFNGETPROFILEPATHA) (
+               LPCSTR    pszUsername,
+               LPSTR     pszBuffer,
+               UINT      cbBuffer
+               );
+</code></pre>
+FAR usually means a segmented FAR call which usually denotes a segmented
+memory model, not flat memory model that is used in win 32.
+
+The 3 members are easy enough,
+
+    pszUsername DWORD ?
+    pszBuffer   DWORD ?
+    cbBuffer    DWORD ?
+
+What it may be is a piece of original 16 bit code that was ported to 32 bit
+without having the call range modernised, if so it can be written with the
+structure name like normal and you can ignore the FAR PASCAL.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-21 19:02:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-197756">
+    <div class="subject"><a href="#post-197756">couple of questions about .inc''s</a></div>
+    <div class="body">While we are on the topic, check out "h2inc.exe", it might be in you masm32\bin folder, or you can download it from hutches or iczelion site. 
+
+I know it converts equates typedefs etc, and im farily sure about structures.</div>
+    <div class="meta">Posted on 2001-04-21 20:10:00 by George</div>
+   </div>
+   <div class="post" id="post-197757">
+    <div class="subject"><a href="#post-197757">couple of questions about .inc''s</a></div>
+    <div class="body">They are not structures at all. They are declarations for
+windows based function calls. They should look like the following
+
+PROCDESC WNetAddConnectionA lpRemoteName:LPCSTR,lpPassword:LPCSTR, lpLocalName:LPCSTR
+
+and
+
+PROCTYPE PFNGETPROFILEPATHA pszUsername:LPCSTR, pszBuffer:LPSTR, cbBuffer:UINT
+
+the second is what amounts to a pointer based function call.
+The delphi equivalent is a procedure type declaration.
+
+Repeat - these are not structure declarations.</div>
+    <div class="meta">Posted on 2001-04-21 20:43:00 by DelphianOracle7</div>
+   </div>
+   <div class="post" id="post-197758">
+    <div class="subject"><a href="#post-197758">couple of questions about .inc''s</a></div>
+    <div class="body">hutch thank you for your reply and hopefully to bring closesure to all my questions maybe you can answer these last few i have on the subject?
+
+you made the conversion like this:
+
+<pre><code>WNetAddConnectionA STRUCT DWORD
+    lpRemoteName  DWORD ?
+    lpPassword    DWORD ?
+    lpLocalName   DWORD ?
+WNetAddConnectionA ENDS</code></pre>
+
+but couldnt it be converted to this instead to allow consistency between the .h file and the .inc?:
+
+<pre><code>WNetAddConnectionA STRUCT DWORD
+    lpRemoteName  LPCSTR ?
+    lpPassword    LPCSTR ?
+    lpLocalName   LPCSTR ?
+WNetAddConnectionA ENDS</code></pre>
+
+another thing is that your equ line looks like this:
+<pre><code>WNetAddConnection equ <WNetAddConnectionA></code></pre>
+
+but is it not the same thing as writing it like this?:
+<pre><code>WNetAddConnection typedef WNetAddConnectionA</code></pre>
+
+ok here's another question and should be my last. Sometimes at the end of the Structs and sometimes at the beggining of a paramter there will be a star in front of a word such as *lplpSystem what is the meaning of this star anyways? here what it looked like at the end of a struct:
+
+<pre><code>typedef struct  _NETRESOURCEA {
+    DWORD    dwScope;
+    DWORD    dwType;
+    DWORD    dwDisplayType;
+    DWORD    dwUsage;
+    LPSTR    lpLocalName;
+    LPSTR    lpRemoteName;
+    LPSTR    lpComment ;
+    LPSTR    lpProvider;
+}NETRESOURCEA, *LPNETRESOURCEA;</code></pre>  <--- hmmmm
+
+thank you for your time
+
+thanks george but i get errors using h2inc for some reason. for example i get errors such as this one:
+
+<pre><code>error H1206: syntax error : identifier 'DWORD'</code></pre>
+
+so i deleted all the DWORD's from the .h file just to see what would happen and it just moved on to another error such as this:
+
+<pre><code>error H1206: syntax error : identifier 'LPSTR'</code></pre></div>
+    <div class="meta">Posted on 2001-04-21 20:50:00 by smurf</div>
+   </div>
+   <div class="post" id="post-197759">
+    <div class="subject"><a href="#post-197759">couple of questions about .inc''s</a></div>
+    <div class="body">smurf,
+
+I think DelphianOracle7 is correct that they are function calls,
+not structures, I did not take a lot of notice and just convered
+what you had in the post.
+
+Now a couple of things, in the current WINDOWS.INC, data types
+like LPCSTR are typdefed to DWORD. The native assembler data type
+for 32 bit is DWORD and this includes addresses.
+
+I would not hold out much hope with h2inc.exe as it does not handle
+C++ header file well at all. I have seen some older C headers
+converted with it but in many instances, you get the errors you
+mentioned.
+
+My C is very rusty now but I think the "*" denoted a pointer to
+a variable.
+
+WNetAddConnection equ <WNetAddConnectionA>
+
+I used this line to make an equate as it is a name, not a data type,
+you can use typdef to create new data types with no problems if
+you need them.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-22 10:08:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-197760">
+    <div class="subject"><a href="#post-197760">couple of questions about .inc''s</a></div>
+    <div class="body">disease_2000 what purpose does the pointer serve anyways? could i just leave it out of the conversion?
+
+LPNETRESOURCEA pointer NETRESOURCEA <--- why would i need this pointer?
+smurf</div>
+    <div class="meta">Posted on 2001-04-24 17:01:00 by smurf</div>
+   </div>
+   <div class="post" id="post-197761">
+    <div class="subject"><a href="#post-197761">couple of questions about .inc''s</a></div>
+    <div class="body">C/C++ is occasionally overly pedantic, rather frantic actually, in it's insistance that everything be typedefined.
+
+So if you have a FOO, and wish a pointer to a FOO, you need declare a type "LPFOO pointer FOO", such that a LPFOO may ONLY point at a FOO and nothing else (least it produce compile errors).
+
+Since Windows defines some 90 base types that are ALL DWORDS, some savy good looking fellow (OK, it wasn't me, it was hutch) defined the include files with loose type checking, and just look for the size of the data.
+
+This makes MASM32 much much easier to use.
+
+ML.EXE does support strict type checking IF you go ahead and define a multitude of types. But trust me, don't do that; that way leads to madness.</div>
+    <div class="meta">Posted on 2001-04-24 23:18:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-197762">
+    <div class="subject"><a href="#post-197762">couple of questions about .inc''s</a></div>
+    <div class="body"><img src=" http://www.ionet.net/~wrightw/vader/vader3.jpg
+
+<strong>Ernie, come to the C++ side...</strong>
+
+:D NaN</div>
+    <div class="meta">Posted on 2001-04-25 00:27:00 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

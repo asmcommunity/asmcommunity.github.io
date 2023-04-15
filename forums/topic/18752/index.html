@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Flag Fun - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18752" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18752">Flag Fun</a></p>
+   <div class="post" id="post-145192">
+    <div class="subject"><a href="#post-145192">Flag Fun</a></div>
+    <div class="body">I want a more 'powerful' (meaning I want to reduce my CMP tests) way of testing values.<br /><br />I was doing some testing with the CMP instruction. Immediately after doing the test I used the LAHF instruction to write the FLAGS into the AH register. I then noticed some interesting things....<br /><br />Usually when people want to determine, 'do the 2 equal each other or not' and 'is one of the values a zero', they will do 2 tests. I want a way of doing 3 things in 1 test, with 2 jumps and 1 'fall through' if the 2 tests failed.  For example:<br /><br />I have 2 values I want to test. Val1 and Val2 ... here are the FLAGS after the CMP. Also I listed the 'common' flags set.<br /><br />Val1 = 0<br />Val2 = 123<br />Flags = 1001 0011<br />CARRY? = 1<br />SIGN? = 1<br /><br />Val1 = 123<br />Val2 = 0<br />Flags = 0000 0110<br />PARITY? = 1<br /><br />Val1 = 123<br />Val2 = 123<br />Flags = 0100 0110<br />ZERO = 1<br />PARITY? = 1<br /><br />Val1 = 12<br />Val2 = 123<br />Flags = 1000 0011<br />CARRY? = 1<br />SIGN?  = 1<br /><br />ecx = 123<br />uMsg = 12<br />Flags = 0001 0110<br />PARITY? = 1<br /><br /><br />For reference:<br />Flags === Sign | Zero | xx | Aux | xx | Parity | xx | Carry<br /><br /><br />Now, my question is this, the Aux (Auxiliary Flag) seems to be used at a few critical/crutial moments in the CMP instruction. I could deffinately use it! But I haven't found a JMP instruction that tests it! So unless I write the flags to AH, how will I determine if the Flag is set? As you can see, just about everything can be determined by the 1 cmp instruction! Also, there are times when an 'unnamed' flag is used (6th Flag)! Why? When?<br /><br />Am I missing anything here? I just want to test 2 unsigned DWORDS! As is often done!<br /><br />Most importantly for me is ... how do I test the Aux flag???<br /><br />Regards!</div>
+    <div class="meta">Posted on 2004-07-01 04:41:24 by SubEvil</div>
+   </div>
+   <div class="post" id="post-145197">
+    <div class="subject"><a href="#post-145197">Flag Fun</a></div>
+    <div class="body">Look at the <strong>Jcc</strong> section of the manual.  It states which flag conditions result in a jump.  Obviously, the condition must be based on two or more flags - one should be the carry flag to provide you with the most instruction options.  See: JNA, JNBE, JNLE, JNG.<br /><br />I've used:<br /><br /><pre><code>jmp @F ; ...<br /><br />exit&#58;<br />  jnc _x<br />  ; &#123;process last bit&#125;<br />_x&#58;<br />  ret<br /><br />@@&#58;<br />  bt &#91;esi&#93;, ecx ; set CF<br />  dec ecx ; set ZF &#40;don't effect CF&#41;<br />  jnbe @B ; ^ if CF=0 and ZF=0<br />  je exit<br />  ; &#123;do something when the bit is set&#125;<br />  jmp @B</code></pre>...cool stuff, huh? :)<br /><br />The AUX flag was not designed for Jcc use.</div>
+    <div class="meta">Posted on 2004-07-01 08:32:24 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-145199">
+    <div class="subject"><a href="#post-145199">Flag Fun</a></div>
+    <div class="body">Hi Bitrake,<br /><br />I think you underestimate the limitations of the Jump instructions without the ability to test the AF. There are NO jump instructions that test the Auxiliary Flag! This Flag is pivotal in gaining more insight into the tested values (especially with cmp)! Others have coded MACRO's to test this Flag. Let me give you an example. <br /><br />Say for example you had something like this:<br /><br />cmp uMsg, WM_COMMAND<br /><br />Under normal cirumstances, with the Intel Jump instructions, there are only 2 things you can 'test'/jump to.  Is it or is it not equal? You cannot, test at the same time if uMsg is NULL (But you can with the AF)<br /><br />So, if they are equal, fine, go somewhere ...<br /><br />HOWEVER, if they are not equal, you cannot test (with any jump) if the uMsg value is a Zero? ... without the Auxiliary Flag. Look at the examples above. This is difficult to explain for me!<br /><br />Take these 2:<br /><br />Val1 = 0        AKA uMsg<br />Val2 = 123     AKA WM_COMMAND (hypothetical)<br />Flags = 1001 0011<br />CARRY? = 1<br />SIGN? = 1<br /><br />Val1 = 12        AKA uMsg<br />Val2 = 123     AKA WM_COMMAND (hypothetical)<br />Flags = 1000 0011<br />CARRY? = 1<br />SIGN? = 1<br /><br />These are the Flag settings after a CMP Val1, Val2. As you can see, only the CF and SF can be tested. However, interesting to note, is the top one has the AF set, because it's ZERO! But with normal Jump instructions, we cannot check this! Because we cannot test the AF. Usually people perform another test, like test eax, eax. What I'm saying is that you can determine all 3 states, (is equal, is not equal, is zero) in 1 cmp by checking the AF.<br /><br />Anyway, all this doesn't matter because it's computationally expensive to check AF anyway, because Intel doesn't give us a jump instruction that tests AF :(</div>
+    <div class="meta">Posted on 2004-07-01 08:58:40 by SubEvil</div>
+   </div>
+   <div class="post" id="post-145204">
+    <div class="subject"><a href="#post-145204">Flag Fun</a></div>
+    <div class="body">mov eax, 0<br />cmp val1, val2<br />lahf<br />shr eax, 8-2<br />jmp <table><br /><br /><br />Not very useful, but it gets the job done. :(<br /><br /><strong>The Svin</strong>, had something to say on this topic. Maybe, review his posts. For me, I just reformulate the problem to match the instructions, but I certainly have things left to learn.</div>
+    <div class="meta">Posted on 2004-07-01 09:48:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-145209">
+    <div class="subject"><a href="#post-145209">Flag Fun</a></div>
+    <div class="body">The Auxiliary Flag has nothing to do with a value of 0 in any of the two numbers being compared.<br /><br />Remember than a comparison simulates a subtraction without changing the values of the two numbers.<br /><br />Also remember that the AF will be affected whenever bit4 of the destination (in this case the number listed first for a comparison) would be modified by the operation.<br /><br />Try repeating your comparisons with small values such as 1,2,3,... instead of 0 and watch what happens.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-07-01 11:10:40 by Raymond</div>
+   </div>
+   <div class="post" id="post-145215">
+    <div class="subject"><a href="#post-145215">Flag Fun</a></div>
+    <div class="body">Exactly, Aux is not found because it is almost never required to be used.  As Ramond was indicating, the AUX bit is a &quot;Half-Carry&quot; bit.  Just like how the carry bit is set, when a number exceeds 8 bits, the AUX half carry bit is set when a number exceeds 4 bits. (hence the half carry since its half of 8 bits..).<br /><br />I believe it was origionally provided for BCD (Binary coded decimal) stuff in the old x86 days...  I have yet to see any real use for it to date.....<br /><br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2004-07-01 13:43:42 by NaN</div>
+   </div>
+   <div class="post" id="post-145237">
+    <div class="subject"><a href="#post-145237">Flag Fun</a></div>
+    <div class="body">aww man the Aux Flag, this flag gave me a headache while emulating the BCD instructions in my Z80 CPU emulator. I do use the aux flag in my Z80 CPU emulator but I have to do the:<br /><pre><code><br />lahf <br />test ah,10h<br /></code></pre><br /><br />Though in other code, barely use it, heck I stay far away from the BCD instructions, it seems the AMD64 architecture has ditched some of them, the CPU will invoke the invalid opcode handler if it comes across the BCD instructions( in 64-bit mode of coursE).</div>
+    <div class="meta">Posted on 2004-07-01 20:32:22 by x86asm</div>
+   </div>
+  </div>
+ </body>
+</html>

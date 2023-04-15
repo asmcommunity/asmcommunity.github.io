@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Console Input Difficulty - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28285" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28285">Console Input Difficulty</a></p>
+   <div class="post" id="post-200374">
+    <div class="subject"><a href="#post-200374">Console Input Difficulty</a></div>
+    <div class="body">Hello!
+I'm trying to write some MASM code that is equivalent to this C code:
+<pre><code>
+int main() {
+  int ch;
+
+  do {
+    if (kbhit()) {
+      ch = getch();
+    }
+  } while (ch != 27);
+
+  printf("done\n");
+  return(0);
+}
+</code></pre>
+Since <pre><code>kbhit</code></pre> (<pre><code>_kbhit</code></pre>) and <pre><code>getch</code></pre> (<pre><code>_getch</code></pre>) are C runtime functions and not Win32 API functions, I had to find some Win32API equivalents for these functions.
+
+I found this article on Microsoft's web site that contained this information:
+
+They are:
+<pre><code>_kbhit</code></pre> is equivalent to <pre><code>PeekConsoleInput</code></pre>; and
+<pre><code>_getch</code></pre> is equivalent to <pre><code>ReadConsoleInput</code></pre>.
+
+First, I wanted to test the conversion in C, just to make sure it still works:
+<pre><code>
+int ReadKey(void) {
+  INPUT_RECORD inpR;
+  DWORD numRecsRead;  
+  int ret = 0;
+      
+  //Get a handle to the console
+  HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+
+  //Set up the console for input
+  SetConsoleMode(hIn, ENABLE_PROCESSED_INPUT);
+
+  //Here is equivalent the kbhit() call.
+  PeekConsoleInput(hIn, &inpR, 1, &numRecsRead);
+
+  //numRecsRead being 0 is equivalent to kbhit() returning false;
+  if (numRecsRead == 0) return(ret);
+
+  //Only interested in keyboard input, and when a key is pressed
+  if (inpR.EventType == KEY_EVENT && inpR.Event.KeyEvent.bKeyDown) {
+    if (inpR.Event.KeyEvent.uChar.AsciiChar != 0 &&
+    inpR.Event.KeyEvent.uChar.AsciiChar != 27) {
+      //ReadConsole() is the equivalent getch() call
+      ReadConsole(hIn, &ret, 1, &numRecsRead, NULL);
+      ret = ret & 0xFF;
+    } else {
+      //Catches other keys (like ESC, ALT, CTRS, SHIFT, etc).
+      ReadConsoleInput(hIn, &inpR, 1, &numRecsRead);
+      ret = inpR.Event.KeyEvent.uChar.AsciiChar;
+    }
+  } else {
+    ReadConsoleInput(hIn, &inpR, 1, &numRecsRead);
+  }  
+  return(ret);
+}
+
+int main() {
+  int key;
+
+  do {
+    key = ReadKey();
+  } while(key != 27);
+
+  printf("done\n");
+  return(0);
+}
+</code></pre>
+No problems here.
+
+I have two issues with the conversion over to MASM (well, one really):
+
+1). WINDOWS.INC doesn't include everything. The two Win32 API functions mentioned above require the INPUT_RECORD structure, which I added. (Saw a discussion on this in an earlier thread, too :-)) No problem here.
+
+2). <pre><code>PeekConsoleInput</code></pre> <u>almost always</u> sets <pre><code>numRecsRead</code></pre> to one, even if I didn't press any keys! I don't know <em>what</em> that's all about. Furthermore, when it does set <pre><code>numRecsRead</code></pre> to zero, and I press a key, it's set one, but </code></pre>ReadConsole()<pre><code> and <pre><code>ReadConsoleInput()</code></pre> do not seem to remove the last character from the input buffer like they should. That would make the next call set <pre><code>numRecsRead</code></pre> to 0 (or the number of pending records/characters minus one).
+
+Can anyone shed some light on this? Thanx!</div>
+    <div class="meta">Posted on 2001-06-04 12:34:00 by Zir0</div>
+   </div>
+   <div class="post" id="post-200375">
+    <div class="subject"><a href="#post-200375">Console Input Difficulty</a></div>
+    <div class="body">I'll take a look. Something similar happens in DOS:
+the device CON always returns after getting just one
+byte. You can see asm source for a skeletal (but
+working) console driver at www.hammick.com/hcs/computer.html</div>
+    <div class="meta">Posted on 2001-06-04 13:46:00 by Larry Hammick</div>
+   </div>
+  </div>
+ </body>
+</html>

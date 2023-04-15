@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>can't think of a descriptive subject - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5238" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5238">can't think of a descriptive subject</a></p>
+   <div class="post" id="post-37048">
+    <div class="subject"><a href="#post-37048">can't think of a descriptive subject</a></div>
+    <div class="body">What I'm trying to do is pass a table ref to another proc.  Well it's kind of hard to explain so I'll just post an example:<br /><pre><code><br />.data<br />    tblStuff    dd offset stuff1<br />                   dd offset stuff2<br />                   dd offset stuff3<br />                   ....<br />    stuff1      db &quot;stuff&quot;,0<br />    stuff2      db &quot;more stuff&quot;,0<br />    stuff3      db &quot;even more stuff&quot;,0<br />                   ....<br />.code<br />     .....<br />     invoke SomeProc,tblStuff<br />     .....<br />SomeProc proc stuff&#58;DWORD<br />     ....<br />     push ecx<br />     imul ecx,4<br />     ;then I'm trying to reference tblStuff &#40;passed through stuff&#41;<br />     ;by using stuff&#91;ecx&#93;<br />     pop ecx<br /></code></pre><br /><br />It doesn't work that way but if I just do &quot;tblStuff&quot; instead of &quot;stuff&quot; it works.<br /><br />How can I use what I'm passing to SomeProc directly?<br /><br />I'm not sure how much sense that makes, but it's the best that I can explain it.</div>
+    <div class="meta">Posted on 2002-05-07 17:37:06 by Will</div>
+   </div>
+   <div class="post" id="post-37050">
+    <div class="subject"><a href="#post-37050">can't think of a descriptive subject</a></div>
+    <div class="body">You need to pass the address of the table to your proc, not the contents (4 byte dword of info ) found <strong>at</strong> tblStuff.<br /><br /><pre><code>.data<br />    tblStuff    dd offset stuff1<br />                   dd offset stuff2<br />                   dd offset stuff3<br />                   ....<br />    stuff1      db &quot;stuff&quot;,0<br />    stuff2      db &quot;more stuff&quot;,0<br />    stuff3      db &quot;even more stuff&quot;,0<br />                   ....<br />.code<br />     .....<br />     invoke SomeProc, &#91;b&#93;addr&#91;/b&#93; tblStuff<br />     .....<br />SomeProc proc &#91;b&#93;lp&#91;/b&#93;Stuff&#58;DWORD<br />     ....<br />     &#91;b&#93;mov ecx, lpStuff&#91;/b&#93;<br />     ;then I'm trying to reference tblStuff &#40;passed through stuff&#41;<br />     ;by using stuff&#91;ecx&#93;<br />     </code></pre><br /><br />Then use ecx as a pointer, and <strong>add</strong> multiples of 4 bytes to the address to get the various dword contents. (0 time == offset to Stuf1, 1 times == offset to stuff2, etc.)<br /><br />I made simular suggestions on a topic simular to your problem here <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=5233">Here.</a> <br /><br />As well you can skip the 'dynamic' math at run time to access the offests with a structure, and allow the assembler to do the math for you.<br /><br /><pre><code><br />MyStuff STRUCT<br />  lpString1  dd  ?<br />  lpString2  dd  ?<br />  lpString3  dd  ?<br />MyStuff ENDS<br /><br />.data<br />    stuff1      db &quot;stuff&quot;,0<br />    stuff2      db &quot;more stuff&quot;,0<br />    stuff3      db &quot;even more stuff&quot;,0<br /><br />  tblStuff  MyStuff &lt; offset stuff1, offset stuff2, offset stuff3 &gt;<br /><br />.code<br />     .....<br />     invoke SomeProc, &#91;b&#93;addr&#91;/b&#93; tblStuff<br />     .....<br />SomeProc proc &#91;b&#93;lp&#91;/b&#93;Stuff&#58;DWORD<br />     ....<br />     &#91;b&#93;mov ecx, lpStuff&#91;/b&#93;<br />     invoke MessageBox, NULL, &#91;ecx&#93;.MyStuff.lpString1, &#91;ecx&#93;.MyStuff.lpString2, MB_OK<br />     </code></pre><br /><br />Just a suggestion of alternate ways.<br /><br />:NaN:</div>
+    <div class="meta">Posted on 2002-05-07 18:39:33 by NaN</div>
+   </div>
+   <div class="post" id="post-37052">
+    <div class="subject"><a href="#post-37052">can't think of a descriptive subject</a></div>
+    <div class="body"><pre><code>     .....<br />     invoke SomeProc, addr tblStuff<br />     .....<br />SomeProc proc lpStuff&#58;DWORD<br />     ....<br />     mov ecx, lpStuff<br />     ;then I'm trying to reference tblStuff &#40;passed through stuff&#41;<br />     ;by using stuff&#91;ecx&#93;</code></pre><strong>4oh4</strong>, you can't reference from <strong>stuff</strong> in the PROC because that is the stack and you didn't pass the whole table.  Instead:<pre><code>SomeProc proc lp&#91;b&#93;tbl&#91;/b&#93;Stuff&#58;DWORD<br />     ....<br />     mov ebx, lp&#91;b&#93;tbl&#91;/b&#93;Stuff<br />     ;then I'm trying to reference tblStuff &#40;passed through stuff&#41;<br />     ;by using stuff&#91;ecx&#93;<br />     mov eax, &#91;ebx + ecx*4&#93; ; index table by ecx<br />     ; or...<br />     invoke MessageBox, hWin, &#91;ebx + ecx*4&#93;, &#91;ebx + ecx*4&#93;, MB_OK</code></pre>I'm assuming that different tables can be passed and that access to that table is dynamic, else <strong>NaN</strong>'s advice with the STRUCT is the best way.</div>
+    <div class="meta">Posted on 2002-05-07 18:51:06 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-37189">
+    <div class="subject"><a href="#post-37189">can't think of a descriptive subject</a></div>
+    <div class="body">NaN:<br />Thanks very much for your suggestion.  :)  That would be great, but I fear that it won't work in my situation.  Please feel free to correct me if I'm wrong though.<br /><br />bitRAKE:<br />You're right in assuming that I want this to be a fairly dynamic proc and I'm trying to pass different tables to it.  I'll be working in my other office for most of the morning so I won't be able to test your suggestion till probably early afternoon at the earliest.  But it looks like it'll work.  :)<br /><br /><br />Thanks for the replies guys.  Three heads are always better than one.</div>
+    <div class="meta">Posted on 2002-05-08 10:05:27 by Will</div>
+   </div>
+  </div>
+ </body>
+</html>

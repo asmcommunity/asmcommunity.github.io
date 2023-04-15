@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>problems creating files - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16555" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16555">problems creating files</a></p>
+   <div class="post" id="post-128725">
+    <div class="subject"><a href="#post-128725">problems creating files</a></div>
+    <div class="body">In a program that I'm writing, the following call to CreateFile()<br /><br />invoke	CreateFile, offset bmp_path, GENERIC_WRITE+GENERIC_READ, \<br />		0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0<br /><br />produces ERROR_NOACCESS (code 03E6h).<br /><br />I intended to change the attributes but I get the same error.<br /><br />Knows anybody what could be happening?</div>
+    <div class="meta">Posted on 2003-12-23 10:01:44 by n u M I T_o r</div>
+   </div>
+   <div class="post" id="post-128726">
+    <div class="subject"><a href="#post-128726">Re: problems creating files</a></div>
+    <div class="body"><div class="quote"><br />In a program that I'm writing, the following call to CreateFile()<br /><br />invoke	CreateFile, offset bmp_path, GENERIC_WRITE+GENERIC_READ, \<br />		0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0<br /><br />produces ERROR_NOACCESS (code 03E6h).<br /><br />I intended to change the attributes but I get the same error.<br /><br />Knows anybody what could be happening? </div><br /><br />maby you should add FILE_SHARE_  flags ?</div>
+    <div class="meta">Posted on 2003-12-23 10:29:30 by AceEmbler</div>
+   </div>
+   <div class="post" id="post-128732">
+    <div class="subject"><a href="#post-128732">problems creating files</a></div>
+    <div class="body">Try <strong>ADDR bmp_path</strong> instead of offset bmp_path. If that does not work, verify the validity of the content of your bmp_path. If the target file is not in the same directory as your app., the FULL path should be included.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-12-23 11:23:57 by Raymond</div>
+   </div>
+   <div class="post" id="post-128806">
+    <div class="subject"><a href="#post-128806">Stack alignment</a></div>
+    <div class="body">Thak you for your help!<br /><br />The problem here is the error code:<br /><br />ERROR_NOACCESS<br /><br />I understand that this error occurs when there is a invalid access to a memory location.<br />Here, I'm creating a file, I'm not intending access to any memory location. So that the<br />problem is not really this call.<br /><br />I've finded the problem: bad stack alignment. I don't know if MASM cares about this <br />when it allocs local variables in the stack. But if you define local structures whose<br />size is not multiple of 4, your stack will stay bad alignmented and can occur errors<br />like this.<br /><br />I resolve this adding this instruction after the local variables declarations:<br /><br />and esp, -4<br /><br />Some quotes:<br />&gt; Try ADDR bmp_path instead of offset bmp_path<br /><br />The &quot;addr&quot; directive is nice for local variables and here I use a global variable. This<br />directive only does: <br /><br />lea eax, bmp_path<br />push eax<br /><br />but &quot;offset&quot; does:<br /><br />push offset bmp_path<br /><br />&gt; If that does not work, verify the validity of the content of your bmp_path. If the target<br />&gt; file is not in the same directory as your app., the FULL path should be included.<br /><br />I'm using the CREATE_ALWAYS, I'm creating a file, I'm not opening it.<br /><br />Anyway, thank you :alright:</div>
+    <div class="meta">Posted on 2003-12-23 22:40:08 by n u M I T_o r</div>
+   </div>
+   <div class="post" id="post-128807">
+    <div class="subject"><a href="#post-128807">problems creating files</a></div>
+    <div class="body">addr dose do <br />push offset ...<br />if it is used with a global variable.<br /><br />as for your problem. If your calling GetLastError after CreateFile then that error code would sugest that there is a problem acess the memory at the offset suplied for the first paramater. Is there anything unusuall about this app?like self modifying code or the code has been placed in an arbitary area of memory.</div>
+    <div class="meta">Posted on 2003-12-24 00:09:34 by ENF</div>
+   </div>
+   <div class="post" id="post-128865">
+    <div class="subject"><a href="#post-128865">problems creating files</a></div>
+    <div class="body">This is a &quot;sample&quot; of the erroneous code:<br /><br /><pre><code><br />	.386<br />	.model flat, stdcall<br /><br />	include \masm32\include\windows.inc<br />	include \masm32\include\kernel32.inc<br />	include \masm32\include\user32.inc<br /><br />	includelib \masm32\lib\kernel32.lib<br />	includelib \masm32\lib\user32.lib<br /><br />	.data<br />	file		db &quot;file.txt&quot;, 0<br />	caption		db &quot;error&quot;, 0<br />	template	db &quot;Error code&#58; %X&quot;, 0<br /><br />	.code<br />start&#58;<br />	call	create<br />	invoke	ExitProcess, eax<br /><br />create&#58;<br />	push	ebp<br />	mov	ebp, esp<br />	add	esp, -14		; &lt;&lt;&lt;&lt; no aligned buffer<br /><br />	<br />	invoke	CreateFile, addr file, GENERIC_WRITE+GENERIC_READ, 0, 0, CREATE_NEW,<br />			FILE_ATTRIBUTE_NORMAL, 0<br />	inc	eax<br />	jne	exit<br /><br />	invoke	GetLastError<br />	lea	edx, &#91;ebp-14&#93;<br />	invoke	wsprintf, edx, addr template, eax<br />	lea	edx, &#91;ebp-14&#93;<br />	invoke	MessageBox, NULL, edx, addr caption, 0<br />	xor	eax, eax <br />	leave<br />	ret<br />	<br />   exit&#58;<br />	dec	eax<br />	leave<br />	ret<br /><br />END start<br /><br /></code></pre><br /><br />This is the correct code:<br /><br /><pre><code><br />	.code<br />start&#58;<br />	call	create<br />	invoke	ExitProcess, eax<br /><br />create	PROC<br />LOCAL	buf&#91;14&#93;&#58;byte	<br />	invoke	CreateFile, addr file, GENERIC_WRITE+GENERIC_READ, 0, 0, CREATE_NEW,<br />			FILE_ATTRIBUTE_NORMAL, 0<br />	inc	eax<br />	jne	exit<br /><br />	invoke	GetLastError<br />	invoke	wsprintf, addr buf, addr template, eax<br />	invoke	MessageBox, NULL, addr buf, addr caption, 0<br />	xor	eax, eax <br />	ret<br />	<br />   exit&#58;<br />	dec	eax<br />	ret<br />create	ENDP<br /><br /></code></pre><br /><br />MASM generates this for the last:<br /><br /><pre><code><br /><br />create	proc<br /><br />var_E		= byte ptr -0Eh<br /><br />		push	ebp<br />		mov	ebp, esp<br />		add	esp, 0FFFFFFF0h	; &lt;- 0FFFFFFF0h = -10h &#40;-16&#41;, is not -0Eh &#40;-14&#41; <br /> <br />		push	0<br />		push	80h<br />		push	1<br />		push	0<br />		push	0<br />		push	0C0000000h<br />		push	offset aFile_txt<br />		call	CreateFileA<br />		inc	eax<br />		jnz	short loc_40105D<br />		call	GetLastError<br />		push	eax<br />		push	offset ErrorCode<br />		lea	eax, &#91;ebp+var_E&#93;<br />		push	eax<br />		call	wsprintfA<br />		add	esp, 0Ch<br />		push	0<br />		push	offset aError<br />		lea	eax, &#91;ebp+var_E&#93;<br />		push	eax<br />		push	0<br />		call	MessageBoxA<br />		xor	eax, eax<br />		leave<br />		retn<br /><br /></code></pre><br /><br />Note that MASM automatically aligns the stack; it does:<br /><br />add esp, -16<br /><br />no:<br /><br />add esp, -14</div>
+    <div class="meta">Posted on 2003-12-24 14:20:46 by n u M I T_o r</div>
+   </div>
+  </div>
+ </body>
+</html>

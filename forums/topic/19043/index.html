@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Restoring Division Algorithm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19043" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=19043">Restoring Division Algorithm</a></p>
+   <div class="post" id="post-147251">
+    <div class="subject"><a href="#post-147251">Restoring Division Algorithm</a></div>
+    <div class="body">I'm writing a restoring division algorithm (for S&amp;G mostly) and have run into a problem.  First, here's my code:<br /><br /><pre><code><br />DIV1 proc Dividend&#58;DWORD, Divisor&#58;DWORD<br /><br />  ; Remainder register - ebx&#58;eax<br />  ; Divisor register   -     edx<br /><br />  mov       eax, Dividend       ; Remainder &#40;right&#41;<br />  xor       ebx, ebx            ; Remainder &#40;left&#41;<br />  mov       ecx, 32             ; Counter<br />  mov       edx, Divisor        ; Divisor<br /><br />  shld      ebx, eax, 1         ; Shift the Remainder register left 1 bit<br /><br />DIV1_STEP1&#58;<br />  sub       ebx, edx            ; Subtract the Divisor register from the left half of the Remainder<br />  js        DIV1_STEP2B         ; Test Remainder<br /><br />  ; If the Remainder is positive &#40;the subtraction was a success&#41;<br />  shld      ebx, eax, 1         ; Shift the Remainder register left 1 bit<br />  or        al, 01h             ; Set the rightmost bit to 1<br />  jmp       DIV1_STEP3<br /><br />DIV1_STEP2B&#58;<br />  ; If the Remainder is negative &#40;the subtraction failed&#41;<br />  add       ebx, edx            ; Restore the original value to the left half of the Remainder<br />  shld      ebx, eax, 1         ; Shift the Remainder register left 1 bit<br /><br />DIV1_STEP3&#58;<br />  loop      DIV1_STEP1          ; Repeat 32 times<br /><br />  shr       ebx, 1              ; Shift the right half of the Remainder right 1 bit<br /><br />  ret<br />DIV1 endp<br /></code></pre><br /><br />My problem is that the 15th line (js DIV1_STEP2B) always jumps to step 2B - maybe I'm using js wrong... I don't know.  As a result, the Dividend is always returned as the answer.  Obviously I'm don't something wrong, but I can't figure out what it is.  Any help would be appreciated.<br /><br />Spara</div>
+    <div class="meta">Posted on 2004-08-01 19:30:02 by SowWn</div>
+   </div>
+   <div class="post" id="post-147254">
+    <div class="subject"><a href="#post-147254">Restoring Division Algorithm</a></div>
+    <div class="body">Some important things to note:<br /><br />- I don't know what this code is suppose to do.<br />- SHLD only shifts the first (destination) operand.<br />- if the algo operates on unsigned data use JC, for signed data use JL.<br /><br />I believe you want to do this:<br /><br />shld ebx, eax, 1<br />shl eax, 1<br /><br />...rather than just the first instruction, but it is more efficient to use:<br /><br />add eax, eax<br />adc ebx, ebx<br /><br />I thought SHLD worked that way when I first tried to use it, now I don't use it at all.<br /><br /> Okay, I see - you are trying to divide by scaled sutraction.<br />Sorry, it is late and I was pulling a blank.</div>
+    <div class="meta">Posted on 2004-08-01 23:12:05 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-147263">
+    <div class="subject"><a href="#post-147263">Restoring Division Algorithm</a></div>
+    <div class="body">Yep, do what he said. And you can remove a few instructions by doing this:<br /><pre><code>DIV1 proc Dividend&#58;DWORD, Divisor&#58;DWORD<br />mov eax,Dividend<br />xor ebx,ebx<br />push 32<br />pop ecx<br />mov edx,Divisor<br />beginning&#58;<br />add eax,eax<br />adc ebx,ebx<br />sub ebx,edx<br />jae one<br />add ebx,edx<br />one&#58;<br />sbb eax,-1<br />loop beginning<br />ret</code></pre><br />It doesn't do anything you can't do with the DIV instruction, but increasing the divisor size should be trivial.</div>
+    <div class="meta">Posted on 2004-08-02 12:14:10 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-147270">
+    <div class="subject"><a href="#post-147270">Restoring Division Algorithm</a></div>
+    <div class="body">Ok, I can see how <br /><br />add eax, eax<br />adc ebx, ebx<br /><br />works in place of <br /><br />shld ebx, eax, 1<br />shl eax, 1<br /><br />but is there a simmilar trick for shrd?<br /><br />@Sephiroth3:  Thanks for the hints... I probably would have done that eventualy, but right now I'm trying to follow an algorithm in a book as close as possible.  I don't quite understand the &quot;sbb eax, -1&quot; statement, could you explain that?<br /><br />Spara<br /><br />EDIT: Replacing the SHLD made the function work perfectly.  Thanks.</div>
+    <div class="meta">Posted on 2004-08-02 15:13:55 by SowWn</div>
+   </div>
+   <div class="post" id="post-147272">
+    <div class="subject"><a href="#post-147272">Restoring Division Algorithm</a></div>
+    <div class="body"><div class="quote"><br />Ok, I can see how <br /><br />add eax, eax<br />adc ebx, ebx<br /><br />works in place of <br /><br />shld ebx, eax, 1<br />shl eax, 1<br /><br />but is there a simmilar trick for shrd?</div>shr eax, 1<br />rcr ebx, 1<br /><br />...should do the trick.  SHRD/SHLD is only really useful for multi-bit shifts where MMX can't be used.  Actually, a branchless MMX/SSE version of this routine would be an interesting challenge (and maybe faster than other methods for numbers in the 64/128-bit range?).</div>
+    <div class="meta">Posted on 2004-08-02 17:25:05 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-147302">
+    <div class="subject"><a href="#post-147302">Restoring Division Algorithm</a></div>
+    <div class="body">I'm not so sure if parallelism is possible here, since you need the remainder of the high result to computer the low result...<br /><br />Spara: The sbb eax,-1 will increase eax if the carry flag is clear.</div>
+    <div class="meta">Posted on 2004-08-03 08:52:47 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-147341">
+    <div class="subject"><a href="#post-147341">Restoring Division Algorithm</a></div>
+    <div class="body"><div class="quote"><br />I'm not so sure if parallelism is possible here, since you need the remainder of the high result to computer the low result...</div>Very true, but I meant to just code a branchless version of the algo - not to parallize.  Un-predicted branches are killer on a big pipe and AMD has cheap shift.</div>
+    <div class="meta">Posted on 2004-08-03 18:56:12 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-147345">
+    <div class="subject"><a href="#post-147345">Restoring Division Algorithm</a></div>
+    <div class="body">Pardon my ignorance, but how could you write a branceless division algorithm?  As far as I know, there are only a few division algorithms: Restoring/Nonrestoring, Booth's, and SRT.  All of these use some sort of comparison and decision inside the loop.  Can you explain how you would write a branchless version of any of the above?  I'd be interested in writing it if I knew what you were talking about.<br /><br />Spara</div>
+    <div class="meta">Posted on 2004-08-03 20:30:17 by SowWn</div>
+   </div>
+   <div class="post" id="post-147350">
+    <div class="subject"><a href="#post-147350">Restoring Division Algorithm</a></div>
+    <div class="body">Well, I said it'd be a challenge. ;)  MMX allows branchless choices using masks - I was thinking something along those lines.  I have other work ATM or I'd code it up.  So many ideas - so little time!</div>
+    <div class="meta">Posted on 2004-08-03 21:58:59 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

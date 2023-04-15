@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>calling directx functions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2698" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=2698">calling directx functions</a></p>
+   <div class="post" id="post-17175">
+    <div class="subject"><a href="#post-17175">calling directx functions</a></div>
+    <div class="body">Happy New year everyone!<br />How would I call a directx function in asm since it needs a C++ object? I supose the object is just structure in memory but I don't know what I would do. In the ddraw.inc file that comes with masm32 there dosen't seam to be much in it I thought there would be a lot more?</div>
+    <div class="meta">Posted on 2002-01-01 18:39:20 by Quantum</div>
+   </div>
+   <div class="post" id="post-17205">
+    <div class="subject"><a href="#post-17205">calling directx functions</a></div>
+    <div class="body">Hi, <br /><br />normally thats Ernie's playground. ;-)<br />But I guess I've got what you want.<br />Check this out:<br /><br /><pre><code><br /><br />hDDraw&#58;	dd	0<br /><br />szDDraw&#58;	db	'ddraw.dll', 0<br />szDCreate&#58;	db	'DirectDrawCreate', 0<br /><br /><br />	; -- open ddraw.dll --<br /><br />	push	offset szDDraw<br />	call	LoadLibrary<br />	mov	hmodDDraw, eax<br />	test	eax, eax<br />	je	iveError<br /><br />	; -- get normal API entry --<br /><br />	push	offset szDCreate<br />	push	hmodDDraw<br />	call	GetProcAddress<br />	mov	lpfnCreate, eax<br />	test	eax, eax<br />	je	iveError<br /><br />	; -- create direct draw object --<br /><br />	xor	eax, eax<br />	push	eax<br />	push	offset hDDraw<br />	push	eax<br />	call	lpfnCreate<br />	test	eax, eax<br />	jne	iveError<br /><br />	; -- call method &#58;&#58;SetCooperativeLevel&#40;&#41;<br /><br />	xor	eax, eax<br />	push	DDSCL_NORMAL<br />	push	eax<br /><br />	mov	eax, hDDraw<br />	mov	eax, &#91;eax&#93;<br />	push	hDDraw<br />	call	idd_SetCooperativeLevel&#91;eax&#93;<br />	test	eax, eax<br />	jne	iveError<br /><br /></code></pre><br /><br />Ok, here we go.<br />There are two pushes for both params of SetCooperativeLevel() the third push is the object itselve. idd_SetCooperativeLevel is a simple offset in a table of function pointers. Check out ddraw.inc for the correct offset. <br /><br />Hafe vun<br />Bye Miracle</div>
+    <div class="meta">Posted on 2002-01-02 04:22:00 by miracle</div>
+   </div>
+   <div class="post" id="post-17296">
+    <div class="subject"><a href="#post-17296">Or</a></div>
+    <div class="body">This is one way of doing it you can also:<br /><br />declare:<br /><br />EXTRN  DirectDrawCreate:PROC<br /><br />as an external procedure<br /><br />and then link your proggy with &quot;ddraw.lib&quot;<br /><br />also after you understand how a DirectX COM call is done you can start to use DDinvoke macros to make your life easy</div>
+    <div class="meta">Posted on 2002-01-02 18:50:47 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-17304">
+    <div class="subject"><a href="#post-17304">thanx</a></div>
+    <div class="body">Are the ddinvoke matrcos included in masm32 allready?</div>
+    <div class="meta">Posted on 2002-01-02 20:08:01 by Quantum</div>
+   </div>
+   <div class="post" id="post-17322">
+    <div class="subject"><a href="#post-17322">calling directx functions</a></div>
+    <div class="body">Ok ok... To answer this question properly:<br /><br />What version of DirectX are you using?<br /><br />If you want to use 8.0 or 8.1 you can uses Scronty's website as an example of using &quot;mcall&quot; (he has various examples and tutorials from the sdk)<br /><br />or coinvoke is used by Caleb (a very nice looking demo he wrote for directx 8.0)<br /><br />(both names can be searched in the member directory and both have all the includes)<br /><br />If you are using lesser versions (because you want to have a pointer to video member (all you really lose from 7.0 to 8.0) you can find <br /><br />Chris Hobbs example of using directx (4.0) enlightening (can be found on gamedev.net -- search with &quot;win32asm&quot;<br /><br />If your using 7.0 I have a source and some includes you maybe able to use<br /><br />-Sliver<br /><br /><br />----EDIT-----<br /><pre><code><br />DDINVOKE	MACRO	func, this, arglist &#58;VARARG<br />	mov			eax , &#91;this&#93;<br />	mov			eax , &#91;eax&#93;<br /><br />	IFB &lt;arglist&gt;<br />		INVOKE &#91;IDirectDrawVtbl. func&#93;&#91;eax&#93;, this<br />	ELSE<br />		INVOKE &#91;IDirectDrawVtbl. func&#93;&#91;eax&#93;, this, arglist<br />	ENDIF<br />ENDM<br /></code></pre><br />example of use:<br /><pre><code><br />; Initialize display<br /><br />	INVOKE	DirectDrawCreate, NULL, ADDR lpDD, NULL<br />	.IF eax != DD_OK<br />		FATAL &quot;Couldn't init DirectDraw&quot;<br />	.ENDIF<br /><br />	DDINVOKE	SetCooperativeLevel, lpDD, hWnd, DDSCL_EXCLUSIVE or DDSCL_FULLSCREEN<br />	.IF eax != DD_OK<br />		FATAL &quot;Couldn't set DirectDraw cooperative level&quot;<br />	.ENDIF<br /><br />	DDINVOKE	SetDisplayMode, lpDD, ddwidth, ddheight, ddbpp<br />	.IF eax != DD_OK<br />		FATAL &quot;Couldn't set display mode&quot;<br />	.ENDIF<br /></code></pre></div>
+    <div class="meta">Posted on 2002-01-02 21:50:20 by Sliver</div>
+   </div>
+   <div class="post" id="post-17344">
+    <div class="subject"><a href="#post-17344">8.1</a></div>
+    <div class="body">I want to use directx 8.1 I've heard that the api is simpler in the later version, dose anyone know if this is tru?</div>
+    <div class="meta">Posted on 2002-01-03 01:27:56 by Quantum</div>
+   </div>
+   <div class="post" id="post-17491">
+    <div class="subject"><a href="#post-17491">calling directx functions</a></div>
+    <div class="body">It really depends on what you mean by, &quot;more easy to use&quot;.  It is more powerful, IMHO. But you may have to judge for yourself... He converted all the m$ tutorials to assembly.<br /><br />Go here and see for yourself:<br /><br /><a target="_blank" href="http://www16.brinkster.com/scronty/">Scronty's Direct 8.0 and 8.1 win32asm page</a> <br /><br />-Sliver</div>
+    <div class="meta">Posted on 2002-01-03 23:01:31 by Sliver</div>
+   </div>
+  </div>
+ </body>
+</html>

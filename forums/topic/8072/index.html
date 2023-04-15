@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Hooks and messages. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8072" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8072">Hooks and messages.</a></p>
+   <div class="post" id="post-59074">
+    <div class="subject"><a href="#post-59074">Hooks and messages.</a></div>
+    <div class="body">I'm playing with hooks and messages and I have a code like:<br /><br />.code<br /><br />        Invoke          CreateWindowEx, NULL, ADDR CLASSNAME, NULL,<br />                        0, 0, 0, 0, 0, NULL, NULL, NULL, NULL<br />        Mov             MHWND, EAX<br /><br />         [...]<br /><br />         Invoke SetWindowHookEx, ..., etc...<br /><br />         Bucle:<br />                Invoke          GetMessage, ADDR MESG, NULL, 0, 0<br />                Invoke          DispatchMessage,ADDR MESG<br />                &quot;More code&quot;<br /><br />         Jmp  Bucle<br /><br /><br />HookProc PROC NCODE:DWORD, WPARAM:DWORD, LPARAM:DWORD<br /><br />         [...]<br />         Invoke SendMessage, ..., etc...<br />         [...]<br />HookProc EndP<br /><br /><br />The idea that I'm trying is that the main program be &quot;blocked&quot; (with GetMessage) until it recives a message that the hook sends. After that the main program executes the &quot;More Code&quot;. I have tryied with different messages but the main program is always blocked in the GetMessage. Can anyone help me, where is the problem? What message I must send? How I can solve? Thanx <br /><br />:alright:</div>
+    <div class="meta">Posted on 2002-09-22 02:22:40 by wildark</div>
+   </div>
+   <div class="post" id="post-59083">
+    <div class="subject"><a href="#post-59083">Hooks and messages.</a></div>
+    <div class="body">The problem is that SendMessage <strong>never</strong> places messeges in message queue.<br />It simply calls window procedure as subroutine. So, GetMessage doesn't return because of there is no new messages in message queue. Use PostMessage instead.<br />BTW, from code you have posted, it's not clear where your hook proc resides, it must be in DLL. But i guess you know that.</div>
+    <div class="meta">Posted on 2002-09-22 03:36:49 by Four-F</div>
+   </div>
+   <div class="post" id="post-59096">
+    <div class="subject"><a href="#post-59096">Hooks and messages.</a></div>
+    <div class="body">Ok here is my code:<br /><br />.code<br />Start:<br />        Invoke		CreateWindowEx, NULL, ADDR CLASSNAME, NULL,<br />                        0, 0, 0, 0, 0, NULL, NULL, NULL, NULL<br />	Mov		MHWND, EAX<br /><br />	Invoke		GetModuleHandle,NULL<br />	Invoke		SetWindowsHookEx, WH_JOURNALRECORD, ADDR HookProc, EAX, NULL<br />	Mov		HHANDLE, EAX<br /><br />Main:<br />	Invoke		GetMessage, ADDR MESG, NULL, 0, 0<br />	Invoke		DispatchMessage,ADDR MESG<br />	Invoke MessageBox, 0, ADDR Text, ADDR Text, MB_OK<br />	Jmp 		Main<br /><br /><br />HookProc PROC NCode:DWORD, WParam:DWORD, LParam:DWORD<br /><br />	Pushfd<br />	Pushad<br /><br /> 	Cmp		NCode, HC_ACTION<br />	JnZ		NextHook<br />	Mov		EAX, LParam<br />	Cmp		DWORD PTR [ EAX ], WM_KEYDOWN<br />	JnZ		NextHook<br />	; A key has been pressed<br /><br />        ; Here is where I would like to send a message to the &quot;main&quot; program<br />        ; and the main program shows the Message Box<br /> <br /><br />NextHook:<br />	Popad<br />	Popfd<br />	Invoke		CallNextHookEx, HHANDLE, NCode, WParam, LParam<br />      Ret<br /><br />HookProc                EndP<br /><br /><br />I have tryied with PostMessage but now the programs crash... I don't know what I'm doing wrong. Is the message the problem? What message I would must send? Can anyone help me?</div>
+    <div class="meta">Posted on 2002-09-22 04:30:59 by wildark</div>
+   </div>
+   <div class="post" id="post-59098">
+    <div class="subject"><a href="#post-59098">Hooks and messages.</a></div>
+    <div class="body">OK. More clearer now.<br /><br /><strong>1.</strong> Don't use WH_JOURNALRECORD/WH_JOURNALPLAYBACK hooks if you are not quite sure for which purpose they are. It's special case. I guess it's not that you want. In your code you want to monitor messages posted to a message queue. So, use WH_GETMESSAGE hook.<br /><br /><strong>2.</strong> Invoke GetModuleHandle, NULL returns the base address of the <strong>executable file</strong> not base of dll even if you call it from code that is contained inside a DLL! But SetWindowsHookEx expects HINSTANCE of DLL in which hook procedure resides if you install system-wide hook.<br /><br /><strong>3.</strong> To send some specific message you can define your own user message.<br />WM_MYMESSAGE equ WM_USER+1<br />And post it. Change your message loop like this:<pre><code>Main&#58;<br />Invoke GetMessage, ADDR MESG, NULL, 0, 0<br />.if MESG.message != WM_MYMESSAGE<br />	Invoke DispatchMessage,ADDR MESG<br />.else<br />	Invoke MessageBox, 0, ADDR Text, ADDR Text, MB_OK<br />.endif<br />Jmp Main</code></pre><br />This way you can decide which message GetMessage returns, and handle it as needed.<br /><br /><strong>4.</strong> If your MessageBox is not for debugging purpose, it hangs your message loop,<br />and can overflow message queue.<br /><br /><strong>5.</strong> Once more. Your hook procedure must reside in DLL.<br />From code you have posted i can see it resides in you main executable.<br /><br />Excuse me, <strong>wildark</strong>, but too many errors.  Do you understand what you are doing?<br />Are you sure you need to install hook to achieve your purpose?<br /><br />May be you should read Icz's tut about hooks if you haven't read it before, and play with its code.</div>
+    <div class="meta">Posted on 2002-09-22 05:31:03 by Four-F</div>
+   </div>
+   <div class="post" id="post-59099">
+    <div class="subject"><a href="#post-59099">Hooks and messages.</a></div>
+    <div class="body">Mmm yes... I'm really newer :( I would must read the tutorials again... I have a lot of errors :'''( Thanx!!!!</div>
+    <div class="meta">Posted on 2002-09-22 06:01:39 by wildark</div>
+   </div>
+  </div>
+ </body>
+</html>

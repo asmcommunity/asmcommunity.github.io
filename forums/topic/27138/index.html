@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>PROLOGUE, EPILOGUE and EBP - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27138" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27138">PROLOGUE, EPILOGUE and EBP</a></p>
+   <div class="post" id="post-194740">
+    <div class="subject"><a href="#post-194740">PROLOGUE, EPILOGUE and EBP</a></div>
+    <div class="body">Is there any reason why the PROLOGUE and EPILOGUE can't be redefined to not create a stack frame.  I know stack frames have their uses, but most the time we could just reference from ESP.  I think MASM will always use  for locals and passed params, then I need to write my own assembler. :)  I like the type checking of the PROC, but I think it should manage the stack for us, too. :)  Even if I put something on it - as long as it's not in a varible loop, it should know to adjust all the varibles that point to locals on the stack :)
+
+A better way exists.
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-07 15:36:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-194741">
+    <div class="subject"><a href="#post-194741">PROLOGUE, EPILOGUE and EBP</a></div>
+    <div class="body">OK, let's clear up a few points.
+
+First, PROC does not do any param checking. PROTO and INVOKE together do that, with PROTO telling the compiler how many parameters to expect, and INVOKE providing those parameters. MASM32 does no type checking, so the only thing that may be checked is the count.
+
+However, INVOKE does expect to ultimately call a procedure. You can't trick it to INVOKE a lable (more later).
+
+Now then, together PROC and ENDP do establish a stack frame. At the top of a procedure a PROC will add this to your code:
+
+<pre><code>
+   push ebp                   ; save previous ebp
+   mov ebp, esp               ; set ebp for the frame
+   add esp, 0FFFFFFF0h        ; -16D for 4 dwords
+</code></pre>
+
+The last number subtracted being the count of bytes allocated on the stack for LOCALS.
+
+Each time a RET is issued inside a PROC, this code is emitted:
+
+<pre><code>
+   leave  
+   ret    000Fh
+</code></pre>
+
+The "leave" instruction does the inverse to ebp as we did upon entry:
+
+<pre><code>
+   mov esp, ebp              ; restore esp from theframe
+   pop ebp                   ; restore previous ebp
+</code></pre>
+
+That's all the PROLOGUE and EPILOGUE do. They can't be redefined to not create a stack frame, because that is their one task in life. MASM is quite optomized, meaning if you don't use the stack frame, it does not generate one.
+
+Referencing your variables from esp is fine if you like keeping track of lots of little nit picking details, such as procedure parameters are higher then esp and LOCALS are lower... unless of cource you've pushed anything on the stack, then LOCALS may be lower.
+
+No one needs this headache.
+
+If you think you know better then the compiler, then go have at it. Nothing says you MUST use PROC and ENDP. Just write your procedure without them. CALL a lable (after pushing the required params), and keep track of where esp is NOW relative to where it was when you last pushed something there.
+
+And make sure you pop all the params off the stack at exit. Get this right or you'll crash fast and hard.
+
+But if you do this, you'll hate yourself in the morning.  ;-)</div>
+    <div class="meta">Posted on 2001-03-07 18:01:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-194742">
+    <div class="subject"><a href="#post-194742">PROLOGUE, EPILOGUE and EBP</a></div>
+    <div class="body">You can use ESP to refer to parameter and locals. But I hope there is 
+atleast one reason for using EBP than esp. Let me try to explain it.
+When you are declaring a function/procedure in MASM, it creates the 
+following stuff for you.
+
+If you declare a function like this,
+
+<pre><code>
+
+function	PROC	param1:DWORD
+
+	LOCAL	local1:DWORD
+	.
+	.
+	.
+function	ENDP
+
+<pre><code>
+
+it generates the code like this:
+
+<pre><code>
+ 
+function:
+
+	Push	ebp		; Save base pointer
+	Mov	ebp, esp	; Point base pointer to stack pointer
+	Add	esp, -4		; Allocate space in stack for local
+				; Here I find using sub esp, 4 does no
+				; harm. But I don't know why MASM does this.
+				; I checked the bytes and cycles used
+				; for both of them.
+
+
+	Leave			; Reset base pointer and stack pointer
+	Ret	4		; Return to caller
+</code></pre>
+
+Now the parameter is referred as  and the local as .
+
+1. Why should we use ebp instead of esp?
+
+It generates smaller code when you use ebp than esp.
+You save one byte always and no time difference in execution. 
+For example, if you refer parametersand locals using EBP, 
+say 10 times, you are saving 10 bytes. So all available compilers 
+and MASM generates this type of code.
+
+2. Your quote "I like the type checking of the PROC, but I think 
+it should manage the stack for us, too."
+
+MASM does that for you. Don't confuse with ebp and esp registers. You see
+
+<pre><code>
+
+	Mov	ebp, esp
+
+</code></pre>
+
+instruction. Now ebp points to esp. This is required to save bytes. In order
+to use ebp at will, you have to save and restore its value.
+
+<pre><code>
+
+	Push	ebp
+
+</code></pre>
+
+saves the value for you.
+
+NOTE:
+	You can achieve the same effect with a single instruction
+
+<pre><code>
+
+	Enter	0, 4
+
+</code></pre>
+
+I think it is too slow. See AOA.
+
+
+MASM generates LEAVE instruction. What it does?
+
+	Its effect is equivalent to
+
+<pre><code>
+
+	Mov	esp, ebp
+	Pop	ebp
+
+Or
+
+	Add	esp, 4
+	Pop	ebp
+
+</code></pre>
+
+It costs 3 bytes and 6 cycles whereas LEAVE costs 1 byte and 4 cycles.
+
+Also if you don't want to create a stack frame, then pass the
+parameter values in available register. That is faster too.
+
+You can allocate space for local at will by
+
+<pre><code>
+
+	Sub	esp, SIZE_OF_VARIABLE
+
+</code></pre>
+
+Good example will be M32LIB\FPTOA.ASM.
+
+See function FloatToBCD, you see "sub esp, 10" at the start and "add esp, 10"
+at the end of the function.</div>
+    <div class="meta">Posted on 2001-03-07 18:19:00 by sjhenry</div>
+   </div>
+   <div class="post" id="post-194743">
+    <div class="subject"><a href="#post-194743">PROLOGUE, EPILOGUE and EBP</a></div>
+    <div class="body">I was just hoping there was a way to coherse MASM into manange my headaches :P  I have done without PROC/INVOKE in other assemblers.  Yes, it's helpfull to say the least - I'm not knocking it that hard :)  Just saying some stuff could be better, or at least have more options :)
+
+Thanks for clearing things up Ernie :)
+
+I did mis-understand the 'typing' of stuff - should be counting :)  I suppose it documents the code as well.
+
+It really wouldn't be a headache if you could define prologue and epilogue yourself in more detail.  Just like other macros aren't a headache.
+
+Thanks for your help,
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-07 19:48:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-194744">
+    <div class="subject"><a href="#post-194744">PROLOGUE, EPILOGUE and EBP</a></div>
+    <div class="body">Primarily a PROC is a label followed by a RET.
+<pre><code>
+    label:          ; address of following instruction
+      ; your code
+    RET
+
+Assuming STDCALL and DWORD size you call a proc as follows,
+
+    push par4
+    push par3
+    push par2
+    push par1
+    call label_address
+
+To keep track of the stack in the PROC that is being called, it preserves
+the base pointer (EBP) and copies the stack pointer into it.
+
+    push ebp        ; preserve base pointer
+    mov ebp, esp    ; stack pointer into ebp
+
+To access the four parameters pushed onto the stack within the PROC, you
+start from the address .
+
+      = par1
+     = par2
+     = par3
+     = par4
+
+At the completion of the code in the PROC you restore the stack pointer(ESP)
+and the base pointer(EBP).
+
+    mov esp, ebp    ; restore stack pointer
+    pop ebp         ; restore base pointer
+
+    ret
+
+This leaves you with a balanced stack and the correct adress so that RET
+jumps back to the following instruction after CALL. If this is messed up
+you get EXTREMELY unpredictable results READ ==> (CRASH). :)
+
+</code></pre>
+
+You can do all of this stuff manually but it just does not work any better
+and it is very error prone code to write.
+
+There is no problem in code to use "CALL LABEL" and at times if you have a
+block of code that you need to call recursively, you can use this technique
+to some advantage in terms of speed over using a normal procedure.
+
+There are some examples in the MASM32 example code under the directory TSTYLE
+but they are examples of how NOT to write code.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-07 23:00:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-194745">
+    <div class="subject"><a href="#post-194745">PROLOGUE, EPILOGUE and EBP</a></div>
+    <div class="body">Actually, you can make masm not generate epilogue/prologue. Only
+problem is that locals and paramaters to the PROC will not be
+accessible automatically, and you will have to do manual ESP referencing. As far as I remember, epilogue and prologue can be
+set to use any macro you desire - with "none" being the only one
+I can think of a use for.
+
+As for opcodes being one byte larger when using ESP...I have only
+one thing to say: sometimes an extra free register (EBP) is much
+more worth than a small(!) increase in opcode size.
+
+And, yes, removing prologue/epilogue can be very useful. Jump
+tables. Then again, you could just use labels for that.</div>
+    <div class="meta">Posted on 2001-03-08 05:02:00 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

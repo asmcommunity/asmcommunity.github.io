@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>executing from a bit of memory? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19168" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19168">executing from a bit of memory?</a></p>
+   <div class="post" id="post-148187">
+    <div class="subject"><a href="#post-148187">executing from a bit of memory?</a></div>
+    <div class="body">Hi everybody,<br />I have been programming with Windows and assembly for a while now, but I don't know the limitations of Windows. Is it possible to execute code from memory that I have allocated by a GlobalAlloc call? for example,<br /><br />     GlobalAlloc .... (etc.)<br />     mov memadr, eax<br />     GlobalLock memadr<br />     LoadProgram  memadr        ; loads program into memory<br />     jmp memadr<br /><br />If this isn't possible, is there any other way to dynamically load some code into memory with Windows and then execute it (it would have been easier in DOS!) Thanks.<br />Stefan.</div>
+    <div class="meta">Posted on 2004-08-16 09:07:40 by StefanD</div>
+   </div>
+   <div class="post" id="post-148189">
+    <div class="subject"><a href="#post-148189">executing from a bit of memory?</a></div>
+    <div class="body">You must use VirtualAlloc to allocate the memory, since recent CPUs support NX/DEP (No eXecute / Date Execution Protection) in hardware. This means that, finally, no-execute can be enforced on IA-32 systems.<br /><br />It's pretty easy - <strong>invoke VirtualAlloc, NULL, datasize, MEM_COMMIT, PAGE_EXECUTE_READWRITE</strong>. You could also use <strong>VirtualProtect</strong> on a &quot;normally allocated&quot; block, but I would prefer VirtualAlloc myself... And if you're going to only write to the memory region once, you should use <strong>VirtualProtect</strong> to change permissions to <em>PAGE_EXECUTE_READ</em> after write is done.<br /><br />PS: it's easy enough to just load&amp;execute some code, if you want to load a full <strong>program</strong>, that takes some more work.</div>
+    <div class="meta">Posted on 2004-08-16 09:22:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-148231">
+    <div class="subject"><a href="#post-148231">executing from a bit of memory?</a></div>
+    <div class="body">Thanks for the suggestion fodder. I have got a program to work that loads a routine into memory and then executes it, but it will generate an error and crash when I try and do a Windows API call. Here is the code:<br /><br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />    .486<br />    .model flat, stdcall<br />    option casemap :none   ; case sensitive<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />    include masm32includewindows.inc<br />    include masm32includeuser32.inc<br />    include masm32includekernel32.inc<br />    include masm32includegdi32.inc<br />    include masm32includemasm32.inc<br /><br />    includelib masm32libuser32.lib<br />    includelib masm32libkernel32.lib<br />    includelib masm32libgdi32.lib<br />    includelib masm32libmasm32.lib<br /><br />    include masm32includedebug.inc<br />    includelib masm32libdebug.lib<br /><br />    main PROTO<br />    copy PROTO<br /><br />    ; ---------------------<br />    ; literal string MACRO<br />    ; ---------------------<br />      literal MACRO quoted_text:VARARG<br />        LOCAL local_text<br />        .data<br />          local_text db quoted_text,0<br />        .code<br />        EXITM &lt;local_text&gt;<br />      ENDM<br />    ; --------------------------------<br />    ; string address in INVOKE format<br />    ; --------------------------------<br />      SADD MACRO quoted_text:VARARG<br />        EXITM &lt;ADDR literal(quoted_text)&gt;<br />      ENDM<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />    .data?<br />        pMem dd ?<br /><br />    .code<br /><br />start:<br /><br />    call main<br /><br />    invoke ExitProcess,0<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />MyFunc proc<br />    invoke Beep, 500, 100<br />    invoke MessageBox, NULL, SADD(&quot;Code executing from memory&quot;), SADD(&quot;appropriate title&quot;),MB_OK<br />    mov eax, 1<br />    ret<br />MyFunc endp<br />MyFunc_Len equ $ - MyFunc<br /><br />main proc<br /><br />    ;<br />    invoke VirtualAlloc,NULL,4096,MEM_COMMIT,PAGE_EXECUTE_READWRITE<br />    mov pMem, eax<br /><br />    ;Copy the procedure into the reserved memory<br />    cld<br />    mov edi, pMem<br />    mov esi, MyFunc<br />    mov ecx, MyFunc_Len<br />    rep movsb<br /><br />    ;Call the memory<br />    lea eax,pMem<br />    call DWORD PTR <br /><br />    ;If the routine worked then eax should be equal to 1. use debug routines to test this<br />    PrintHex eax<br /><br />    ;Free up memory<br />    invoke VirtualFree,pMem,0,MEM_RELEASE<br /><br />    ret<br />main endp<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />end start<br /> <br /><br />I was wondering if I could get it to perform the Win32 API calls in the executing memory? It works fine if you comment those two lines in MyFunc. Thanks</div>
+    <div class="meta">Posted on 2004-08-17 07:55:18 by StefanD</div>
+   </div>
+   <div class="post" id="post-148233">
+    <div class="subject"><a href="#post-148233">executing from a bit of memory?</a></div>
+    <div class="body">The calls to api are calls to jump table (Since you are using masm), hence the way it is encoded is relative to its location. I guess that is why your code crash. You can get it to work if you call the imports directly. I think there are some examples on this board, though I cannot remember where.</div>
+    <div class="meta">Posted on 2004-08-17 08:17:56 by roticv</div>
+   </div>
+   <div class="post" id="post-148234">
+    <div class="subject"><a href="#post-148234">executing from a bit of memory?</a></div>
+    <div class="body">Well, if you want to do API calls, then things get a bit complicated :). Do you ultimately want to use this technique to load larger pieces of code from disk? If so, I would recommend you to write a PE-&gt;your_own_format converter, and handle relocations and imports...</div>
+    <div class="meta">Posted on 2004-08-17 08:34:12 by f0dder</div>
+   </div>
+   <div class="post" id="post-148286">
+    <div class="subject"><a href="#post-148286">executing from a bit of memory?</a></div>
+    <div class="body">I don't want to load a larger piece of code from disk. I want to use this technique to create a dynamic recompiler emulator. Is there some way I could convert the offsets for it to work?</div>
+    <div class="meta">Posted on 2004-08-18 07:24:02 by StefanD</div>
+   </div>
+   <div class="post" id="post-148287">
+    <div class="subject"><a href="#post-148287">executing from a bit of memory?</a></div>
+    <div class="body"><pre><code>push address<br />retn<br /></code></pre><br />But of course it means that you cannot use invoke.</div>
+    <div class="meta">Posted on 2004-08-18 07:31:35 by roticv</div>
+   </div>
+   <div class="post" id="post-148288">
+    <div class="subject"><a href="#post-148288">executing from a bit of memory?</a></div>
+    <div class="body">...or you could implement a disassembler, and have it fix up all references to outside of the code block you're moving :-)</div>
+    <div class="meta">Posted on 2004-08-18 08:16:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-148368">
+    <div class="subject"><a href="#post-148368">f0dder I never heard of that</a></div>
+    <div class="body">&quot;recent CPUs support NX/DEP&quot;<br /><br />could you tell us exactly what this instuction does and when it was implimented (what ptocessor).<br /><br />A link is fine too</div>
+    <div class="meta">Posted on 2004-08-24 10:02:33 by mrgone</div>
+   </div>
+   <div class="post" id="post-148382">
+    <div class="subject"><a href="#post-148382">executing from a bit of memory?</a></div>
+    <div class="body">NX = Non-eXecutable, DEP = Data Execution Protection (microsoft term).<br /><br />The NX is a per-page protection, just like supervisor-only or writable. Introduced for x86 with the 64bit athlon and P4 prescott. Can be emulated in software, sorta efficient when CPU has split code/data caches (google for PaX, find old docs. Or perhaps docs on plex86 virtualization.)</div>
+    <div class="meta">Posted on 2004-08-24 12:33:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-148413">
+    <div class="subject"><a href="#post-148413">executing from a bit of memory?</a></div>
+    <div class="body">mrgone,<br /><br />This article--and the link included--give a rough idea:<br /><br />http://ct.com.com/click?q=f1-Mt_uQpslWZEIoOfyFTWcmMUKm9RR<br /><br />hth<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-08-24 21:35:14 by farrier</div>
+   </div>
+  </div>
+ </body>
+</html>

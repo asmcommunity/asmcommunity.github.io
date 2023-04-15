@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Limits of Debug system in ObjAsm32 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24993" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24993">Limits of Debug system in ObjAsm32</a></p>
+   <div class="post" id="post-182986">
+    <div class="subject"><a href="#post-182986">Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">What are the limits of the debug system in ObjAsm32?<br /><br />I created a bare bones project like this<br /><br /><pre><code>include \masm32\ObjAsm32\code\macros\model.inc<br />SysSetup OOP_NONE, DBG(WND)<br /><br />.code<br />start:<br />SysInit<br /><br />include Project1.inc<br /><br />SysDone<br /><br />invoke ExitProcess, 0<br /><br />end start</code></pre><br /><br />Project1.inc contains 2000 copies of the following line:<br /><br /><pre><code>DbgWarning &quot;Warning&quot;,&quot;DbgDest&quot;</code></pre><br /><br /><br />At assembly time a number of errors occur like this:<br /><br /><pre><code>Project1_Calls2.inc(923) : error A2008: syntax error : typedef<br /> $ConvEscSeqs(4): Macro Called From<br />¦nbsp; $OfsCStrX(4): Macro Called From<br />¦nbsp; ¦nbsp;MacroLoop(2): iteration 1: Macro Called From <br />¦nbsp; ¦nbsp; @invoke(11): Macro Called From<br />¦nbsp; ¦nbsp; ¦nbsp;DbgWarning(15): Macro Called From<br />¦nbsp; ¦nbsp; ¦nbsp; Project1_Calls2.inc(923): Include File</code></pre><br /><br />I changed the 2000 lines in Project1.inc to:<br /><br /><pre><code>DbgWarning &quot;Warning&quot;</code></pre><br /><br />Now the errors look like this:<br /><br /><pre><code>Project1_Calls2.inc(1724) : error A2008: syntax error : typedef<br /> $ConvEscSeqs(4): Macro Called From<br />¦nbsp; $OfsCStrX(4): Macro Called From<br />¦nbsp; ¦nbsp;MacroLoop(2): iteration 1: Macro Called From <br />¦nbsp; ¦nbsp; @invoke(11): Macro Called From<br />¦nbsp; ¦nbsp; ¦nbsp;DbgWarning(15): Macro Called From<br />¦nbsp; ¦nbsp; ¦nbsp; Project1_Calls2.inc(1724): Include File</code></pre><br /><br />So: Explicitly naming the output window the first error occurs at the 923th DbgWarning macro.<br />But: Without naming the output window the first error I get is at the 1724th DbgWarning macro.<br /><br />Have we reached the limits of the Debug system here?<br />Or is it possible to extend the possibilities?<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-05 16:03:01 by mdevries</div>
+   </div>
+   <div class="post" id="post-183003">
+    <div class="subject"><a href="#post-183003">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">That&#39;s quite interesting.<br />Offhand I&#39;m going to guess that this is a limitation imposed by masm&#39;s macro engine.<br />I assure you that if you do the same thing programatically it works eg<br /><pre><code><br />xor ecx,ecx<br />.while ecx&lt;2000<br />DbgWarning &quot;heh&quot;,&quot;hee&quot;<br />inc ecx<br />.endw<br /></code></pre><br /><br />but if you try to do it via conditional assembly it fails eg<br /><pre><code><br />sillymacro macro blah:VARARG<br />i=0<br />while i&lt;2000<br />blah<br />i=i+1<br />endm<br />endm<br /><br />.code<br />start:<br />SysInit<br /><br />sillymacro DbgWarning &quot;Warning&quot;,&quot;DbgDest&quot;<br /><br />SysDone<br /></code></pre><br /><br />Looking through the debug framework I see no particular reason why, so again I suggest that this is an artefact of ML.EXE<br />I&#39;ve used thousands of debug lines without encountering this problem before, perhaps Biterider can spot the issue.. but really, you have to admit that this is not a typical scenario.<br />Just out of curiosity, try the same thing with DbgText and let me know if the same thing happens.<br /></div>
+    <div class="meta">Posted on 2006-07-05 23:33:02 by Homer</div>
+   </div>
+   <div class="post" id="post-183004">
+    <div class="subject"><a href="#post-183004">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">The same thing happens when you use DbgText.<br /><br />I know this is a silly program, but I reached the limit in an other program in which I used many different DbgText an DbgWarning code lines.<br />I couldn&#39;t figure out what was wrong when I got an error on a certain moment.<br />So I thought I must have reached the limits of the Debug system.<br />I decided to test it in the way I showed you. Yust to quantify the problem.<br /><br />As you say: Maybe we didn&#39;t reach the limits of the Debug system, but the limits of ML.EXE.<br /><br />I am curious what Biterider has to say on this issue.<br /><br />Friendly regards,<br />mdevries.<br /></div>
+    <div class="meta">Posted on 2006-07-06 00:41:45 by mdevries</div>
+   </div>
+   <div class="post" id="post-183013">
+    <div class="subject"><a href="#post-183013">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi mdevries<br />As Homer said before, it is a flaw of ML that I found when programs become bigger. The reason is that MASM doesn’t release local symbols within macros. The obvious consequence is that the symbol database is growing and growing until it reaches its limit of 2^16 (65536) entries. Now the second bug is that it is not reported as such… no ML tries to override previous symbols starting at the beginning of the database.<br />I noted this behaviour some time ago while I was writing bigger apps and some annoying error were reported on lines that were error free before.<br />Fortunately I found a workaround. I reuse myself the internal symbols I need for ObjAsm32 (20-30 symbols that now start with ??xxxx). As a side effect, the compilation time was speedup considerably since the database is kept small compared with the situation we have before.<br />Currently I have made the work and wanted to release it as version 1.4, but you can try it out installing the attached files. To compile correctly you need the new Primer.inc. If you are using LoadObjects macro, recompile all objects using the MakeObjects.bat batch file in the Objects directory.<br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1819" target="_blank">Update.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-07-06 03:49:33 by Biterider</div>
+   </div>
+   <div class="post" id="post-183014">
+    <div class="subject"><a href="#post-183014">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">This is great feedback for me, since I&#39;m currently working on a new compiler/assembler which will make ML.exe obselete :)<br />I&#39;m not willing to say too much about it since its early days and I&#39;m miles away from a working beta, suffice to say that the other Moderators are aware of it and are able to follow my progress.<br /></div>
+    <div class="meta">Posted on 2006-07-06 04:26:59 by Homer</div>
+   </div>
+   <div class="post" id="post-183024">
+    <div class="subject"><a href="#post-183024">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Thanks for your comments and the update.<br />I encountered two problems after the update.<br /><br />Using the MakeObjs.bat file none of the objects were made.<br />For every object I got error messages like this:<br /><br /><pre><code> Assembling: Array.asm<br />C:\Masm32\ObjAsm32\Code\Objects\ObjErrs.inc(15) : error A2006: undefined symbol : DEBUGGING<br /> RegErrMsg(1): Macro Called From<br />?&nbsp; C:\Masm32\ObjAsm32\Code\Objects\ObjErrs.inc(15): Include File</code></pre><br /><br />The second problem was when I recompiled existing projects.<br />I got error messages like this:<br /><br /><pre><code>C:\Masm32\ObjAsm32\Code\Objects\ObjErrs.inc(83) : error A2006: undefined symbol : ??ObjErrTableCount<br /> RegErrMsg(7): Macro Called From<br />?&nbsp; C:\Masm32\ObjAsm32\Code\Objects\ObjErrs.inc(15): Include File</code></pre><br /><br />Your attached zip-file contained the following 5 files:<br />- Objects.inc<br />- Primer.asm<br />- Primer.inc<br />- ObjIDs.inc<br />- ObjErrs.inc<br /><br />I quess something must be missing?<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-06 09:24:34 by mdevries</div>
+   </div>
+   <div class="post" id="post-183036">
+    <div class="subject"><a href="#post-183036">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">I guess that I forgot to add 2 additional files that were also altered to support the changes I described before. These files are Model.inc and Objects.cop. Especially this last file is important since it defines all “C???ompilation “OP???tions for the object contained in the Objects folder. I added these 2 files to the Update.zip file of the previous post. I hope it works now&nbsp; ;)<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-07-06 13:01:05 by Biterider</div>
+   </div>
+   <div class="post" id="post-183051">
+    <div class="subject"><a href="#post-183051">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi BiteRider,<br /><br />I updated the two extra files.<br />Now some object assemble, and others don&#39;t.<br /><br />In the attached file you can see the error messages.<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1802" target="_blank">MakeObjs.txt</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-07-06 17:29:29 by mdevries</div>
+   </div>
+   <div class="post" id="post-183062">
+    <div class="subject"><a href="#post-183062">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi mdevries<br />From the listing you post, I see that ICall fails. I added the new ICall macro to the above zip file.<br /><br />Biterider</div>
+    <div class="meta">Posted on 2006-07-07 00:33:26 by Biterider</div>
+   </div>
+   <div class="post" id="post-183063">
+    <div class="subject"><a href="#post-183063">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi Biterider,<br /><br />That does part of the job. But I still have errors. (See attached file)<br /><br />I also compiled the barebones project I started this thread with.<br />This resulted in the following errors:<br /><br /><pre><code>C:\Masm32\ObjAsm32\Code\Objects\Primer.inc(105) : error A2006: undefined symbol : pObjIDTableStart<br />C:\Masm32\ObjAsm32\Code\Objects\Primer.inc(116) : error A2006: undefined symbol : dObjIDTableCount<br />C:\Masm32\ObjAsm32\Code\Objects\Primer.inc(122) : error A2006: undefined symbol : pObjErrTableStart<br />C:\Masm32\ObjAsm32\Code\Objects\Primer.inc(133) : error A2006: undefined symbol : dObjErrTableCount<br />Project1.asm(72) : error A2006: undefined symbol : pObjErrTableStart<br /> SysInit(9): Macro Called From<br />&nbsp; Project1.asm(72): Main Line Code<br />Project1.asm(72) : error A2006: undefined symbol : dObjErrTableCount<br /> SysInit(10): Macro Called From<br />&nbsp; Project1.asm(72): Main Line Code<br />Project1.asm(72) : error A2006: undefined symbol : pObjIDTableStart<br /> SysInit(11): Macro Called From<br />&nbsp; Project1.asm(72): Main Line Code<br />Project1.asm(72) : error A2006: undefined symbol : dObjIDTableCount<br /> SysInit(12): Macro Called From<br />&nbsp; Project1.asm(72): Main Line Code</code></pre><br /><br />Friendly regards,<br />mdevries</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1804" target="_blank">MakeObjs2.txt</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-07-07 01:16:52 by mdevries</div>
+   </div>
+   <div class="post" id="post-183086">
+    <div class="subject"><a href="#post-183086">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi mdevries<br />OK, now I think we will get it :)<br /><br />The missing definitions are in the Debug.inc file I added to the zip file. I added some other files too in case that there are affected by the changes.<br /><br />The compilation problems are now reduced to 2 little things:<br />1. There is a wrong definition of the VarBstrFromDate api in the OleAut32.inc file from the MASM32 package. Change it to the following proto:<br />VarBstrFromDate PROTO :REAL8,:DWORD,:DWORD,:DWORD<br />2. The second problem is a line size issue in the SkinnedMsgBox.Init Method. Try to reduce the line size to something like this:<br /><pre><code>Method SkinnedMsgBox.Init, uses esi, pOwner:Pointer,&nbsp;  hParentWnd:Handle, dTtlResID:dword, \<br />dMsgResID:dword, pGifResName:Pointer, \<br />pBtn1ResName:Pointer, dBtn1ID:dword, \<br />pBtn2ResName:Pointer, dBtn2ID:dword, \<br />pBtn3ResName:Pointer, dBtn3ID:dword</code></pre><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-07-07 08:35:53 by Biterider</div>
+   </div>
+   <div class="post" id="post-183098">
+    <div class="subject"><a href="#post-183098">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">We are a few steps further again.<br /><br />After installing the files you added to the zip-file, I was able to build the bare bones project. It assembles fine now.<br /><br />And now the results of the update are becoming visible:<br />In my first post I mentioned the debug system produced an error on the 923th line, in case I added the name of the output window.<br />After the update I can have more than 13.000 DbgWarning or DbgText lines before the first error occurs. That&#39;s quite an improvement!! Thanks Biterider.<br />I&#39;m glad you encountered the problem in bigger programs too! Otherwise we wouldn&#39;t have been that far now.<br /><br /><div class="quote">1. There is a wrong definition of the VarBstrFromDate api in the OleAut32.inc file from the MASM32 package. Change it to the following proto:<br />VarBstrFromDate PROTO :REAL8,:DWORD,:DWORD,:DWORD</div><br /><br />I updated OleAut32.inc.<br />The error message related to it is gone now.<br /><br /><div class="quote">2. The second problem is a line size issue in the SkinnedMsgBox.Init Method. Try to reduce the line size to something like this:</div><br /><br />About your second suggestion:<br />The line in SkinnedMsgBox.inc looks already just like you suggested.<br />I even removed the leading spaces. But it doesn&#39;t work.<br />So I can&#39;t get SkinnedMsgBox to work (assembled).<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-07 11:48:04 by mdevries</div>
+   </div>
+   <div class="post" id="post-183105">
+    <div class="subject"><a href="#post-183105">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Try to replace the SkinnedMsgBox.init method with the following lines (copy and paste them):<br /><br /><pre><code>Method SkinnedMsgBox.Init, uses esi, pOwner:Pointer, hParentWnd:Handle, \<br />&nbsp; &nbsp; &nbsp; &nbsp;  dTtlID:dword, dMsgID:dword, pGifName:Pointer, \<br />&nbsp; &nbsp; &nbsp; &nbsp;  pBtn1Name:Pointer, dBtn1ID:dword, \<br />&nbsp; &nbsp; &nbsp; &nbsp;  pBtn2Name:Pointer, dBtn2ID:dword, \<br />&nbsp; &nbsp; &nbsp; &nbsp;  pBtn3Name:Pointer, dBtn3ID:dword<br />&nbsp; &nbsp; local bBuffer[1024]:byte<br /><br />&nbsp; &nbsp; SetObject esi<br />&nbsp; &nbsp; ACall esi.Init, pOwner, hParentWnd, &quot;SkinnedMsgBox&quot;<br />&nbsp; &nbsp; invoke LoadString, hInstance, dTtlID, addr bBuffer, sizeof bBuffer<br />&nbsp; &nbsp; mov .pCaptionText, $invoke(StrNew, addr bBuffer)<br />&nbsp; &nbsp; invoke LoadString, hInstance, dMsgID, addr bBuffer, sizeof bBuffer<br />&nbsp; &nbsp; mov .pMessageText, $invoke(StrNew, addr bBuffer)<br /><br />&nbsp; &nbsp; m2m .pBtn1ResName, pBtn1Name<br />&nbsp; &nbsp; m2m .dBtn1ID, dBtn1ID<br />&nbsp; &nbsp; m2m .pBtn2ResName, pBtn2Name<br />&nbsp; &nbsp; m2m .dBtn2ID, dBtn2ID<br />&nbsp; &nbsp; m2m .pBtn3ResName, pBtn3Name<br />&nbsp; &nbsp; m2m .dBtn3ID, dBtn3ID<br />&nbsp; &nbsp; m2m .pGifResName, pGifName<br />MethodEnd</code></pre><br /><br />I think it should compile correctly now&nbsp; ;)<br /><br />Biterider</div>
+    <div class="meta">Posted on 2006-07-07 15:52:02 by Biterider</div>
+   </div>
+   <div class="post" id="post-183144">
+    <div class="subject"><a href="#post-183144">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi Biterider,<br /><br />I copied and pasted your text, and it compiles ok now. Thanks for the update.<br /><br />Just to be sure I had all object now I compared the created LIB-files in the LIB directory with the ASM and INC files in the OBJECTS directory.<br /><br />I noticed some Inc files that didn&#39;t have an asm file. So: A corresponding LIB file can&#39;t be created.<br />If they are to be used as a LIB file, a corresponding ASM file should be added, and the creation of the objects should be added to the MakeObjs.bat file:<br /><br /><pre><code>D3Camera.inc<br />D3Light.inc<br />D3Math.inc<br />D3Object.inc<br />D3Scene.inc<br />D3Triangle.inc<br />D3VectronCollection.inc<br />SkinnedModalDialog.inc</code></pre><br /><br />Some objects do have a corresponding ASM file, but MakeObjs.bat doesn&#39;t mention them. So, for those object no LIB files are created. Again: If they are to be used as a LIB file they should be added to the MakeObjs.bat file too:<br /><br /><pre><code>CAD_DialogSetup.asm<br />EditStream.asm<br />RA_Float.asm<br />RA_MethodSetup.asm<br />RA_TextSource.asm</code></pre><br /><br />Maybe for the next release?<br />Just in case you didn&#39;t have noticed it yourself...<br /><br />Friendly regards,<br />mdevries.<br /></div>
+    <div class="meta">Posted on 2006-07-08 06:51:54 by mdevries</div>
+   </div>
+   <div class="post" id="post-183238">
+    <div class="subject"><a href="#post-183238">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi mdevries<br /><br />The files D3xxx.inc are implementations of objects contained in the D3Engine.inc file. The compilation file is D3Engine.asm. This must be this way, since all these objects work together and need to know about the structure of each other. Another way to do it is using VirtualObjects or playing with the compilation switches, but I prefer to do it this way.<br /><br />SkinnedModalDialog.asm is a relict, you can delete it.<br />All CAD_xxx are files from my own that should not be in the package.<br /><br />EditStream and the RA_xxx objects are erroneously not included in MakeObjects.bat file.<br /><br />I updated the zip file to include and update some files.<br /><br />If you find any other issue, please don’t hesitate to write it.<br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-07-09 07:32:16 by Biterider</div>
+   </div>
+   <div class="post" id="post-183252">
+    <div class="subject"><a href="#post-183252">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Hi Biterider,<br /><br />The new MakeObjs.bat searches for Demo01.asm which is not in the Objects directory. The error message is:<br /><br /><pre><code>MASM : fatal error A1000: cannot open file : Demo01.asm</code></pre><br /><br />And EditStream gives the following error messages.<br />In fact it&#39;s only one: EditStreamID is missing.<br /><br /><pre><code>C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20) : error A2006: undefined symbol : EditStreamID<br /> MacroLoop(1): iteration 1: Macro Called From <br />&nbsp; Object(7): Macro Called From<br />&nbsp;  C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20): Include File<br />C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20) : error A2006: undefined symbol : EditStreamID<br /> MacroLoop(1): iteration 2: Macro Called From <br />&nbsp; Object(7): Macro Called From<br />&nbsp;  C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20): Include File<br />C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20) : error A2006: undefined symbol : EditStreamID<br /> MacroLoop(1): iteration 3: Macro Called From <br />&nbsp; Object(7): Macro Called From<br />&nbsp;  C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20): Include File<br />C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(19) : error A2006: undefined symbol : EditStreamID<br /> Object(9): Macro Called From<br />&nbsp; C:\Masm32\ObjAsm32\Code\Objects\EditStream.inc(20): Include File</code></pre><br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-09 09:13:50 by mdevries</div>
+   </div>
+   <div class="post" id="post-183255">
+    <div class="subject"><a href="#post-183255">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">zip updated.<br /><br />Biterider</div>
+    <div class="meta">Posted on 2006-07-09 10:09:25 by Biterider</div>
+   </div>
+   <div class="post" id="post-183256">
+    <div class="subject"><a href="#post-183256">Re: Limits of Debug system in ObjAsm32</a></div>
+    <div class="body">Thanks. Everything assembles fine now.<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-09 10:25:32 by mdevries</div>
+   </div>
+  </div>
+ </body>
+</html>

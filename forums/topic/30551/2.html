@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CPU Speed - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30551" />
+  <link rel="prev" href="../?id=30551&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30551">CPU Speed</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=30551&amp;page=1" style="">&laquo;</a><a href="../?id=30551&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="30551" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-214396">
+    <div class="subject"><a href="#post-214396">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote">You are saying that QPF might or might not use CPU&#039;s frequency.</div><br />Specifically, it might be one of the following:<br />- RDTSC - mostly on low- to -mid-end AMD systems from my experience<br />- 8254 PIT with a resolution of about 1 ms. It&#039;s set up via a I/O port, so it&#039;s kinda slow to use. If you see that your QPF/QPC is noticably slower than on other system, you most probably have 8254 PIT.<br />- APIC timer - good, fast, synchronized across all cores. May pause during power-saving modes so it can&#039;t be used to reliably measure time.<br />- PM Clock - an upgraded APIC timer. It doesn&#039;t pause during power-saving modes.<br />- HPET - &quot;the standard&quot; in all modern systems. ~20% faster to use than PM clock.<br /><br />Older windows versions (XP, specifically) need a /usepmtimer switch to make them use PM instead of legacy sh*t. Modern windows versions use PM timer or HPET, whichever is available (64-bit HPET is available on all modern motherboards. make sure to enable it in the bios config).<br /><br /><div class="quote">Getting to know how much realworld time has passed between one point in your code and another.</div><br />True, but even that isn&#039;t reliable in some scenarios. I prefer <strong>timeGetTime</strong> to get a reliable, even if less precise, timing. It has a resolution of 1 ms and precision of about 5ms, so it&#039;s OK in most situations.</div>
+    <div class="meta">Posted on 2011-05-19 02:46:12 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-214397">
+    <div class="subject"><a href="#post-214397">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote"><br />You are saying that QPF might or might not use CPU&#039;s frequency.<br />Whereas, i was assuming will always use CPU&#039;s frequency as the timer when it might use another&#039;s device at certain times.</div><br /><br />Yes, I said that literally a few times, and also quoted MSDN saying exactly the same. Not quite sure how you could have missed it.<br /><br /><div class="quote"><br />Then here is a question, why QPF/QPC should be used as a timer for algorithm bottlenecks when it doesn&#039;t directly relate to the CPU performance?<br /></div><br /><br />See HeLLoWoRLD&#039;s answer. QueryPerformanceCounter/Frequency only guarantee that you are querying a &#039;high-performance counter&#039;. Basically the most high-resolution counter available in the system. They don&#039;t make any guarantees about WHAT counter this is, or how high the resolution actually is. But since you can query the frequency, they don&#039;t have to.<br />You can still use it to time your code... Even GetTickCount() can be used for that. Just run the code in a loop enough times to compensate for the lack of resolution of the timer. You just can&#039;t time it in exact cycles... But that&#039;s what rdtsc is for.</div>
+    <div class="meta">Posted on 2011-05-19 02:56:35 by Scali</div>
+   </div>
+   <div class="post" id="post-214398">
+    <div class="subject"><a href="#post-214398">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote"><br />True, but even that isn&#039;t reliable in some scenarios. I prefer <strong>timeGetTime</strong> to get a reliable, even if less precise, timing. It has a resolution of 1 ms and precision of about 5ms, so it&#039;s OK in most situations.<br /></div><br /><br />I do QPF, and use it if I see a reasonable frequency reported, and fall back to timeGetTime when QPF seems suspect.</div>
+    <div class="meta">Posted on 2011-05-19 03:08:15 by Scali</div>
+   </div>
+   <div class="post" id="post-214401">
+    <div class="subject"><a href="#post-214401">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote"><br />Then again:<br />Multicore made rdtsc potentially buggy when the process is robbed from one core to the other. Then frequency throttling made it fuzzy and questionably trustful. Then now there may be even more advanced execution sophistication that interfere.</div><br /><br />I&#039;d like to add that especially Intel fumbled the TSC in recent years so that it no longer does what it is supposed to do, but it makes all the broken software in the world run.<br />Technically, the TSC was supposed to be updated at every cycle of the core. With multicore, yes, it would be rather obvious that each core could have a different TSC value (they may not have been initialized at the exact same time, and in recent years, with CPU throttling and power save etc, not all cores may run at the same clock speed all the time... Which shouldn&#039;t matter, if you view a multicore CPU as a multi-CPU system on-a-chip. If you have physically different CPUs in a system, clearly they will also each have their own TSC, so you need to be careful with which CPU you are using at the time).<br />However, since apparently most programmers don&#039;t understand how to write proper multithreaded code, this messed up most programs using TSC as an actual timer.<br /><br />Intel decided to make the TSC a global counter for multicore CPUs. So on an Intel CPU, calling RDTSC will yield the same value, regardless of what core you are using. They also decided to make the TSC run at a fixed speed (not all cores may be running at the same speed at all times anyway, so in a way it makes sense... otherwise, which core&#039;s clockspeed would you take?).<br />However, AMD apparently forgot to read the Intel specs, so AMD&#039;s multicore CPUs were not compatible with Intel in this respect. Despite everyone claiming that AMD had native multicore CPUs while Intel didn&#039;t, in reality AMD just copy-pasted the logic of multiple single-core Athlons onto a single die. The result: they still had individual TSCs, which were not synced, unlike Intel&#039;s.<br /><br />AMD decided to release a software fix (which I believe will just re-sync the TSCs of all cores every once in a while) so that their CPUs now had the same behaviour as Intel again, and all the broken software would work. Bonus points for the marketing of this fix: They called it the Dual-Core Optimizer(tm):<br />http://support.amd.com/us/Pages/dynamicDetails.aspx?ListID=c5cd2c08-1432-4756-aafa-4d9dc646342f&amp;ItemID=153<br />AMD always &#039;optimizes&#039; stuff when their hardware is flawed. Just like they know have a &#039;tessellation optimizer&#039; in their Radeon drivers, which artificially reduces tessellation workloads, since their hardware can&#039;t handle high amplification counts, teehee.<br /><br />So, everyone is happy again, since Intel/AMD now basically turned RDTSC into what QPC has been doing all the time: a high-performance fixed speed timer. So all the broken software will now work, teehee!<br />Well, except for actual multi-CPU systems. I don&#039;t think the CPUs will sync their TSCs.</div>
+    <div class="meta">Posted on 2011-05-19 03:45:39 by Scali</div>
+   </div>
+   <div class="post" id="post-214409">
+    <div class="subject"><a href="#post-214409">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote">which I believe will just re-sync the TSCs of all cores every once in a while</div><br /><br />Hmm. That cant work.<br />One day or another a process will jump cores at the exact wrong time and everything will blow.<br /><br />ti_mo_n :<br />Damn. I dont know where you get your information from but your contribution shows how valuable a few knowledgeable words can be ; I didnt even think it was possible to get that information. But then again silly me, there must be someone somewhere who writes the windows librairies ; I don&#039;t know if thats you (or if you disassembled ).<br />This forum doesnt deceive me :)</div>
+    <div class="meta">Posted on 2011-05-19 11:55:56 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-214410">
+    <div class="subject"><a href="#post-214410">Re: CPU Speed</a></div>
+    <div class="body">Besides that, 5ms uncertainity is not sufficient for the only thing that matters to everyone in the world:<br /><br />Timing part or all of a framebuffer generation.<br /><br /></div>
+    <div class="meta">Posted on 2011-05-19 12:01:17 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-214411">
+    <div class="subject"><a href="#post-214411">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">which I believe will just re-sync the TSCs of all cores every once in a while</div><br /><br />Hmm. That cant work.<br />One day or another a process will jump cores at the exact wrong time and everything will blow.</div><br /><br />No, it&#039;s not perfect. But that&#039;s AMD for ya (just like their large page addressing bug in the original Athlon... never fixed, just a less-than-perfect software workaround: disable large pages in the Windows registry: http://support.microsoft.com/kb/270715).<br />It should be good enough though, things don&#039;t drift too far on short notice. Besides, it&#039;s mostly for games and other high-performance apps, where generally all cores are running at max speed all the time, so that&#039;s not the most problematic scenario.</div>
+    <div class="meta">Posted on 2011-05-19 12:04:53 by Scali</div>
+   </div>
+   <div class="post" id="post-214415">
+    <div class="subject"><a href="#post-214415">Re: CPU Speed</a></div>
+    <div class="body">Let&#039;s say the counters are synchronized, get out of sync because one throttles a bit, then before the next sync some code does two rdtsc on two cores because of a task switch, gets a negative difference and blows up.<br /><br /><br />When talking about synchronization, deadlocks and impossible one-in-a-million scenarios, a teacher once told us stories about people that win huge lotteries with their first tickets.<br /><br />There are gazillions of processors executing gazillions of instructions each second, for years and years.<br /><br />Theres no such thing as luck ; shit hapens and things will blow. :)<br /><br /></div>
+    <div class="meta">Posted on 2011-05-19 12:57:54 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-214416">
+    <div class="subject"><a href="#post-214416">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote"><br />Let&#039;s say the counters are synchronized, get out of sync because one throttles a bit, then before the next sync some code does two rdtsc on two cores because of a task switch, gets a negative difference and blows up.</div><br /><br />Sure, but as I say, in games, the CPU will run at full speed, and at the time AMD didn&#039;t have throttling for overheating either (in fact, I don&#039;t know if they do now).<br />So it&#039;s &#039;good enough&#039; in most cases.<br /><br />The real problem is not the CPU though, it&#039;s the software (although obviously it&#039;s nasty when AMD makes Intel clones that don&#039;t do exactly what the Intels do).<br />The software should either not rely on RDTSC directly, or be smarter about how they use it. If you set thread affinity, then at least you avoid the core jumping problem. And you could probably avoid cores clocking down by making your own idle threads, just to be safe. Or just tell the user to disable Cool-n-Quiet.</div>
+    <div class="meta">Posted on 2011-05-19 13:06:07 by Scali</div>
+   </div>
+   <div class="post" id="post-214418">
+    <div class="subject"><a href="#post-214418">Re: CPU Speed</a></div>
+    <div class="body">I believe scali is correct wrt. how AMD &quot;fixed&quot; their TSC differences - I used to own an AMD64x2. Before AMD released the &quot;fix&quot;, I used to have to manually limit thread affinity of some games to a single CPU because the stupid game designers thought it was a good idea to base their gameloop timing around RDTSC... and I kept doing that, since I didn&#039;t feel like having an app constantly running the needed ring0 privileges in order to WRMSR.</div>
+    <div class="meta">Posted on 2011-05-20 14:15:47 by f0dder</div>
+   </div>
+   <div class="post" id="post-214419">
+    <div class="subject"><a href="#post-214419">Re: CPU Speed</a></div>
+    <div class="body">Well, the description on the site actually says that too:<br /><div class="quote">The AMD Dual-Core Optimizer can help improve some PC gaming video performance by compensating for those applications that bypass the Windows API for timing by directly using the RDTSC (Read Time Stamp Counter) instruction. Applications that rely on RDTSC do not benefit from the logic in the operating system to properly account for the affect of power management mechanisms on the rate at which a processor core&#039;s Time Stamp Counter (TSC) is incremented. The AMD Dual-Core Optimizer helps to correct the resulting video performance effects or other incorrect timing effects that these applications may experience on dual-core processor systems, by <strong>periodically adjusting the core time-stamp-counters, so that they are synchronized.</strong></div><br /><br />It doesn&#039;t say how large this &#039;period&#039; is, but I doubt they do it at EVERY context switch.<br />At the same time it also implies that &#039;bypassing the Windows API&#039; (being QPC/QPF) for timing logic and using RDTSC directly is a bad thing, since the Windows API has code to avoid problems with core switching, throttling and all that.</div>
+    <div class="meta">Posted on 2011-05-20 15:01:13 by Scali</div>
+   </div>
+   <div class="post" id="post-214423">
+    <div class="subject"><a href="#post-214423">Re: CPU Speed</a></div>
+    <div class="body">In general QPC is useless, the results are unreliable as the switch from protected mode in order to execute RDPMC has so much overhead that RDTSC is probably more accurate. No idea what the huge security issue was in making this a privileged instruction but for whatever reason you cannot execute it from user mode. Would be nice if MS/Intel would give it to us though, a low granularity timer doesn&#039;t seem to threaten anything except Intel&#039;s extremely expensive vTune analyzer.</div>
+    <div class="meta">Posted on 2011-05-24 01:04:50 by donkey</div>
+   </div>
+   <div class="post" id="post-214424">
+    <div class="subject"><a href="#post-214424">Re: CPU Speed</a></div>
+    <div class="body">I&#039;m struggling to think of a case where timing in video games is so critical that it requires anything like RDTSC.<br /></div>
+    <div class="meta">Posted on 2011-05-24 06:06:14 by Homer</div>
+   </div>
+   <div class="post" id="post-214425">
+    <div class="subject"><a href="#post-214425">Re: CPU Speed</a></div>
+    <div class="body"><div class="quote"><br />I&#039;m struggling to think of a case where timing in video games is so critical that it requires anything like RDTSC.</div><br /><br />In video games maybe not, but in performance analyzers high resolution timers that can be accessed quickly are important.</div>
+    <div class="meta">Posted on 2011-05-24 08:01:58 by donkey</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=30551&amp;page=1" style="">&laquo;</a><a href="../?id=30551&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="30551" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

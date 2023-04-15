@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Selecting multiple files in OpenFileName-dialog - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13864" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=13864">Selecting multiple files in OpenFileName-dialog</a></p>
+   <div class="post" id="post-107166">
+    <div class="subject"><a href="#post-107166">Selecting multiple files in OpenFileName-dialog</a></div>
+    <div class="body">I've been trying to achieve this for several hours now but it don't work :( I want a dynamic buffer to recieve the filenames from GetOpenFileName so that I can select alot of files.  The ofn structure flags are set to OFN_ENABLEHOOK + some more. That part is working OK, the thing is that I can't select any files if their length is above the original ofn.nMaxFile-value (here 32). This is what I have tried:<br /><br /><pre><code><br /><br />.data<br />ofn OPENFILENAME &lt;sizeof OPENFILENAME,0,400000h,NULL,0,0,0,NULL,\<br />				256,0,0,0,0,\<br />				OFN_ENABLEHOOK or	OFN_PATHMUSTEXIST or OFN_LONGNAMES or OFN_ALLOWMULTISELECT or OFN_FILEMUSTEXIST or OFN_EXPLORER or OFN_HIDEREADONLY,\<br />				0,0,0,0,offset OFNHookProc,0&gt;<br /><br />...<br /><br /><br />invoke HeapCreate,HEAP_NO_SERIALIZE,0,0<br />mov hHeapen,eax<br />invoke HeapAlloc,hHeapen,HEAP_ZERO_MEMORY or HEAP_NO_SERIALIZE,32<br />mov lpHeapPointer,eax<br />mov ofn.lpstrFile, eax<br />mov hHeapSize,32<br />mov ofn.nMaxFile, 32<br />invoke GetOpenFileName,offset ofn<br /><br />...<br />OFNHookProc PROC hWin&#58;DWORD,uMsg&#58;DWORD,wParam&#58;DWORD,lParam&#58;DWORD<br />LOCAL hh&#58;HANDLE<br /><br />.if uMsg==WM_NOTIFY<br />	mov eax,lParam<br /><br />	<br />		.if &#91;eax&#93;.NMHDR.code==CDN_SELCHANGE<br />			invoke GetParent,hWin<br />			mov hh,eax<br />			invoke SendMessage,hh,CDM_GETSPEC,0,0<br />			push eax<br />			invoke SendMessage,hh,CDM_GETFOLDERPATH,0,0<br />			pop ecx<br />			add eax,ecx<br /><br />				.if eax&gt;=hHeapSize<br /><br /><br />				  inc eax<br />				  mov hHeapSize,eax<br />				  mov ofn.nMaxFile,eax<br />				  invoke HeapReAlloc,hHeapen,HEAP_REALLOC_IN_PLACE_ONLY	or HEAP_ZERO_MEMORY or HEAP_NO_SERIALIZE,lpHeapPointer,eax <br />				 ; mov lpHeapPointer,eax<br /><br />				.endif<br /><br />		.endif<br /><br /><br />.else<br />	mov		eax,FALSE<br />	ret<br />.endif<br />mov		eax,TRUE<br />ret<br />OFNHookProc endp <br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-06-15 09:13:38 by Delight</div>
+   </div>
+   <div class="post" id="post-107193">
+    <div class="subject"><a href="#post-107193">Selecting multiple files in OpenFileName-dialog</a></div>
+    <div class="body">Are you sure the problem is nMaxFile? Then,<br /><br /><div class="quote">nMaxFile<br /><br />Specifies the size, in bytes (ANSI version) or characters (Unicode version), of the buffer pointed to by lpstrFile. The GetOpenFileName and GetSaveFileName functions return FALSE if the buffer is too small to contain the file information. The buffer should be at least 256 characters long. </div></div>
+    <div class="meta">Posted on 2003-06-15 16:49:39 by cakmak</div>
+   </div>
+   <div class="post" id="post-107212">
+    <div class="subject"><a href="#post-107212">Selecting multiple files in OpenFileName-dialog</a></div>
+    <div class="body">When calling GetOpenFileName, you must allocate a a memory enough to hold the files selected. If you expect that you need to have 1 kb for the files that user will select, then allocate such memory for <strong>lpstrFile</strong> and specify this also in nMaxFile.<br /><br />Hope it will help you</div>
+    <div class="meta">Posted on 2003-06-15 21:18:43 by rxbagain</div>
+   </div>
+   <div class="post" id="post-107247">
+    <div class="subject"><a href="#post-107247">Selecting multiple files in OpenFileName-dialog</a></div>
+    <div class="body">CakMak: Yep, it returns FALSE :(<br /><br />rxbagain: That is what I did before, but what if the user selects 2000 files? That would require a <em>very</em> large buffer. That's why I'm trying to have a dynamic buffer. I've found an example that does what I'm trying to do but it's in C++ and I don't understand that language, so if anyone could translate parts of it to ASM, I would be very happy:<br /><br />here is the link: <a target="_blank" href="http://www.codeproject.com/dialog/PJA_MultiSelect.asp">http://www.codeproject.com/dialog/PJA_MultiSelect.asp</a></div>
+    <div class="meta">Posted on 2003-06-16 04:36:39 by Delight</div>
+   </div>
+   <div class="post" id="post-107248">
+    <div class="subject"><a href="#post-107248">Selecting multiple files in OpenFileName-dialog</a></div>
+    <div class="body">I'm not sure that you can select that big a buffer anyway, I always thought that the maximum size of the buffer was fixed at 65535 bytes (0FFFFh) because the returned buffer size is limited to 2 byte :<br /><div class="quote">If the buffer is too small, the function returns FALSE and the CommDlgExtendedError function returns FNERR_BUFFERTOOSMALL. In this case, <strong>the first two bytes</strong> of the lpstrFile buffer contain the required size, in bytes or characters. </div></div>
+    <div class="meta">Posted on 2003-06-16 04:48:50 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

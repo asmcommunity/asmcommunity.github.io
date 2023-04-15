@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Tesselate THIS !! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29150" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29150">Tesselate THIS !!</a></p>
+   <div class="post" id="post-205892">
+    <div class="subject"><a href="#post-205892">Tesselate THIS !!</a></div>
+    <div class="body">I wanna pick your collective brains.<br />Look at the attached images, and try to develop a scheme which follows these rules:<br />-Only Triangles (or quads, which are 2 triangles)<br />-More triangles near the eye, less in the &#039;distance&#039;<br />-No &#039;tee junctions&#039; (triangles all marry neatly)<br /><br />Provided that these rules are observed, what tesselations could we use?</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2626" target="_blank">frusticles.JPG</a></li>
+      <li><a href="../../attachments/?id=2628" target="_blank">help.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2008-09-09 09:01:43 by Homer</div>
+   </div>
+   <div class="post" id="post-205897">
+    <div class="subject"><a href="#post-205897">Re: Tesselate THIS !!</a></div>
+    <div class="body">you just measure the area of each quad/triangle in screen-space, and split it in 4 triangles (no matter whether it&#039;s a quad or tri) above a&nbsp; certain threshold. <br />There&#039;s a Geometry Shader program for this, already ;)</div>
+    <div class="meta">Posted on 2008-09-10 00:22:16 by Ultrano</div>
+   </div>
+   <div class="post" id="post-205898">
+    <div class="subject"><a href="#post-205898">Re: Tesselate THIS !!</a></div>
+    <div class="body">I&#039;ve been thinking about applying the view tranform to deform a predefined tesselation template which is defined in unit space (equals texture space). I&#039;ve already used this technique to extract the planes and bounding vertices of the view frustum in 3D in realtime applications, I&#039;m just applying it to a more complex unit-space geometry.<br />This can be done on the cpu, or the gpu.<br />But I&#039;m not describing the &#039;geometry clipmaps&#039; technique (which was published by Hugues Hoppe exactly one month after I posted on This Forum about Sparse Radial Oversampling).<br />This is a lot faster, and eliminates some problems with that scheme, and it&#039;s a new idea based on an old one.<br />In the SRO algorithm, you&#039;re riding a dartboard-like pizza of sampling coordinates, so if the camera rotates but doesn&#039;t translate, we don&#039;t need to retesselate the pizza, and our framerate can be higher.<br />I realized that I don&#039;t need to keep all the triangles to perform simple collision detection against the terrain.<br />I can do it atomically, no problem.<br />I realized that in terms of rendering, I don&#039;t need the whole pizza, just the slice that represents the current view - and that my collision detection against the terrain FOR OFFSCREEN SPACE can be based on something other than the planes of triangles, with relatively low cost.<br /></div>
+    <div class="meta">Posted on 2008-09-10 05:57:28 by Homer</div>
+   </div>
+   <div class="post" id="post-205903">
+    <div class="subject"><a href="#post-205903">Re: Tesselate THIS !!</a></div>
+    <div class="body">OK before I describe what I have in mind, I&#039;ll explain a little about &#039;unit space projections&#039;.<br /><br />Let&#039;s describe a 2D Square in &quot;unit space&quot;.<br />X values will range between +/- 0.5, and Y (or Z) values will range between 0 and 1.<br /><br />Near Left = (-0.5, 0.0)<br />Near Right = (+0.5, 0.0)<br />Far Left = (-0.5, +1.0)<br />Far Right = (+0.5, +1.0)<br /><br />Now lets grab the current View and Projection transform matrices being used by the Camera.. and let&#039;s concatenate those two matrices, and then invert the resulting matrix.<br />The final resulting matrix (inverse viewproj) can be used to transform coordinates from &quot;unit space&quot; to &quot;world space&quot;.<br /><br />So if we transform the above coords using said matrix, we get:<br /><br />Near Left = (-smallvalue,CameraFrustumNearPlaneDistance)<br />Near Right = (+smallvalue,CameraFrustumNearPlaneDistance)<br />Far Left = (-largevalue, CameraFrustumFarPlaneDistance)<br />Far Right = (+largevalue, CameraFrustumFarPlaneDistance)<br /><br />Note that this calculation didn&#039;t take world translation into account, it assumes that the camera is always located at World Zero, which is important for the algorithm I&#039;m going to describe next.<br /><br />So, we just learned how to &#039;deform&#039; a unit square into a frustum-shaped trapezoid.<br />What if we supplied other unit-space geometries, for example a unit triangle, or a unit circle or sphere or whatever?<br />We can deform ANY geometry defined in unit space, effectively stretching it, giving it &#039;perspective&#039;.<br /><br />Now I&#039;m going to make a statement which is not immediately obvious.<br />The view frustum can be described as a triangle or tetrahedron rather than as a deformed square or cube.<br /><br />Now picture a dart board geometry, with the viewer always located in the middle of the dartboard... and imagine that this dartboard deforms to the geometry of the terrain as the viewer moves and rotates.<br />Its a fact that the viewer can only see one slice of this pizza at a time - represented by a triangle whose apex is located at the origin. We can now think in terms of our view frustum being a triangle that is moving and rotating above the map of the world.<br /><br />Contrast this with &#039;spherical clipmaps&#039; algorithm, it will start to make sense.<br />In that whitepaper, the size of triangles is based on their distance from the camera - triangles which are twice as far away are twice the size, so that they appear on the screen as roughly the same size regardless of distance.<br />Strictly speaking, this approximation of perspective is not accurate - the Golden Mean is not a 2:1 relationship.<br />My concept is to deform a regular tesselation (as a triangle, not as a square grid) using the same perspective projection that the camera uses, so that my triangles are EXACTLY the same size onscreen - our deformed array of points appears to be a regularly-spaced array when viewed through the camera.<br /><br />Although I plan on using spherical mapping to define planets of terrain rather than less cool planar heightmapping, it can easily handle both.<br /><br />Because we&#039;re only interested in a slice of the &#039;pizza&#039; that defines the hemisphere of the planet we&#039;re looking at, it&#039;s roughly 6 times faster than the &#039;spherical clipmaps&#039; algorithm, without jumping through any hoops, and possibly without the need for vertex textures to pass the data to the gpu (meaning it can work on older videocards).<br />For now I&#039;m going to call this algorithm &#039;dynamic sparse superfrustum oversampling on the gpu&#039; or simply &#039;the pizza slice algorithm&#039;.<br /><br />I&#039;ve left out loads of details and I expect I&#039;ll modify this post, but thats a quick overview of the new algo in contrast with planar and spherical gpu clipmap techniques.<br /></div>
+    <div class="meta">Posted on 2008-09-11 03:11:07 by Homer</div>
+   </div>
+   <div class="post" id="post-205915">
+    <div class="subject"><a href="#post-205915">Re: Tesselate THIS !!</a></div>
+    <div class="body">Ultrano - two problems with your suggestion.<br /><br />#1 - Geometry Shaders only work on DirectX 10, which I believe is only good for VISTA (which I dont like, I run XP SP3) although I understand there is an XP version of DX10 in the beta phase.<br /><br />#2 - Geometry Shaders are only supported in hardware on GeForce 8800 and above (my best machine has an 8800 and its a rocket, what about everyone else?)<br /><br />I don&#039;t think that a software rendering device is a viable solution - if I have to do stuff in software, I&#039;ll do it myself, not leave it to microsoft drivers to do it the long way :D<br /><br /></div>
+    <div class="meta">Posted on 2008-09-12 22:12:38 by Homer</div>
+   </div>
+   <div class="post" id="post-205916">
+    <div class="subject"><a href="#post-205916">Re: Tesselate THIS !!</a></div>
+    <div class="body">#1 - OpenGL ;) . ATi will soon add support, too. <br />#2 - I doubt users with something less than GF8400 or HD2400 (both being cheapo cards) will mind not seeing things tessellated :D</div>
+    <div class="meta">Posted on 2008-09-13 02:55:13 by Ultrano</div>
+   </div>
+   <div class="post" id="post-205919">
+    <div class="subject"><a href="#post-205919">Re: Tesselate THIS !!</a></div>
+    <div class="body"><div class="quote"><br />I don&#039;t think that a software rendering device is a viable solution - if I have to do stuff in software, I&#039;ll do it myself, not leave it to microsoft drivers to do it the long way :D<br /></div><br />why not simple a virtual polyfiller, meaning it doesnt actually render them but it counts how many pixels big they are onscreen and let it feedback to tesselation proc to tesselate more if polys appear too big onscreen?<br /></div>
+    <div class="meta">Posted on 2008-09-15 01:47:31 by daydreamer</div>
+   </div>
+   <div class="post" id="post-205920">
+    <div class="subject"><a href="#post-205920">Re: Tesselate THIS !!</a></div>
+    <div class="body"><div class="quote">although I understand there is an XP version of DX10 in the beta phase.</div>Where?<br /><br />There was the unofficial and hacky <a target="_blank" href="http://alkyproject.blogspot.com/">Alky project</a> but that was shut down... I wouldn&#039;t mind DX10 on XP though. But I&#039;d much rather see prioritized I/O and the more agressive prefetcher, tbh :)</div>
+    <div class="meta">Posted on 2008-09-15 19:08:12 by f0dder</div>
+   </div>
+   <div class="post" id="post-205954">
+    <div class="subject"><a href="#post-205954">Re: Tesselate THIS !!</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">although I understand there is an XP version of DX10 in the beta phase.</div>Where?<br /><br />There was the unofficial and hacky <a target="_blank" href="http://alkyproject.blogspot.com/">Alky project</a> but that was shut down... I wouldn&#039;t mind DX10 on XP though. But I&#039;d much rather see prioritized I/O and the more agressive prefetcher, tbh :)<br /></div><br />well I dropped my XP game computer in the floor, all I had to choose for replacements gfx cards was dx10 cards:(, so I moved gameplay to my newest because I couldnt get dx9 to work anymore :(, so it became reduced to DVD-computer/rendernode<br />that would seriously be interesting to run beta dx10 for xp on that one<br /></div>
+    <div class="meta">Posted on 2008-09-19 12:58:35 by daydreamer</div>
+   </div>
+   <div class="post" id="post-205978">
+    <div class="subject"><a href="#post-205978">Re: Tesselate THIS !!</a></div>
+    <div class="body">daydreamer - point me at an example of a &#039;virtual polyfiller&#039; please.<br /></div>
+    <div class="meta">Posted on 2008-09-24 07:23:41 by Homer</div>
+   </div>
+   <div class="post" id="post-205981">
+    <div class="subject"><a href="#post-205981">Re: Tesselate THIS !!</a></div>
+    <div class="body">Maybe<br />http://developer.download.nvidia.com/SDK/10.5/opengl/samples.html<br />the &quot;Transform Feedback Fractal&quot; ?<br /><br />Or something along that idea, but entirely on CPU, and generating the object into a streaming VBO. </div>
+    <div class="meta">Posted on 2008-09-24 11:13:55 by Ultrano</div>
+   </div>
+   <div class="post" id="post-205985">
+    <div class="subject"><a href="#post-205985">Re: Tesselate THIS !!</a></div>
+    <div class="body">Well if i was to use opengl, i have access to geometry shaders on xp, so it wouldnt make sense - I&#039;m looking for a path that DOESNT use the cpu to tesselate, as its quite expensive to do view dependant split and merge operations at runtime on the cpu for arbitrary surfaces.<br />I was looking for a DirectX example.<br />Maybe I should think about supporting both in my graphic engine, ive written demos previously which used both so I could extend that thought process to the engine.</div>
+    <div class="meta">Posted on 2008-09-25 01:32:58 by Homer</div>
+   </div>
+   <div class="post" id="post-206026">
+    <div class="subject"><a href="#post-206026">Re: Tesselate THIS !!</a></div>
+    <div class="body"><div class="quote"><br />daydreamer - point me at an example of a &#039;virtual polyfiller&#039; please.<br /><br /></div><br />you know I like to make ddraw thingies just for fun sometimes<br />just a simple transform to screenpixels like you should have done if you fed it to your own software polyfiller, but it performs instead report lengths in pixels on polys/area on polys measured in pixels onscreen completely without write anything onscreen<br />and you could call it only for closest polys to viewer and get input like Max lengths/areas, median lengths/areas ,min lengths/areas whatever information you need and as often you want to adjust tesselation, which is maybe not nesserary by each frame<br />after that you can add your own conditional code to base changes of tesselation if max and median becomes too big for your taste, after testruns+ measured performance of the systems FPS, but initial measure performance would easily be possible with dx caps calls, to initalize variables with and let it tune up/down depending on fps<br /></div>
+    <div class="meta">Posted on 2008-10-01 14:22:39 by daydreamer</div>
+   </div>
+  </div>
+ </body>
+</html>

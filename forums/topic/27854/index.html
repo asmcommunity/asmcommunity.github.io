@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>another string manipulating routine - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27854" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27854">another string manipulating routine</a></p>
+   <div class="post" id="post-198340">
+    <div class="subject"><a href="#post-198340">another string manipulating routine</a></div>
+    <div class="body">Submitted for your approval.
+I often need to format the display of floating point numbers for
+output to the screen (only display a set number of significant digits).
+Truncating the number is the easiest, but not correct way to do this.
+So I created this function. It will correctly round off or pad the
+number to any number of decimal places (at least as far as I have tested).
+
+NOTES:
+1. String must contain only valid 'numerical' characters ('0'-'9','e','-','.')
+2. String must be in a buffer at least 1 byte larger than length of string
+3. Will not reformat a 'number' with exponential notation
+
+If anyone else has a better solution and is willing to share, I would love
+to see it. Otherwise, all comments welcome.
+
+<pre><code>
+SetDecimal proc uses edi Number:DWORD,Decimal:DWORD
+;--------------------------------------------------------------------------
+;IN   <-  Number  = pointer to a null terminated string representing a number
+;IN   <-  Decimal = number of desired decimal places in formatted string
+;OUT  ->  Returns 0 in eax
+;DESTROYS ecx,edx
+;USAGE    invoke SetDecimal,addr Buffer,2
+;--------------------------------------------------------------------------
+
+;if number has no digits in front of the decimal,
+;we need to insert a '0' in front of the decimal
+mov    edi,Number
+cmp    byte ptr,02Dh
+jne    @F
+cmp    byte ptr,02Eh
+je     @pad0
+@@:
+cmp    byte ptr,02Eh
+je     @pad1
+jmp    @exponent
+@pad0:
+inc    edi
+@pad1:
+mov    dl,030h
+call   Shift
+
+;check if exponential
+@exponent:
+call   GetLength          ;returns length in ecx
+push   ecx
+mov    al,065h            ;'e'
+mov    edi,Number
+repne  scasb
+je     @end               ;if number is exponential, we do not handle it
+
+;check if there is a decimal in the string
+pop    ecx
+mov    al,02Eh            ;'.'
+mov    edi,Number
+repne  scasb
+je     @decimal           ;found a decimal in the string
+cmp    Decimal,0          ;if no decimal needed, we are done
+je     @end
+mov    byte ptr,02Eh ;add decimal
+inc    edi
+mov    byte ptr,0    ;add terminating zero
+
+;check if number needs to be padded or rounded
+@decimal:
+mov    ecx,Decimal
+@@:
+test   ecx,ecx
+je     @preround          ;Number has more digits past decimal than we want
+cmp    byte ptr,0
+je     @add0              ;Number has less digits past decimal than we want
+inc    edi
+dec    ecx
+jmp    @B
+
+;add 0's to requested number of decimal places
+@add0:
+test   ecx,ecx
+je     @term
+mov    byte ptr,030h
+inc    edi
+dec    ecx
+jmp    @add0
+
+;round off number to requested number of decimal places
+@preround:
+cmp    byte ptr,035h
+jl     @term              ;this digit does not need rounding, we are done
+mov    byte ptr,0    ;terminate string at correct length
+dec    edi                ;adjust pointer
+call   GetLength          ;ecx contains number of chars
+@round:
+test   ecx,ecx            ;first char in string
+je     @preshift
+cmp    byte ptr,02Dh ;first char is negative sign
+je     @preshift
+cmp    byte ptr,02Eh ;the decimal, do not change it
+jne    @F
+dec    edi
+dec    ecx
+@@:
+inc    byte ptr
+cmp    byte ptr,03Ah
+jl     @checkdec
+mov    byte ptr,030h
+dec    edi
+dec    ecx
+jmp    @round
+
+;if number was rounded up, we need to shift all other digits right
+@preshift:
+inc    edi
+cmp    byte ptr,030h
+jne    @end
+mov    dl,byte ptr
+mov    byte ptr,031h
+inc    edi
+call   Shift
+
+;add terminating zero to string if not already there
+@term:
+mov    byte ptr,0
+
+;check for unwanted decimal point at end of string
+@checkdec:
+cmp    Decimal,0
+jne    @end
+call   GetLength
+mov    edi,Number
+add    edi,ecx
+dec    edi
+cmp    byte ptr,02Eh
+jne    @end
+mov    byte ptr,0
+
+@end:
+xor    eax,eax
+ret
+;local procedure =============================
+GetLength equ $ ;get number of chars in string
+xor    ecx,ecx
+mov    eax,Number
+@@:
+cmp    byte ptr,0
+je     @F
+inc    ecx
+inc    eax
+jmp    @B
+@@:
+retn
+;loc</div>
+    <div class="meta">Posted on 2001-04-30 19:18:00 by anon</div>
+   </div>
+  </div>
+ </body>
+</html>

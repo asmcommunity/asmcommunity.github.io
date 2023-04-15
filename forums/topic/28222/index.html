@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Weird speed increase - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28222" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28222">Weird speed increase</a></p>
+   <div class="post" id="post-199970">
+    <div class="subject"><a href="#post-199970">Weird speed increase</a></div>
+    <div class="body">I don’t know a whole lot about optimisations but at the moment I’m reading the Agner Fog Help File and am trying to learn. I wrote a small program using the rdtsc command to measure the number of clock cycles some code takes.
+
+I was just comparing the mul to imul and, well I’ve run into something strange.
+
+I started trying to measure how long the following took to execute:
+<pre><code>
+Mult Proc
+mov ecx, 1000
+@@:
+	xor edx, edx
+	mov eax, 17892
+	mov ebx, 71172
+	mul ebx
+dec ecx
+jnz @B
+ret
+Mult EndP
+</code></pre>
+This took 5014 clock cycles
+
+Then I tried the imul version
+<pre><code>
+mov ecx, 1000
+@@:
+	xor edx, edx
+	mov eax, 17892
+	mov ebx, 71172
+	imul ebx
+dec ecx
+jnz @B
+</code></pre>
+Again 5014
+
+Then I changed it to an immediate value
+<pre><code>
+mov ecx, 1000
+@@:
+	xor edx, edx
+	mov eax, 17892
+	mov ebx, 71172
+	imul eax, 71172
+dec ecx
+jnz @B
+</code></pre>
+Now it was down to 5013
+
+Then I got rid of the unnecessary code
+<pre><code>
+mov ecx, 1000
+@@:
+	xor edx, edx
+	mov eax, 17892
+	imul eax, 71172
+dec ecx
+jnz @B
+</code></pre>
+Huge improvement, down to 4041
+
+Then I removed the xor edx, edx. But there was no improvement, so for some reason I left it out but put back in the mov ebx, 71172 ( I don’t know why I tried this).
+<pre><code>
+mov ecx, 1000
+@@:
+	mov eax, 17892
+	mov ebx, 71172
+	imul eax, 71172
+dec ecx
+jnz @B
+</code></pre>
+And this shot down to 3020 clock cycles
+
+After playing around with a few values it seem you can put any mov reg, immed before or after the mov eax, immed and get the same results. Even a mov eax, 0 prior to the mov eax, immed speed up the loop and therefore only modifies the eax register.
+
+Maybe this is pretty standard stuff, but it took me by surprise. And it takes only 60% of the time the old method I used took, plus only one reg is modified.
+
+
+This message was edited by Zadkiel, on 5/30/2001 6:44:27 PM</div>
+    <div class="meta">Posted on 2001-05-30 18:42:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-199971">
+    <div class="subject"><a href="#post-199971">Weird speed increase</a></div>
+    <div class="body"><div class="quote">
+mov ecx, 1000
+@@:
+   xor edx, edx
+   mov eax, 17892
+   imul eax, 71172
+dec ecx
+jnz @B
+
+</div>
+It's because dependency in your code
+Rearrange it to:
+mov ecx, 1000
+@@:
+   mov eax, 17892
+   xor edx, edx
+   imul eax, 71172
+dec ecx
+jnz @B
+And you probably get the last result.</div>
+    <div class="meta">Posted on 2001-05-31 03:43:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-199972">
+    <div class="subject"><a href="#post-199972">Weird speed increase</a></div>
+    <div class="body">Zadkiel,
+
+The results you are geting tend to be normal when you are writing
+small loops. The number of variables are many, cache effects,
+register dependency, nominal instruction timing etc...
+
+I have digested most of the optimisation data over the last 5 years
+or so and there tends to be a basic set of rules but its easy
+enough to get something going that breaks the rules and often code
+that "should" work well runs a lot slower than you expect.
+
+When I chase the speed of a piece of code, I tend to think of it in
+EIP sequence terms and this will always place a piece of code you
+are developing between other code, preceding and trailing and it seems
+that the action in part is here, always be aware of what code is around
+what you are writing as it often effects it in unusual ways.
+
+Its worth have a set of alternative codings available to do something
+simple, for example when I write an algo that simply increments a
+register in it somewhere, I often test the variations like,
+
+    inc eax
+    add eax, 1
+    lea eax, 
+
+inc eax should be faster but it is not always so. There are times
+when using the traditional indexing saves instructions and goes 
+faster but there are times when the RISC approach works better.
+
+Think of it this way, if it was crude simple stuff, a compiler
+could do it better but hand written assembler still has the performance
+edge when it is written correctly and this is why most of us still
+write in assembler.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-31 05:38:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-199973">
+    <div class="subject"><a href="#post-199973">Weird speed increase</a></div>
+    <div class="body">Thanks Hutch for the reply, I going to try and learn as much about optimisations as I can.
+
+But in reply to The Svin using
+<pre><code>
+mov ecx, 1000
+@@:
+xor edx, edx
+mov eax, 17892
+imul eax, 71172
+dec ecx
+jnz @B
+</code></pre>
+Does not produce the same results, you get 4041, thats where my confusion was. Even if you remove the xor edx, edx you still get 4041 and there you only have two instructions inside the loop.
+
+It seemed strange to me that placing a third instruction in the form of any <pre><code>mov reg, immed</code></pre> actually speed up the loop.</div>
+    <div class="meta">Posted on 2001-05-31 08:28:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-199974">
+    <div class="subject"><a href="#post-199974">Weird speed increase</a></div>
+    <div class="body"><strong>Zadkiel</strong>, if I rewrite the different versions you present above in a different way, you might be able to understand what <strong>Svin</strong> is trying to say:
+
+<pre><code>
+@@:xor edx, edx
+   mov eax, 17892
+
+   mov ebx, 71172
+
+   mul ebx     </code></pre><strong>;This took 5014 clock cycles</strong>
+<pre><code>
+@@:xor edx, edx
+   mov eax, 17892
+
+   mov ebx, 71172
+
+   imul ebx       </code></pre><strong>;Again 5014</strong>
+
+<pre><code>
+@@:xor edx, edx
+   mov eax, 17892
+
+   mov ebx, 71172
+
+   imul eax, 71172   </code></pre><strong>;Now it was down to 5013</strong>
+
+<pre><code>
+@@:xor edx, edx      </code></pre><strong>;pairs with loop code, or?</strong><pre><code>
+   mov eax, 17892
+
+   imul eax, 71172   </code></pre><strong>;Huge improvement, down to 4041</strong>
+
+<pre><code>
+@@:mov eax, 17892    </code></pre><strong>;Notice how no result is</strong><pre><code>
+   mov ebx, 71172    </code></pre><strong>;needed in the following</strong><pre><code>
+                     </code></pre><strong>;instruction</strong><pre><code>
+   imul eax, 71172</code></pre>   <strong>;And this shot down to 3020 clock cycles</strong>
+
+
+I put line breaks between where I guessed the pairing would be.  How many clocks do you show for:<pre><code>
+@@:mov eax, 17892
+   xor edx,edx
+
+   imul eax, 71172
+</code></pre>
+I would think it'd be ~3020?  It's the register dependancies that prevents the code from utilizing the full capablities of the processor.  Also, I think that the begining of a loop can pair with the untaken branch at the end of the code.  It is best just to maximize the distance between dependancies - if future processors have more pipelines then this will make it run even faster w/o having to reorder instructions.  What processor are you running these tests on?
+
+This message was edited by bitRAKE, on 5/31/2001 11:34:31 AM</div>
+    <div class="meta">Posted on 2001-05-31 11:25:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-199975">
+    <div class="subject"><a href="#post-199975">Weird speed increase</a></div>
+    <div class="body">maybe a dum question by me... but are these test reliable? what if windows swaps to another task inside a loop?</div>
+    <div class="meta">Posted on 2001-05-31 11:34:00 by lifewire</div>
+   </div>
+   <div class="post" id="post-199976">
+    <div class="subject"><a href="#post-199976">Weird speed increase</a></div>
+    <div class="body">If adding one instruction forces two pairings then you not only execute that instruction for free, but save a cycle for the other two that pair.  This gets worse with more execution pipes!  I suppose that is why out of order execution is such a performance winner, and this in turn makes unpredicted branches very-evil - because the pipe has become so deep.
+
+:) I'm at work an really board. ;) :) :P :) ;)</div>
+    <div class="meta">Posted on 2001-05-31 11:45:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-199977">
+    <div class="subject"><a href="#post-199977">Weird speed increase</a></div>
+    <div class="body">The tests are of a short enough duration that you can throw out very large cycle differences - which would occur if there was a task switch.</div>
+    <div class="meta">Posted on 2001-05-31 11:48:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-199978">
+    <div class="subject"><a href="#post-199978">Weird speed increase</a></div>
+    <div class="body">BitRAKE the following code actually takes 4041
+<pre><code>
+@@:mov eax, 17892
+   xor edx,edx
+
+   imul eax, 71172
+</code></pre>
+where as this takes only 3020
+<pre><code>
+@@:mov eax, 17892
+   mov edx, 0
+
+   imul eax, 71172
+</code></pre>
+Also this this
+<pre><code>
+@@:
+   mov eax, 0
+   mov eax, 17892
+   imul eax, 71172
+</code></pre>
+takes 3020 and only affects the eax register.
+
+Regarding the clock cycles, I know task switching could affect it, but I call the procedure 64 time takeing a seperate time reading for each. For short code such as this you get the same timing for the last 60 calls suggesting its quite reliable.</div>
+    <div class="meta">Posted on 2001-05-31 13:53:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-199979">
+    <div class="subject"><a href="#post-199979">Weird speed increase</a></div>
+    <div class="body">I'm confused now too. :P  What chip were you running this on?</div>
+    <div class="meta">Posted on 2001-05-31 16:54:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-199980">
+    <div class="subject"><a href="#post-199980">Weird speed increase</a></div>
+    <div class="body">Zadkiel,
+
+The thing that will make sense of the wide range of variations that
+you can get in small loops is the process of pipelining instructions.
+
+If you think of a pipeline as a production line where instructions
+are sequenced through stages in the pipeline,
+
+    fetch
+    decode
+    calculate addresses
+    execute
+    write back
+
+Then apply the usual set of problems, register dependency, register
+stalls, nominal timing etc .... ytou will get a better picture of
+where the range of variations are coming from.
+
+I am still freeing my own thinking from the days when x86 processors
+were simple linear instruction munchers as it assumes that code
+execution speed can be narrowed down to each single instruction
+where with pipelined instructions, leading and trailing instructions
+have a very considerable effect on how fast code executes.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-31 19:06:00 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

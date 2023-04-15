@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Obscurities... jne, cmp, je, stack balancing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3757" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3757">Obscurities... jne, cmp, je, stack balancing</a></p>
+   <div class="post" id="post-25262">
+    <div class="subject"><a href="#post-25262">Obscurities... jne, cmp, je, stack balancing</a></div>
+    <div class="body">I'm trying to make my code obscure and hard to read :grin:, but<br />mostly I just want to learn about some basics to assembly so i<br />can read other peoples code better.<br /><br />I'm translating one piece of code..<br /><br />I've been pushing everything and calling functions now, but I've<br />read about stack balancing and I'm not sure what i have to do<br />about it.<br /><br />Second I have a basic logic statement that I don't really know<br />how to translate properly..<br /><br />It's:<br /><pre><code><br />.if eax != 0<br />;do stuff<br />        .if eax == 0<br />        ; do stuff<br />        .endif<br />.else<br />        ;do stuff<br />.endif<br /></code></pre><br />And i've got it partially worked out to:<br /><pre><code><br />;findwindow<br />cmp eax, 0<br />je display_error_open<br />;post message<br />cmp eax, 0<br />je display_error_post<br />ret<br />display_error_post&#58;<br />;messagebox<br />ret<br />display_error_open&#58;<br />;messagebox<br />ret<br /></code></pre><br />I won't show the specific code, but i think everything is working,<br />can't really test the display_error_post: part though....<br /><br />Lastly, on the subject of addresses and offsets.<br /><br />Are these true?:<br /><br />Only use ADDR when using invoke, don't use offset(?).<br />push offset A_Variable ; is correct if i need address to a variable?<br />push  ; memory address of previously undefined variable<br /><br />..<br /><br />That's all.. if someone could help, much appreciated, a conformation<br />of some things, a correction of others, and a link to that <br />assembly guides (not the hll one that i always find instead)<br />would be appreciated.</div>
+    <div class="meta">Posted on 2002-02-21 01:44:55 by matthew</div>
+   </div>
+   <div class="post" id="post-25264">
+    <div class="subject"><a href="#post-25264">Obscurities... jne, cmp, je, stack balancing</a></div>
+    <div class="body"><pre><code><br />.if eax != 0<br />;do stuff<br />        .if eax == 0<br />        ; do stuff<br />        .endif<br />.else<br />        ;do stuff<br />.endif<br /></code></pre><br /><br /><pre><code><br />cmp eax, 0<br />je @F<br /><br />;do stuff<br /><br />cmp eax, 0<br />jne out<br /><br />;do stuff<br /><br />@@&#58;<br />;do stuff<br /><br />out&#58;<br /></code></pre><br /><br />;I think that is should work perfectly<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-02-21 01:56:59 by Sliver</div>
+   </div>
+   <div class="post" id="post-25277">
+    <div class="subject"><a href="#post-25277">Obscurities... jne, cmp, je, stack balancing</a></div>
+    <div class="body">The offset instruction tells the assembler to write the address of the variable in memory as the argument. This can obviously be done with variables that are defined in a known position at assemble time! Local variables can never use the offset instruction because their address is unknown until the process is called (as the exist on the stack, and could exist anywhere in the stack, and the stack itself may not be in the same place either)!<br /><br />MASM will only allow you to use ADDR with an invoke statement, but that does not mean you cannot use an offset instead.<br />ADDR simply does something like this:<br /><pre><code><br />IF variable is LOCAL<br />  lea eax, variable<br />  push eax<br />ELSE ; Must be defined, and have a known location<br />  push offset variable<br />ENDIF<br /></code></pre><br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-02-21 03:56:47 by Mirno</div>
+   </div>
+   <div class="post" id="post-25304">
+    <div class="subject"><a href="#post-25304">Obscurities... jne, cmp, je, stack balancing</a></div>
+    <div class="body">matthew,<br /><br />balancing the stack is normally done by the PROC capacity in masm so if you want to code it manually, you need to make sure it is at the same address AFTER the proc as before it.<br /><br />The stack is memory that is reserved for the 2 mnemonics PUSH/POP and for passing parameters in most instances.<br /><br />When you CALL a proc, the return address is placed on the stack so any parameters and locals you want must be added in the right place or you will not have the return address in the right place after the proc is finished.<br /><br />Probably the best way to get a look at what is happening is to write some normal PROCS and then disassemble them to see what they are doing. MASM uses LEAVE at the end to tidy up the stack. Its shorter from memory but its mainly used to prevent a register stall.<br /><br />Just try a few of these for practice. The simplest CALL is one with no parameters to a label with a RET after it.<br /><br /><pre><code><br />CALL MyLabel<br /><br />; asm code<br /><br />MyLabel&#58;<br />  ; more code<br />RET<br /><br />This works fine in simple situations.<br /><br />push parameter<br />call NextProc<br />  ; more code<br /><br />NextProc&#58;<br />  mov eax, &#91;esp+4&#93;<br />; code that does NOT use ESP or EBP or LOCAL vars<br />ret<br /><br />A more authodox proc call<br /><br />    push parameter<br />    call thirdproc<br /><br />    ; more code<br /><br />thirdproc&#58;<br />    push ebp        ; preserve base pointer<br />    mov ebp, esp    ; stack pointer into ebp<br /><br />    mov eax, &#91;ebp+8&#93;<br /><br />    ; other code<br /><br />    mov esp, ebp    ; restore stack pointer<br />    pop ebp         ; restore base pointer<br /><br />    ret<br /></code></pre><br /><br />Decompile a MASM exe to see how MASM does it.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-02-21 08:50:17 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

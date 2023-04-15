@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>stuck at gas macro - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29732" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29732">stuck at gas macro</a></p>
+   <div class="post" id="post-209984">
+    <div class="subject"><a href="#post-209984">stuck at gas macro</a></div>
+    <div class="body">Guys,<br /><br />This is a gas macro for calling functions without pushing all the PUSHes<br /><br /><pre><code><br />.macro invoke func:req, args:vararg<br />&nbsp; &nbsp; .irp arg, \args<br />&nbsp; &nbsp; &nbsp; &nbsp; push \arg<br />&nbsp; &nbsp; .endr<br />&nbsp; &nbsp; call \func<br />.endm<br /><br /></code></pre><br /><br />But the problem is it can only push in the reverse order. I have explored all the gas assembler directives for something that can help reverse the arguments before pushing. Any ideas ?? I don&#039;t yet wanna explore M4 preprocessor option unless I&#039;m sure that there is no way to accomplish this using gas macros.<br /><br />Thank you</div>
+    <div class="meta">Posted on 2009-12-21 00:00:00 by uglyhunK</div>
+   </div>
+   <div class="post" id="post-209985">
+    <div class="subject"><a href="#post-209985">Re: stuck at gas macro</a></div>
+    <div class="body">I&#039;m not sure the macro engine is up to the task, we defeated a similar issue using MASM.<br /><br />NASM IS NOT MATURE ENOUGH.<br /><br />If it was, we&#039;d all swing that way.<br /></div>
+    <div class="meta">Posted on 2009-12-21 01:50:14 by Homer</div>
+   </div>
+   <div class="post" id="post-209987">
+    <div class="subject"><a href="#post-209987">Re: stuck at gas macro</a></div>
+    <div class="body"><strong>uglyhunK</strong>,<br /><br />GAS is not my area of expertise, so the following may be completely wrong:<br /><br />Try to reverse arguments list yourself: <strong>.irp</strong> through it and collect them backward, i.e. something like this:<br /><pre><code><br />.irp arg, \args<br />&nbsp; &nbsp; .ifdef reversed_args<br />&nbsp; &nbsp; &nbsp; &nbsp; .equ reversed_args, \arg , \reversed_args<br />&nbsp; &nbsp; .else<br />&nbsp; &nbsp; &nbsp; &nbsp; .equ reversed_args, \arg<br />&nbsp; &nbsp; .endif<br />.endr<br /></code></pre><br /><br /><strong>reversed_args</strong> should be local to macro (or undefined beforehand).<br /><br />This trick is depends on whether <strong>.equ</strong> evaluates symbols in expression being assigned to symbol.</div>
+    <div class="meta">Posted on 2009-12-21 03:58:50 by baldr</div>
+   </div>
+   <div class="post" id="post-209988">
+    <div class="subject"><a href="#post-209988">Re: stuck at gas macro</a></div>
+    <div class="body">.equ will not take more than 2 arguments, so that will throw up an error. And moreover I would definitely not like to add overhead of additional instructions into the source just for this macro. &nbsp;</div>
+    <div class="meta">Posted on 2009-12-21 04:27:59 by uglyhunK</div>
+   </div>
+   <div class="post" id="post-209990">
+    <div class="subject"><a href="#post-209990">Re: stuck at gas macro</a></div>
+    <div class="body"><strong>uglyhunK</strong>,<br /><br />I&#039;d downloaded <strong>binutils</strong> and tried several approaches to the problem. This one appears to work:<br /><pre><code><br />.macro stdcall function:req,args:vararg<br />&nbsp; &nbsp; argc=0<br />&nbsp; &nbsp; .ifnb \args<br />&nbsp; &nbsp; &nbsp; &nbsp; .irp arg,\args; argc=argc+1; .endr<br />&nbsp; &nbsp; &nbsp; &nbsp; argrc=argc<br />&nbsp; &nbsp; &nbsp; &nbsp; .rept argc<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; argrc=argrc-1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; argc=0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .irp arg,\args<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .if argrc==argc; push \arg; .endif<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; argc=argc+1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .endr<br />&nbsp; &nbsp; &nbsp; &nbsp; .endr<br />&nbsp; &nbsp; .endif<br />&nbsp; &nbsp; call&nbsp; &nbsp; \function<br />.endm<br /></code></pre><br /><br />Awkward, I know.</div>
+    <div class="meta">Posted on 2009-12-21 06:31:48 by baldr</div>
+   </div>
+   <div class="post" id="post-209991">
+    <div class="subject"><a href="#post-209991">Re: stuck at gas macro</a></div>
+    <div class="body">That cool badlr !! working perfectly&nbsp; :).&nbsp; Lemme c if there I can tweak it little more...<br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2009-12-21 07:14:52 by uglyhunK</div>
+   </div>
+   <div class="post" id="post-211358">
+    <div class="subject"><a href="#post-211358">Re: stuck at gas macro</a></div>
+    <div class="body">Here another solution with a little test code:<br /><br /><pre><code><br />.intel_syntax noprefix<br /><br />.altmacro&nbsp; &nbsp; &nbsp; &nbsp; <br />.macro ccall func:req, arg1, args:vararg<br />&nbsp; &nbsp; &nbsp; &nbsp; local argc<br />&nbsp; &nbsp; &nbsp; &nbsp; argc = 0<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; /* recursive reverse pusher */<br />&nbsp; &nbsp; &nbsp; &nbsp; .macro pusher parg1, pargs:vararg<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .ifnb \parg1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; pusher&nbsp; \pargs<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; push&nbsp; &nbsp; \parg1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; argc = argc + 1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .endif<br />&nbsp; &nbsp; &nbsp; &nbsp; .endm<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; pusher&nbsp; \arg1 \args<br />&nbsp; &nbsp; &nbsp; &nbsp; call&nbsp; &nbsp; \func<br />&nbsp; &nbsp; &nbsp; &nbsp; /* check if ther were arguments pushed */<br />&nbsp; &nbsp; &nbsp; &nbsp; .if \argc<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; add&nbsp; &nbsp;  esp, argc * 4<br />&nbsp; &nbsp; &nbsp; &nbsp; .endif<br />.endm&nbsp; &nbsp; &nbsp; &nbsp; <br /><br />&nbsp; &nbsp; &nbsp; &nbsp; ccall&nbsp;  myfunc eax, ebx, ecx, (offset fd), fd, <br /><br />/* test variable in memory */<br />fd:&nbsp; &nbsp;  .long 0x1234<br /><br />/* test function to call */&nbsp; &nbsp; &nbsp; &nbsp; <br />myfunc:<br />&nbsp; &nbsp; &nbsp; &nbsp; ret<br /></code></pre></div>
+    <div class="meta">Posted on 2010-04-17 11:14:27 by theorizer</div>
+   </div>
+  </div>
+ </body>
+</html>

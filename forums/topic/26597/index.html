@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fast ASCII HEX - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26597" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26597">Fast ASCII HEX</a></p>
+   <div class="post" id="post-192275">
+    <div class="subject"><a href="#post-192275">Fast ASCII HEX</a></div>
+    <div class="body">;Fastest DWORD to ASCII HEX code by The Svin//Russia
+;fastadw 
+;in = eax == number
+;out = eax:edx == ASCII HEX ready to be sent into some string
+;fastadwz
+;in eax == number
+;dest == addr to dest to put ASCII HEX of the number in.
+;fastadwszsp is the same as fastadwz but insert 20h between low and high words
+;if eax == ffffffff then string in dest will be 'FFFF ;FFFF',0
+; Test the speed ;) fastadw ~ 18 clocks.
+;use: fastadwz proto :DWORD
+; mov eax,number ;if it's not already in eax
+; invoke fastadwz,addr dest ;or invoke fastadwszsp,addr dest
+
+.586
+.model flat,stdcall
+option casemap:none
+.code
+fastadw proc
+mov edx,eax
+shl eax,4  
+and edx,0FFFF0000h     	
+mov ebx,eax
+shr edx,12
+and eax,0ff0h   
+shr bh,4         
+shr al,4        
+and ebx,0f0f00h 
+mov ecx,edx
+shl ebx,8       
+add eax,06060606h 
+and edx,0ff0h
+add ebx,eax	
+shr ch,4
+mov eax,ebx	
+shr dl,4
+and ebx,10101010h 
+and ecx,0f0f00h
+shr ebx,4	
+shl ecx,8
+sub eax,ebx	
+add edx,06060606h
+shl ebx,3	
+add eax,2a2a2a2ah 
+add ecx,edx
+add eax,ebx	
+mov edx,ecx
+bswap eax	
+;################################################
+and ecx,10101010h
+shr ecx,4
+sub edx,ecx
+shl ecx,3
+add edx,2a2a2a2ah
+add edx,ecx
+bswap edx
+ret
+fastadw endp
+
+fastadwsz proc dest:DWORD
+call fastadw
+mov ebx,dest
+mov dword ptr ,edx
+mov dword ptr ,eax
+mov byte ptr ,0
+ret
+fastadwsz endp
+
+fastadws proc dest:DWORD
+call fastadw
+mov ebx,dest
+mov dword ptr ,edx
+mov dword ptr ,eax
+ret
+fastadws endp
+
+fastadwszsp proc dest :DWORD
+call fastadw
+mov ebx,dest
+mov dword ptr ,edx
+mov byte ptr ,' '
+mov dword ptr ,eax
+mov byte ptr ,0
+ret
+fastadwszsp endp
+
+end</div>
+    <div class="meta">Posted on 2001-01-15 00:24:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-192276">
+    <div class="subject"><a href="#post-192276">Fast ASCII HEX</a></div>
+    <div class="body">Svin,
+
+Compliments on the published procedures, now here is the offer, tidy them up so they are reliable and make a module out of each one, document them so everyone can understand and use them and I will put them in the next version of MASM32 library so that they are available to any MASM programmer who needs them.
+
+Put your copyright and email address at the top of each module so that everyone knows you are the author of the code and send them to me at my email address.
+
+regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-15 21:39:00 by Steve Hutchesson </div>
+   </div>
+   <div class="post" id="post-192277">
+    <div class="subject"><a href="#post-192277">Fast ASCII HEX</a></div>
+    <div class="body">Thank you for the offer.
+It will be a privilege. I'll do my best :)
+In order to get the work done I have some questions to ask.
+Is it OK to discuss them here or I'd better send them by e-mail?
+For now on I want to say just few words:
+I'm grateful user of MASM32 pack.
+Many thanks to you and Iczelion for the work you've done on the Win32asm way :)
+I dared to post some messages here after I'd downloaded new SP for MASM32.
+I found a lot of new procs in M32LIB directory and thought may be it was time
+I say some ideas and notes I'd never shared with anybody?
+I love the idea to make Win32asm stdlibrary in the way it was done in MASM32, 
+and make use of most of them.
+But I optimized most of them, so some of them run 2-3 times faster now.
+I didn't change whole procedures, but little parts of them.
+Critical parts :)
+I always clock (testing speed) proc I accept to use.
+Hope others do the same.
+Two short examples:
+Look at dwtoa.asm by Tim Roberts.
+I like the proc, because it's easy to use and universal.
+But with close look we can see that the most clock consuming part is:
+
+;    mov ecx, 10
+;    .while (eax > 0)		; while there is more to convert...
+;      xor edx, edx
+;      div ecx			; put next digit in edx
+;      add dl, '0'		; convert to ASCII
+;      mov , dl		; store it
+;      inc edi
+;    .endw
+
+Why? Because the DIV command is still one of the slowest of +386 inst. set.
+For Pentium it's 41 clock and is NP.
+So it will take 48 clocks for each circle (iter.) up to 48*9 just to divide 
+whole number to get its MOD (10).
+But if we replace the code above with this it'll do the same but 4 times 
+faster:
+
+mov ecx,429496730
+mov ebx,eax	;eax = num
+mul ecx		;edx = num/10
+mov eax,edx	;eax = num/10
+lea edx, 
+add edx,edx	   ;edx =num - num mode(10)
+sub ebx,edx	   ;ebx = num mode(10)
+add bl,'0'
+mov ,bl
+inc edi
+
+.while (eax > 0)
+mov ebx,eax
+mul ecx
+mov eax,edx
+lea edx,
+add edx,edx
+sub ebx,edx
+add bl,'0'
+mov ,bl
+inc edi
+.endw
+
+If you doubt - test the speed.
+This part after the correction runs 4 times faster. The whole proc 2,5 times 
+faster.
+Another example - let's take a look at new A2DW.ASM by Iczelion.
+Good and comprehensive proc.
+
+      xor ecx, ecx
+      mov edi, String
+      invoke lstrlen, String
+
+      .while eax != 0
+        xor edx, edx
+        mov dl, byte ptr 
+        sub dl, "0" ; subtrack each digit with "0" to convert it to hex value
+        mov esi, eax
+        dec esi
+        push eax
+        mov eax, edx
+        push ebx
+        mov ebx, 10
+          .while esi > 0
+            mul ebx
+            dec esi
+          .endw
+        pop ebx
+        add ecx, eax
+        pop eax
+        inc edi
+        dec eax
+      .endw
+
+        mov eax, ecx
+        ret
+
+Yet we can make it shorten and run 3 time faster:
+
+      xor ecx, ecx
+      mov edi, String
+      invoke lstrlen, String
+      .while eax != 0
+        xor edx, edx
+        mov dl, byte ptr 
+        sub dl, "0" 
+        mov esi, eax
+          .while esi > 0
+            lea edx,
+	    add edx,edx
+            dec esi
+          .endw
+        add ecx, edx
+        inc edi
+        dec eax
+      .endw
+
+        mov eax, ecx
+        ret
+
+Those procs are already in your MASM32 pack.
+And I don't pretend to be the author :)
+I just speed them up a little bit ;)
+So I wonder, may you or the authors could be interested in this optimization
+of their procs to think over those changed parts and may be persuaded to 
+replace current versions of the procs with optimized ones?
+Excuse my ability to express myself by commands of the English language.
+I'm not a native English speaker :)</div>
+    <div class="meta">Posted on 2001-01-16 06:32:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192278">
+    <div class="subject"><a href="#post-192278">Fast ASCII HEX</a></div>
+    <div class="body">Svin,
+
+Your optimisations look great, I am sure any of the authors would be pleased to see the optimisations that you have done made available so that other assembler programmers can use them as well. A lot of the reason why programmers are writing in assembler is to get the speed advantage so any faster code will be appreciated.
+
+The important thing with library modules is to get them reliable so that they work across the range that they are supposed to. The modules need to be stack parameter based so that they have a standard interface as register passed parameters are harder to use for many people.
+
+The form used in the existing range of modules in the MASM32 library is the form that we need. One thing that is important is to put each procedure in its own module, this keeps the granularity of the library down so that unused code does not get included.
+
+It is not a problem to replace an existing module with a faster one once it is reliable, I used one of Tim Roberts modules to replace one of mine, I have fully rewritten some of mine and I have replaced some earlier versions with faster ones.
+
+As with other contributed code, nmake sure you put your name and copyright at the top of each module so that everyone knows who wrote the code.
+
+As far as posting code, I think most would be pleased to see the optimisations that you are doing but its fine to send them to me when you are satisfied with them and they are reliable. Just send them to my email address.
+
+I would not worry about your English, its a lot better than my Russian. :)
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-16 19:46:00 by Steve Hutchesson </div>
+   </div>
+   <div class="post" id="post-192279">
+    <div class="subject"><a href="#post-192279">Fast ASCII HEX</a></div>
+    <div class="body">Svin,
+Please, supply the code you use to measure the perfomance.
+I have one from MASM32 help, but it's not clear for me.
+
+Please, choose (at least for me) another alias.
+Me is russian too, it is very difficult to apply to
+you with the present one.
+
+Your fastadw is a piece of fantastic. I'm delighted.
+DVA</div>
+    <div class="meta">Posted on 2001-01-16 23:50:00 by DVA </div>
+   </div>
+   <div class="post" id="post-192280">
+    <div class="subject"><a href="#post-192280">Fast ASCII HEX</a></div>
+    <div class="body">;It should be corrected a little bit
+;but at list it can give you basic idea.
+;This code tests three 'stringlen' algorithm
+;First is mine (I put it in the worst place :)
+;, 2nd is macro from MASM32, and 3d - 
+;some old way to mesure string lenth.
+;Try to extend the program to mesure the lstrlen API
+;function.
+;You'll be shocked how slow it runs.
+;Esp. when you short the lenth of tested string.
+;I love A.Fog and R.Hyde but Mr.Hyde must drop his HLA
+;and begin teach us to use boolean algebra in 386 model flat
+;world :)
+;Just jocking ;) But I really need some fat book written just
+;about algorithms in 386 model flat with lots of exser. and 
+;examples.
+;Do you know one?
+
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\user32.inc
+include C:\masm32\include\kernel32.inc
+include C:\masm32\include\masm32.inc
+includelib C:\masm32\lib\kernel32.lib
+includelib C:\masm32\lib\user32.lib
+includelib C:\masm32\lib\masm32.lib
+
+TimeTest_ON macro 
+
+ db 0fh,31h ;rdtsc - read (TSC)
+ push edx   ;save TSC
+ push eax
+endm
+
+TimeTest_OFF macro 
+  db 0fh,31h  ;rdtsc - new TSC
+  pop ebx     
+  pop ecx     
+  sub eax,ebx 
+  sbb edx,ecx
+endm
+
+.data
+buffer db 100 dup('*'),0
+
+MT 	db 'One circle has taken: ',13,10
+CT	db 12 dup (0)
+MC	db '1000 circles',0
+
+.code
+
+start:
+	mov ecx,1000
+	TimeTest_ON
+testcl:	push ecx
+	lea edi,buffer
+	lea edx,buffer
+
+ALIGN 4
+again:	mov al,
+	inc edi
+	or al,al
+	jnz again
+	sub edx,edi
+	not edx
+	pop ecx
+	dec ecx
+	jnz testcl
+	TimeTest_OFF
+	xor edx,edx
+	mov ebx,1000
+	div ebx
+invoke	dwtoa,eax,addr CT
+invoke MessageBox,0,addr MT,addr MC,MB_OK
+
+	mov ecx,1000
+	TimeTest_ON
+testcl2:    push ecx
+	    lea edi,buffer
+	    xor eax, eax        ; zero eax as counter
+
+	    align 4
+
+    l:                 ; cycles
+      mov dl,      ;   1
+      inc edi           ;   1
+      inc eax           ;   1
+      cmp dl, 0         ;   1
+      jne l            ;   3
+
+      dec eax           ; correct eax for extra digit
+	pop ecx
+	dec ecx
+	jnz testcl2
+	TimeTest_OFF
+	xor edx,edx
+	mov ebx,1000
+	div ebx
+invoke	dwtoa,eax,addr CT
+invoke MessageBox,0,addr MT,addr MC,MB_OK
+	mov ecx,1000
+	TimeTest_ON
+test3:  push ecx
+	xor al,al
+	lea edi,buffer
+	mov ecx,-1
+	repne scasb
+	inc ecx
+	not ecx
+	pop ecx
+	dec ecx
+	jnz test3
+	TimeTest_OFF
+	xor edx,edx
+	mov ebx,1000
+	div ebx
+invoke	dwtoa,eax,addr CT
+invoke MessageBox,0,addr MT,addr MC,MB_OK
+
+invoke ExitProcess,0
+	
+end	start</div>
+    <div class="meta">Posted on 2001-01-17 04:45:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192281">
+    <div class="subject"><a href="#post-192281">Fast ASCII HEX</a></div>
+    <div class="body">Has anybody else tried testing the dw2hex proc written by f0dderin masm32. It seems it is about 20 times faster on my PC, (PII or PIII i can't remember). Its probably just me, or something to do with theway pentiums operate, with dual pipes, extra caches and the rest, cause i didn't get the same two counts twice?????
+
+I would also like to point out, that the results of reading the clock counter can be serverly corrrupt if an interupt occours during the timing sequence (also in windows, the timer interupt could be called at least once every milli second if not shorter), so beware, you can either clear the interupt flag with a cli instruction (dont forget to set it again with sti), or repeat the test several times, also becareful cause if your app gets stuck in an infinite loop it WILL crash windozes.</div>
+    <div class="meta">Posted on 2001-01-17 05:25:00 by X </div>
+   </div>
+   <div class="post" id="post-192282">
+    <div class="subject"><a href="#post-192282">Fast ASCII HEX</a></div>
+    <div class="body">Do you mean his (f0dder) trick?
+    add    al, 90h
+    daa
+    adc    al, 40h
+    daa
+That's good one but can be replaced ;) with:
+    cmp al,10
+    sbb al,69h
+    das
+Wich is shorter and twice faster :)
+BTW: How could you make cli from Win32 ring3 ?</div>
+    <div class="meta">Posted on 2001-01-17 07:51:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192283">
+    <div class="subject"><a href="#post-192283">Fast ASCII HEX</a></div>
+    <div class="body">You simply cannot toutch CLI from ring3, it's a protected instruction.
+
+I know, you want to stop multi tasking as you test your code. Can't do it that way.
+
+The SIMPLEST way is to boost your test code's thread priority so the OS gives it the biggst slice of time, and do multiple runs testing run time, and take the lowest number.
+
+The harder way involves writing a VxD or WDM. The investment in that depends on how serious you are in measuring speed. You still need to know how windows opperates at it's lowest levels intimately. 
+
+Personally, I'd test speed in DOS before I tried the driver approach.</div>
+    <div class="meta">Posted on 2001-01-17 10:33:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192284">
+    <div class="subject"><a href="#post-192284">Fast ASCII HEX</a></div>
+    <div class="body">Of course, we cannot use cli inst. from ring 3 :)
+That's why I was surprized to read the X's advice to use it :)
+I'd love to listen to anybody ideas on the subj. of speed testing. Though I might not always agree with the ones.
+So thank you for sharing your aproach to the matter.
+Actually I use complex method to get picture of perfomance.
+First with pen and paper and instraction clock reference (or may be VTUNE).
+Then in flat 386 DOS world (if it's possible and dont involves
+somehow Win32 spec. texting)
+And finaly in real Win32 env. with some other tasks running.
+All the above gives me some info to think about.
+For now, as I've noted, most tricky part is when testing algorithm using memory access to read or write in Win32.
+I never can be 100 % sure what's waiting me to surprize with
+every such a case :)</div>
+    <div class="meta">Posted on 2001-01-17 11:33:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192285">
+    <div class="subject"><a href="#post-192285">Fast ASCII HEX</a></div>
+    <div class="body">Of course, we cannot use cli inst. from ring 3 :)
+That's why I was surprized to read the X's advice to use it :)
+I'd love to listen to anybody ideas on the subj. of speed testing. Though I might not always agree with the ones.
+So I thank you for sharing whith me your aproach to the matter.
+Actually I use complex method to get picture of perfomance.
+First with pen and paper and instraction clock reference (or may be VTUNE).
+Then in flat 386 DOS world (if it's possible and dont involves
+somehow Win32 spec. texting)
+And finaly in real Win32 env. with some other tasks running.
+All the above gives me some info to think about.
+For now, as I've noted, most tricky part is when testing algorithm using memory access to read or write in Win32.
+I never can be 100 % sure what's waiting me to surprize with
+every such a case :)</div>
+    <div class="meta">Posted on 2001-01-17 11:34:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192286">
+    <div class="subject"><a href="#post-192286">Fast ASCII HEX</a></div>
+    <div class="body">Benchmarking in ring3 is a pain at best, my experience is that there is about 2-3% variation which is directly from Operating System interference. While the resolution from RDTSC is very good, it suffers the same variation in ring3 so it is of little use.
+
+What I do to get an algorithm timed with some degree of accuracy is to run GetTickCount() on a test that is at least .5 to 1 second in duration and this gives an accuracy of about .5 of 1 percent. This is a lot simpler to do from ring3 access and it is reasonably hard to improve on in a hurry.
+
+Depending on the type of algorithm to test, some need a very large buffer to run them properly, testing of the two string length algorithms in the MASM32 library was done with a 100 meg buffer in OLE string memory.
+
+The reason for the two types is that the classic byte scanner is better suited for recursive small string reads where the algorithm by Agner Fog is clearly faster on long linear string scans. SCAS is a lot slower than both.
+
+The InString algo was also benchmarked in this manner and it performs reasonably well, it has overlapping performance with a classic Boyer Moore string scanner but is a lot less complicated. I am of the view that the InString algo could do with some more optimisation but I have not had time to do it.
+
+regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-17 18:00:00 by Steve Hutchesson </div>
+   </div>
+   <div class="post" id="post-192287">
+    <div class="subject"><a href="#post-192287">Fast ASCII HEX</a></div>
+    <div class="body">Svin,
+thanks for the example.
+> But I really need some fat book written just
+> about algorithms in 386 model flat with lots of exser. and 
+> examples.Do you know one?
+Try Intel site. It contains few libraries on math, image/
+signal processing etc. Accordingly their readmes, they
+contain highly optimised procs and are fully documented.
+Libs are very big, I have not any so far, so the information
+isn't checked.
+DVA</div>
+    <div class="meta">Posted on 2001-01-17 23:51:00 by DVA </div>
+   </div>
+   <div class="post" id="post-192288">
+    <div class="subject"><a href="#post-192288">Fast ASCII HEX</a></div>
+    <div class="body">it maybe different on NT, but, on my PC (Win98)
+
+cli
+@@:
+jmp @B
+
+is a grand way to make windows crash
+
+And, theres always the long way round, of using GetThreadContext, SetThreadContext</div>
+    <div class="meta">Posted on 2001-01-18 07:19:00 by X </div>
+   </div>
+  </div>
+ </body>
+</html>

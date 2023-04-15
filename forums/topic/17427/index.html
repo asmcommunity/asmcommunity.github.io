@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Desktop Shortcuts - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17427" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17427">Desktop Shortcuts</a></p>
+   <div class="post" id="post-134944">
+    <div class="subject"><a href="#post-134944">Desktop Shortcuts</a></div>
+    <div class="body">Is it possible to move the desktop shortcuts?? perhaps let them flee when the cursor wants to click them ;)</div>
+    <div class="meta">Posted on 2004-02-27 16:14:14 by chromos</div>
+   </div>
+   <div class="post" id="post-134945">
+    <div class="subject"><a href="#post-134945">Desktop Shortcuts</a></div>
+    <div class="body">I've never tried it but, IIRC the desktop is nothing more than a big list-view control.  So use FindWindow(Ex) to get a handle to the SysListView32 (it should be a child control of a window called 'program manager') and then send LVM_SETITEMPOSITION messages to rearrange the icons.  Also use SetWindowLong() to remove the LVS_AUTOARRANGE style, and maybe use SetWindowPos() to make sure the style was removed.<br /><br />If that doesn't work try subclassing the control and blocking some messages that it might be using to keep other applications from messing with it.</div>
+    <div class="meta">Posted on 2004-02-27 16:31:08 by iblis</div>
+   </div>
+   <div class="post" id="post-134975">
+    <div class="subject"><a href="#post-134975">Desktop Shortcuts</a></div>
+    <div class="body">thanx a lot.<br />I'll try that</div>
+    <div class="meta">Posted on 2004-02-28 07:49:24 by chromos</div>
+   </div>
+   <div class="post" id="post-134997">
+    <div class="subject"><a href="#post-134997">Desktop Shortcuts</a></div>
+    <div class="body">I wasn't able to retrieve the SysListView32 Handle via FindWindowEx(). So i had to call WindowFromPoint() and finally got the handle. <br />Now my Question:<br />Is there another way to get the handle beside mine WindowFromPoint() call, wich means also minimizin all opened windows to get the handle?</div>
+    <div class="meta">Posted on 2004-02-28 11:09:51 by chromos</div>
+   </div>
+   <div class="post" id="post-135009">
+    <div class="subject"><a href="#post-135009">Desktop Shortcuts</a></div>
+    <div class="body">Try this :<br /><br /><pre><code>invoke GetDesktopWindow<br />invoke EnumChildWindows,eax,OFFSET EnumProc,OFFSET hListview<br /><br />EnumProc FRAME hwnd,lParam<br />	LOCAL ClassName&#91;256&#93;	&#58;B<br />	<br />	invoke GetClassName,&#91;hwnd&#93;,OFFSET ClassName,256<br />	invoke lstrcmpi,OFFSET ClassName,&quot;SysListView32&quot;<br />	or eax,eax<br />	jnz &gt;<br />		mov ecx,&#91;lParam&#93;<br />		mov eax,&#91;hwnd&#93;<br />		mov &#91;ecx&#93;,eax<br />		mov eax,FALSE<br />		ret<br />	&#58;<br />	RET<br />ENDF</code></pre><br /><br />The handle of the Listview is returned in hListview</div>
+    <div class="meta">Posted on 2004-02-28 12:27:08 by donkey</div>
+   </div>
+   <div class="post" id="post-135015">
+    <div class="subject"><a href="#post-135015">Desktop Shortcuts</a></div>
+    <div class="body">A quick scan with WinSpy yields this window hierarchy:<br /><br /><br /><pre><code>#32769 &#40;Desktop window&#41;<br />|<br />|____Progman &#40;Program Manager&#41;<br />     |<br />     |____SHELLDLL_DefView<br />          |<br />          |____SysListView32 &#40;FolderView&#41;</code></pre><br /><br />That's on Windows XP, I don't know about the other windows versions.<br />So the window you want is a few more levels deep than I had originally thought.<br /><br />I just tried moving the icons around and it works.  But for some reason LVM_GETITEMPOSITION fails to report the correct item positions, so I was unable to return the icons to their original positions.  LVM_GETITEMPOSITION returns TRUE, but still it fails to fill in the POINT struct I send to it.<br /><br />/shrug.</div>
+    <div class="meta">Posted on 2004-02-28 14:04:36 by iblis</div>
+   </div>
+   <div class="post" id="post-135016">
+    <div class="subject"><a href="#post-135016">Desktop Shortcuts</a></div>
+    <div class="body">Hi Iblis<br /><br />Working on the assumption that it is the lowest listview in the Z-Order no matter what, the proc I posted should acutally be like this, then it will find it reliably :<br /><br /><pre><code>invoke GetDesktopWindow<br />invoke EnumChildWindows,eax,OFFSET EnumProc,OFFSET hListview<br /><br />EnumProc FRAME hwnd,lParam<br />	LOCAL ClassName&#91;256&#93;	&#58;B<br />	<br />	invoke GetClassName,&#91;hwnd&#93;,OFFSET ClassName,256<br />	invoke lstrcmpi,OFFSET ClassName,&quot;SysListView32&quot;<br />	or eax,eax<br />	jnz &gt;<br />		mov ecx,&#91;lParam&#93;<br />		mov eax,&#91;hwnd&#93;<br />		mov &#91;ecx&#93;,eax<br />	&#58;<br />	&#91;b&#93;mov eax,TRUE&#91;/b&#93;<br />	ret<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-02-28 14:15:35 by donkey</div>
+   </div>
+   <div class="post" id="post-135024">
+    <div class="subject"><a href="#post-135024">Desktop Shortcuts</a></div>
+    <div class="body">The way I did it was just:<br /><br /><pre><code>invoke FindWindow, &quot;progman&quot;, 0<br />invoke FindWindowEx, eax, 0, &quot;SHELLDLL_DefView&quot;, 0<br />invoke FindWindowEx, eax, 0, &quot;SysListView32&quot;, 0<br />mov hListView, eax</code></pre><br /><br />Whatever works is fine I suppose.  Finding the window is easy.<br /><br />I'm still trying to figure out why the desktop list-view ignores the LVM_GETITEMPOSITION message.  Or rather, it ignores the reference to the POINT structure.  I know that it is acknowledging the reference because, just to test, I sent a NULL reference and received a FALSE return value, and then I tried an invalid address, and explorer crashes.  So apparently it's doing something with that POINT reference, but whatever it's doing, it's not filling in the structure with the requested info.<br /><br />So not being able to retrieve the position of the desktop items will make it more difficult to perpetuate the idea that chromos had, which was to make the icon dance around the screen out of the user's reach as the mouse moves over it.</div>
+    <div class="meta">Posted on 2004-02-28 17:06:21 by iblis</div>
+   </div>
+   <div class="post" id="post-135032">
+    <div class="subject"><a href="#post-135032">Desktop Shortcuts</a></div>
+    <div class="body">If I remember correctly, the only way to get this to work is to make a dll that gets injected into explorer.exe's address space.  A Jeffrey Richter book I have at work explains how and why.  I'll post more details when I bring it home.</div>
+    <div class="meta">Posted on 2004-02-28 19:04:48 by Mecurius</div>
+   </div>
+   <div class="post" id="post-135059">
+    <div class="subject"><a href="#post-135059">Desktop Shortcuts</a></div>
+    <div class="body">Cool, Mercurius.<br /><br />That would be great.</div>
+    <div class="meta">Posted on 2004-02-28 22:58:53 by iblis</div>
+   </div>
+   <div class="post" id="post-135060">
+    <div class="subject"><a href="#post-135060">Desktop Shortcuts</a></div>
+    <div class="body">Mmmm,<br /><br />I think you would just be required to create a memory buffer in the process of the desktop. This doesn't necessarily imply a DLL, I will try to experiment with VirtualAllocEx and create a buffer in the desktop process. Might be simpler and you could handle it inside the app.</div>
+    <div class="meta">Posted on 2004-02-28 23:48:34 by donkey</div>
+   </div>
+   <div class="post" id="post-135063">
+    <div class="subject"><a href="#post-135063">Desktop Shortcuts</a></div>
+    <div class="body">This appears to work :<br /><br /><pre><code>GetItemPos FRAME hlv,iItem,pPoint<br />	LOCAL pMem		&#58;D<br />	LOCAL PID		&#58;D<br />	LOCAL hProcess		&#58;D<br />	LOCAL cbWritten		&#58;D<br /><br />	invoke GetWindowThreadProcessId, &#91;hlv&#93;, OFFSET PID<br />	invoke OpenProcess, PROCESS_VM_OPERATION + \<br />		PROCESS_VM_READ + PROCESS_VM_WRITE,NULL,&#91;PID&#93;<br />	mov &#91;hProcess&#93;, eax<br /><br />	invoke VirtualAllocEx, eax, NULL, 1024, MEM_COMMIT, PAGE_READWRITE<br />	mov &#91;pMem&#93;, eax<br /><br />	invoke SendMessage, &#91;hlv&#93;, LVM_GETITEMPOSITION, &#91;iItem&#93;, &#91;pMem&#93;<br />	<br />	invoke ReadProcessMemory, &#91;hProcess&#93;, &#91;pMem&#93;, &#91;pPoint&#93;, 8,OFFSET cbWritten<br /><br />	invoke VirtualFreeEx, &#91;hProcess&#93;, &#91;pMem&#93;, 1024, MEM_RELEASE<br />	invoke CloseHandle, &#91;hProcess&#93;<br /><br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-02-29 00:10:42 by donkey</div>
+   </div>
+   <div class="post" id="post-135064">
+    <div class="subject"><a href="#post-135064">Desktop Shortcuts</a></div>
+    <div class="body">A little more complex is to read and write to the desktop to get the LV_ITEM structure, you must also take into account the buffer that will be used to hold the text:<br /><br /><pre><code>GetRemoteItem FRAME hlv,pLVItem<br />	uses ebx<br />	LOCAL pMem		&#58;D<br />	LOCAL PID		&#58;D<br />	LOCAL hProcess		&#58;D<br />	LOCAL cbWritten		&#58;D<br /><br />	invoke GetWindowThreadProcessId,&#91;hlv&#93;,OFFSET PID<br />	invoke OpenProcess,PROCESS_VM_OPERATION + \<br />		PROCESS_VM_READ + PROCESS_VM_WRITE,NULL,&#91;PID&#93;<br />	mov &#91;hProcess&#93;,eax<br /><br />	invoke VirtualAllocEx, eax, NULL, 1024, MEM_COMMIT, PAGE_READWRITE<br />	mov &#91;pMem&#93;,eax<br /><br />	mov eax,&#91;pMem&#93;<br />	add eax,256<br />	mov ecx,&#91;pLVItem&#93;<br />	mov ebx,&#91;ecx+LV_ITEM.pszText&#93;<br />	mov &#91;ecx+LV_ITEM.pszText&#93;,eax<br />	invoke WriteProcessMemory, &#91;hProcess&#93;, &#91;pMem&#93;,\<br />		 &#91;pLVItem&#93;, SIZEOF LV_ITEM, OFFSET cbWritten<br /><br />	invoke SendMessage,&#91;hlv&#93;,LVM_GETITEM,0,&#91;pMem&#93;<br /><br />	invoke ReadProcessMemory, &#91;hProcess&#93;, &#91;pMem&#93;, \<br />		&#91;pLVItem&#93;, SIZEOF LV_ITEM, OFFSET cbWritten<br /><br />	mov eax,&#91;pLVItem&#93;<br />	mov ecx,&#91;eax+LV_ITEM.cchTextMax&#93;<br />	mov &#91;eax+LV_ITEM.pszText&#93;,ebx<br /><br />	mov eax,&#91;pMem&#93;<br />	add eax,256<br />	invoke ReadProcessMemory, &#91;hProcess&#93;, eax, ebx, ecx, OFFSET cbWritten<br /><br />	invoke VirtualFreeEx, &#91;hProcess&#93;, &#91;pMem&#93;, 1024, MEM_RELEASE<br />	invoke CloseHandle, &#91;hProcess&#93;<br /><br />	RET<br />ENDF</code></pre><br /><br />Called it with this:<br /><br /><pre><code>mov D&#91;lvi.imask&#93;,LVIF_TEXT<br />mov D&#91;lvi.pszText&#93;,OFFSET lvtext<br />mov D&#91;lvi.cchTextMax&#93;,255<br />mov D&#91;lvi.iItem&#93;,0<br />invoke GetRemoteItem,&#91;hListView&#93;,OFFSET lvi<br /><br />PrintString&#40;lvtext&#41;<br /><br />Output was &#58;<br /><br />Line 50&#58; lvtext = My Documents</code></pre></div>
+    <div class="meta">Posted on 2004-02-29 00:34:50 by donkey</div>
+   </div>
+   <div class="post" id="post-135077">
+    <div class="subject"><a href="#post-135077">Desktop Shortcuts</a></div>
+    <div class="body">wow cool that some people find dancing icon as interesting as i do :).<br />I'll try some of your ways.</div>
+    <div class="meta">Posted on 2004-02-29 06:06:38 by chromos</div>
+   </div>
+   <div class="post" id="post-135088">
+    <div class="subject"><a href="#post-135088">Desktop Shortcuts</a></div>
+    <div class="body"><div class="quote"><br />wow cool that some people find dancing icon as interesting as i do :).<br />I'll try some of your ways. </div><br />Well, more interested in the problem actually, I'm not quite clear on what the icons will do or why but it is an interesting coding problem given that it requires a little thinking to get the information you need.</div>
+    <div class="meta">Posted on 2004-02-29 11:09:38 by donkey</div>
+   </div>
+   <div class="post" id="post-135090">
+    <div class="subject"><a href="#post-135090">Desktop Shortcuts</a></div>
+    <div class="body">Oh, I see.  I had figured that since it was a systemwide control that interprocess issues wouldn't be a problem.  I guess explorer subclasses it or something.<br /><br />Good job Donkey.  I wonder if the IShell interface has any means to do this?  I haven't worked with it enough to know.</div>
+    <div class="meta">Posted on 2004-02-29 12:48:28 by iblis</div>
+   </div>
+   <div class="post" id="post-135091">
+    <div class="subject"><a href="#post-135091">Desktop Shortcuts</a></div>
+    <div class="body">Hi iblis,<br /><br />My first instinct was IShellView2, the SelectAndPositionItem method might be used for this if you can get an interface to the destop listview. Haven't tried it but I imagine it could be done.</div>
+    <div class="meta">Posted on 2004-02-29 13:12:34 by donkey</div>
+   </div>
+   <div class="post" id="post-135106">
+    <div class="subject"><a href="#post-135106">Desktop Shortcuts</a></div>
+    <div class="body">There was a rather disasterous memory leak in the code I posted, the VirtualFreeEx line should read:<br /><br />invoke VirtualFreeEx,,,0,MEM_RELEASE<br /><br />This is the final version :<br /><br /><pre><code>GetItemPos FRAME hlv,iItem,pPoint<br />	LOCAL pMem		&#58;D<br />	LOCAL PID		&#58;D<br />	LOCAL hProcess		&#58;D<br />	LOCAL cbWritten		&#58;D<br /><br />	invoke GetWindowThreadProcessId,&#91;hlv&#93;,OFFSET PID<br />	invoke OpenProcess,PROCESS_VM_OPERATION + \<br />		PROCESS_VM_READ + PROCESS_VM_WRITE,NULL,&#91;PID&#93;<br />	mov &#91;hProcess&#93;,eax<br /><br />	invoke VirtualAllocEx, eax, NULL, 8, MEM_COMMIT, PAGE_READWRITE<br />	mov &#91;pMem&#93;,eax<br /><br />	invoke SendMessage, &#91;hlv&#93;, LVM_GETITEMPOSITION, &#91;iItem&#93;, &#91;pMem&#93;<br /><br />	invoke ReadProcessMemory, &#91;hProcess&#93;, &#91;pMem&#93;, &#91;pPoint&#93;, 8, OFFSET cbWritten<br /><br />	invoke VirtualFreeEx,&#91;hProcess&#93;,&#91;pMem&#93;,0,MEM_RELEASE<br />	invoke CloseHandle,&#91;hProcess&#93;<br /><br />	RET<br />ENDF<br /><br />GetRemoteItem FRAME hlv,pLVItem<br />	uses ebx,edi,esi<br />	LOCAL pMem		&#58;D<br />	LOCAL PID		&#58;D<br />	LOCAL hProcess		&#58;D<br />	LOCAL cbWritten		&#58;D<br /><br />	invoke GetWindowThreadProcessId,&#91;hlv&#93;,OFFSET PID<br />	invoke OpenProcess,PROCESS_VM_OPERATION + \<br />		PROCESS_VM_READ + PROCESS_VM_WRITE,NULL,&#91;PID&#93;<br />	mov &#91;hProcess&#93;,eax<br /><br />	mov edi,&#91;pLVItem&#93;<br /><br />	mov ecx,SIZEOF LV_ITEM<br />	add ecx,&#91;edi+LV_ITEM.cchTextMax&#93;<br />	inc ecx<br /><br />	invoke VirtualAllocEx, eax, NULL, ecx, MEM_COMMIT, PAGE_READWRITE<br />	mov &#91;pMem&#93;,eax<br /><br />	; Substitute the address of the local pszText buffer for the remote one<br />	mov esi,eax<br />	add esi,SIZEOF LV_ITEM<br /><br />	mov ebx,&#91;edi+LV_ITEM.pszText&#93;<br />	mov &#91;edi+LV_ITEM.pszText&#93;,esi<br /><br />	invoke WriteProcessMemory,&#91;hProcess&#93;,&#91;pMem&#93;,&#91;pLVItem&#93;,\<br />		SIZEOF LV_ITEM,OFFSET cbWritten<br /><br />	invoke SendMessage,&#91;hlv&#93;,LVM_GETITEM,0,&#91;pMem&#93;<br /><br />	invoke ReadProcessMemory,&#91;hProcess&#93;,&#91;pMem&#93;,&#91;pLVItem&#93;,\<br />		SIZEOF LV_ITEM,OFFSET cbWritten<br /><br />	; reset the address of the pszText buffer<br />	mov &#91;edi+LV_ITEM.pszText&#93;,ebx<br /><br />	; copy the text from the remote buffer<br />	invoke ReadProcessMemory,&#91;hProcess&#93;,esi,ebx,\<br />		&#91;edi+LV_ITEM.cchTextMax&#93;,OFFSET cbWritten<br /><br />	invoke VirtualFreeEx,&#91;hProcess&#93;,&#91;pMem&#93;,0,MEM_RELEASE<br />	invoke CloseHandle,&#91;hProcess&#93;<br /><br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-02-29 20:54:52 by donkey</div>
+   </div>
+   <div class="post" id="post-135111">
+    <div class="subject"><a href="#post-135111">Desktop Shortcuts</a></div>
+    <div class="body">perhaps i should have said that i write in c, i understand also most of your code, but i dont understand, why i do not get the Handle via inline asm, how Iblis got it.<br /><br />invoke FindWindow, &quot;progman&quot;, 0<br />invoke FindWindowEx, eax, 0, &quot;SHELLDLL_DefView&quot;, 0<br />invoke FindWindowEx, eax, 0, &quot;SysListView32&quot;, 0<br />mov hListView, eax<br /><br />PS: Of course I didn't use the masm Syntax in c.<br /><br />Perhaps i was yesterday also only too tired, to get the code working. I'll have a look at it this evening.</div>
+    <div class="meta">Posted on 2004-03-01 01:07:32 by chromos</div>
+   </div>
+   <div class="post" id="post-135152">
+    <div class="subject"><a href="#post-135152">Desktop Shortcuts</a></div>
+    <div class="body">wow hm pretty amazing, the FindWindow calls return always 0 as handle, although they got the handle of &quot;SysListView32&quot;.<br />According to the msdn Description of the return value, I quoute :<br />&quot;If the function fails, the return value is NULL.&quot;<br /><br />hm strange, and this took me 3 days to solve .... omg.</div>
+    <div class="meta">Posted on 2004-03-02 07:24:08 by chromos</div>
+   </div>
+  </div>
+ </body>
+</html>

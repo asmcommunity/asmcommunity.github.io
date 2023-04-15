@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>fasm for linux problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12695" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=12695">fasm for linux problem</a></p>
+   <div class="post" id="post-98124">
+    <div class="subject"><a href="#post-98124">fasm for linux problem</a></div>
+    <div class="body">hi,<br /><br />I would like to ask for help concerning the following problem:<br /><br />I set up a fli4l linux router which should also send me received faxmessages as email attachments.<br />I need a program which is started like &quot;/usr/local/bin/base64encode \${PDF} \${PDF} | utod &gt;&gt; smtp.cmd&quot;<br />in order to receive a base64 encoded arttachment instead of the now installed uuencode program.<br />It works already with uuencode but my email client (I'm used to it) doesn't decode uuencoded attachments, so I need a base64 encoder with about the same functionality as uuencode.<br />What would help me very much is a program frame for fasm which which gets the 2 environment variables \$PDF (filenames) and can manage the appended output to &quot;| utod  &gt;&gt; smtp.cmd&quot; - without the encoding routine which shouldn't be so difficult for me.<br />I could do it in win32 but I have never coded a linux program before.<br /><br />Thanks in advance<br />wolf</div>
+    <div class="meta">Posted on 2003-04-20 04:23:42 by wolf</div>
+   </div>
+   <div class="post" id="post-98139">
+    <div class="subject"><a href="#post-98139">fasm for linux problem</a></div>
+    <div class="body"><pre><code><br />bazik@exodus bazik $ emerge -s base64<br />Searching...   <br />&#91; Results for search key &#58; base64 &#93;<br />&#91; Applications found &#58; 2 &#93;<br />*  net-mail/base64<br />      Latest version available&#58; 1.3<br />      Latest version installed&#58; &#91; Not Installed &#93;<br />      Size of downloaded files&#58; 173 kB<br />      Homepage&#58;    &#91;url&#93;http&#58;//www.fourmilab.ch/webtools/base64/&#91;/url&#93;<br />      Description&#58; Command line program that encodes/decodes files in base64<br />&#91;...&#93;<br /></code></pre><br /><br />But I'll see if I can hack a assembly programm together :)</div>
+    <div class="meta">Posted on 2003-04-20 05:17:46 by bazik</div>
+   </div>
+   <div class="post" id="post-98158">
+    <div class="subject"><a href="#post-98158">fasm for linux problem</a></div>
+    <div class="body">Thanks a lot!<br /><br />I think this is exactly the program I need. But as the fli4l-router <a target="_blank" href="http://www.fli4l.de">http://www.fli4l.de</a> is only a very minimal linux installation, I would need a compiled binary and had to hope that it is running with kernel 2.2.19.<br />You seem to use a smart search machine or use it that way respectively! I found some valuable infos but not this site.<br /><br />wolf</div>
+    <div class="meta">Posted on 2003-04-20 07:04:11 by wolf</div>
+   </div>
+   <div class="post" id="post-98164">
+    <div class="subject"><a href="#post-98164">fasm for linux problem</a></div>
+    <div class="body">As I dont know which version of GCC us used for fli4l, I compiled that base64 programm static for you.</div>
+    <div class="meta">Posted on 2003-04-20 07:37:55 by bazik</div>
+   </div>
+   <div class="post" id="post-98193">
+    <div class="subject"><a href="#post-98193">fasm for linux problem</a></div>
+    <div class="body">bazik, again, thank you!<br /><br />I get an &quot;Illegal Instruction&quot;  message  when calling base64. But anyway - just by chance I discovered that uuencode has a switch -m which will encode the data with base64. Now I can read the fax as attachment though scanlines are doubled. But this is a different matter.<br />Nevertheless I'm still interested in a linux asmprog skeleton which gets the commandline and handles output just like uuencode or base64.<br /><br />wolf</div>
+    <div class="meta">Posted on 2003-04-20 10:53:26 by wolf</div>
+   </div>
+   <div class="post" id="post-98648">
+    <div class="subject"><a href="#post-98648">fasm for linux problem</a></div>
+    <div class="body">Exploiting some of the fasm for linux sources (thanks to Privalov) I managed to get a working binary.<br />There is also a useful site for linux system calls: <a target="_blank" href="http://www.lxhp.in-berlin.de/index-lx.shtml">http://www.lxhp.in-berlin.de/index-lx.shtml</a><br /><br />Here is my code:<br /><br /><pre><code><br />; fasm implementation of a base64 encoder<br />; usage&#58; scibase64 filename<br /><br />format ELF executable<br />entry start<br /><br />O_RDONLY=0<br /><br />section readable writeable<br /><br />basecode db 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/',0<br /><br />cmderr db 'scibase64 - scientix base64 encoder v1.0',13,10,'usage&#58; scibase64 sourcefile',13,10<br />cmderr_size = $-cmderr<br /><br />ferr db   'scibase64 - scientix base64 encoder v1.0',13,10,'file not found',13,10<br />ferr_size = $-ferr<br /><br />buff dd ?<br />fdin dd ?<br />line dd ?<br /><br /><br />section readable executable<br /><br />start&#58;<br />	mov dword&#91;line&#93;,0<br />	pop eax				; number of commandline strings no.1 = prog no.2...no.n = arg 1 .. arg n<br />	cmp eax,2                                                ; one argument<br />	jne cmderror<br />	pop eax				; pointer to progname<br />	pop ebx				; pointer to arg 1 &#40;filename&#41;<br />		<br />	call open<br />	call base64<br />	call close<br /><br />exit&#58;<br />	mov	eax,1<br />	xor	ebx,ebx<br />	int	0x80<br />	<br />	<br />base64&#58; <br />	mov eax,3<br />	mov ebx,&#91;fdin&#93;<br />	mov ecx,buff<br />	mov edx,3<br />	int 80h<br />	cmp eax,3<br />	jne .eof<br />	lea ecx,&#91;buff&#93;<br />	mov al,byte&#91;ecx&#93;<br />	shl eax,8<br />	mov al,byte&#91;ecx+1&#93;<br />	shl eax,8<br />	mov al,byte&#91;ecx+2&#93;<br />	<br />	xor edx,edx<br />	xor ebx,ebx<br />	mov dl,al<br />	and dl,3Fh<br />	lea ecx,&#91;basecode&#93;<br />	mov bl,byte&#91;ecx+edx&#93;<br />	shl ebx,8<br />	<br />	shr eax,6<br />	mov dl,al<br />	and dl,3Fh<br />	mov bl,byte&#91;ecx+edx&#93;<br />	shl ebx,8<br />	<br />	shr eax,6<br />	mov dl,al<br />	and dl,3Fh<br />	mov bl,byte&#91;ecx+edx&#93;<br />	shl ebx,8<br /><br />	shr eax,6<br />	mov dl,al<br />	and dl,3Fh<br />	mov bl,byte&#91;ecx+edx&#93;<br />	<br />	call outlong<br />	inc &#91;line&#93;<br />	cmp &#91;line&#93;,17<br />	jne base64<br />	call newline<br />	mov dword&#91;line&#93;,0<br />	jmp base64<br /><br />	.eof&#58;<br />	cmp eax,2<br />	jne .oneleft<br />	xor eax,eax<br />	lea ecx,&#91;buff&#93;<br />	mov al,byte&#91;ecx&#93;<br />	shl eax,8<br />	mov al,byte&#91;ecx+1&#93;<br /><br />	xor edx,edx<br />	xor ebx,ebx<br />	mov bl,'='<br />	shl ebx,8<br />	mov dl,al<br />	and dl,3Fh<br />	lea ecx,&#91;basecode&#93;<br />	mov bl,byte&#91;ecx+edx&#93;<br />	shl ebx,8<br />	<br />	shr eax,6<br />	mov dl,al<br />	and dl,3Fh<br />	mov bl,byte&#91;ecx+edx&#93;<br />	shl ebx,8<br />	<br />	shr eax,6<br />	mov dl,al<br />	and dl,3Fh<br />	mov bl,byte&#91;ecx+edx&#93;<br />		<br />	call outlong<br />	call newline<br />	jmp .finish<br />	<br />	.oneleft&#58;	<br />	cmp eax,1<br />	jne .last<br />	xor eax,eax<br />	lea ecx,&#91;buff&#93;<br />	mov al,byte&#91;ecx&#93;<br />	xor edx,edx<br />	xor ebx,ebx<br />	mov bx,'=='<br />	shl ebx,16<br />	mov dl,al<br />	and dl,3Fh<br />	lea ecx,&#91;basecode&#93;<br />	mov bl,byte&#91;ecx+edx&#93;<br />	shl ebx,8<br />	<br />	shr eax,6<br />	mov dl,al<br />	and dl,3Fh<br />	mov bl,byte&#91;ecx+edx&#93;<br />		<br />	call outlong<br />	.last&#58;<br />	call newline<br />	<br />	.finish&#58;<br />	ret<br />	<br /><br />outlong&#58;			           ; four bytes base64 output for three bytes input<br />	mov dword&#91;buff&#93;,ebx<br />	mov eax,4<br />	mov ebx,1<br />	mov ecx,buff<br />	mov edx,4<br />	int 80h<br />	ret<br /><br /><br />newline&#58;<br />	mov word&#91;buff&#93;,0D0Ah<br />	mov eax,4<br />	mov ebx,1<br />	mov ecx,buff<br />	mov edx,2<br />	int 80h<br />	ret<br /><br />open&#58;<br />	mov eax,5			        ; ptr to filename is in ebx already			<br />	mov ecx,O_RDONLY<br />	xor edx,edx<br />	int 80h<br />	test eax,eax<br />	js ferror<br />	mov &#91;fdin&#93;,eax			; eax = file descriptor of input file<br />	ret<br />	<br />close&#58;<br />	mov eax,6<br />	mov ebx,&#91;fdin&#93;<br />	int 80h<br />	ret<br /><br />cmderror&#58;	<br />	mov ecx,cmderr<br />	mov edx,cmderr_size<br />	jmp error<br />	<br />ferror&#58;	<br />	mov ecx,ferr<br />	mov edx,ferr_size<br />	<br />error&#58;<br />	mov eax,4<br />	mov ebx,1<br />	int 80h<br />	jmp exit	<br /></code></pre><br />wolf</div>
+    <div class="meta">Posted on 2003-04-22 13:16:52 by wolf</div>
+   </div>
+   <div class="post" id="post-98650">
+    <div class="subject"><a href="#post-98650">fasm for linux problem</a></div>
+    <div class="body">Cool :cool: <br /><br />Great work :alright: <br /><br />Maybe this can be of some use for you aswell:<br /><br />(remove .gz extension and unpack with &quot;tar -jxvf asmutils.tar.bz2&quot;)</div>
+    <div class="meta">Posted on 2003-04-22 13:23:32 by bazik</div>
+   </div>
+   <div class="post" id="post-98660">
+    <div class="subject"><a href="#post-98660">fasm for linux problem</a></div>
+    <div class="body">What's the point of gzipping a bzip2 compressed file?</div>
+    <div class="meta">Posted on 2003-04-22 15:33:24 by comrade</div>
+   </div>
+   <div class="post" id="post-98661">
+    <div class="subject"><a href="#post-98661">fasm for linux problem</a></div>
+    <div class="body"><div class="quote"><br />What's the point of gzipping a bzip2 compressed file? </div><br /><br />I didnt say that I gzipped it, I just added the extension because bz2 is not allowed on that board and as gzip it would be over the 300k limit.</div>
+    <div class="meta">Posted on 2003-04-22 15:38:33 by bazik</div>
+   </div>
+   <div class="post" id="post-98786">
+    <div class="subject"><a href="#post-98786">fasm for linux problem</a></div>
+    <div class="body">I found a mistake in the posted code: <br />beneath the label .oneleft: shl ebx,16 is wrong - it must be shl ebx,8 instead.<br />for those who urgently need a base64 en/decoder ;) I attach scibase64.asm<br /><br />wolf</div>
+    <div class="meta">Posted on 2003-04-23 03:42:19 by wolf</div>
+   </div>
+  </div>
+ </body>
+</html>

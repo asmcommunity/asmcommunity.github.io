@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ComboBox Handles - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14457" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=14457">ComboBox Handles</a></p>
+   <div class="post" id="post-111803">
+    <div class="subject"><a href="#post-111803">ComboBox Handles</a></div>
+    <div class="body">In a previous thread, I stated that ComboBox had problems with using GetWindowLong or SetWindowLong in conjunction with the GWL_USERDATA offset. As Donkey pointed out later, there is nothing wrong with the GWL_USERDATA offset on ComboBoxes.<br /><br />The problem turns out to be that since I was using GWL_USERDATA to hold the address of my control descriptor, a handle with a null in this long would cause a bad pointer to my descriptor and blow up the program.<br /><br />This is, in fact, the case with the ComboBox control. For the ctlcolor event for the text box portion, I get a handle containing 0 in the GWL_USERDATA offset. I detect this and do a GetParent and then check its GWL_USERDATA offset. It is a valid pointer to my ComboBox ComboBox descriptor, which I then use (with success).<br /><br />If, in trying the GetParent, I still get a null pointer in GWL_USERDATA, so I jump to defwndproc.<br /><br />My question is how can I obtain the handle that is presented when the listbox portion of the combobox is being colored with the ctlcolor event?</div>
+    <div class="meta">Posted on 2003-07-24 21:23:35 by msmith</div>
+   </div>
+   <div class="post" id="post-111807">
+    <div class="subject"><a href="#post-111807">ComboBox Handles</a></div>
+    <div class="body">The listbox for a combobox will never return the actual parent as it is actually last in a chain of windows of which the combobox is the root, use the following instead:<br /><pre><code>.ELSEIF eax == WM_CTLCOLORLISTBOX<br />	invoke GetAncestor,lParam,GA_ROOT</code></pre>This will return the handle of the ComboBox which owns the listbox<br /><br />Sorry mssmith, I just tried that and it doesn't work, it just returns the same handle. I have a few ideas...</div>
+    <div class="meta">Posted on 2003-07-24 22:25:02 by donkey</div>
+   </div>
+   <div class="post" id="post-111810">
+    <div class="subject"><a href="#post-111810">ComboBox Handles</a></div>
+    <div class="body">OK, here's the thing, the listbox that is attached to the combobox has to be able to be displayed outside the bounding rectangle of the control. The problem is that the edit box is the bounding rectangle so the actual combo box cannot be the parent otherwise you would never see the listbox. In order to allow it to display properly MS pulled a fast one, they appear to have made the Desktop window it's parent, IOW there is no way to identify the combobox from the listbox handle, dumb move but that's the size of it. My only suggestion is to create a superclass and use that in place of all combo-boxes, set the extra info size to 4 and store the handle of the combo box there.</div>
+    <div class="meta">Posted on 2003-07-24 22:53:33 by donkey</div>
+   </div>
+   <div class="post" id="post-111811">
+    <div class="subject"><a href="#post-111811">ComboBox Handles</a></div>
+    <div class="body">Hi Donkey,<br /><br />Thanks for the effort.<br /><br />I guess with your second reply you will not be surprised at the following:<br /><br />GA_ROOT and GA_ROOTOWNER make no color on either the text or the listbox sections.<br /><br />GA_PARENT works like GetParent in that they both allow coloring of the text section but not the listbox section.<br /><br />I haven't tried supercalssing yet. Is it difficult? (I know read the tutorial) :)</div>
+    <div class="meta">Posted on 2003-07-24 23:09:11 by msmith</div>
+   </div>
+   <div class="post" id="post-111814">
+    <div class="subject"><a href="#post-111814">ComboBox Handles</a></div>
+    <div class="body">It is also unfortunately very diffcult to superclass a combobox, all of my attempts in the last half hour have failed miserably. I checked the knowledge base, they had this, it was as I suspected:<br /><div class="quote">However, the ComboLBox (list box) window for combo boxes that have the CBS_DROPDOWN or CBS_DROPDOWNLIST style is not a child of the ComboBox window. Instead, each <strong>ComboLBox window is a child of the desktop window</strong>. This is required so that, when the drop-down list box is dropped, it can extend outside the application window or dialog box. Otherwise, the list box would be clipped at the window or dialog box border. <br /><br />Because the ComboLBox window is not a child of the ComboBox window, <strong>there is no simple method to get the handle of one window, given the other</strong>. For example, given a handle to the ComboBox, the handle to any associated drop- down list box is not readily available. The ComboLBox is a private class registered by USER that is a list box with the class style CS_SAVEBITS. </div><br />The best I can say is that the ComboBox listbox is not colored until it is displayed, at that point the WM_CTLCOLORLISBOX message is sent to get the brush handle. Since you have to press the button to have it displayed the combo box must have the focus when this message is recieved (as far as I can tell) so you can get the parent handle with a getfocus call. It's a hack method but I can't think of an exception offhand.<br /><br />The handle of the listbox is available to the GetComboBoxInfo function, you can then use that to check the handle against, that's the only way I can think of that will guarantee a perfect match.</div>
+    <div class="meta">Posted on 2003-07-24 23:33:26 by donkey</div>
+   </div>
+   <div class="post" id="post-111820">
+    <div class="subject"><a href="#post-111820">ComboBox Handles</a></div>
+    <div class="body">Thanks again Donkey,<br /><br />It's getting too late to try tonight, but it sounds like that last idea (GetComboBoxInfo function) might just work.<br /><br />If it is OK to invoke the GetComboBoxInfo function immediately after creating the combo box, I will do so and then do a SetWindowLong on each of the 3 resultant handles, stuffing each one's GWL_USERDATA with the address of my descriptor. Then when the user causes the list box to drop down, the ctlcolor event will occur, and I will get a non-zero on the listbox's GWL_USERDATA and point to the correct descriptor, causing it to be colored.</div>
+    <div class="meta">Posted on 2003-07-25 01:13:25 by msmith</div>
+   </div>
+   <div class="post" id="post-111877">
+    <div class="subject"><a href="#post-111877">ComboBox Handles</a></div>
+    <div class="body">When I invoke GetComboBoxInfo, it returns an error 57 (hex) which is ERROR_INVALID_PARAMETER. Since there are 7 dwords in the structure, I assum I should put 28 into the first dword.<br /><br /><pre><code><br /><br />!Rect1 rd 4<br />!Rect2 rd 4<br /><br />!cbSize dd 28<br />!rcItem dd !Rect1<br />!rcButton dd !Rect2<br />!stateButton dd 0<br />!hwndCombo dd 0<br />!hwndItem dd 0<br />!hwndList dd 0<br /><br />...<br /><br />invoke CreateWindowEx,0,!ControlType4,NULL,WS_VSCROLL+WS_VISIBLE+WS_CHILD+CBS_DROPDOWN,0,0,80,30,&#91;OBMain&#93;,104,&#91;!hinstance&#93;,NULL<br />mov &#91;ComboBox&#93;,eax<br />invoke GetComboBoxInfo,&#91;ComboBox&#93;,!cbSize<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-07-25 14:15:36 by msmith</div>
+   </div>
+   <div class="post" id="post-111881">
+    <div class="subject"><a href="#post-111881">ComboBox Handles</a></div>
+    <div class="body">I get 52 bytes for COMBOBOXINFO :<br /><pre><code>COMBOBOXINFO STRUCT<br />    cbSize DWORD ? ;-&gt; 4<br />    rcItem RECT &lt;?&gt; ;-16<br />    rcButton RECT &lt;?&gt; ;-&gt;16<br />    stateButton DWORD ? ;-&gt; 4<br />    hwndCombo DWORD ? ;-&gt; 4<br />    hwndItem DWORD ? ;-&gt; 4<br />    hwndList DWORD ? ;-&gt; 4<br />COMBOBOXINFO ENDS</code></pre></div>
+    <div class="meta">Posted on 2003-07-25 14:27:33 by donkey</div>
+   </div>
+   <div class="post" id="post-111889">
+    <div class="subject"><a href="#post-111889">ComboBox Handles</a></div>
+    <div class="body">It looks to me like items 2 and 3 should be pointer to type rect, not the rect structures themselves which puts us back to 28.<br /><br />MSDN says:<br /><br /><div class="quote"><br />rcItem <br />Pointer to a RECT structure that specifies the coordinates of the edit box. <br />rcButton <br />Pointer to a RECT structure that specifies the coordinates of the button that contains the drop-down arrow. <br /></div></div>
+    <div class="meta">Posted on 2003-07-25 14:57:58 by msmith</div>
+   </div>
+   <div class="post" id="post-111890">
+    <div class="subject"><a href="#post-111890">ComboBox Handles</a></div>
+    <div class="body">Our docs are at odds, mine say that they are RECT structures. (mine works BTW).<br /><pre><code>&#91;b&#93;Members&#91;/b&#93;<br /><br />&#91;b&#93;cbSize&#91;/b&#93;<br />	Specifies the size, in bytes, of the structure. The caller must set this to sizeof&#40;COMBOBOXINFO&#41;. <br />&#91;b&#93;rcItem&#91;/b&#93;<br />	A &#91;b&#93;RECT&#91;/b&#93; structure that specifies the coordinates of the edit box. <br />&#91;b&#93;rcButton&#91;/b&#93;<br />	A &#91;b&#93;RECT&#91;/b&#93; structure that specifies the coordinates of the button that contains the drop-down arrow. <br />&#91;b&#93;stateButton&#91;/b&#93;<br />	Specifies the combo box button state. This parameter can be one of the following values. <br />	0 The button exists and is not pressed.<br />	STATE_SYSTEM_INVISIBLE There is no button.<br />	STATE_SYSTEM_PRESSED The button is pressed.<br />&#91;b&#93;hwndCombo&#91;/b&#93;<br />	Handle to the combo box. <br />&#91;b&#93;hwndItem&#91;/b&#93;<br />	Handle to the edit box. <br />&#91;b&#93;hwndList&#91;/b&#93;<br />	Handle to the drop-down list. </code></pre><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/commctls/comboboxes/comboboxreference/comboboxstructures/comboboxinfo.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/commctls/comboboxes/comboboxreference/comboboxstructures/comboboxinfo.asp</a></div>
+    <div class="meta">Posted on 2003-07-25 15:02:19 by donkey</div>
+   </div>
+   <div class="post" id="post-111896">
+    <div class="subject"><a href="#post-111896">ComboBox Handles</a></div>
+    <div class="body">Your right, the docs are at odds. Yours was right.<br /><br />My program now has colored comboboxes (both edit and list).<br /><br />The correct info was free off the web. The incorrect docs cost me $170.00 (MSDN subcription)<br /><br />Thanks again.</div>
+    <div class="meta">Posted on 2003-07-25 16:21:03 by msmith</div>
+   </div>
+   <div class="post" id="post-111897">
+    <div class="subject"><a href="#post-111897">ComboBox Handles</a></div>
+    <div class="body">The MSDN library is now available as a three ISO download from Microsoft for free (APR 2003) that's where I got mine:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=13270&amp;highlight=MSDN+library">http://www.asmcommunity.net/board/index.php?topic=13270&amp;highlight=MSDN+library</a></div>
+    <div class="meta">Posted on 2003-07-25 16:25:03 by donkey</div>
+   </div>
+   <div class="post" id="post-111983">
+    <div class="subject"><a href="#post-111983">ComboBox Handles</a></div>
+    <div class="body">Assuming the files ever finish downloading :) how do I open them?</div>
+    <div class="meta">Posted on 2003-07-26 16:44:43 by msmith</div>
+   </div>
+   <div class="post" id="post-111984">
+    <div class="subject"><a href="#post-111984">ComboBox Handles</a></div>
+    <div class="body">They have to burned onto a CD, they are in ISO format so any cd writer software can handle them. In Nero, just select &quot;Burn Image&quot; and choose the iso file.</div>
+    <div class="meta">Posted on 2003-07-26 16:48:18 by donkey</div>
+   </div>
+   <div class="post" id="post-111985">
+    <div class="subject"><a href="#post-111985">ComboBox Handles</a></div>
+    <div class="body"><a target="_blank" href="http://www.winimage.com/download.htm">http://www.winimage.com/download.htm</a></div>
+    <div class="meta">Posted on 2003-07-26 16:57:39 by lingo12</div>
+   </div>
+  </div>
+ </body>
+</html>

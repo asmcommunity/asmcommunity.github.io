@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Memory Addressing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25325" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25325">Memory Addressing</a></p>
+   <div class="post" id="post-185233">
+    <div class="subject"><a href="#post-185233">Memory Addressing</a></div>
+    <div class="body">Hi.&nbsp; Sorry if my question seems trivial, but I need to know the answer in order to progress!&nbsp; I think I&#39;m asking a question relating to indirect addressing, but I&#39;m not sure.&nbsp; Here goes...<br /><br />I have allocated 4K of memory using VirtualAlloc.&nbsp; The location of this memory has been mov&#39;d into pTable using the following code:<br /><br /><pre><code><br />LOCAL pTable: DWORD<br />&nbsp; .<br />&nbsp; .<br />&nbsp; .<br />invoke VirtualAlloc, NULL, 4096, MEM_COMMIT, PAGE_EXECUTE_READWRITE<br />mov pTable, eax<br /></code></pre><br /><br />This works fine with the memory being allocated and the pointer being stored in the pTable variable (verified with OllyDbg)<br /><br />I now want to write some dword values to this newly allocated memory, treating it as a table.&nbsp; Here is the code I am using now to store a value at the first dword offset of the table:<br /><br /><pre><code><br />mov ebx, pTable<br />mov dword ptr , eax <br /></code></pre><br /><br />The above code is functional, but I don&#39;t see why I can&#39;t just use the following:<br /><br /><pre><code><br />mov dword ptr , eax<br /></code></pre><br /><br />The above code simply overwrites the value stored in pTable, effectively losing my pointer to the table.&nbsp; Can anyone explain why the second method doesn&#39;t work and/or how this could be written better?</div>
+    <div class="meta">Posted on 2006-09-11 00:09:56 by Timbo</div>
+   </div>
+   <div class="post" id="post-185235">
+    <div class="subject"><a href="#post-185235">Re: Memory Addressing</a></div>
+    <div class="body">The first case is correct because you are loading a value from memory using &quot;pTable&quot; as the memory reference (pointer), and using that value as a memory reference itself.<br /><br />The second example will not work because you are using &quot;pTable&quot; as the memory reference, which is why you are overriding it.<br /><br />Here is an example in NASM syntax (which I find more uniform and clear in this case)...<br /><br /><pre><code><br />;LOCAL pTable<br />pTable DD 0<br /><br />;First Case<br />mov ebx, DWORD ;***** This illustrates the difference *****<br />mov DWORD, eax<br /><br />;Second Case<br />mov DWORD, eax<br /></code></pre><br /><br />If you notice in the above code, the first instruction of the first case uses the same principles as the first instruction of the second case, that being &quot;pTable&quot; as a memory reference.<br /><br />This is something that MASM &quot;hides&quot; for you by keeping track of variable references and accessing them in a C-like manner (directly addressing the value of a variable, not the pointer/address of it). Thus, &quot;mov ebx, pTable&quot; is the equivalent of &quot;mov ebx, dword ptr &quot;. I think the main reason being, is that MASM was further designed in mind to be used as an intermediate stage for compilers... this is where referencing values of variables instead of their pointer/address becomes easier.<br /><br />For example, it is much easier to write &quot;invoke MyFunction, pTable&quot; instead of &quot;invoke MyFunction, dword ptr &quot;... imagine having to do that for every variable value you wish to reference. For most people who are debugging/reading their ASM equivalent code, it would get annoying to read the same thing over and over (&quot;dword ptr &quot; ad-infitium).<br /><br />In the end, MASM is a pretty good assembler... as long as you are aware of its idiosyncrasies.</div>
+    <div class="meta">Posted on 2006-09-11 01:58:06 by SpooK</div>
+   </div>
+   <div class="post" id="post-185237">
+    <div class="subject"><a href="#post-185237">Re: Memory Addressing</a></div>
+    <div class="body">Thanks for the quick reply.<br /><br />I should have mentioned I was using masm but I guessed you figured it out :)<br /><br />So, if I understand correctly, the nasm syntax:<br /><br /><pre><code><br />mov dword, 1000H<br /></code></pre><br /><br />places the value 1000H in the memory address referenced by the data stored in ebx.&nbsp; So, for example, if the ebx register held the value 30000H, the above instruction would move the value 10000H to the memory location 30000H.&nbsp; I hope I got that right.<br /><br />The main reason why I preferred the look of the second method was that it only used 1 instruction.&nbsp; Is there way, using masm, to reference (or store data in) the memory location pointed to by pTable using 1 instruction?&nbsp; Or am I better off using the first method, i.e. using the ebx register to temporarily hold the location?</div>
+    <div class="meta">Posted on 2006-09-11 04:05:21 by Timbo</div>
+   </div>
+   <div class="post" id="post-185239">
+    <div class="subject"><a href="#post-185239">Re: Memory Addressing</a></div>
+    <div class="body">&nbsp; &nbsp; &nbsp;All my code has the following header statements<br /><pre><code><br />Q&nbsp; &nbsp; &nbsp; &nbsp; EQU&nbsp; &nbsp; &nbsp;QWORD PTR<br />D&nbsp; &nbsp; &nbsp; &nbsp; EQU&nbsp; &nbsp; &nbsp;DWORD PTR<br />W&nbsp; &nbsp; &nbsp; &nbsp; EQU&nbsp; &nbsp; &nbsp;WORD PTR<br />B&nbsp; &nbsp; &nbsp; &nbsp; EQU&nbsp; &nbsp; &nbsp;BYTE PTR<br /></code></pre><br /><br />&nbsp; &nbsp; &nbsp;So I code like this:<br /><pre><code><br />&nbsp; PUSH W<br />&nbsp; MOV AL,B<br />&nbsp; ...ETC<br /></code></pre><br /><br />Ratch</div>
+    <div class="meta">Posted on 2006-09-11 09:49:37 by Ratch</div>
+   </div>
+   <div class="post" id="post-185240">
+    <div class="subject"><a href="#post-185240">Re: Memory Addressing</a></div>
+    <div class="body">My code is very close to what Ratch does:<br /><br /><pre><code><br />a$	TEXTEQU	&lt;ADDR&gt;<br />b$	TEXTEQU	&lt;BYTE PTR&gt;<br />d$	TEXTEQU	&lt;DWORD PTR&gt;<br />w$	TEXTEQU	&lt;WORD PTR&gt;<br />s$	TEXTEQU	&lt;SIZEOF&gt;<br />o$	TEXTEQU	&lt;OFFSET&gt;<br /></code></pre><br /><br /><pre><code><br />mov eax, o$ szTemp<br />mov d$, edx<br /></code></pre><br /><br />It adds readability.</div>
+    <div class="meta">Posted on 2006-09-11 10:27:22 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-185241">
+    <div class="subject"><a href="#post-185241">Re: Memory Addressing</a></div>
+    <div class="body"><div class="quote"><br />The main reason why I preferred the look of the second method was that it only used 1 instruction.&nbsp; Is there way, using masm, to reference (or store data in) the memory location pointed to by pTable using 1 instruction?&nbsp; Or am I better off using the first method, i.e. using the ebx register to temporarily hold the location?<br /></div><br /><br />On the x86, register values (your first post) and immediate values (your 2nd post) that get moved into memory require an effective memory address. That memory address will always be direct, not a pointer to a pointer. So no, you are suck with the first method.<br /><br />If you find yourself reloading a register with a memory value (like the &quot;pTable&quot; stored pointer) one too many times, you have to re-think and re-design the way you are programming. This is usually were functions/subroutines come in to play.<br /><br />As for Ratch/JimmyClif&#39;s examples, it just reinforces why I will never program in MASM/POASM unless forced to. Using one abstraction to mask another was never my style. Basically, **** or get off the pot... but as I said... that is just my style ;)</div>
+    <div class="meta">Posted on 2006-09-11 10:35:29 by SpooK</div>
+   </div>
+   <div class="post" id="post-185248">
+    <div class="subject"><a href="#post-185248">Re: Memory Addressing</a></div>
+    <div class="body">so, back to the topic:<br />to fill your array with values, there are two common ways:<br />(example of filling the array with values 0...1023)<br /><pre><code><br />mov ebx,pTable<br />xor ecx,ecx<br />.while ecx&lt;1024<br />&nbsp; &nbsp; mov ,ecx<br />&nbsp; &nbsp; inc ecx<br />.endw<br /></code></pre><br /><pre><code><br />mov ebx,pTable<br />xor ecx,ecx<br />.while ecx&lt;1024<br />&nbsp; &nbsp; mov ,ecx<br />&nbsp; &nbsp; inc ecx<br />&nbsp; &nbsp; add ebx,4<br />.endw<br /></code></pre></div>
+    <div class="meta">Posted on 2006-09-11 14:38:22 by Ultrano</div>
+   </div>
+   <div class="post" id="post-185253">
+    <div class="subject"><a href="#post-185253">Re: Memory Addressing</a></div>
+    <div class="body"><div class="quote"><br />The main reason why I preferred the look of the second method was that it only used 1 instruction.&nbsp; Is there way, using masm, to reference (or store data in) the memory location pointed to by pTable using 1 instruction?&nbsp; Or am I better off using the first method, i.e. using the ebx register to temporarily hold the location?<br /></div><br />You cannot use &quot;one&quot; instruction unless you create a macro (a fake instruction) that will generate two real instructions. The CPU itself does not support indirect addressing via memory for data.</div>
+    <div class="meta">Posted on 2006-09-11 21:04:28 by tenkey</div>
+   </div>
+   <div class="post" id="post-185259">
+    <div class="subject"><a href="#post-185259">Re: Memory Addressing</a></div>
+    <div class="body">Thanks to everyone for replying.<br /><br />@SpooK: You are correct in saying that I need to rethink and redesign my programming method.&nbsp; I come from a basic/pascal background and I am beginning to realize that there is more going on &quot;under the hood&quot; when using high level languages than is immediately apparent.&nbsp; I&#39;m fairly new to assembler so this is all a learning experience at the moment.<br /><br />@Ultrano: Thanks for the sample code.&nbsp; That&#39;s exactly what I wanted to do (i think).&nbsp; The solution seems so obvious now, I just have to rethink my approach and make more efficient use of the instruction set and registers.<br /><br />@Ratch &amp; JimmyClif: I wasn&#39;t aware of that little trick.&nbsp; Thanks!<br /><br />@tenkey: The idea of a macro sounds like a viable alternative, I&#39;ll give it a go.<br /><br />I&#39;m beginning to think that maybe masm is not the best flavour of assembler to start learning in.&nbsp; From the look of some other posts in this forum, nasm seems to be the assembler of choice and as many of you have mentioned, the code is clear and the intent more obvious.&nbsp; Either way, a quick look at the disassembly in OllyDbg displays the code as it is.&nbsp; At least I understand the concept now.&nbsp; I&#39;m impressed at the quality of the replies so thanks again for your help guys!</div>
+    <div class="meta">Posted on 2006-09-12 04:59:23 by Timbo</div>
+   </div>
+   <div class="post" id="post-185267">
+    <div class="subject"><a href="#post-185267">Re: Memory Addressing</a></div>
+    <div class="body"><div class="quote"><br />@SpooK: You are correct in saying that I need to rethink and redesign my programming method.&nbsp; I come from a basic/pascal background and I am beginning to realize that there is more going on &quot;under the hood&quot; when using high level languages than is immediately apparent.&nbsp; I&#39;m fairly new to assembler so this is all a learning experience at the moment.<br /></div><br /><br />No problem. Just keep in mind that high-level languages usually keep track of variable lifetime for you, which is calculated in to the optimizations. In Assembly Language, you have to exercise complete control. How/when you access a variable (or any data in memory/registers) is static, meaning that once you put that instrunction there... it stays there. You are the optimizer now ;)<br /><br />It takes a bit to get used to, but eventually you will feel &quot;naked&quot; when programming in HLLs :P</div>
+    <div class="meta">Posted on 2006-09-12 12:57:53 by SpooK</div>
+   </div>
+   <div class="post" id="post-185274">
+    <div class="subject"><a href="#post-185274">Re: Memory Addressing</a></div>
+    <div class="body"><div class="quote">It takes a bit to get used to, but eventually you will feel &quot;naked&quot; when programming in HLLs</div><br /><br />I don&#39;t know about you, but I feel the opposite way.. I feel &#39;stifled and suppressed&#39; in the rare event that I find myself coding under a HLL, as if I was wearing two fur coats and three pairs of gloves (or perhaps a strait jacket?)<br />When I code in asm, I feel &#39;free and empowered&#39;, which is probably closer to &#39;naked&#39;, depending on your interpretation of the word.<br />Evidentally, I don&#39;t have a problem with being &#39;naked&#39; :P<br /><br /><br /></div>
+    <div class="meta">Posted on 2006-09-13 03:16:15 by Homer</div>
+   </div>
+   <div class="post" id="post-185275">
+    <div class="subject"><a href="#post-185275">Re: Memory Addressing</a></div>
+    <div class="body"><div class="quote"><br />The above code is functional, but I don&#39;t see why I can&#39;t just use the following:<br /><br /><pre><code><br />mov dword ptr , eax<br /></code></pre></div><br />you got fooled by stupid HLLish MASMy syntax, where &quot;mov a, eax&quot; is same as &quot;mov ,eax&quot;. IMHO too many things are uncertain and context dependant in MASM, no general rules.</div>
+    <div class="meta">Posted on 2006-09-13 03:45:36 by vid</div>
+   </div>
+   <div class="post" id="post-185279">
+    <div class="subject"><a href="#post-185279">Re: Memory Addressing</a></div>
+    <div class="body">@vid: That&#39;s what I&#39;m starting to realize.&nbsp; I thought that  would dereference pTable in the same fashion as  =&gt; eax.&nbsp; But I understand now, it&#39;s a masm thing.<br /><br />@Homer: What&#39;s the saying?&nbsp; With great power comes great responsibility.&nbsp; When you&#39;re coding at this level, as SpooK said, you have complete control and must handle everything.&nbsp; There&#39;s no fancy optimizing or error checking unless implement it yourself.&nbsp; So far I&#39;ve found that in asm, there&#39;s a much smaller safety net to catch you when you screw it up.&nbsp; The trade off, in my opinion, is worth it as it makes you think more about what you are doing and there&#39;s less bloat.</div>
+    <div class="meta">Posted on 2006-09-13 05:14:24 by Timbo</div>
+   </div>
+   <div class="post" id="post-185285">
+    <div class="subject"><a href="#post-185285">Re: Memory Addressing</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">It takes a bit to get used to, but eventually you will feel &quot;naked&quot; when programming in HLLs</div><br /><br />I don&#39;t know about you, but I feel the opposite way.. I feel &#39;stifled and suppressed&#39; in the rare event that I find myself coding under a HLL, as if I was wearing two fur coats and three pairs of gloves (or perhaps a strait jacket?)<br />When I code in asm, I feel &#39;free and empowered&#39;, which is probably closer to &#39;naked&#39;, depending on your interpretation of the word.<br />Evidentally, I don&#39;t have a problem with being &#39;naked&#39; :P<br /></div><br /><br />I meant like one of those dreams where you are in the middle of a crowd and they are staring at you because you are naked. You have know idea what to do... you just know you are not in control at the moment :P<br /><br /><div class="quote"><br />The trade off, in my opinion, is worth it as it makes you think more about what you are doing and there&#39;s less bloat.<br /></div><br /><br />That is why most of us do it. Just don&#39;t get &quot;too&quot; caught-up in optmizations. Usually there are better algorthims that you can implement if you find yourself in the middle of an optimization nightmare. Design your program from the Top-Down (HLL type logic), and build it from the Bottom-Up (ASM programming) :)</div>
+    <div class="meta">Posted on 2006-09-13 09:23:44 by SpooK</div>
+   </div>
+   <div class="post" id="post-185399">
+    <div class="subject"><a href="#post-185399">Re: Memory Addressing</a></div>
+    <div class="body">Timbo: NASM fixed it, and later FASM took this fix. FASM has (much) less materials on internet, but also has very good support on it&#39;s board (you ask - we answer), so you could think about migrating to FASM. Or NASM, YASM, or just anything with syntax that&#39;s not designed as fake of high level languages syntax<br /><br />You will encounter many more such things with MASM.</div>
+    <div class="meta">Posted on 2006-09-20 08:40:55 by vid</div>
+   </div>
+  </div>
+ </body>
+</html>

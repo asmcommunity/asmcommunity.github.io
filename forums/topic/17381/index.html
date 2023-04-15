@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>0.56668974=&gt; '0.5' - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17381" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=17381">0.56668974=&gt; '0.5'</a></p>
+   <div class="post" id="post-134594">
+    <div class="subject"><a href="#post-134594">0.56668974=&gt; '0.5'</a></div>
+    <div class="body">how to format a number with 1 digit after the point?<br />ex : I get 0.5666458 in the stack of fpu<br />and I wish to display '0.5' only<br />how make it?</div>
+    <div class="meta">Posted on 2004-02-23 13:23:11 by franlou</div>
+   </div>
+   <div class="post" id="post-134629">
+    <div class="subject"><a href="#post-134629">0.56668974=&gt; '0.5'</a></div>
+    <div class="body">; Top of FPU stack is converted to 12345.9 style number<br />sub esp, 8<br />fimul TEN<br />fistp QWORD PTR <br />pop eax<br />pop edx<br />div TEN<br />invoke wsprintf, OFFSET __buffer, _T(&quot;%lu.%lu&quot;), eax, edx<br /><br />Sorry for such lazy code.</div>
+    <div class="meta">Posted on 2004-02-23 19:50:50 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-134647">
+    <div class="subject"><a href="#post-134647">0.56668974=&gt; '0.5'</a></div>
+    <div class="body">I assume that your primary objective is to <strong>truncate</strong> all the decimals except the first one. I also assume that you already have some preferred procedure to display the content of the FPU and there is no need to cover that subject. The following code also assumes that the target value is already in the FPU's top register and you are programming in 32-bit.<pre><code>pushd 10<br />fimul dword ptr&#91;esp&#93;  ;multiply it by 10<br />push eax              ;reserves space on the stack<br />fstcw word ptr&#91;esp&#93;   ;get the current control word in that space<br />mov  eax,&#91;esp&#93;        ;get it into eax &#40;only AX will have the CW&#41;<br />and  ah,0ch           ;set the precision control bits for truncating<br />push eax              ;store the modified control word on the stack<br />fldcw word ptr&#91;esp&#93;   ;load the modified control word<br />frndint               ;discard all other 'decimals'<br />fldcw word ptr&#91;esp+4&#93; ;restore the original control word<br />fidiv dword ptr&#91;esp+8&#93;;get the number with one decimal place<br />add  esp,12           ;restore the stack</code></pre>Raymond</div>
+    <div class="meta">Posted on 2004-02-24 00:01:41 by Raymond</div>
+   </div>
+   <div class="post" id="post-134798">
+    <div class="subject"><a href="#post-134798">0.56668974=&gt; '0.5'</a></div>
+    <div class="body">thanks raymond but<br />I don't understand your code...<br /><br />there is mine:<br />finit<br />fld ;=QWORD<br />fdiv <br />invoke FloatToStr, , ADDR NumberBuffer<br /> fst <br />invoke FloatToStr, , ADDR NumberBuffer<br /><br />I got result either in CaloQW (floatnumber), either in NumberBuffer (string)<br />and ,indeed ,my objective is to truncate all the decimals except the first one.<br />I wish display this result into an editbox.<br /><br />How I apply your code to my example?</div>
+    <div class="meta">Posted on 2004-02-25 13:04:54 by franlou</div>
+   </div>
+   <div class="post" id="post-134821">
+    <div class="subject"><a href="#post-134821">0.56668974=&gt; '0.5'</a></div>
+    <div class="body">One of the internal 16-bit FPU registers is the <strong>Control Word</strong>. The RC field (bits 11 and 10) or Rounding Control determines how the FPU will round results in one of four ways: <br /><br />00 = Round to nearest, or to even if equidistant (this is the initialized state) <br />01 = Round down (toward -infinity) <br />10 = Round up (toward +infinity) <br />11 = Truncate (toward 0) <br /><br />If you are not familiar with the FPU's internals, I would refer you to Chap.1 of the following tutorial:<br /><br /><a target="_blank" href="http://www.masmforum.com/website/tutorials/fptute/index.html">http://www.masmforum.com/website/tutorials/fptute/index.html</a><br /><br />To explain my code a little more using the example which you used as the subject, if the value already in the FPU top data register is 0.56668974, multiplying it by 10, would give 5.6668974.<br /><br />You would then want to convert that to an integer with the <strong>frndint</strong> instruction, truncating all the decimals. However, that instruction uses the directive of the Rounding Control field of the Control Word. The preceeding instructions were to retrieve the current Control Word, save it, modify it for truncating, and load the modified Control Word into the FPU. In this example, the truncated integer would be 5.<br /><br />After the truncation, the former Control word is restored and the integer is divided by 10 to give you back the original value but with only 1 decimal place (i.e. 0.5 in this example). <br /><br />The very last instruction was simply to clean up the stack which had been used for storing the multiplier and the Control Words.<br /><br />The final value is still in the FPU top data register and none of the other data registers have been modified. You can then save the result as a floating point value or convert it to a string with whichever procedure you prefer.<br /><br />Using the Fpu.lib which is part of the MASM32v8 package, it also could be as simple as the following (again assuming that the value to be 'truncated' is already in the FPU top data register):<pre><code>invoke FpuMul,0,10,0,SRC1_FPU or SRC2_DIMM or DEST_FPU<br />invoke FpuTrunc,0,0,SRC1_FPU or DEST_FPU<br />invoke FpuDiv,0,10,0,SRC1_FPU or SRC2_DIMM or DEST_FPU</code></pre>You could then follow it with the following to convert it to a null-terminated string with 1 decimal place:<pre><code>invoke FpuFLtoA,0,1,ADDR YourBuffer,SRC1_FPU or SRC2_DIMM</code></pre>Raymond</div>
+    <div class="meta">Posted on 2004-02-25 22:16:39 by Raymond</div>
+   </div>
+  </div>
+ </body>
+</html>

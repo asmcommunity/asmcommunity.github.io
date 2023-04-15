@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CreateWindowEx - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17561" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17561">CreateWindowEx</a></p>
+   <div class="post" id="post-135833">
+    <div class="subject"><a href="#post-135833">CreateWindowEx</a></div>
+    <div class="body">Hi,<br /><br />I have been plucking out my head trying to figure out what caused the CreateWindowEx to fail (return 0 in eax). The error code is ERROR_INVALID_HANDLE, but I do not think that helps because in my other test codes... it returns a valid handle but the same error exist.. My code is as follows..<br /><br /><pre><code><br />  start&#58;<br />        invoke  LoadLibrary,richeditdll<br />        push    eax                         ;For FreeLibrary<br />        invoke  WSAStartup,0202h,wsadata<br />        or      eax,eax<br />        jnz     exit<br />        invoke  LoadIcon,0,IDI_APPLICATION<br />        mov     &#91;wc.hIcon&#93;,eax<br />        invoke  LoadCursor,0,IDC_ARROW<br />        mov     &#91;wc.hCursor&#93;,eax<br />        mov     &#91;wc.style&#93;,0<br />        mov     &#91;wc.lpfnWndProc&#93;,WindowProc<br />        mov     &#91;wc.cbClsExtra&#93;,0<br />        mov     &#91;wc.cbWndExtra&#93;,0<br />        mov     &#91;wc.hInstance&#93;,hinstance<br />        mov     &#91;wc.hbrBackground&#93;,COLOR_WINDOW+1<br />        mov     &#91;wc.lpszMenuName&#93;,0<br />        mov     &#91;wc.lpszClassName&#93;,ClassName<br />        invoke  RegisterClass,wc<br />        invoke  CreateWindowEx, 0, ClassName, AppName, WS_OVERLAPPEDWINDOW,\<br />                                0, 0 , 100, 100, NULL, NULL, hinstance, NULL<br />        mov     &#91;mainhwnd&#93;,eax<br />        invoke  ShowWindow, &#91;mainhwnd&#93;, SW_SHOWNORMAL<br />        invoke  UpdateWindow, &#91;mainhwnd&#93;<br />  msg_loop&#58;<br />        invoke  GetMessage,msg,NULL,0,0<br />        or      eax,eax<br />        jz      exit<br />        invoke  TranslateMessage,msg<br />        invoke  DispatchMessage,msg<br />        jmp     msg_loop<br />  exit&#58;<br />        invoke  FreeLibrary<br />        invoke  ExitProcess,0<br /></code></pre><br />PS: the full source code is buggy as I am still trying to convert it from a dialogbox based to windows...<br /><br />Regards,<br />Victor</div>
+    <div class="meta">Posted on 2004-03-13 23:34:45 by roticv</div>
+   </div>
+   <div class="post" id="post-135835">
+    <div class="subject"><a href="#post-135835">CreateWindowEx</a></div>
+    <div class="body">Hi Roticv,<br /><br />Everything looks fine. I do have one suggestion though. Instead of using LoadLibrary to load Riched20.dll, use the inc and lib from masm32 and just include the following line anywhere in your code where it will never be executed:<br /><br /><pre><code>include riched20.inc<br />includelib riched20.lib<br />.code<br />invoke CreateTextServices,0,0,0</code></pre><br />It will force the PELoader to load the DLL then there is no need to load or free the library at all. I use GoAsm so I import the IID_ITextHost2 GUID which resides in the DLL to force load it but since the MASM libs don't handle exported values you can just use the function instead. In GoAsm you have only to do this :<br /><br />mov eax,</div>
+    <div class="meta">Posted on 2004-03-13 23:58:49 by donkey</div>
+   </div>
+   <div class="post" id="post-135836">
+    <div class="subject"><a href="#post-135836">CreateWindowEx</a></div>
+    <div class="body">Hi donkey,<br /><br />That's exactly the problem. Because everything seem to look fine, I do noth know what caused the CreateWindowEx to return null.:grin:</div>
+    <div class="meta">Posted on 2004-03-14 00:01:12 by roticv</div>
+   </div>
+   <div class="post" id="post-135837">
+    <div class="subject"><a href="#post-135837">CreateWindowEx</a></div>
+    <div class="body">My guess is your not providing a class style that is typical for windows created as overlapped (as such the CreateWindow expects a parent window):<br /><br /><strong>mov     ,   CS_HREDRAW or CS_VREDRAW or CS_BYTEALIGNWINDOW</strong><br /><br />All else apears correct...<br />:NaN:</div>
+    <div class="meta">Posted on 2004-03-14 00:03:19 by NaN</div>
+   </div>
+   <div class="post" id="post-135840">
+    <div class="subject"><a href="#post-135840">CreateWindowEx</a></div>
+    <div class="body">Actually I fixed it. The problem was with my WindowProc. Now I know that WindowProc is called a few times before the return to CreateWindowEx. So in short WM_CREATE is definitely not the first message passed to the window.</div>
+    <div class="meta">Posted on 2004-03-14 00:34:38 by roticv</div>
+   </div>
+   <div class="post" id="post-135841">
+    <div class="subject"><a href="#post-135841">CreateWindowEx</a></div>
+    <div class="body"><pre><code><br />  start&#58;<br />        invoke  LoadIcon,0,IDI_APPLICATION<br />        mov     &#91;wc.hIcon&#93;,eax<br />        invoke  LoadCursor,0,IDC_ARROW<br />        mov     &#91;wc.hCursor&#93;,eax<br />        mov     &#91;wc.style&#93;,0<br />        mov     &#91;wc.lpfnWndProc&#93;, offset WindowProc<br />        mov     &#91;wc.cbClsExtra&#93;,0<br />        mov     &#91;wc.cbWndExtra&#93;,0<br />        invoke  GetModuleHandle, NULL<br />        mov     hinstance, eax<br />        mov     &#91;wc.hInstance&#93;, eax<br />        mov     &#91;wc.hbrBackground&#93;,COLOR_WINDOW+1<br />        mov     &#91;wc.lpszMenuName&#93;,0<br />        mov     &#91;wc.lpszClassName&#93;, offset ClassName<br />        invoke  RegisterClass,addr wc<br />        invoke  CreateWindowEx, 0, addr ClassName, addr AppName, WS_OVERLAPPEDWINDOW,\<br />                                0, 0 , 100, 100, NULL, NULL, hinstance, NULL<br />        mov     mainhwnd,eax<br />        invoke  ShowWindow, &#91;mainhwnd&#93;, SW_SHOWNORMAL<br />        invoke  UpdateWindow, &#91;mainhwnd&#93;<br />  msg_loop&#58;<br />        invoke  GetMessage,addr msg,NULL,0,0<br />        or      eax,eax<br />        jz      exit<br />        invoke  TranslateMessage,addr msg<br />        invoke  DispatchMessage, addr msg<br />        jmp     msg_loop<br />  exit&#58;<br />        invoke  ExitProcess,0<br /></code></pre><br /><br />The above is a subset of my code!<br /><br />As far as I can tell, you weren't passing the addresses of functions and variables, instead literal values. The code ran fine for me once I had changed some of your values. I don't know what assembler you were using, I used MASM, also, where are you getting the process handle passed to your application in the wc.hInstance variable?</div>
+    <div class="meta">Posted on 2004-03-14 00:37:54 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135842">
+    <div class="subject"><a href="#post-135842">CreateWindowEx</a></div>
+    <div class="body">WM_NCCREATE if the first message sent to your WindowProc, if you return false from this message CreateWindowEx will fail and return NULL.<br /><br />Hi Subevil,<br /><br />The hInstance for a normal app is always 0400000h</div>
+    <div class="meta">Posted on 2004-03-14 00:40:16 by donkey</div>
+   </div>
+   <div class="post" id="post-135843">
+    <div class="subject"><a href="#post-135843">CreateWindowEx</a></div>
+    <div class="body">Hi Subevil,<br /><br />I am using fasm. I have hardcoded hinstance to be 400000h<br /><br />Hi donkey,<br /><br /><div class="quote">WM_NCCREATE if the first message sent to your WindowProc, if you return false from this message CreateWindowEx will fail and return NULL.</div><br />I guess that is exactly why my CreateWindowEx fails. Learn a thing each day..</div>
+    <div class="meta">Posted on 2004-03-14 00:41:52 by roticv</div>
+   </div>
+   <div class="post" id="post-135855">
+    <div class="subject"><a href="#post-135855">CreateWindowEx</a></div>
+    <div class="body">Damn! Never knew hInstance was always 0400000h! Isn't that a bit risky? Hardcoding things like that? Just now windows changes it in Win64 or something? Anyway, thanx! So I also learnt something new! BTW, are HANDLE's ALWAYS memory locations?</div>
+    <div class="meta">Posted on 2004-03-14 05:16:03 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135856">
+    <div class="subject"><a href="#post-135856">CreateWindowEx</a></div>
+    <div class="body">Hi Subevil,<br /><br />hinstance points to where the exe is mapped to. For normal exe for which the base address is 400000h, hardcoding it should not be a problem. If you change your base address to something else or you are coding a dll, the histance value will change too.<br /><br />Take a look at <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=6225">http://www.asmcommunity.net/board/index.php?topic=6225</a><br />Quite an interseting discussion on hinstance and 400000h</div>
+    <div class="meta">Posted on 2004-03-14 05:23:27 by roticv</div>
+   </div>
+   <div class="post" id="post-135858">
+    <div class="subject"><a href="#post-135858">CreateWindowEx</a></div>
+    <div class="body">While it holds true on all current win32 versions, there is nothing that says HINSTANCE must be your module load address. It's plain wrong to depend on the value of HANDLEs, they are supposed to be &quot;black box&quot; values. It would be reasonable to use 0x400000 hardcoding and all these assumptions in a 64k demo, but it's a foo foo foo thing to do in production code.<br /><br />Shame on you, it's not like a GetModuleHandle() call is a big waste of instructions.</div>
+    <div class="meta">Posted on 2004-03-14 06:15:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-135859">
+    <div class="subject"><a href="#post-135859">CreateWindowEx</a></div>
+    <div class="body">I always use following technic about module handle:<br /><pre><code><br />; in non initialized variables<br />hInstance dd ? <br /><br /><br />; In the begining of the program.<br />invoke GetModulHandle, 0<br />mov  &#91;hInstance&#93;, eax<br /></code></pre><br /><br />And I though, whether it is appropriate to use this technic for GetProcessHeap as well.<br /><br />Regards</div>
+    <div class="meta">Posted on 2004-03-14 06:26:20 by JohnFound</div>
+   </div>
+   <div class="post" id="post-135875">
+    <div class="subject"><a href="#post-135875">CreateWindowEx</a></div>
+    <div class="body">Hi f0dder,<br /><br />Actually I had expected this response from you :)</div>
+    <div class="meta">Posted on 2004-03-14 09:08:07 by roticv</div>
+   </div>
+   <div class="post" id="post-135884">
+    <div class="subject"><a href="#post-135884">CreateWindowEx</a></div>
+    <div class="body">I agree with f0dder here.  There is a time for short cuts, but this one has no advantage, only risk.<br /><br />:NaN:</div>
+    <div class="meta">Posted on 2004-03-14 10:12:36 by NaN</div>
+   </div>
+   <div class="post" id="post-135885">
+    <div class="subject"><a href="#post-135885">CreateWindowEx</a></div>
+    <div class="body">Agreed!</div>
+    <div class="meta">Posted on 2004-03-14 10:21:04 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135886">
+    <div class="subject"><a href="#post-135886">CreateWindowEx</a></div>
+    <div class="body"><div class="quote"><br />And I though, whether it is appropriate to use this technic for GetProcessHeap as well.<br /></div><br />This is a good question John, and more useful than shaving a few cycles off your program startup. (Iirc GetProcessHeap just fetches the variable with a lookup through the TIB). But even though it's not a big speed overhead, it's annoying to do the GetProcessHeap call all the time.<br /><br />I would <strong>assume</strong> it's safe to store the process heap handle in a variable. (Afaik) the process heap is always created (PE header flags), and since we're dealing with HANDLEs, there's no reason why the handle value vould change (afaik you cannot destroy the default process heap). So unless anybody knows better, I'd say it's safe to use GetProcessHeap once.<br /><br /><div class="quote"><br />Actually I had expected this response from you :)<br /></div><br />And it's not without reason. Programmers doing this kind of code in release applications should be shot through their kneecaps, and possibly have their fingers cut off as well. It's annoying to have to fix other people's bugs to be able to run their stuff.</div>
+    <div class="meta">Posted on 2004-03-14 10:36:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-135889">
+    <div class="subject"><a href="#post-135889">CreateWindowEx</a></div>
+    <div class="body"><div class="quote">Programmers doing this kind of code in release applications should be shot through their kneecaps, and possibly have their fingers cut off as well.</div><br /><br />I have never used a hard coded instance handle but I think that's a little severe :grin: <br /><br />Another interesting one would be the default handle returned from SelectObject, it would be convenient not to have to save the old handle every time when creating a DC for a back buffer. For example is it always 0185000Fh for bitmaps ?</div>
+    <div class="meta">Posted on 2004-03-14 10:46:06 by donkey</div>
+   </div>
+   <div class="post" id="post-135921">
+    <div class="subject"><a href="#post-135921">CreateWindowEx</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by f0dder </em><br /><strong><br />This is a good question John, and more useful than shaving a few cycles off your program startup. (Iirc GetProcessHeap just fetches the variable with a lookup through the TIB). But even though it's not a big speed overhead, it's annoying to do the GetProcessHeap call all the time.</strong><div class="quote"><br /><br />If you make thousends of dynamic allocations/deallocations on complex data structures, avoiding one call may give valuable speed gain, IMHO. On other hand this may save a lot of register savings and to increase readability of the source.<br />I write very often similar to below constructions:<br /><pre><code><br />push      ecx<br />invoke   GetProcessHeap<br />invoke   HeapAlloc, eax, 0  ; size from the stack.<br /></code></pre><br /><br />While the following is smaller, simple and more readable:<br /><pre><code><br />invoke   HeapAlloc, &#91;ProcessHeap&#93;, 0, ecx<br /></code></pre><br /><br />I will definately try this technique in my sources.<br /><br />Regards.</div>
+    <div class="meta">Posted on 2004-03-14 16:08:05 by JohnFound</div>
+   </div>
+   <div class="post" id="post-135931">
+    <div class="subject"><a href="#post-135931">CreateWindowEx</a></div>
+    <div class="body"><div class="quote"><br />I have never used a hard coded instance handle but I think that's a little severe :grin:<br /></div><br />Yeah, it's a little severe - but look at the win32 version of XCOM &quot;oh, why use pitch, width and pitch are always the same on OUR boxes&quot;. This was easy to fix for me, though. Look at the win32 POD... &quot;Oh, port I/O works fine on our windows version, so let's do port I/O&quot; - I'm considering having a look at fixing this, too. Instance handle stuff isn't that severe, and would probably be emulated in the future if the OS changes that much, but it's the same mentality.<br /><br />As for SelectObject, sure, it would be handy not having to save those pesky values. Still doesn't feel too safe to hardcode those values, though... besides, your code is more generic if you save the old value :)<br /><br /><div class="quote"><br />If you make thousends of dynamic allocations/deallocations on complex data structures, avoiding one call may give valuable speed gain, IMHO.<br /></div><br />Probably, yes... and if memory allocation is your bottleneck, it might also pay off to fiddle around with implementing alternative allocation schemes (ontop of HeapAlloc or VirtualAlloc, things like pooled alloc/dealloc etc).<br /><br /><div class="quote"><br />I will definately try this technique in my sources.<br /></div><br />I wish I knew if it's &quot;officially safe&quot; to do this... It 'feels' safe though, and I'm doing it myself.</div>
+    <div class="meta">Posted on 2004-03-14 17:59:16 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

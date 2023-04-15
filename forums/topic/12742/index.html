@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>VB6-ASM Experiences - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12742" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12742">VB6-ASM Experiences</a></p>
+   <div class="post" id="post-98543">
+    <div class="subject"><a href="#post-98543">VB6-ASM Experiences</a></div>
+    <div class="body">Experiences with VB6 and ASM : (I hope it is useful)<br /><br />[0] VB6 uses two methods of passing parameters to external functions, each with a different keyword : ByVal and ByRef (default).<br />I' ve experienced the use of both with two different data types : String and Long;<br />here are the results :<br /><br />[1] Passing a string to an ASM function<br /><br />VB internally uses BSTR data type which is different from the traditional null-terminated string. If you try to pass it to your asm function ByRef, you get a pointer to it rather that the actual data. It should be possible to &quot;decode&quot; this format but you can fly over that problem by the use of ByVal : this cause a copy of your string to be created by VB in the classical format and a pointer to that string to be pushed on the stack! It is now easy to manipulate it into your function :<br /><br />ASM DLL:<br /><br />.data<br /><br />Hello db 'HELLO',0<br /><br />.code<br />........................<br />Stringa proc puntatore:DWORD<br /><br />	push MB_OK<br />	push offset Hello<br />	push puntatore<br />	push 0<br />	call MessageBox<br />	ret<br /><br />Stringa endp<br /><br />VB6 EXE:<br />Public Declare Sub Stringa Lib &quot;skeleton.dll&quot; (ByVal puntatore As String)<br />........<br />Dim l As String<br />l = &quot;World!&quot;<br />Call Stringa(l)<br />................<br />RESULTS : HELLO World!<br /><br />[2] Passing a Long ByVal to an ASM function<br /><br />Longs are 32 bit signed values that can be stored/returned directly in the eax register.<br />Because of their nature, when you pass them by value, you get them as they are.<br />If you pass, for example, 5, you get 5 onto the stack.<br /><br />ASM DLL:<br /><br />Schiera proc ptrSchiera:DWORD<br />	mov eax, ptrSchiera<br />	ret<br />Schiera endp<br /><br />VB6 :<br />Public Declare Function Schiera Lib &quot;skeleton.dll&quot; (ByVal ptrSchiera As Long) As Long<br />..........<br />Dim k As Long<br />Dim j As Long<br />j = Schiera(k)<br /><br />RESULTS : J=0; k=0<br /><br />k = 1<br />j = Schiera(k)<br /><br />RESULTS : J=1; k=1<br /><br />Those examples are banal but demonstrate the mechanism of parameters passing/returning by eax. You can do whatever you want with the value once you have it in asm and then send it back to VB by eax.<br /><br />[3] Passing a Long ByRef to an ASM function<br /><br />This is a very interesting way to directly access the value of VB's Long variables by <br />your asm code. Here you get on the stack the effective address of Longs and can use it to change their value!<br /><br />ASM DLL:<br /><br />Schiera proc ptrSchiera:DWORD<br /><br />	mov eax, ptrSchiera<br />	mov DWORD PTR , 99; I use eax to address the memory ***<br />	mov eax, ptrSchiera<br />	ret<br /><br />Schiera endp<br /><br />VB6 EXE:<br /><br />Public Declare Function Schiera Lib &quot;skeleton.dll&quot; (ByRef ptrSchiera As Long) As Long<br />.....................<br />Dim k As Long<br />Dim j As Long<br />k = 1<br />j = Schiera(k)<br /><br />RESULTS : j=1242668 (memory address); k=99<br /><br /><br /><br />*** Those instructions seemed good to me but didn't work : (cause of my ignorance, sorry)<br /><br />;They change the value of ptrSchiera, don't write at its address as I expected!<br />;mov DWORD PTR ptrSchiera, 99<br />;mov DWORD PTR , 99<br />;are the same of : mov ptrSchiera, 99<br /><br />[4] Passing an array of Longs ByRef to an ASM function<br /><br />It is very similar to the last one and very useful for me! By using an array<br />of longs I can easily deal with a formatted memory area back in VB while using<br />the POWER of assembly for computations. Note that I don't declare I am <br />passing an array to my function, I just pass the first element of it.<br /><br />ASM DLL:<br /><br />Schiera proc ptrSchiera:DWORD<br /><br />	mov eax, ptrSchiera<br />	mov DWORD PTR , 99;sch(1)<br />	add eax, 4<br />	mov DWORD PTR , 88;sch(2)<br />	mov eax, ptrSchiera<br />	ret<br /><br />Schiera endp<br /><br />VB6 EXE:<br /><br />Public Declare Function Schiera Lib &quot;skeleton.dll&quot; (ByRef ptrSchiera As Long) As Long<br />.....................<br />Dim sch(1 To 10) As Long<br />Dim j As Long<br />sch(1) = 22<br />j = Schiera(sch(1))<br /><br />RESULTS : j=2289432 (memory address); sch(21) = 99 And....what about sch(2) ? Obviously 88!!<br /><br />fooCoder</div>
+    <div class="meta">Posted on 2003-04-22 04:00:58 by fooCoder</div>
+   </div>
+   <div class="post" id="post-98545">
+    <div class="subject"><a href="#post-98545">Note</a></div>
+    <div class="body">Please REMOVE the last &quot;mov eax, ptrSchiera&quot; from [3] and [4], it is useless!:) <br /><br />fooCoder</div>
+    <div class="meta">Posted on 2003-04-22 04:04:52 by fooCoder</div>
+   </div>
+   <div class="post" id="post-98550">
+    <div class="subject"><a href="#post-98550">VB6-ASM Experiences</a></div>
+    <div class="body">... doesn't seem useless to me.</div>
+    <div class="meta">Posted on 2003-04-22 04:44:14 by abc123</div>
+   </div>
+   <div class="post" id="post-98557">
+    <div class="subject"><a href="#post-98557">VB6-ASM Experiences</a></div>
+    <div class="body">yes, that's really useful information foocoder<br /><br />eg. for writing a game you could do the speed-critical parts in assembler ... and the high-score tables and &quot;type in your name&quot; etc parts in VB...:)</div>
+    <div class="meta">Posted on 2003-04-22 05:16:35 by argus</div>
+   </div>
+   <div class="post" id="post-98573">
+    <div class="subject"><a href="#post-98573">VB6-ASM Experiences</a></div>
+    <div class="body">fooCoder,<br />if you had done a search of the board you would have found that i (and others) have posted all this information before. In fact, you seem to quote the very same information i posted to one of your threads about two days ago. Here are a few pointers:<br /><br /> - it is good that you experimented, this is an excellent way to learn<br /><br /> - if you search the board first, you can save yourself a lot of time<br /><br /> - &lt;edit&gt; this point removed, no longer valid!!!!!!!!!! &lt;/edit&gt;<br /><br /> - to be a safe and good VB l33t h4x0r, your dll function declarations should use &quot;As Any&quot; for the array parameters<br /><br /> - if you want to receive string values back (ie change them in the asm function), then you either have to learn to use BSTR's (they really are simple), or like i said the other day pass a byte array ByRef then reassemble it into a string back in VB. Arrays of structures have to be handled the same way.</div>
+    <div class="meta">Posted on 2003-04-22 06:55:19 by sluggy</div>
+   </div>
+   <div class="post" id="post-98757">
+    <div class="subject"><a href="#post-98757">again...</a></div>
+    <div class="body">To  abc123 : I wrote that the last &quot;mov eax, ptrSchiera&quot; are useless because eax is has just been just loaded with the same value before.<br /><br />To argus : Yes, I think it is one of the best way to use assembly in modern applications. You can manage speed critical tasks or take advantage of such instructions like mmx, simd...etc<br /><br />To sluggy : You are right, I &quot;felt&quot; that those info were around but I  haven't had the time to make a good research of threads...(I am working with an old P II off-line until the end of May) so I captured the moment when nobody was putting pressure on me at office and made those experiences...I just knew how to pass strings and longs ByVal but hadn't played with arrays or similar...( You give me the idea :)  )<br /><br />Anyway, this forum is composed of people of different skills, some are experts (COM, Videogames...) other are just novices asking apparently simple questions...sometimes you can read questions, posted by novices, which is impossible to answer because one don't know where to start from...I am neither a novice in assembly nor an expert so I hope that what I write can be useful for the first ones and interesting to the last ones (which I hope can correct my faults/omissions..etc...) <br /><br />I have a debt with this forum because 85% I know about Win32 programming is due to it!! :)  (16 bit asm, flat real mode programming are another music...)<br /><br />Soon I will be experiencing with asm and .NET languages to check if about has changed about calling asm-DLLs, because I want really to USE much more assembly at work (alone or mixed).<br /><br />regards,<br /><br />fooCoder</div>
+    <div class="meta">Posted on 2003-04-22 23:38:23 by fooCoder</div>
+   </div>
+   <div class="post" id="post-98827">
+    <div class="subject"><a href="#post-98827">VB6-ASM Experiences</a></div>
+    <div class="body">Does VB support the use of inline assembler?<br /><br />(I am not a VB user.)</div>
+    <div class="meta">Posted on 2003-04-23 08:53:04 by Vortex</div>
+   </div>
+   <div class="post" id="post-98830">
+    <div class="subject"><a href="#post-98830">VB6-ASM Experiences</a></div>
+    <div class="body">Don't think so...</div>
+    <div class="meta">Posted on 2003-04-23 08:57:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-98839">
+    <div class="subject"><a href="#post-98839">VB6-ASM Experiences</a></div>
+    <div class="body">No, it doesn't.  However, in QB (maybe VB, too), you could use DEF SEG and use the DATA statement to enter byte code and jump to it.  i have seen something for use in QuickBasic (not QBasic) that adds assembly-language like capabilities to QB, like:<br /><br />mov reg.ax,bleh<br /><br />don't remember where i saw this, but it is *somewhere* on my 386.  i think it was a Snoopy game (like a 2D game).</div>
+    <div class="meta">Posted on 2003-04-23 09:35:20 by jademtech</div>
+   </div>
+   <div class="post" id="post-98916">
+    <div class="subject"><a href="#post-98916">VB6-ASM Experiences</a></div>
+    <div class="body"><div class="quote"><em>No, it doesn't.  However, in QB (maybe VB, too), you could use DEF SEG and use the DATA statement to enter byte code and jump to it.  i have seen something for use in QuickBasic (not QBasic) that adds assembly-language like capabilities to QB, like:<br /><br />mov reg.ax,bleh<br /><br />don't remember where i saw this, but it is *somewhere* on my 386.  i think it was a Snoopy game (like a 2D game). </em></div>Most of the old Basics had this feature using PEEK/POKE/CALL. IMO this feature is good on 8 bit cpus, but would be useless on todays cpus.</div>
+    <div class="meta">Posted on 2003-04-23 17:04:09 by sluggy</div>
+   </div>
+  </div>
+ </body>
+</html>

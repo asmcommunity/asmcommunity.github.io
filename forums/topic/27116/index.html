@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How do I read a single line from a file? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27116" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27116">How do I read a single line from a file?</a></p>
+   <div class="post" id="post-194651">
+    <div class="subject"><a href="#post-194651">How do I read a single line from a file?</a></div>
+    <div class="body">I need to open a saved newsgroup article and read-in each
+line, one at a time. What functions would best do this?
+
+Thanks,
+Xtreme</div>
+    <div class="meta">Posted on 2001-03-05 21:32:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-194652">
+    <div class="subject"><a href="#post-194652">How do I read a single line from a file?</a></div>
+    <div class="body">Hi xtreme,
+
+I have a small program on my website that is called <strong>Fill a Listview with a TXT file</strong> and it does nearly the thing you want. It takes a txt file, reads in the complete content and afterwards breaks the buffer down to single lines as strings. Maybe you want to take a look at it?
+
+Stefan
+
+Normally I would explain how to do it but I have no time anymore because I have to go to school now. Sorry!
+
+This message was edited by Stefan Krause, on 3/6/2001 3:01:40 AM</div>
+    <div class="meta">Posted on 2001-03-06 02:52:00 by Stefan Krause</div>
+   </div>
+   <div class="post" id="post-194653">
+    <div class="subject"><a href="#post-194653">How do I read a single line from a file?</a></div>
+    <div class="body">greetings xtreme, 
+
+    I've made a library called GetSeg, it has a function that allows you to parse strings into segments. The function can also parse data loaded from textfiles and it would allow you to read the textfile's contents by line (it only reads and processes 1024 bytes though). There's an example included with the package that demonstrates this. I'll send it to you as soon as I get home :)
+
+cheers,
+DM</div>
+    <div class="meta">Posted on 2001-03-06 23:15:00 by dm</div>
+   </div>
+   <div class="post" id="post-194654">
+    <div class="subject"><a href="#post-194654">How do I read a single line from a file?</a></div>
+    <div class="body">xtreme,
+
+The mechanics of what you need to do is to set up a byte read
+algorithm and scan for the first occurrence of ascii 13.
+
+The logic is something like this,
+
+Make a spare buffer at least long enough to take the longest string
+and load its address into EDI.
+
+Put your source address into ESI, copy it into EDI until you find the
+next ascii 13.
+
+Do wha you need to do with the data in the buffer in EDI, then inc
+ESI, reset the buffer address into EDI and do it again until the end
+occurs. You will need to keep track of the total byte length to
+get the exit condition.
+
+It sounds complicated but it is a reasonably simple algo once you
+get it going.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-07 03:31:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-194655">
+    <div class="subject"><a href="#post-194655">How do I read a single line from a file?</a></div>
+    <div class="body">This works some. I'm getting single chars from the file and
+detecting the "\r" but placing the chars in edi is giving me
+problems...
+
+<pre><code>
+ReadLine proc
+
+    LOCAL szBuffer[1024]        :BYTE
+    LOCAL bTemp[2]              :BYTE
+    LOCAL hFile                 :DWORD
+    LOCAL dwread                :DWORD
+
+    szText szFilename, "C:\WINDOWS\Desktop\Articles\ART1C2.TMP",0
+
+    invoke CreateFile, addr szFilename, GENERIC_READ, NULL, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+    mov hFile, eax
+
+    lea edi, szBuffer
+
+    .while TRUE
+        invoke ReadFile, hFile, addr bTemp, 1, addr dwread, 0
+        mov bTemp[1],0
+
+        mov edi,byte ptr ]      ;DOESN'T WORK
+        inc edi
+
+        .break .if byte ptr ] == 13
+    .endw
+
+    invoke MessageBox, 0, addr szBuffer, 0, 0
+    invoke CloseHandle,hFile
+
+    ret
+
+ReadLine endp
+</code></pre></div>
+    <div class="meta">Posted on 2001-03-11 17:34:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-194656">
+    <div class="subject"><a href="#post-194656">How do I read a single line from a file?</a></div>
+    <div class="body">hi, i wrote this from mind so expect some errors... the following procedure should read your file into a mem buffer, then it should read out every line via msgbox.
+
+<pre><code>
+ReadLine proc
+    LOCAL hFile                 :DWORD
+    LOCAL dwread                :DWORD
+
+    LOCAL hMemory               :DWORD
+    LOCAL buffer                :DWORD
+
+    szText szFilename, "C:\WINDOWS\Desktop\Articles\ART1C2.TMP",0
+    caption szFilename, "this msgbox displays single lines from a file",0
+
+;---===open existing file===---
+
+    invoke CreateFile, addr szFilename, GENERIC_READ, NULL, NULL, OPEN_EXISTING,         FILE_ATTRIBUTE_NORMAL, NULL
+    mov hFile, eax
+
+;---===get its size and pop it ===---
+
+    invoke GetFileSize,hFile,NULL
+    push eax
+
+;---===allocate memory===---
+
+        invoke GlobalAlloc, GHND, eax
+        mov hMemory,eax 
+        invoke GlobalLock, eax 
+        mov buffer,eax 
+
+    pop ebx
+    push ebx ;don't know if ebx is destroyed by api's (?)
+
+;---===read file to allocated buffer===---
+
+    invoke ReadFile, hFile, buffer, ebx, addr dwread, 0
+    mov,esi,buffer
+    pop eax
+    add eax,esi
+
+;---===1st loop to destroy carriageret & linefeed===---
+
+    xor ebx,ebx
+@@loop1:    
+    cmp byte ptr ,13
+    jz @null
+    cmp byte ptr ,10
+    jz @null
+    jmp @continue
+@null:
+    mov byte ptr ,0
+    inc ebx
+@continue:
+    inc esi
+    cmp esi,eax
+    jnz @@loop1
+
+    shr ebx,1 ;must be divided by 2 because of crlf
+
+;---===2nd loop to show every single line===---
+
+@@loop2:
+    push ebx ;ebx should now contain the line number!!!
+    invoke MessageBox,NULL,buffer,addr caption,MB_OK
+    invoke lstrlen,buffer
+    pop ebx
+    inc eax ;because of cr lf = 00 00
+    add buffer,eax
+    dec ebx
+    jnz @@loop2
+
+;---===unlock memory region===---
+
+        invoke GlobalUnlock, buffer 
+        invoke GlobalFree, hMemory 
+    
+    ret
+ReadLine endp
+</code></pre>
+
+ahm by the way, you can't give a 32bit register
+a 8bit value. -you can but not the way you did-
+
+This message was edited by drcmda, on 3/11/2001 10:02:58 PM</div>
+    <div class="meta">Posted on 2001-03-11 20:26:00 by drcmda</div>
+   </div>
+   <div class="post" id="post-194657">
+    <div class="subject"><a href="#post-194657">How do I read a single line from a file?</a></div>
+    <div class="body">Thank you so much!!!
+
+Just add another <pre><code>inc eax</code></pre> to <pre><code>loop2</code></pre>,
+below the one already there. Without it a blank Message Box
+appears between lines.
+
+...<pre><code>
+        @@loop2:
+        push ebx
+        invoke MessageBox,NULL,buffer,addr caption,MB_OK
+        invoke lstrlen,buffer
+        pop ebx
+
+        add 2 ;REMOVE THE INC EAX AND ADD THIS
+
+        add buffer,eax
+        dec ebx
+        jnz @@loop2
+</code></pre>...
+
+Xtreme
+
+This message was edited by xtreme, on 3/12/2001 12:05:27 AM</div>
+    <div class="meta">Posted on 2001-03-11 22:03:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-194658">
+    <div class="subject"><a href="#post-194658">How do I read a single line from a file?</a></div>
+    <div class="body">uhm... my fault. great to help you :)</div>
+    <div class="meta">Posted on 2001-03-12 04:22:00 by drcmda</div>
+   </div>
+  </div>
+ </body>
+</html>

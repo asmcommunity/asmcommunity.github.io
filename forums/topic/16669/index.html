@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Imported functions question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16669" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16669">Imported functions question</a></p>
+   <div class="post" id="post-129507">
+    <div class="subject"><a href="#post-129507">Imported functions question</a></div>
+    <div class="body">Hello,<br /><br />the following is taken from a book page describing DLL imported functions and how their calls are resolved:<br /><br /><div class="quote">So how does the loader tell your application where to find an imported function? The solution is fiendishly clever. If you think about where the calls to XXXXX go, you'll soon realize that each call must go to the same address: the address where XXXXX is loaded into memory. Of course, your application can't know this address ahead of time, so instead, all your XXXXX calls get routed through a single, indirect address. When the program loader loads your executable and its dependent DLLs, the loader fixes up this one indirect address so that it corresponds to the final load address of XXXXX. The compiler makes this indirect addressing work by generating a jump to the indirect address any time your code calls the imported function. This indirect address is stored in the .idata (or import) section of the executable. If you import through __declspec(dllimport), instead of being an indirect jump, the code is an indirect call, thus saving a couple of instructions per function call.</div> <br /><br />I have looked at a few applications using a debugger, and some (notepad, regedit, explorer) not have a .idata section, and in fact all calls to imported functions &quot;point&quot; directly to the imported function's code.<br /><br />Other applications have their imported function calls point to an area such as the following:<br /><br />004088A0   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.HeapAlloc&gt;]                   <br />004088A6   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.HeapFree&gt;]                    <br />004088AC   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.LoadLibraryA&gt;]                <br />004088B2   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.RaiseException&gt;]              <br />004088B8   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.RtlUnwind&gt;]                   <br />004088BE   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.SetConsoleCtrlHandler&gt;]       <br />004088C4   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.SetFilePointer&gt;]              <br />004088CA   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.SetHandleCount&gt;]              <br />004088D0   JMP DWORD PTR DS:[&lt;&amp;KERNEL32.TlsAlloc&gt;]<br /><br />Is the first an example of the use of __declspec(dllimport)?<br />Is the second an example of a import address table?<br /><br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-01 08:31:42 by yaa</div>
+   </div>
+   <div class="post" id="post-129508">
+    <div class="subject"><a href="#post-129508">Imported functions question</a></div>
+    <div class="body">No that's not an IAT. That's a jump table. Some assembler/compiler call the IAT directly while some assembler/compile call a jmp table which in turn jmp to the IAT.</div>
+    <div class="meta">Posted on 2004-01-01 08:59:37 by roticv</div>
+   </div>
+   <div class="post" id="post-129509">
+    <div class="subject"><a href="#post-129509">Imported functions question</a></div>
+    <div class="body">I'm not quite sure what you are asking, but I can tell you that once an application is loaded by a debugger, the imports have been loaded and the import table jumps have been filled. What most debuggers do is allow the os to load the application as if it was going to be executed, and break the execution at the entrypoint. Take another look at one of these applications in a hex editor and you will see that the import table jumps are not defined until the app is loaded.</div>
+    <div class="meta">Posted on 2004-01-01 09:01:15 by Homer</div>
+   </div>
+   <div class="post" id="post-129512">
+    <div class="subject"><a href="#post-129512">Imported functions question</a></div>
+    <div class="body"><strong>EvilHomer2k</strong>,<br /><br />the debugger I talk about is just a means for me to try to give a more tangible meaning to what I read, but it is not the object of my question.<br /><br />What I was asking about is a clearer exaplaination and maybe an example of what is described in the last part of the fragment take from my book and exactly:<br /><br />This indirect address is stored in the .idata (or import) section of the executable. If you import through __declspec(dllimport), instead of being an indirect jump, the code is an indirect call, thus saving a couple of instructions per function call.<br /><br />I see some applications don't have an .idata section ... how do these applications (those missing a .idata section) resolve imported functions???<br /><br />I also noticed that applications without a .idata section are missing what roticv calls a jump table, I was wondering if there is a relationship between the two things.<br /><br />And finally, is the import take located in the .idata section???<br /><br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-01 09:25:54 by yaa</div>
+   </div>
+   <div class="post" id="post-129513">
+    <div class="subject"><a href="#post-129513">Imported functions question</a></div>
+    <div class="body"><div class="quote">I see some applications don't have an .idata section ... how do these applications (those missing a .idata section) resolve imported functions???</div><br />There is no rule saying that the section containing the IAT has to be called .idata. Using .idata is for import table is probably compiler/assembler specific.  For example the following code (fasm) has the import table in .import<br /><br /><pre><code><br />format PE GUI 4.0<br />entry start<br /><br />include 'C&#58;\fasm\include\win32a.inc'<br /><br />;section '.data' data readable writeable<br /><br />section  '.roticv' data readable writeable executable<br />start&#58;<br />        push    _handler<br />        xor     eax, eax<br />        push    dword &#91;fs&#58;eax&#93;<br />        mov     &#91;fs&#58;eax&#93;, esp<br />        int3<br />@@&#58;<br />        jmp     @B<br />        int 1<br />@@&#58;<br />        jmp     @B<br />        nop<br />        nop<br />        nop<br />        nop<br />        invoke  MessageBox,0,0,0,0<br />        invoke  ExitProcess,0<br /><br />_handler&#58;<br />        mov     ecx, &#91;esp+08h&#93;<br />        mov     eax,&#91;esp+0Ch&#93;<br />        cmp     ecx, 80000003h<br />        jz      _int3<br />        add     dword&#91;eax+0b8h&#93;, 4<br />        xor     eax, eax<br />        retn<br />_int3&#58;<br />        add     dword&#91;eax+0B8h&#93;, 3<br />        xor     eax, eax<br />        retn<br /><br />section '.import' import data readable writeable<br /><br />        library kernel,'KERNEL32.DLL',\<br />                user,'USER32.DLL'<br /><br />        import kernel,\<br />               ExitProcess, 'ExitProcess'<br /><br />        import user,\<br />               MessageBox, 'MessageBoxA'<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2004-01-01 09:40:40 by roticv</div>
+   </div>
+   <div class="post" id="post-129518">
+    <div class="subject"><a href="#post-129518">Imported functions question</a></div>
+    <div class="body">Ok, supose that you have a proc/function in your code, you will call:<br /><br />invoke myCode, uno, dos, tres<br />and you use invoke MessageBox, NULL, &quot;hi&quot;, &quot;more hi&quot;, MB_OK<br /><br />for the first a expansion is:<br />push tres<br />push dos<br />push uno<br />call myCode ;this is a direct address call<br /><br />for the second, because you dont know where to jump:<br />push MB_OK<br />push xAddress<br />push xAddress2<br />push NULL<br />extern MessageBox<br />call <br /><br />Also in a obj file, whe have import xFunction X.dll<br /><br />That is a expansion of a nasm macro (normally used, called invoke too), like you see, you mark that a function is extern (you dont have it in your code), but when you call it you dont call directly a address like in example one, you call a unknow address by the direction of the symbol.<br /><br />Now the full call is resolved to some like: KERNEL32.HeapAlloc (in a debuger) now this 'name' or data is provided by the loader, it say that call dword[&amp;KERNEL32.HeapAlloc], is a call to the direction of that symbol (provided by the loader) and say that is 100, see that the debuger say &amp; before the name (or symbol), then following what C say &quot;&amp; mean the direction of ____&quot;, hope you get the idea.<br /><br />Nice day or night.</div>
+    <div class="meta">Posted on 2004-01-01 10:50:05 by rea</div>
+   </div>
+   <div class="post" id="post-129526">
+    <div class="subject"><a href="#post-129526">Imported functions question</a></div>
+    <div class="body"><em>If you import through __declspec(dllimport), instead of being an indirect jump, the code is an indirect call, thus saving a couple of instructions per function call.???</em> <br /><br />Anyone?</div>
+    <div class="meta">Posted on 2004-01-01 12:27:27 by yaa</div>
+   </div>
+   <div class="post" id="post-129540">
+    <div class="subject"><a href="#post-129540">Imported functions question</a></div>
+    <div class="body">Yaa, never depend on section names - follow the PE headers.<br /><br />Indirect jump vs call... &quot;normal&quot; code would be like...<br /><br />MessageBox(hwnd, &quot;blah&quot;, &quot;bluh&quot;, MB_OK); - would generate<br /><br /><div class="quote"><br />push MB_OK<br />push szBluh<br />push szBlah<br />push <br />call j_MessageBoxA@16<br />...<br />j_MessageBoxA@16: jmp <br /></div><br /><br />the __dllimport method would generate code like this:<br /><pre><code><br />push MB_OK<br />push szBluh<br />push szBlah<br />push &#91;hwnd&#93;<br />call &#91;imp__MessageBoxA@16&#93;<br /></code></pre><br /><br />...<br /><br />Which version is most optimal depends on the amount of calls you have for each imported function.</div>
+    <div class="meta">Posted on 2004-01-01 15:20:18 by f0dder</div>
+   </div>
+   <div class="post" id="post-129542">
+    <div class="subject"><a href="#post-129542">Imported functions question</a></div>
+    <div class="body">f0dder, <br /><br />when coding I use __declspec(dllimport) to import custom functions. Never heard/though that one could use it with system functions. I even wonder how it can be done.<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-01 15:36:28 by yaa</div>
+   </div>
+   <div class="post" id="post-129619">
+    <div class="subject"><a href="#post-129619">Imported functions question</a></div>
+    <div class="body">It should be doable - it really only depends on how the IAT is used, and the linker should discard the jmp-indiret table if only call-indirect is used at the call sites.</div>
+    <div class="meta">Posted on 2004-01-02 14:12:42 by f0dder</div>
+   </div>
+   <div class="post" id="post-129650">
+    <div class="subject"><a href="#post-129650">Imported functions question</a></div>
+    <div class="body">mmmmhhh, things aren't exactly clear.<br />How do an indirect jump and an indirect call look like???<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-03 05:51:11 by yaa</div>
+   </div>
+   <div class="post" id="post-129670">
+    <div class="subject"><a href="#post-129670">Imported functions question</a></div>
+    <div class="body">indirect call/jmp are FF15&lt;imm32&gt; and FF25&lt;imm32&gt; - where the imm32 is the absolute value to call/jmp indirectly. Ie, if the opcode is FF1504404000 you get 'call d.[000404004]'.<br /><br />Normal call/jmp has a *relative* address in the opcode - thus the opcode generated for &quot;call/jmp &lt;addr&gt;&quot; will be different depending on where the call/jmp is made, even for the same address. Addr can be encoded as either 8bit or 32bit immediate, depending of course on the distance to the target - and it's a signed value.<br /><br />When you do &quot;call MessageBox&quot;, you get the EIP-relative form. It's possible to handle imports this way too, iirc the LE format did it this way? (or perhaps I'm confusing it with a exe format I did back when LE was in fashion), but it requires a fixup record for each and every call in your exe - wasteful.<br /><br />The IAT method in windows is smarter - you only fill the pointers in the IAT.<br /><br />It also makes it easier to redirect imports, which is a nice thing.<br /><br />Indirect call/jmp look like the following, depending on assembler syntax...<br /><br />&quot;call dword ptr [_imp__MessageBoxA@16]&quot; or &quot;call dword [_imp__MessageBoxA@16]&quot; (the name in the brackets can differ too, it will depend on which kind of import libraries you are using - this example is standard MS style. It will always be a dword, though, and it's in your importa table, filled out by the windows EXE loader).</div>
+    <div class="meta">Posted on 2004-01-03 13:23:34 by f0dder</div>
+   </div>
+   <div class="post" id="post-129720">
+    <div class="subject"><a href="#post-129720">Imported functions question</a></div>
+    <div class="body"><strong>f0dder</strong>,<br /><br />you introduced &quot;normal&quot; call/jmp and got me a little lost.<br />What are &quot;normal&quot; call/jmp??? I though &quot;indirect&quot; call/jmp are called this way simply because they call or jump to an address that contains the real address thus the &quot;indirect&quot; but they are by all means &quot;normal&quot; call/jmp. You talk instead of &quot;normal&quot; call/jmp as something different .... and in fact they use relative addresses as you say instead of absolute ones. Why do they use relative addresses?<br /><br />Thx.<br /><br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 05:49:04 by yaa</div>
+   </div>
+   <div class="post" id="post-129728">
+    <div class="subject"><a href="#post-129728">Imported functions question</a></div>
+    <div class="body">Well, of course all the call/jmp are &quot;normal&quot;, I chose to call the non-indirect versions &quot;normal&quot; because I'd say they're used more often than the indirect versions - sorry for any confusion :)<br /><br />I guess the EIP-relative encoding was chosen because it allows the short 8-bit signed offset when the distance from call site to destination is short enough. Furthermore, it allows blocks of code without absolute references to be relocated without any code fixups.</div>
+    <div class="meta">Posted on 2004-01-04 07:24:08 by f0dder</div>
+   </div>
+   <div class="post" id="post-129761">
+    <div class="subject"><a href="#post-129761">Imported functions question</a></div>
+    <div class="body">btw, how is a relative address distinguished from an absolute one as the argument to a jmp or call???<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 13:32:59 by yaa</div>
+   </div>
+   <div class="post" id="post-129763">
+    <div class="subject"><a href="#post-129763">Imported functions question</a></div>
+    <div class="body">Well, a relative offset is always used in a direct near jump or call, in all other cases an absolute offset is used.</div>
+    <div class="meta">Posted on 2004-01-04 13:56:49 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-129766">
+    <div class="subject"><a href="#post-129766">Imported functions question</a></div>
+    <div class="body"><strong>Sephiroth3</strong>, I can use an absolute address for a near call or jump too.<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 14:39:05 by yaa</div>
+   </div>
+   <div class="post" id="post-129767">
+    <div class="subject"><a href="#post-129767">Imported functions question</a></div>
+    <div class="body">no you can't.<br /><br />Well, your assembler might support it, but it will be encoded as a relative call/jmp, since there's no direct call/jmp on x86 taking an absolute offset.</div>
+    <div class="meta">Posted on 2004-01-04 14:41:42 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>SmallAlloc : a compact memory manager - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20726" />
+  <link rel="prev" href="../?id=20726&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=20726">SmallAlloc : a compact memory manager</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=20726&amp;page=1" style="">&laquo;</a><a href="../?id=20726&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="20726" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-184409">
+    <div class="subject"><a href="#post-184409">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">By the way, last night during a terrible headache I found a way to solve the speed-issue on SmAlloc. Though, since this will require 33 bits extra per object, instead of (the current) 1 extra bit per object, I&#39;ll probably make it as another lib. <br /><br /><strong>The need is:</strong><br /> ability to SmAlloc() and SmFree() objects for less than 50 cycles. <br /><strong>The environment is:</strong><br /> probably one set of object-sizes (means &quot;all objects are&nbsp; i.e 24 bytes big&quot;). The objects are 50,000 - 1,000,000 in number. We can malloc and free any of the objects at random. <br /><br /><strong>The solution:</strong><br />Keep a <em>stack</em> of the free objects from the current MemChunk. SmAlloc2() will take the object from the top of the stack, and decrease the stack-size. <br />SmFree2() will check in the bit-table whether the object is already free (and return immediately if yes), then add this object to the top of the stack. <br />When a new MemChunk is created, the &quot;free-stack&quot; is pre-filled with all addresses of objects from this MemChunk. <br /><br /></div>
+    <div class="meta">Posted on 2006-08-11 12:18:29 by Ultrano</div>
+   </div>
+   <div class="post" id="post-184414">
+    <div class="subject"><a href="#post-184414">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">Here&#39;s the implementation of the idea, mentioned above. Called it &quot;TinyAlloc&quot;... although it certainly isn&#39;t smaller than SmAlloc ^^&#39;<br /><br />Finally, my venture to beat HeapAlloc is complete -&nbsp; TinyAlloc is 5-7 times faster than HeapAlloc :D. But man, HeapAlloc really impresses me! Good job, Microsoft! <br /><br />Test machine: <br />Sempron 2200+ (1800MHz), DDR400 (~2.6GB/s bandwidth), Win2kSP4<br /><br />TinyAllocNonZero() executes in 71 cycles (or more)<br />TinyFree() executes in 130 cycles<br /><br />HeapAlloc() executes in 351 cycles (or more)<br /><br />Total time for allocation of 300,000&nbsp; 50-byte objects:<br />TinyAllocNonZero() : 10ms<br />HeapAlloc(): 70ms<br /><br />If you write into the memory you allocate (i.e zero-out the whole object), performance drops twice on both TinyFree() and HeapAlloc()<br /><br /><br />Btw, TinyAlloc can be made 4 times faster by removing the checks, used in TinyFree(). Currently, TnAlloc will not misbehave in the case of freeing the same object twice:<br />TinyFree(pObj1);<br />TinyFree(pObj1); // TinyFree sees that this object is already free, and does nothing<br /><br /><br /><br /><br /><strong>Conclusion</strong><br />TinyAlloc is 6-10 times faster than SmallAlloc, with the same functionality. But for each object, it takes 32 extra bits instead of 1. <br />TinyAlloc doesn&#39;t have SmallAlloc&#39;s limit of 65535 objects/MemChunk<br />Neither TinyAlloc nor SmallAlloc are anything revolutionary :)<br />BUT, the idea behind TinyAlloc can be used to boost the performance of special cases: particle managers in 3D games, for instance. <br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1986" target="_blank">TinyAlloc.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-08-11 17:31:37 by Ultrano</div>
+   </div>
+   <div class="post" id="post-184444">
+    <div class="subject"><a href="#post-184444">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">Great minds think alike...<br /><br />I&#39;m currently in the testing phase of a very similar memory manager system of my own.&nbsp; I would say its 85-90% identical in structure (looking at your source).&nbsp; Good work.&nbsp; If anything you&#39;re solution is hinting at some optimizations I can borrow from.<br /><br />I especially like your bit32 usage for used/not used in the memory pointer stack.&nbsp; One question tho, is it a known fact that the OS will not provide a memory object with this bit set for OS related purposes (from Virtual Alloc)?&nbsp; Or is this something you figured out (IE. trial and no error).<br /><br />Also, I still used HeapAlloc.&nbsp; What reasons made you choose the VirtualAlloc?&nbsp; Last I remember, they are all the same in the latest version of the Win OS&#39;s.<br /><br />Great work.<br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2006-08-13 23:24:29 by NaN</div>
+   </div>
+   <div class="post" id="post-184454">
+    <div class="subject"><a href="#post-184454">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">HeapAlloc vs. VirtualAlloc... VirtualAlloc gives you 64kb alignment, control of page permissions, possibility to control reserve vs. commit. Last time I checked it was a bit slower than HeapAlloc for small allocs. There&#39;s no VirtualReAlloc, so you&#39;d have to code that logic yourself.<br /><br />VirtualAlloc is, imho, good when you need to allocate large blocks that&#39;ll mostly be allocated through your app lifetime... so, pretty nice for your own custom memory managers. If you look at the MSDN documentation for HeapAlloc, it says they&#39;re slow on 9x for blocks larger than 4meg.<br /></div>
+    <div class="meta">Posted on 2006-08-14 04:59:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-184456">
+    <div class="subject"><a href="#post-184456">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body"><div class="quote"><br />One question tho, is it a known fact that the OS will not provide a memory object with this bit set for OS related purposes (from Virtual Alloc)?&nbsp; Or is this something you figured out (IE. trial and no error).<br /></div><br />It was a bit hard for me to understand what you mean, so I guessed you mean &quot;does the OS let normal apps get virtual memory with address 0x8xxxxxxx ?&quot; . <br />Windows reserves the virtual space 0x80000000 up to 0xFFFFFFFF for drivers, and internals. It&#39;ll never let you allocate memory there. So, currently it&#39;s safe to reserve the last bit in pointers of memory that we allocate. <br />But in TinyAlloc, in the &quot;free-stack&quot;, I don&#39;t put pointers. I put a value ObjectID, which is 0,1,2,3,4....(NumMaxObjects-1) . </div>
+    <div class="meta">Posted on 2006-08-14 06:53:41 by Ultrano</div>
+   </div>
+   <div class="post" id="post-184465">
+    <div class="subject"><a href="#post-184465">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">Just to be pedantic: what about the /3GB switch in boot.ini?<br /></div>
+    <div class="meta">Posted on 2006-08-14 09:59:31 by f0dder</div>
+   </div>
+   <div class="post" id="post-184466">
+    <div class="subject"><a href="#post-184466">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">I hadn&#39;t heard of it. But still, it can&#39;t pose problems, since to use 3GB, the PE header must have a specific flag:<br /><div class="quote"><br />The /3GB switch allocates 3 GB of virtual address space to an application that uses IMAGE_FILE_LARGE_ADDRESS_AWARE in the process header. This switch allows applications to address 1 GB of additional virtual address space above 2 GB.<br /></div><br />(quote from http://www.microsoft.com/whdc/system/platform/server/PAE/PAEmem.mspx)<br /><br />Actually, since I knew for sure Win2k has the to 2GB limit (we studied it at uni), <strong>but</strong> this could (would) be changed in later 32-bit OSes (or HALs), I gave it some thought. <br />Yet, for such a major point to be changed, for years to come it would require only the special apps (that would use it) to switch somehow to such a mode. (and the normal apps would run in a legacy/compatibility layer). Microsoft has always been very concerned about compatibility :) , fortunately. <br /><br />Since TinyAlloc was (initially) designed for apps that would require millions of objects (thus the alloc/free speed issue), these apps could easily need 2GB+ . So, just in TinyAlloc, I didn&#39;t thread on the 2GB limit.<br />(I kinda wanted to present a particle-manager for 3D games or scientific apps, that would break the current limitations and problems :) . TinyAlloc served as a concept-proof)<br /><br />I initially planned the stack entries of TinyAlloc to be 33-bit, instead of the current 32-bit (a stack of 32-bit pointers + a bitfield of &#39;is object allocated&#39;). But while optimizing TinyAlloc, I had to switch to using ObjectID in the stack, instead of ObjectPtr. Since the highest 3 bits would always be 0, then I merged the bitfield with the stack. </div>
+    <div class="meta">Posted on 2006-08-14 10:44:46 by Ultrano</div>
+   </div>
+   <div class="post" id="post-184470">
+    <div class="subject"><a href="#post-184470">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">Hi Ultano<br />If you are using an alignment for storing your objects (which is always a good deal), let’s say 4, then you can use bits 0 and 1 to store additional information. Transforming the pointer back is as simple as using the and instruction&nbsp; ;)<br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-08-14 12:30:33 by Biterider</div>
+   </div>
+   <div class="post" id="post-184471">
+    <div class="subject"><a href="#post-184471">Re: SmallAlloc : a compact memory manager</a></div>
+    <div class="body">Well, I align only the first object in the internal array on dword-boundary, it&#39;s up to the user to make his objects&#39; size a multiple of 4, 8 or 16. For max optimization (aligning the objects at 16-byte boundary) and enabling SSE/SSE2 &quot;movaps&quot; (instead of &quot;movups&quot;), the user can fix-up TinyAlloc&#39;s SmNewChunk() to align pFirstObject. <br />Additional bits aren&#39;t necessary... I already have 2-11 bits too much :) (11+ bits if we&#39;re allocating less than 1 million objects in one TinyAllocChunk.) And I don&#39;t have any idea on what to do with them :)<br /><br />The 3 bottlenecks in TinyAlloc are: <br />- TinyAlloc() : finding a chunk to get memory from<br />- TinyFree() : finding the chunk this object persists in<br />- TinyFree() : &quot;div&quot; instruction when checking if the object is already free. I could add an <br />if(!(ObjSize &amp; (ObjSize-1))){ size is power of 2, use SHR }else{ size is arbitrary, use DIV}<br />but finding CL for the SHR really makes things slower iirc...<br /><br />In the particle-manager I&#39;m currently designing, those 3 bottlenecks are gone - but only since it&#39;s a specialized manager. </div>
+    <div class="meta">Posted on 2006-08-14 13:53:43 by Ultrano</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=20726&amp;page=1" style="">&laquo;</a><a href="../?id=20726&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="20726" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

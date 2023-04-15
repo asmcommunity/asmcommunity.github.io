@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>self modifying code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6538" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6538">self modifying code</a></p>
+   <div class="post" id="post-47185">
+    <div class="subject"><a href="#post-47185">self modifying code</a></div>
+    <div class="body">i posted this article b/c some of u might be interested in<br />its not my article &amp; i dont have any idea if it works<br />thx <br /><br />Basic Overview<br /><br />Self-modifying code is a technique in which the application writes or modifies portions of it's own code at run-time.<br /><br />Windows 95 has higher data protection than MS-DOS. Applications are normally given access to memory for<br /><br />their data segments and stack, but they are not permitted to modify their own code. In order to do this we must first ask Windows 95 for permission by calling the VirtualProtect() function. When you call VirtualProtect() you pass in the address of the first byte you want to modify, the number of bytes you want to work with and a flag indicating what you want to do with the memory (ie read it, write to it, execute it etc). You also pass in the address of a variable which the function fills with the previous protect state so you can restore it when you're done.<br /><br />The following is a portion of Win32 code that demonstrates self-modifying code. The assembly statement immediately after the myloop label is &quot;mov dword ptr a,0x12345678&quot;. The preceding statements change the op code to &quot;mov dword ptr a,0x87654321&quot;. Try placing this code inside a C/C++ function and stepping through it with a line debugger:<br /><br />LPVOID address;<br /><br />// Get the address of the dword we need to change<br /><br />_asm mov dword ptr address,offset <br /><br />// Ask windows for permission to modify the code<br /><br />result = VirtualProtect(address,4,PAGE_WRITECOPY,&amp;oldprotect);<br /><br />// Modify it in assembly. This is equivelelent to *(LPLONG)address = 0x87654321<br /><br />_asm mov ebx,dword ptr address<br /><br />_asm mov dword ptr ,0x87654321<br /><br />// All done<br /><br />result = VirtualProtect(address,4,PAGE_EXECUTE,&amp;oldprotect);<br /><br />myloop:<br /><br />_asm mov dword ptr a,0x12345678<br /><br /> <br /><br />Creating New Portions of Code<br /><br />It's also possible to generate new code from scratch. This technique is particularly handy for things such as precompiled sprites and precompiled texture mapping loops. As a simple example, I'll show how to create a function that accepts two long integers and returns the sum. For convenience I'll declare a function pointer type and a variable of that type:<br /><br />typedef LONG (* FunctionType)(LONG, LONG);<br /><br />FunctionType ComputeSum;<br /><br />ComputeSum is a variable of type FunctionType, a type that can point to functions with the following format:<br /><br />LONG Function(LONG, LONG)<br /><br />The first step is to determine the actual op-codes that will go inside the function. I've already done this (which I'll show next) and it turns out that we need 11 bytes of memory to store them. How you allocate the memory for your functions is up to you, I'll use the new operator:<br /><br />ComputeSum = (FunctionType) new BYTE[11];<br /><br />We can now fill the array with the actual op code values:<br /><br />((LPBYTE)ComputeSum)[0] = 0x55; // push ebp<br /><br />((LPBYTE)ComputeSum)[1] = 0x8B; // mov ebp, esp<br /><br />((LPBYTE)ComputeSum)[2] = 0xEC;<br /><br />((LPBYTE)ComputeSum)[3] = 0x8B; // mov eax,<br /><br />((LPBYTE)ComputeSum)[4] = 0x45;<br /><br />((LPBYTE)ComputeSum)[5] = 0x08;<br /><br />((LPBYTE)ComputeSum)[6] = 0x03; // add eax,<br /><br />((LPBYTE)ComputeSum)[7] = 0x45;<br /><br />((LPBYTE)ComputeSum)[8] = 0x0C;<br /><br />((LPBYTE)ComputeSum)[9] = 0x5D; // pop ebp<br /><br />((LPBYTE)ComputeSum)[10] = 0xC3; // ret eax<br /><br />The final step is to call VirtualProtect(). We already have the op-codes in place, so we only have to ask for access to execute the code segment. The following call will do the job in this case:<br /><br />VirtualProtect(ComputeSum, 11, PAGE_EXECUTE, &amp;oldprotect);<br /><br />As before, the variable oldprotect should be of type DWORD. At this point we have a pointer to a valid function and we can call it with C code such as the following:<br /><br />sum = ComputeSum(1, 2);<br /><br />sum = ComputeSum(val1, val2);<br /><br />The only thing that remains is for us to delete the code segment before our application terminates. This is a simple matter of restoring the access protection back to it's original value and calling the appropriate function to delete the allocated memory, eg:<br /><br />VirtualProtect(ComputeSum, 11, oldprotect, &amp;oldprotect);<br /><br />delete (LPBYTE)ComputeSum;<br /><br />One last point: if you want your self-modifying code to be compatible with Windows NT then you'll also need to call the FlushInstructionCache() function after modifying any code segments. This is not a requirement under Windows95 since it is a single-CPU operating system, but I strongly recommend calling it anyway to avoid compatibility problems with future Windows releases.</div>
+    <div class="meta">Posted on 2002-07-11 21:38:21 by b0z0</div>
+   </div>
+   <div class="post" id="post-47193">
+    <div class="subject"><a href="#post-47193">self modifying code</a></div>
+    <div class="body">b0z0,<br /><br />There is a piece of example code in MASM32 called SMC that shows how runtime code modification is done. It is useful for protection schemes among other things.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-07-11 23:38:34 by hutch--</div>
+   </div>
+   <div class="post" id="post-47195">
+    <div class="subject"><a href="#post-47195">self modifying code</a></div>
+    <div class="body">b0z0,<br /><br />just change the characteristics of your code section to writable</div>
+    <div class="meta">Posted on 2002-07-12 00:16:37 by masquer</div>
+   </div>
+   <div class="post" id="post-47215">
+    <div class="subject"><a href="#post-47215">self modifying code</a></div>
+    <div class="body">For small pieces of code, just build it on the stack and jmp/call to stack space.  And don't forget how important it is to modify your code that self modifies your code... :)</div>
+    <div class="meta">Posted on 2002-07-12 05:39:24 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47309">
+    <div class="subject"><a href="#post-47309">self modifying code</a></div>
+    <div class="body"><div class="quote"><br />For small pieces of code, just build it on the stack and jmp/call to stack space.  And don't forget how important it is to modify your code that self modifies your code... :) </div><br /><br />Hey... neat tricks!<br /><br /><br />Also, on really really old computers (those without separate data and code caches), self-modifying code had uses in optimization.  It is very rarely used in optimization today because there is a time penalty when executing code that was recently modified (because it's still in the write-data cache, the code cache needs to be updated).</div>
+    <div class="meta">Posted on 2002-07-12 19:51:40 by AmkG</div>
+   </div>
+   <div class="post" id="post-47315">
+    <div class="subject"><a href="#post-47315">self modifying code</a></div>
+    <div class="body"><div class="quote"><br />It is very rarely used in optimization today because there is a time penalty when executing code that was recently modified (because it's still in the write-data cache, the code cache needs to be updated).</div>I get around this penalty by creating the code on the stack, and then jumping to another piece of code - which returns to an address on the stack.  You can even blend this in with the typical stack frame code - making it harder to see.  While the program is initializing it is also <u>slowing</u> creating some <em>key pieces</em> of code from the registration key.  The poor would be cracker will be sucking down coffee and scratching his head for hours trying to figure out what happens where. :)  Granted, he could just create those pieces of code and patch them in, but this can be very hard to impossible and out of reach of most byte patching baboons.  Combine this with good software watermarking - that way a register version isn't just passed around without consequences.</div>
+    <div class="meta">Posted on 2002-07-12 20:40:24 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47319">
+    <div class="subject"><a href="#post-47319">self modifying code</a></div>
+    <div class="body">Ages ago i made com files with debug and did the recursive thing in which my program continually modified its own code. Then i read that it wasn't a good idea to modify code in this way. I personally believe that progs that are self modifying are at the cornerstone of true artificial intelligence. Its only M$ and its buddies that make it difficult to attain this on their platforms as they wish to be the first.<br /><br /> :alright:<br /><br />oh yah..and i never once got a crash from self modification. But that was on the older systems...386 downward with win 3.1</div>
+    <div class="meta">Posted on 2002-07-12 21:42:26 by IwasTitan</div>
+   </div>
+   <div class="post" id="post-47350">
+    <div class="subject"><a href="#post-47350">self modifying code</a></div>
+    <div class="body"><strong>bitRAKE</strong>: which consequences? And what if the user tells to the judge that somebody stole his purchased copy of your program?<br /><br />Moreover, why do you jmp elsewhere and then again on the stack? Haven't tested this yet on the Athlon-XP, but I see no reason why a jmp direct to the stack wouldn't be the same, penalty-wise (just one less passage).<br /><br />I haven't tested this (or I don't recall the results of my test), but I'm quite certain that your concern is not technical, but just to give one more headache to the wannabe cr*cker. Do you confirm?</div>
+    <div class="meta">Posted on 2002-07-13 03:10:21 by Maverick</div>
+   </div>
+   <div class="post" id="post-47356">
+    <div class="subject"><a href="#post-47356">self modifying code</a></div>
+    <div class="body">There is a certain amount of myth about the performance penalty that is supposed to follow from self modifying code. When the term is used to refer to modifying a register that is already in the pipeline, you get a stall until the pipeline is clear which IS the performance penalty from writing self modifying code.<br /><br />When the same term is used to modifying code in the code section, the problem does not hold, read/ write to memory is no big deal and unless you were particularly clever, you probably could not get all of the code directly into the cache anyway.<br /><br />If you could master this trick, the solution would be to modify the code earlier in the program and come back and execute it later. What you will get at the worst is a stall if you modify the code and THEN run it immediately after it has been modified.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-07-13 05:26:53 by hutch--</div>
+   </div>
+   <div class="post" id="post-47357">
+    <div class="subject"><a href="#post-47357">self modifying code</a></div>
+    <div class="body">bitRake,<br />i like your idea of running code that is on the stack. I see it as working something like this:<br /><br /><pre><code><br />- start a proc<br />- create as many local DWORD vars as you need to cover the <br />    amount of instructions you want to execute &#40;coz LOCALS are<br />    created on the stack&#41;<br />- set all those vars to specific values, those values could be from <br />    the .data section<br />- run a math algo on those vars to change them to the actual <br />    code and data you require, maybe the algo could use the CRC<br />    of the app as a type of key value<br />- execute the new code<br />- if the CRC is wrong because the app has been patched, or <br />    because some cr4cker is messing with the registers, there is a <br />    great chance the app will GPF, which you should be able to <br />    catch with exception handling.<br /></code></pre><br /><br /><br />It is kind of like a mixture of the old Roman letter transposing ciphers, mixed with hostile 'buffer overflow to execute code on the stack' methods. I like it, it is kind of poetic :)</div>
+    <div class="meta">Posted on 2002-07-13 05:40:10 by sluggy</div>
+   </div>
+   <div class="post" id="post-47387">
+    <div class="subject"><a href="#post-47387">self modifying code</a></div>
+    <div class="body"><div class="quote"><br /><strong>bitRAKE</strong>: which consequences? And what if the user tells to the judge that somebody stole his purchased copy of your program?<br /><br />Moreover, why do you jmp elsewhere and then again on the stack? Haven't tested this yet on the Athlon-XP, but I see no reason why a jmp direct to the stack wouldn't be the same, penalty-wise (just one less passage).<br /><br />I haven't tested this (or I don't recall the results of my test), but I'm quite certain that your concern is not technical, but just to give one more headache to the wannabe cr*cker. Do you confirm? </div>The consequences are me publicly outlining the situation and using their personal information, so everyone knows what kind of as<strong></strong>shole this guy is.  Might not catch him this time, but maybe someone will.  Locks are to keep good men honest - all locks can be broken by bad men.<br /><br />You are correct - I haven't tested for a penalty.  Technically, I only understand there would be a penalty if you were modifying code in the same cacheline being executed but haven't tested this either.  Also, it makes sense that there might be a penalty if you modify any data that is in the instruction cache already.  Jumping to another section of code creates greater convolution.  Doing it the same everytime isn't good - IDA can be programmed to decypher these sections of code.</div>
+    <div class="meta">Posted on 2002-07-13 10:33:50 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47427">
+    <div class="subject"><a href="#post-47427">self modifying code</a></div>
+    <div class="body">bitRake is right. I have a ThunderBird CPU. With 128KB total L1 cache. 64KB for Ins and 64KB for data. When you write data to memory it goes into the data cache. But when you jump to this address the CPU has to write back the data in the cache to memory so that it can be fetched by the Instruction Cache. Maybe the Athlon/XP has some way to prevent the memory access but I heavily doubt this as self modified code isnt used that much these days.</div>
+    <div class="meta">Posted on 2002-07-13 20:20:19 by x86asm</div>
+   </div>
+   <div class="post" id="post-47462">
+    <div class="subject"><a href="#post-47462">self modifying code</a></div>
+    <div class="body">bitRake: That lock comment just reminded me that I meant to<br />ask you if you realized that &quot;bitraking&quot; is a locksmithing term <br />for a particular method of picking a pin tumber lock.</div>
+    <div class="meta">Posted on 2002-07-14 02:13:20 by Canite</div>
+   </div>
+   <div class="post" id="post-47468">
+    <div class="subject"><a href="#post-47468">self modifying code</a></div>
+    <div class="body"><strong>Canite</strong>, my father's father was a watch maker, and my father a locksmith for a short time. It has been a long time since anyone mentioned that.  And the tool we call a bitRAKE.  Little ones have to do something to pass the time. :grin:</div>
+    <div class="meta">Posted on 2002-07-14 03:33:14 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47480">
+    <div class="subject"><a href="#post-47480">self modifying code</a></div>
+    <div class="body">Ricky,<br /><br />You must have been pretty lean and flexible as a kid to be used to pick locks with. :tongue: <br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-07-14 06:10:15 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

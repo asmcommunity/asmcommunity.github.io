@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Source code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=387" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=387">Source code</a></p>
+   <div class="post" id="post-2124">
+    <div class="subject"><a href="#post-2124">Source code</a></div>
+    <div class="body">Ok, here is the source i have been working on. Found out that I didn't have to use raw sockets anyway, but now I know how to do it.<br /><br />The program sends a UDP packet and tries to wake it up. The documentation for these magic packets can be found on AMD page.<br /><br />Sorry that I didn't have time to comment it all for you, but if you have any questions, please send them to <a href="mailto:tfs@inbound.dk">tfs@inbound.dk</a>.<br /><br />.386<br />.model flat,stdcall<br />option casemap:none<br /><br />PrintError PROTO :DWORD<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\ws2_32.inc<br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\ws2_32.lib<br /><br />.data?<br />_hInstance		dd		?<br />_WSAData		WSADATA		&lt;?&gt;<br />_target			sockaddr_in	&lt;?&gt;<br />_SocketHandler		dd		?<br /><br />.data<br />ProgramName		db		&quot;WOL (c) 2001 by Torben Flindt Sillesen&quot;,0<br />ErrStartup		db		&quot;WinSock not installed or version mismatch&quot;,0<br />ErrSocket		db		&quot;Can't create UDP Socket&quot;,0<br />ErrConnect		db		&quot;Can't connect to target&quot;,0<br />ErrSend			db		&quot;Can't send data.&quot;,0<br />ErrOn			db		&quot;Error in IP_HDRINCL&quot;,0<br />source			db		&quot;127.0.0.1&quot;,0<br />target			db		&quot;127.0.0.1&quot;,0<br />port			dd		32767<br />on			dd		1<br />buffer			ip_hdr		&lt;0&gt;<br />udp			udp_hdr		&lt;0&gt;<br />realbuffer		db		0FFh,0FFh,0FFh,0FFh,0FFh,0FFh ;INIT SEQ<br />			db		16 DUP(000h, 050h, 0BAh, 0D5h, 0F5h, 011h) ;The MAC-addr<br /><br />.code<br />start:	invoke 	GetModuleHandle, 0<br />	mov	_hInstance, eax<br />	<br />	;STARTUP WSA<br />	invoke	WSAStartup, 201h, addr _WSAData<br />	cmp	eax,0<br />	je	ok2<br />	invoke	PrintError, addr ErrStartup<br />	jmp	exit<br /><br />ok2:	;CREATE SOCKET<br />	invoke	WSASocket, AF_INET, SOCK_RAW, IPPROTO_UDP, 0, 0, 0<br />	cmp	eax,INVALID_SOCKET<br />	jne	ok3<br />	invoke	PrintError, addr ErrSocket<br />	jmp	cleanup<br /><br />ok3:	;FILL IN HEADERS FOR IP AND UDP<br />	mov	_SocketHandler,eax<br />	<br />	mov	_target.sin_family, AF_INET<br />	invoke	htons, port<br />	mov	_target.sin_port, ax<br />	invoke	inet_addr, addr target<br />	mov	_target.sin_addr, eax<br /><br />	;IP HEADER<br />	mov	buffer.ip_hlv, 45h<br />	mov	buffer.ip_tos, 0<br />	invoke	htons, 130<br />	mov	buffer.ip_len, ax<br />	invoke	htons, 1234h<br />	mov	buffer.ip_id, ax<br />	mov	buffer.ip_off, 40h<br />	mov	buffer.ip_ttl, 48<br />	mov	buffer.ip_p, IPPROTO_UDP<br />	mov	buffer.ip_cksum, 0<br />	invoke	inet_addr, addr source<br />	mov	buffer.ip_src, eax<br />	mov	eax, _target.sin_addr<br />	mov	buffer.ip_dest, eax<br /><br />	;UDP HEADER<br />	mov	ax, _target.sin_port<br />	mov	udp.udp_srcport, ax<br />	mov	udp.udp_dstport, ax<br />	invoke	htons, 110<br />	mov	udp.udp_len, ax<br />	mov	udp.udp_cksum, 0<br /><br />	;SET IP_HDRINCL (IP-HEADER INCLUDED)<br />	invoke	setsockopt, _SocketHandler, IPPROTO_IP, 2h, addr on, sizeof on<br />	cmp	eax, SOCKET_ERROR<br />	jne	ok4<br />	invoke	PrintError, addr ErrOn<br />	jmp	close<br />	<br />ok4:	;SEND DATA<br />	invoke	sendto, _SocketHandler, addr buffer, sizeof buffer+sizeof udp+102, 0, addr _target, sizeof _target<br />	cmp	eax,SOCKET_ERROR<br />                jne           close<br />                invoke	PrintError, addr ErrSend<br /><br />close:	invoke	closesocket, _SocketHandler<br />cleanup:invoke	WSACleanup<br />exit:	invoke	ExitProcess, 0<br /><br />PrintError	proc mes:DWORD<br />	invoke MessageBox, NULL, mes, addr ProgramName, MB_OK<br />	ret<br />PrintError	endp<br />end start</div>
+    <div class="meta">Posted on 2001-07-27 05:02:22 by Unregistered</div>
+   </div>
+   <div class="post" id="post-2128">
+    <div class="subject"><a href="#post-2128">another uuups</a></div>
+    <div class="body">I almost forgot. The udp_hdr structure was not defined in my windows.inc, so I had to define i myself.<br /><br />Also the IP stack does not fill in the checksum for the UDP protocol when using raw sockets. It doesn't matter in this program, since the NIC doesn't check it, but if you need to implement it, a routine can be found at the WinSock FAQ.<br /><br />udp_hdr STRUCT<br />  udp_srcport	WORD	?<br />  udp_dstport	WORD	?<br />  udp_len	WORD	?<br />  udp_cksum	WORD	?<br />udp_hdr ENDS<br /><br />Clerihew</div>
+    <div class="meta">Posted on 2001-07-27 05:17:31 by clerihew</div>
+   </div>
+   <div class="post" id="post-2129">
+    <div class="subject"><a href="#post-2129">Source code</a></div>
+    <div class="body">Thanks :alright:</div>
+    <div class="meta">Posted on 2001-07-27 05:18:27 by eko</div>
+   </div>
+   <div class="post" id="post-156062">
+    <div class="subject"><a href="#post-156062">Source code</a></div>
+    <div class="body">Packet sniffer I tested it on had it show up as an icmp packet heh  :) but yah thanks for the code, is much appreciated.</div>
+    <div class="meta">Posted on 2005-01-20 21:18:58 by Webring</div>
+   </div>
+  </div>
+ </body>
+</html>

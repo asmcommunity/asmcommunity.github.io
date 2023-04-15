@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>FTP file upload - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5866" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=5866">FTP file upload</a></p>
+   <div class="post" id="post-42038">
+    <div class="subject"><a href="#post-42038">FTP file upload</a></div>
+    <div class="body">Hi!<br /><br />Can anyone show me what I need to do to upload a file via FTP?<br />I can't figure out, how to open a data port after the STOR command...<br /><br /><br />TIA,<br />bAZiK</div>
+    <div class="meta">Posted on 2002-06-08 16:45:03 by bazik</div>
+   </div>
+   <div class="post" id="post-42083">
+    <div class="subject"><a href="#post-42083">FTP file upload</a></div>
+    <div class="body">to receive information you will need to open a data port you must send a PASV command. the response you will get will be something like: <br /><br />227 Entering Passive Mode (128,243,20,9,165,101). <br /><br />using this information you will need to make some calculations to determine the port to connect to.<br /><br />128,243,20,9 ;&lt;-- this is the same ip address you connected with on port 21 <br />165,101 ;&lt;-- these 2 numbers after some multipliction and addition will give you the data port you will need to connect to. <br /><br />here is the formula you will need to use to get the port number: <br />1st number * 256 + 2nd number <br /><br />so it will look like this: <br />165 * 256 + 101 = the data port <br /><br />so the port you will need to connect to is port 42341 <br /><br /><br />you can also send the PORT command. the PORT command im not to fimilar with but i know instead of the server you are connected to deciding the port you decide your own port to connect to. i think alot of servers try to avoid using PORT for security reasons.<br /><br /><br />__________________</div>
+    <div class="meta">Posted on 2002-06-09 01:11:04 by smurf</div>
+   </div>
+   <div class="post" id="post-42090">
+    <div class="subject"><a href="#post-42090">FTP file upload</a></div>
+    <div class="body">I dont know if you want to use raw sockets or would be happy with wininet,  in one of my curretn projects i needed to upload a file to an ftp server - this is the easiest way i found to do it:<br /><br />(note some lines of code removed for simplicity - the original code was in the middle of a thread with some sync code for another thred)<br /><br /><br /><br /> invoke InternetOpen,addr AppName,INTERNET_OPEN_TYPE_PRECONFIG,NULL,NULL,0<br />  mov hInternet,eax<br /> <br /><br />  ;  Establish a connection to the FTP server specified<br /> <br />  invoke InternetConnect,hInternet,addr FTPAddress,INTERNET_DEFAULT_FTP_PORT,addr UserName, addr Password,INTERNET_SERVICE_FTP,INTERNET_FLAG_PASSIVE,0<br />  mov hConnect,eax<br /><br /><br />;upload the file<br />  invoke FtpPutFile,hConnect,addr TEST_TEMP,addr NewName,INTERNET_FLAG_RELOAD Or INTERNET_FLAG_RESYNCHRONIZE,0<br /><br />;now close all the stuff<br /><br />  invoke InternetCloseHandle,hConnect<br />  invoke InternetCloseHandle,hInternet<br /><br /><br /><br /><br />Hope this helps</div>
+    <div class="meta">Posted on 2002-06-09 03:04:07 by Terab</div>
+   </div>
+   <div class="post" id="post-42113">
+    <div class="subject"><a href="#post-42113">FTP file upload</a></div>
+    <div class="body">Hi Terab, Hi smurf!<br /><br />Thanks so far for your advice. I code this program in PowerBASIC, so I just needed to know how to open the data port. Here is what I get from the FTP server (done via puTTY :) ):<br /><pre><code><br />220 FTP Server ready.<br />USER p544837<br />331 Password required for p544837.<br />PASS ********<br />230 User p544837 logged in.<br />CWD /tmp<br />250 CWD command successful.<br />TYPE I<br />200 Type set to I.<br />PASV<br />227 Entering Passive Mode &#40;195,20,225,16,221,179&#41;.<br />STOR test.txt<br /></code></pre><br /><br />Should I open the data-port before or after the STOR command? <br />In this case the data port should be<br />221 * 256 + 179 = 56755<br />right? :)<br /><br />But perhaps I'll use the WinInet way... it's enough for my needs, too.<br />BTW, here is the little PowerBASIC snippet. Look how easy TCP stuff can be:<br /><pre><code><br />FUNCTION UploadFiles&#40;sServer AS ASCIIZ, sUser AS ASCIIZ, sPass AS ASCIIZ, sDirectory AS ASCIIZ, sFileList AS ASCIIZ&#41; EXPORT AS LONG<br /><br />    DIM hTCP AS LONG<br />    DIM sBuffer AS STRING<br /><br />    hTCP = FREEFILE<br />    TCP OPEN PORT 21 AT sServer AS hTCP<br /><br />    IF ERR THEN<br />        sBuffer = &quot;Error connecting to FTP server!<br />        GOTO lblError<br />    ELSE<br />        TCP LINE hTCP, sBuffer<br />    END IF<br /><br />    IF LEFT$&#40;sBuffer, 3&#41; &lt;&gt; &quot;220&quot; THEN<br />        GOTO lblError<br />    END IF<br /><br />    TCP PRINT hTCP, &quot;USER &quot; + sUser<br /><br />    TCP LINE hTCP, sBuffer<br /><br />    IF LEFT$&#40;sBuffer, 3&#41; &lt;&gt; &quot;331&quot; THEN<br />        sBuffer = &quot;USER error&#58; &quot; + sBuffer<br />        GOTO lblError<br />    END IF<br /><br />    TCP PRINT hTCP, &quot;PASS &quot; + sPass<br /><br />    TCP LINE hTCP, sBuffer<br /><br />    IF LEFT$&#40;sBuffer, 3&#41; &lt;&gt; &quot;230&quot; THEN<br />        sBuffer = &quot;PASS error&#58; &quot; + sBuffer<br />        GOTO lblError<br />    END IF<br /><br />    TCP PRINT hTCP, &quot;CWD &quot; + sDirectory<br /><br />    TCP LINE hTCP, sBuffer<br /><br />    IF LEFT$&#40;sBuffer, 3&#41; &lt;&gt; &quot;250&quot; THEN<br />        sBuffer = &quot;CWD error&#58; &quot; + sBuffer<br />        GOTO lblError<br />    END IF<br /><br />    TCP PRINT hTCP, &quot;TYPE I&quot;<br /><br />    TCP LINE hTCP, sBuffer<br /><br />    IF LEFT$&#40;sBuffer, 3&#41; &lt;&gt; &quot;200&quot; THEN<br />        sBuffer = &quot;TYPE I error&#58; &quot; + sBuffer<br />        GOTO lblError<br />    END IF<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-09 06:30:47 by bazik</div>
+   </div>
+   <div class="post" id="post-42115">
+    <div class="subject"><a href="#post-42115">FTP file upload</a></div>
+    <div class="body"><div class="quote"><br />Hi Terab, Hi smurf!<br /><br />[<br />Should I open the data-port before or after the STOR command? <br />In this case the data port should be<br />221 * 256 + 179 = 56755<br />right? :)<br /><br />BTW, here is the little PowerBASIC snippet. Look how easy TCP stuff can be:<br /><br /></code></pre> </div><br /><br /><br />I *think* you should open the port before using the STOR command.<br /><br />even easier in asm with wininet :-)</div>
+    <div class="meta">Posted on 2002-06-09 06:37:27 by Terab</div>
+   </div>
+   <div class="post" id="post-42135">
+    <div class="subject"><a href="#post-42135">FTP file upload</a></div>
+    <div class="body">Hehe, works! Thanks again!<br /><br /><pre><code><br />FUNCTION UploadFile&#40;sServer AS ASCIIZ, sUser AS ASCIIZ, sPass AS ASCIIZ, sRemoteDir AS ASCIIZ, sInputDir AS ASCIIZ&#41; EXPORT AS LONG<br /><br />    DIM hInternet AS LONG<br />    DIM hConnect  AS LONG<br />    DIM sFile     AS STRING<br /><br />    hInternet = InternetOpen&#40;&quot;WebShot FTP Engine&quot;, %INTERNET_OPEN_TYPE_PRECONFIG, &quot;&quot;, &quot;&quot;, 0&#41;<br /><br />    hConnect = InternetConnect&#40;hInternet, sServer, %INTERNET_DEFAULT_FTP_PORT, sUser, sPass, _<br />                               %INTERNET_SERVICE_FTP, %INTERNET_FLAG_PASSIVE, 0&#41;<br /><br />    sFile = DIR$&#40;sInputDir + &quot;*.jpg&quot;&#41;<br /><br />    CALL FtpSetCurrentDirectory&#40;hConnect, sRemoteDir&#41;<br /><br />    DO WHILE sFile &lt;&gt; &quot;&quot;<br /><br />        'msgbox sInputDir + sFile<br /><br />        IF FtpPutFile&#40;hConnect, sInputDir + sFile, sFile + $NUL, %INTERNET_FLAG_TRANSFER_BINARY OR %INTERNET_FLAG_RELOAD, 0&#41; &lt;&gt; 1 THEN<br />            CALL InternetCloseHandle&#40;hConnect&#41;<br />            CALL InternetCloseHandle&#40;hInternet&#41;<br />            FUNCTION = 1<br />            EXIT FUNCTION<br />        END IF<br /><br />        sFile = DIR$<br /><br />    LOOP<br /><br />    CALL InternetCloseHandle&#40;hConnect&#41;<br />    CALL InternetCloseHandle&#40;hInternet&#41;<br /><br />    FUNCTION = 0<br /><br />END FUNCTION  <br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-09 09:39:11 by bazik</div>
+   </div>
+   <div class="post" id="post-42309">
+    <div class="subject"><a href="#post-42309">Help for wininet</a></div>
+    <div class="body">Hi!<br />Terab, your variant is very interesting but where can I see help (hlp or chm) for suc functions as InternetConnect, FtpPutFile and so on from the wininet?<br />Thanx, <br />Mike</div>
+    <div class="meta">Posted on 2002-06-10 06:07:59 by Mike</div>
+   </div>
+   <div class="post" id="post-42317">
+    <div class="subject"><a href="#post-42317">FTP file upload</a></div>
+    <div class="body">Get the PlatformSDK. <br />Link here: <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4650&amp;highlight=platformsdk">http://www.asmcommunity.net/board/index.php?topic=4650&amp;highlight=platformsdk</a></div>
+    <div class="meta">Posted on 2002-06-10 06:29:17 by bazik</div>
+   </div>
+   <div class="post" id="post-42324">
+    <div class="subject"><a href="#post-42324">FTP file upload</a></div>
+    <div class="body">Yup, like bazik says - the platform sdk,  if you have a msdn library disk it *should* be on it</div>
+    <div class="meta">Posted on 2002-06-10 06:47:17 by Terab</div>
+   </div>
+   <div class="post" id="post-42564">
+    <div class="subject"><a href="#post-42564">FTP file upload</a></div>
+    <div class="body">The link bAZiK provided doesn't work.  Has it expired?  I'd like to see what was in this post<br /><br />Thanks,<br /><br />farrier</div>
+    <div class="meta">Posted on 2002-06-11 06:42:10 by farrier</div>
+   </div>
+   <div class="post" id="post-42571">
+    <div class="subject"><a href="#post-42571">FTP file upload</a></div>
+    <div class="body">Hiro deleted some old posts... this was one of them :( <br /><br />If you are looking for the PlatformSDK, look here:<br /><a target="_blank" href="http://www.microsoft.com/msdownload/platformsdk/sdkupdate">http://www.microsoft.com/msdownload/platformsdk/sdkupdate</a></div>
+    <div class="meta">Posted on 2002-06-11 07:10:51 by bazik</div>
+   </div>
+   <div class="post" id="post-42870">
+    <div class="subject"><a href="#post-42870">FTP file upload</a></div>
+    <div class="body">bAZik, if you are interested, ante and I are working on a FTP Client written in assembly, he has the project posted on <a target="_blank" href="www.sourceforge.net">www.sourceforge.net</a><br /><br />I'm a newbie on assembly but I have written my own FTP Client using C on a Unix box<br /><br />Just FYI<br /><br />Later,<br />gorshing</div>
+    <div class="meta">Posted on 2002-06-12 10:01:37 by gorshing</div>
+   </div>
+  </div>
+ </body>
+</html>

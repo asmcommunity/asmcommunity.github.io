@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Why does it save a couple of instructions per function call? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16694" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16694">Why does it save a couple of instructions per function call?</a></p>
+   <div class="post" id="post-129723">
+    <div class="subject"><a href="#post-129723">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">Hello,<br /><br />the following is a fragment of text taken from a book page describing how imported functions are resolved inside PE files:<br /><br /><div class="quote">When the program loader loads your executable and its dependent DLLs, the loader fixes up this one indirect address so that it corresponds to the final load address of the XXXXXX api. The compiler makes this indirect addressing work by generating a jump to the indirect address any time your code calls the imported function. This indirect address is stored in the .idata (or import) section of the executable. If you import through __declspec(dllimport), instead of being an indirect jump, the code is an indirect call, thus saving a couple of instructions per function call.</div><br /><br />What I don't undestand is the fact that importing through __declspec(dllimport) saves 2 instructions. Isn't the saved instruction only one (the jump that would otherwise be made from the jump array to the .idata location where the loader has substituted the real address of the imported function)??? Where is the other saved instruction???<br /><br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 06:06:02 by yaa</div>
+   </div>
+   <div class="post" id="post-129741">
+    <div class="subject"><a href="#post-129741">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">could be what he says talks about the OriginalFirstThunk and FirstThunk which at run time FirstThunk points to the functions and not to the import able .<br />i could go wrong though :)</div>
+    <div class="meta">Posted on 2004-01-04 10:25:27 by wizzra</div>
+   </div>
+   <div class="post" id="post-129762">
+    <div class="subject"><a href="#post-129762">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body"><strong>wizzra</strong> I did not get your answer. Where is the other saved instruction?<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 13:35:01 by yaa</div>
+   </div>
+   <div class="post" id="post-129765">
+    <div class="subject"><a href="#post-129765">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">Indirect JMP and CALL are same size - however, the normal method is direct CALL to &quot;thunk&quot; + indirect JMP using the IAT dword. So, for one import you'd get E8xxxxxxxx (5 bytes) + FF25xxxxxxxx (7 bytes). With the declspec, causing the indirect CALL (FF15xxxxxxxx) you only get 7 bytes for a single call. (both are excluding the IAT dword of course, but that's not relevant when comparing the methods, as both require it).<br /><br />So... for n calls to the same import, the indirect CALL method requires n*7 bytes. The direct CALL + indirect JMP requires (n*5)+7 bytes. Using simple math... solve this equation:<br /><br />(n*7) &gt; (n*5) + 7<br /><br />you get n=4 (rounded up - half a call doesn't really make sence ;)). Thus, For less than 4 imports, indirect CALL gives you the smallest executable, while the direct CALL + thunk is better for n&gt;=4.<br /><br />Not that this really matters a lot, imo. But for size-limited situations, it can matter. The indirect CALL method should also compress slightly better, since the FF15xxxxxxxx will be the same for every call to the same import, while the indirect + thunk will have different opcodes for every call, because E8xxxxxxxx is EIP-relative.</div>
+    <div class="meta">Posted on 2004-01-04 14:35:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-129774">
+    <div class="subject"><a href="#post-129774">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">Still F0dder, you have not explained where are the &quot;couple of instructions&quot; saved by importing thru __declspec(dllimport).<br /><br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 17:07:35 by yaa</div>
+   </div>
+   <div class="post" id="post-129775">
+    <div class="subject"><a href="#post-129775">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">&quot;couple of instructions&quot; is wrong, it's &quot;couple of bytes&quot;. Or, well, you do save the &quot;JMP indirect&quot; since you do &quot;CALL indirect&quot; instead of &quot;CALL direct + JMP indirect&quot;.</div>
+    <div class="meta">Posted on 2004-01-04 17:10:29 by f0dder</div>
+   </div>
+   <div class="post" id="post-129777">
+    <div class="subject"><a href="#post-129777">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">Wait a minute, you mean 6 bytes, not 7 ;) That makes the number of calls 6.<br /><br />Hmm... I think you can use 5 bytes per call with no extra bytes per imported function, if you replace all the calls with invalid instructions, and set up an exception handler that will replace the invalid instructions with appropriate direct jumps and calls. :P If speed is not important, it could even simulate the jump or call and not patch it, thereby requiring only 3 or 4 bytes per call :alright: If the program uses many imported functions, then you could save a few bytes with this.</div>
+    <div class="meta">Posted on 2004-01-04 17:22:40 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-129778">
+    <div class="subject"><a href="#post-129778">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body"><div class="quote"><br />Wait a minute, you mean 6 bytes, not 7 ;) That makes the number of calls 6.<br /></div><br />Hehe, blame multitasking and tiredom ;)<br /><br />As for using invalid instructions, humm... be careful - some instruction might be invalid now but used in the future. UD2 is two bytes - are there any one-byte invalid instructions? Of course you could use int3 0xCC, but this could make debugging hard (which could of course also be a benefit ;)).<br /><br />If you're really sneaky, you could make import calls two-byte... 0xCC + 1byte index, then handle this in SEH + a LUT. Lots of apps wont need more than 256 imports anyway. Hm, interesting idea, I'll save this as a note for future use ;) :thumbsup: . Of course this would be a bit troublesome (or at least not-as-maintainable-as-normal), but it should be doable.<br /><br />But this is somewhat off-topic anyway :)</div>
+    <div class="meta">Posted on 2004-01-04 17:30:36 by f0dder</div>
+   </div>
+   <div class="post" id="post-129779">
+    <div class="subject"><a href="#post-129779">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">Interesting considerations that you have made guys.<br /><br />As for my post, it is strange that John Robbins has made such a big mistake .... bytes and instructions aren't exactly the same thing.<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-01-04 17:49:51 by yaa</div>
+   </div>
+   <div class="post" id="post-129780">
+    <div class="subject"><a href="#post-129780">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">Well, it's easy to mix up things when you're writing. Besides, you do save on instruction per call when using indirect CALLs instead - and those can add up, causing a &quot;couple of instructions&quot; :)</div>
+    <div class="meta">Posted on 2004-01-04 17:53:02 by f0dder</div>
+   </div>
+   <div class="post" id="post-129782">
+    <div class="subject"><a href="#post-129782">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">I have seen a lot of debate over the virtues of direct calls and indirect calls but usually the functions being called are so slow it simply does not matter.<br /><br />If you really do need fast calls on external code in a DLL, use LoadLibrary, GetProcAddress, Freelibrary as you have the direct address to call without any overhead once you have the address.<br /><br />You can write a DLL with a table of adresses you get once and call whatever you require if call overhead is a problem with the code design you are using.<br /><br />Regards,<br />http://www.asmcommunity.net/board/cryptmail.php?tauntspiders=in.your.face@nomail.for.you&amp;id=2f46ed9f24413347f14439b64bdc03fd</div>
+    <div class="meta">Posted on 2004-01-04 18:12:50 by hutch--</div>
+   </div>
+   <div class="post" id="post-129783">
+    <div class="subject"><a href="#post-129783">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">This is not a speed issue in any way, it's a size issue - loadlib+gpa will be larger no matter what. And you'll have the same CALL overhead as __declspec(dllimport). Getting a table of addrs is in now way better than CALL indirect - at best the same.<br /><br />If you really cared about speed (which would be silly... sure, I can gives examples why if required) you could patch CALL sites in the executable, but this would require a lot of relocations, which would bloat executable size.</div>
+    <div class="meta">Posted on 2004-01-04 18:20:50 by f0dder</div>
+   </div>
+   <div class="post" id="post-129788">
+    <div class="subject"><a href="#post-129788">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body"><div class="quote"><br />If you really cared about speed (which would be silly... sure, I can gives examples why if required) you could patch CALL sites in the executable, but this would require a lot of relocations, which would bloat executable size.<br /></div> <br /><br />It's funny that you should mention that...<br /><br />4th post in thead is my source.<br /><a target="_blank" href="http://groups.google.co.kr/groups?dq=&amp;hl=ko&amp;lr=&amp;ie=UTF-8&amp;oe=UTF-8&amp;newwindow=1&amp;threadm=2e7c19fd.0401040225.7ad8cee1%40posting.google.com&amp;prev=/groups%3Fhl%3Dko%26lr%3D%26ie%3DUTF-8%26oe%3DUTF-8%26newwindow%3D1%26group%3Dcomp.lang.asm.x86">http://groups.google.co.kr/groups?dq=&amp;hl=ko&amp;lr=&amp;ie=UTF-8&amp;oe=UTF-8&amp;newwindow=1&amp;threadm=2e7c19fd.0401040225.7ad8cee1%40posting.google.com&amp;prev=/groups%3Fhl%3Dko%26lr%3D%26ie%3DUTF-8%26oe%3DUTF-8%26newwindow%3D1%26group%3Dcomp.lang.asm.x86</a> <br /><br />I've finally made that faster ExitProcess you once said people waste their time making(Actually it is a faster call to ExitProcess.)<br /><br />That's my &quot;proof-of-concept&quot; code at the link.<br /><br />Considering bloat, the nice thing about my system is you only pay for what you use(or add yourself.)<br /><br />Per import called = 4 bytes<br /><br />RELOC table = 4 bytes per relocation<br /><br />Call address to modify+function index = 8 bytes<br /><br />So one function call will cost 16 bytes of overhead.<br />Secondary call will cost 8 bytes.<br /><br />I could make some of this small, but thats for version 2.0<br /><br />It looks like OP had his question answed.  Sorry if this was a thread hijack... :sweat:</div>
+    <div class="meta">Posted on 2004-01-04 21:02:43 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-129815">
+    <div class="subject"><a href="#post-129815">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body"><div class="quote">UD2 is two bytes - are there any one-byte invalid instructions? </div><br /><br />What about 0f2h (aka int1)?</div>
+    <div class="meta">Posted on 2004-01-05 08:19:04 by roticv</div>
+   </div>
+   <div class="post" id="post-129823">
+    <div class="subject"><a href="#post-129823">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">ThoughtCriminal, that methods seems *very* tedious... it can be done automatically if you add some stub code and hijack (plus fill out yourself) the IAT. Instead of filling the IAT with the real imports, you fill it with addrs of runtime generated &quot;patch caller&quot; code. It's not that much of a big deal to do, and this way you'll be able to support precompiled executables instead of requiring a lot of tedious manual work in your own apps.<br /><br />However, I'd say that if you're worrying about CALL speed overhead, you're doing wrong program design - whether this is for DLLs or statically linked code. The gain by doing direct call is pretty small, and when doing it runtime I'd worry a lot more about dirtying your code pages.<br /><br />While not very useful for program optimization, this technique is sort of cute and can be used for obfuscation; especially in the scope of exe packers/encrypters where all the code pages will be dirty anyway.<br /><br />roticv, ah yes - good olde icebp. I'm sorta absent-minded these days :) (you mean 0xF1 though)<br /><br />PS: btw I think it's hutch who made fun about the &quot;faster ExitProcess&quot;, not me. I could be wrong, though.</div>
+    <div class="meta">Posted on 2004-01-05 09:44:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-129828">
+    <div class="subject"><a href="#post-129828">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">f0dder-<br /><br />Yes it is a 50-50 solution :grin:  The assembler does half the work, you do the other half. However it will only optmize what you tell it to...<br /><div class="quote"><br />However, I'd say that if you're worrying about CALL speed overhead, you're doing wrong program design - whether this is for DLLs or statically linked code. The gain by doing direct call is pretty small, and when doing it runtime I'd worry a lot more about dirtying your code pages.<br /></div> <br /><br />When you mentioned about a faster ExitProcess a long time ago, you indirectly gave me a project to pursue.  It's a proof of concept. I use APIs because it is convinient.  My main goal this first time was to get it to work.  A better use for this might be the DirectX vtables.  A place where performance might matter.  As an optimization, it would best be used at program initilization IMO.  Part of my complexity is that I'm trying to do a list.  I'm thinking of making a it to a function that does one relocation at a time and some other method of giving the address to modify and function to point to.<br /><br />Oddly enough, I was first thinking of doing something like this as a stub.  <br /><div class="quote"><br />it can be done automatically if you add some stub code and hijack (plus fill out yourself) the IAT. Instead of filling the IAT with the real imports, you fill it with addrs of runtime generated &quot;patch caller&quot; code. It's not that much of a big deal to do, and this way you'll be able to support precompiled executables instead of requiring a lot of tedious manual work in your own apps.<br /></div> <br />Hmmmmm But I need to get the address of external functions somehow...  I kinda guessing at what your are talking about, but this sounds like optmize as you go....  You would not happen to know where I could find an implemention of this?  I was thinking of an exe that optimizes itself, then saves itself minus the stub, or with the stub code disabled.  Then you don't have to worry about code pages being dirty as the next time the exe is run, it will load in it's optimized state.  Maybe use a command line parameter to force re-optimzation.<br /><br />Your just dragging me in deeper :)</div>
+    <div class="meta">Posted on 2004-01-05 11:12:27 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-129833">
+    <div class="subject"><a href="#post-129833">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body">(replying in <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=15991">http://www.asmcommunity.net/board/index.php?topic=15991</a> )</div>
+    <div class="meta">Posted on 2004-01-05 12:01:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-129835">
+    <div class="subject"><a href="#post-129835">Why does it save a couple of instructions per function call?</a></div>
+    <div class="body"><div class="quote"><br /><br /><br />What about 0f2h (aka int1)? </div><br /><br />You mean 0F1h, 0F2h is REPNE.<br />AFAIK 0F1h is valid on most processors and is pretty good documented. <a target="_blank" href="http://www.sandpile.org/post/msgs/20003978.htm">http://www.sandpile.org/post/msgs/20003978.htm</a></div>
+    <div class="meta">Posted on 2004-01-05 14:04:14 by MazeGen</div>
+   </div>
+  </div>
+ </body>
+</html>

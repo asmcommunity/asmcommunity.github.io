@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>getting data from webserver using wininet.dll - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7560" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=7560">getting data from webserver using wininet.dll</a></p>
+   <div class="post" id="post-54929">
+    <div class="subject"><a href="#post-54929">getting data from webserver using wininet.dll</a></div>
+    <div class="body">Hi all,<br />i tried to get data from a Webserver with wininet.dll using the following pseudo-code:<br /><pre><code><br />Allocate memory for buffer &#40;GlobalAlloc&#41;<br />InternetOpen<br />InternetOpenUrl<br />InternetReadFile<br />Close the handles<br /></code></pre><br />But i don't get any data in the buffer, InternetReadFile returns zero.<br />I searched MSDN but didn't find anything. The code is a try of porting it to asm from VB.<br />Hope you can help me.<br /><br />greetings, Phueghy</div>
+    <div class="meta">Posted on 2002-08-26 11:49:37 by phueghy</div>
+   </div>
+   <div class="post" id="post-54934">
+    <div class="subject"><a href="#post-54934">getting data from webserver using wininet.dll</a></div>
+    <div class="body">Try something like this<br /><br /><pre><code><br />.386<br />.model flat, stdcall<br />option casemap &#58;none   ; case sensitive<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\wininet.inc<br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\wininet.lib<br />includelib \masm32\lib\kernel32.lib<br /><br />.data<br />  url db &quot;http&#58;//www.gmx.de&quot;,0<br />  useragent db &quot;wininet_test&quot;,0<br />  hresult dd 0<br />  hopen HANDLE ?<br />  hfile HANDLE ?<br /><br />.data?<br />      szStuff db 500 dup&#40;?&#41;<br /><br /><br />.code<br />start&#58;<br />  invoke InternetOpen, ADDR useragent, INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0<br />  mov hopen, eax<br />  invoke InternetOpenUrl, hopen, ADDR url, NULL, 0, INTERNET_FLAG_RELOAD, 0<br />  mov hfile, eax<br />  invoke InternetReadFile, hfile, offset szStuff, 500, offset hresult<br />  invoke InternetCloseHandle, hfile<br />  invoke InternetCloseHandle, hopen<br />  invoke MessageBox, NULL, offset szStuff, ADDR url, MB_OK<br />  invoke ExitProcess, 0<br />end start<br /></code></pre><br /><br />This worked for me.  I believe you are passing a handle where it is expecting the address of memory.<br /><br />Hopefully this works for you,<br />gorshing</div>
+    <div class="meta">Posted on 2002-08-26 12:28:47 by gorshing</div>
+   </div>
+   <div class="post" id="post-54936">
+    <div class="subject"><a href="#post-54936">getting data from webserver using wininet.dll</a></div>
+    <div class="body">thx gorshing, that worked well.<br /><br />But can't i access any allocated memory as a buffer? I tried with several types of memory and as i understand it, allocating mem with GPTR which is GMEM_FIXED combined with GMEM_ZEROINIT should return a pointer to that mem, which i should be able to use in the call to InternetReadFile. But it does not work. The reason is, i want to be able to read in a large buffer without the need of having that buffer in my data section.<br /><br />You see my problem?</div>
+    <div class="meta">Posted on 2002-08-26 12:54:18 by phueghy</div>
+   </div>
+   <div class="post" id="post-54938">
+    <div class="subject"><a href="#post-54938">getting data from webserver using wininet.dll</a></div>
+    <div class="body">GlobalAlloc with GPTR should work just as you describe. Post a small bit of code with the problem. :)</div>
+    <div class="meta">Posted on 2002-08-26 13:09:45 by Eóin</div>
+   </div>
+   <div class="post" id="post-54940">
+    <div class="subject"><a href="#post-54940">getting data from webserver using wininet.dll</a></div>
+    <div class="body">this is what i use:<br /><pre><code><br />      .386<br />      .model flat, stdcall<br />      option casemap &#58;none   ; case sensitive<br /><br />      include \masm32\include\windows.inc<br />      include \masm32\include\user32.inc<br />      include \masm32\include\kernel32.inc<br />      include \masm32\include\wininet.inc<br /><br />      includelib \masm32\lib\user32.lib<br />      includelib \masm32\lib\wininet.lib<br />      includelib \masm32\lib\kernel32.lib<br /><br />    .data<br />	url db &quot;http&#58;//www.gmx.de&quot;,0<br />	useragent db &quot;wininet_test&quot;,0<br />	hresult dd 0<br />	hopen HANDLE ?<br />	hfile HANDLE ?<br />	hmem DD ?<br /><br />    .code<br /><br />start&#58;<br />        invoke GlobalAlloc, GPTR, 500<br />        mov hmem, eax<br />        invoke InternetOpen, ADDR useragent, INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0<br />	mov hopen, eax<br />	invoke InternetOpenUrl, hopen, ADDR url, NULL, 0, INTERNET_FLAG_RELOAD, 0<br />	mov hfile, eax<br />	invoke InternetReadFile, hfile, hmem, 500, hresult<br />	invoke InternetCloseHandle, hfile<br />	invoke InternetCloseHandle, hopen<br />	invoke MessageBox, NULL, hmem, ADDR url, MB_OK<br />	invoke GlobalFree, hmem<br />	invoke ExitProcess, 0<br /><br />end start<br /></code></pre><br /><br />hope you can help :)</div>
+    <div class="meta">Posted on 2002-08-26 13:13:30 by phueghy</div>
+   </div>
+   <div class="post" id="post-54946">
+    <div class="subject"><a href="#post-54946">getting data from webserver using wininet.dll</a></div>
+    <div class="body">Heh, I don't know .... InternetReadFile returns FALSE, GetLastError returned 87 == ERROR_INVALID_PARAMETER, MSDN says &quot;The parameter is incorrect.&quot;<br /><br />I'm trying to figure out what's wrong with the parameters.<br /><br />The memory location returned by GlobalAlloc, it's ok to pass it like it is correct?  We don't need to do the offset/addr on the variable correct?  That's the only thing I can see.<br /><br />Ohhh, it's your result variable!!  You have<br /><pre><code>invoke InternetReadFile, hfile, hmem, 500, hresult</code></pre><br />It needs to be<br /><pre><code>invoke InternetReadFile, hfile, hmem, 500, offset hresult</code></pre><br /><br />On MSDN<br /><pre><code><br />BOOL WINAPI InternetReadFile&#40;<br />IN HINTERNET hFile, <br />IN LPVOID lpBuffer, <br />IN DWORD dwNumberOfBytesToRead, <br />OUT LPDWORD lpdwNumberOfBytesRead<br />&#41;;<br /></code></pre><br /><br />Hope this helps man,<br />gorshing</div>
+    <div class="meta">Posted on 2002-08-26 13:56:01 by gorshing</div>
+   </div>
+   <div class="post" id="post-54952">
+    <div class="subject"><a href="#post-54952">getting data from webserver using wininet.dll</a></div>
+    <div class="body">gorshing thank you very much that did the trick.<br />i was already going crazy, browsing MSDN and finding nothing (or better: overlooking the important part.)<br />It's always those little things, that make you mad.<br /><br />Thanks again! :alright:</div>
+    <div class="meta">Posted on 2002-08-26 14:25:17 by phueghy</div>
+   </div>
+  </div>
+ </body>
+</html>

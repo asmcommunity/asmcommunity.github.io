@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Video editing software : ideas on implementation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21287" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=21287">Video editing software : ideas on implementation</a></p>
+   <div class="post" id="post-161067">
+    <div class="subject"><a href="#post-161067">Video editing software : ideas on implementation</a></div>
+    <div class="body">Having made my first AMV (anime music video), I am now even more keen on this subject. <br />So, the project target is: from 1...25 videofiles fetch scenes, arrange them in a timetable, 1..6 minutes long, add a .wav as background music and compress to .avi . Effects (like fade-in) should be done in this software (and not via DirectShow filters). <br /><br />So, I need direct access to the decoded video buffer. <br /><br />First I looked at DX9&#39;s SDK samples, but I didn&#39;t find example of direct buffer access (maybe I didn&#39;t revise well enough). <br />Then, I dug up my oldest MSDN copy - examples for Win95 and 98 (when DirectShow was known as DirectAnimation), and got interested in the AVIxxx API. Though, they fail in opening half of the videofiles I have. So, I&#39;m stuck with DShow, I guess. <br /><br /><strong>================================================</strong><br />Any pointers on how to fetch decoded videoframes at arbitrary position? Using DirectShow, preferably. Or rendering to a DirectDraw back-surface. <br /><strong>================================================</strong><br /><br /><br />There are several free video-editing tools available, but I think their creators never really tried using their software. On my PC (AthlonXP 2000+, 512MB DDR@400), previewing movies cannot be called &quot;realtime&quot;. So, for a 2 minutes&#39; video I have to compile it to see what the result might be. Compilation of 22 minutes. <br /><br />Since I want this software to be _fast_ to use, I&#39;ve decided to make a cache-system, each useful frame gets decoded into a 160x120x2 malloced buffer. Taking 66MB RAM per minute at 30fps is perfect. <br /><br />Managing media cache, sequencing, adding effects, saving to .avi - all are clear. Only fetching of the input video frames is problematic. <br /><br /><br />Ah, this project, if started, will be opensource in MASM, using my libraries/macros: Ilix (DirectDraw wrapper), ATC (C++ wrapper/ OOP for asm) . </div>
+    <div class="meta">Posted on 2005-06-12 15:54:50 by Ultrano</div>
+   </div>
+   <div class="post" id="post-161079">
+    <div class="subject"><a href="#post-161079">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">I dug deeper into the AVIFileXXX , and found a good enough solution :)<br />The only .avi files these API fail to render are .asf files, as Microsoft have decided. Supporting .wmv and .mpg files will be dropped. <br /><br />I did some benchmarks to compare rendering the time of AVIFileXX with that of DirectShow. They&#39;re 100% equal :) . But for my purpose (getting the decoded data), AVIFile is maybe 10% to 50% faster .<br /> I also decided to set the cache-buffer from 160x120x2 (565) to 160x120x3 (24-bit RGB), taking 99MB per minute. <br /><br />A funny thing I found about the AVIFile functions - the samples are coded to be slow lol. On every frame decoding, they reallocate the output .dib several times, and get the &quot;current frame to render&quot; more than a dozen times :) . <br /><br />Ah, a tricky part about the decoding is that in the BITMAPINFOHEADER you have to specify the same dimensions as specified in the AVIFileInfo. And .dibs are upside-down... </div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=685" target="_blank">VAMV.asm</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-06-12 18:40:41 by Ultrano</div>
+   </div>
+   <div class="post" id="post-161081">
+    <div class="subject"><a href="#post-161081">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">You might want to test the AVIFileXXX performance on 9x as well - it sounds a bit like one of those pretty old APIs that could have crappy half-16bit implementation on 9x. One never knows :)<br /><br />.wmv support isn&#39;t a big loss IMHO, but .mpg is a bit sad... I guess it might be possible to move to DShow later (if you figure out how to access the buffer) without too much pain, if your classes are abstract enough.<br /><br /><div class="quote"><br />the samples are coded to be slow lol<br /></div><br />Sounds typical of the old Microsoft samples... they vary extremely in quality, from pretty good code to the <strong>atrocities</strong> included in the MDAC SDK (ODBC samples are eeky).<br /></div>
+    <div class="meta">Posted on 2005-06-12 18:49:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-161105">
+    <div class="subject"><a href="#post-161105">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">From what I&#39;ve been trying out so far, the AVIxxxxx VFW functions are slow (even with fast codecs, though I have not compared them with another set of functions as you have). They are limited in user interfacing, which I find is the biggest problem, but they work. That to say that I won&#39;t be using them for any real-time work. They&#39;re also very picky when it comes to order in function calls and from where they&#39;re called (I was unable to get AVIStreamWrite and AVIStreamRelease to not hang in a DLLEntryPoint function). <br /><br />I found this tutorial on the AVIxxxxx implementation:<br />http://www.shrinkwrapvb.com/<br />Maybe it would be of some help. <br /><br /></div>
+    <div class="meta">Posted on 2005-06-13 10:44:27 by Big Red</div>
+   </div>
+   <div class="post" id="post-161108">
+    <div class="subject"><a href="#post-161108">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">Is that on Win98 ? Or probably you have awful codecs. Or you have seen bad examples (it&#39;s full of them). On both PCs here they manage to render as fast as DirectShow. Accessing arbitrary-positioned frames from a movie with AVIFile is even faster than what I&#39;ve seen with DShow - mostly because with AVIFile the programmer has full control of when and what to decode/show. <br />Losing .mpg support is not a big deal for AMV makers, I did a bit limited research on that :). <br /><br />At first I thought DirectShow would be the way, but it turned out I have to write a lot of code, and achieve bad results and get no control of the video data. The DShow filters seemed nice, but in the end only &quot;Fade&quot; is useful. But the word &quot;limitation&quot; is what DShow shouts all the time, while AVIFile gives full control :) . Only managing DIBs is nasty there, but I&#39;ll handle it easily :) . </div>
+    <div class="meta">Posted on 2005-06-13 11:20:43 by Ultrano</div>
+   </div>
+   <div class="post" id="post-161109">
+    <div class="subject"><a href="#post-161109">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">I&#39;ve been programming on WinME, but I&#39;ve tried the code on WinXP HE as well. I&#39;ve tried the Intel, Windows Media, DivX and XviD codecs so far.<br /><br />I didn&#39;t mean that the AVIxxxx functions are bad at all; I will use them for my own project (in a separate module). But they&#39;re still too slow to use in real-time for something like game video capture (for example, simply dumping the single frames to an uncompressed DIB stream automatically shaves off 25+ fps, excluding the massive original blitting loss of 50+ fps; using any kind of compression bumps the final framerate to below 10 fps, all this in a level that originally ran at 100+ fps). I&#39;ve also run into problems when trying to write multiple frames to compressed streams in a single call. <br /><br />They may still be faster than other methods, though; as I said, I can&#39;t comment on that.<br /><br />I&#39;m also not taking into account my lack of experience in such programming here. If you can make them work well, and/or if encoding speed really doesn&#39;t matter, then by all means ignore this.</div>
+    <div class="meta">Posted on 2005-06-13 14:05:36 by Big Red</div>
+   </div>
+   <div class="post" id="post-161113">
+    <div class="subject"><a href="#post-161113">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">If you&#39;re looking for a good open source example, you should check out <a target="_blank" href="http://www.virtualdub.org">VirtualDub</a>.&nbsp; It&#39;s written in C with, what it soulds like, a lot of inline assembly.<br /><br />Spara</div>
+    <div class="meta">Posted on 2005-06-13 14:50:02 by Sparafusile</div>
+   </div>
+   <div class="post" id="post-161124">
+    <div class="subject"><a href="#post-161124">Re: Video editing software : ideas on implementation</a></div>
+    <div class="body">I&#39;ve seen VDub&#39;s code briefly - and none of it is useful to my project (codenamed VAMV).<br />VDub is specialized in editing/exporting a single videofile, while VAMV&#39;s purpose is to easily import many .avi-s, arrange fragments of them and apply effects+transitions. <br /><br />So far, I have completed the OOP class for loading of arbitrary frames:<br /><pre><code><br />set avi1 as IVideo<br />mov avi1,new(IVideo)<br />pcall avi1.LoadFile,T(&quot;test.avi&quot;)<br />pcall avi1.RenderFrame,ptr1,160,120,2338 ; outBuffer,outWidth,outHeight,FrameNumber<br />...<br />delete avi1<br /></code></pre><br /><br />Did many benchmarks on both PCs here (PC1: a high-end one, PC2: a low-end one). <br />It doesn&#39;t matter at all if I render frames sequentially or not - the time taken is the same +/- 3%. <br />PC1: 74fps =&gt; 13ms to render a frame<br />PC2: 17fps =&gt; 58ms <br />On PC2, films are awful to watch anyway - 17fps is a better result than I expected :D<br /><br />I just wonder how to make the cache system. Right now I got the idea of doing it in a background thread. </div>
+    <div class="meta">Posted on 2005-06-13 19:41:53 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

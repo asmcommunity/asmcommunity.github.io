@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Read/Write Locking library - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25803" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25803">Read/Write Locking library</a></p>
+   <div class="post" id="post-188236">
+    <div class="subject"><a href="#post-188236">Read/Write Locking library</a></div>
+    <div class="body">This is my attempt at solving this problem in the best way possible (fast and small, no drawbacks). <br /><br />(the problem is: allowing multiple threads to simultaneously read from a shared object, and one thread to be able to write exclusively there. While a thread gains readwrite access to the object, no other thread can read or write to that object). Mostly applicable in internet-servers)<br /><br />The object is only 4 bytes big, supports up to 65535 simultaneously-running readers, has optimized behaviour for its environment (number of processors and type of OS), and is completely safe. <br /><br />Each of the lib&#39;s procs expects ECX to contain the address of the 4-byte RWLock object. The only modified register in each of the procs is EAX. <br /><br />Since the 4-byte object contains only numbers (and no Windows objects), with CreateFileMapping you can even do inter-process synchronization. <br /><br />Attached is the latest version, bug-free. </div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2292" target="_blank">RWLock_article.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2007-02-25 06:27:06 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188237">
+    <div class="subject"><a href="#post-188237">Re: Read/Write Locking library</a></div>
+    <div class="body">Just to note that I added two nifty procs: RWLock_UpgradeToWriter() and RWLock_DowngradeToReader() . <br /><br />Initially thought of adding the option to disable writing, but this was making the max number of threads 255 instead of 65535, so I noticed writing is disabled anyway if our thread is already a reader :) . <br /><br />Each of the 8&nbsp; procs (except for _Init/_Free) takes around 50 cycles (since xchg takes 19 cycles). Does anyone think that I could keep the lib&#39;s perfect stability if in the macro @UnlockByte I replace the &quot;xchg&quot; with a simple &quot;mov byte ptr,0&quot;&nbsp; ? (in order to save 18 cycles per proc). </div>
+    <div class="meta">Posted on 2007-02-25 08:20:53 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188250">
+    <div class="subject"><a href="#post-188250">Re: Read/Write Locking library</a></div>
+    <div class="body">Are you making an webserver? If so, I cant wait to check it! We just cant stand anymore just Apache and Lighty.<br /><br />Now really, to the questions... You said if you set up something to writting state you gonna downgrade thread numbers to 255. So how UpgradeToWriter works then? Just out of curiousty I dont even know what your prog is all about. 8)<br /><br />Now about macros, I always heard there is not a difference. I have a trend to believe however that auto tasks logically can be slower.</div>
+    <div class="meta">Posted on 2007-02-27 19:04:07 by codename</div>
+   </div>
+   <div class="post" id="post-188251">
+    <div class="subject"><a href="#post-188251">Re: Read/Write Locking library</a></div>
+    <div class="body">This is only really usable if the locks are held for a very short time though, isn&#39;t it? Otherwise you&#39;ll be burning a lot of CPU cycles... but for very short locks, this seems interesting :)<br /></div>
+    <div class="meta">Posted on 2007-02-27 19:36:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-188253">
+    <div class="subject"><a href="#post-188253">Re: Read/Write Locking library</a></div>
+    <div class="body">Whoops, forgot to update the code here ^^. I fixed it (covered all cases), added more procs, and wrote an article for <a target="_blank" href="http://www.codeproject.com/useritems/FastReadWriteLock.asp">CodeProject.com</a><br /><br />Attached is the same file as the one, uploaded on CodeProject. <br /><br />F0dder: I doubt it&#39;ll be burning too many cycles, because on a single cpu it&#39;ll be quickly switching to the writer thread and stay there for more than 30ms. And on multicore cpu, only if the writer is on another cpu, and there are no active threads ready for the current cpu - we&#39;ll be looping. Actually, this can be handled somehow after a &quot;SwitchToThread&quot; returns &quot;false&quot; on a blocked reader - but it will increase latency.<br />Moving a thread from Active to Wait state seems slower (while I was doing some benchmarks).&nbsp; I can&#39;t come up with a valid way to measure the time for moving a thread from Active to Wait state, I think I&#39;ll need to learn even more of Windows. My attempts at benchmarking WaitForSingleObject returned unexplainably long times. Someone that already has the ReadersWriterLock implemented with WaitForSingleObject told me it&#39;s actually slow, so maybe all the benchmark results I&#39;ve encountered with Events are correct. <br />Was there a legally-avable sourcecode of the Windows kernel (in a DDK), or my memory is playing tricks? <br />attachment has been moved to the first post in this thread</div>
+    <div class="meta">Posted on 2007-02-28 02:27:27 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188255">
+    <div class="subject"><a href="#post-188255">Re: Read/Write Locking library</a></div>
+    <div class="body">Legally-available source code would be for universities with a license - otherwise the closest you&#39;ll get is Windows Internals (the XP version of Inside Windows 2000), and WinDbg with .pdb files from Microsoft (those are amazingly enough freely available, and gives a LOT more detail about kernel as well as usermode components).<br /><br />Yeah, Wait* is slower than what you can do with usermode code - they incur ring overhead, need the scheduler to wake them up which, again, means ring overhead, etc. Se yeah, it has overhead, which is why CRITICAL_SECTION does some spinlooping before waiting on event. If you need longer waits, it&#39;s of course very efficient because your thread gets removed from the ready-list.<br /><br />Anyway, thanks for your work - reader/writer locking is much more nifty than &quot;everybody blocks&quot; :)<br /><br />PS: <em>&quot;But Sleep(0) ignores threads with <strong>higher</strong> priority than the current thread&#39;s priority&quot;</em> - don&#39;t you mean <em>lower</em> priority?<br /></div>
+    <div class="meta">Posted on 2007-02-28 08:04:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-188256">
+    <div class="subject"><a href="#post-188256">Re: Read/Write Locking library</a></div>
+    <div class="body">Quote from msdn &quot;to any other thread of <strong>equal priority</strong> that is ready to run&quot;. <br />So, if there are only active threads with a bit higher priority than the current one, this thread will eat-up its pie, causing higher latency. </div>
+    <div class="meta">Posted on 2007-02-28 08:31:52 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188257">
+    <div class="subject"><a href="#post-188257">Re: Read/Write Locking library</a></div>
+    <div class="body">Hm,<br /><br />I was pretty sure it would relinquish control to higher-priority threads as well. Oh well, flawed memory, sorry.<br /></div>
+    <div class="meta">Posted on 2007-02-28 09:10:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-188258">
+    <div class="subject"><a href="#post-188258">Re: Read/Write Locking library</a></div>
+    <div class="body">My university has contracts with MS, and I&#39;ve personally shuffled through the several thousands of cds/dvds they&#39;ve provided so far (msdn ultimate+more), but I didn&#39;t see anything like that. And the tech-support MS provides us is a bit on the paranoia side when things come to licensing. And, I&#39;ll have to be asking through a lecturer of mine, with whom no-one (including me) is on good terms ^^&quot;. I&#39;ve read the InsideWin2k book just recently, the insight it gave was part of the reason to make this RWLock lib and a ReWire-like audio-IPC lib of mine. So now I&#39;ll have to check these .pdbs and find/read more articles on the subject. Thanks for the pointer :)<br /><br />Btw, I simply needed this RWLock lib for 2-3 threaded apps, and optimized it only in order to be able to squeeze-out as much performance as possible, if I or someone else ever needs it :)</div>
+    <div class="meta">Posted on 2007-02-28 09:41:09 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188259">
+    <div class="subject"><a href="#post-188259">Re: Read/Write Locking library</a></div>
+    <div class="body">Thanks for the library. I was looking for anything like that a couple months ago. I&#39;ll certainly archive it somewhere on my HD and will check it out as soon as I got some spare time.</div>
+    <div class="meta">Posted on 2007-02-28 10:57:07 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-188262">
+    <div class="subject"><a href="#post-188262">Re: Read/Write Locking library</a></div>
+    <div class="body">Yeah, your solution is obviously pretty good if you have very short lock times and are almost exclusive running user-mode code :)<br /><br />As for the kernel source thing, it&#39;s only part of the source, and I think it&#39;s a special license, not some MSDN* thing.<br /></div>
+    <div class="meta">Posted on 2007-02-28 18:01:50 by f0dder</div>
+   </div>
+   <div class="post" id="post-188321">
+    <div class="subject"><a href="#post-188321">Re: Read/Write Locking library</a></div>
+    <div class="body">Couple of bugs fixed, updated the attachment. Both caused by changes of design in the last minute &gt;_&lt;</div>
+    <div class="meta">Posted on 2007-03-06 02:30:48 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188322">
+    <div class="subject"><a href="#post-188322">Re: Read/Write Locking library</a></div>
+    <div class="body">One minor thing: that .html file links to two .asp files which aren&#39;t included in the zip archive - you should either include them, or give a full URL to them :)<br /><br />PS: cool that you&#39;ve put it on The Code Project, should help get you some publicity :thumbsup:</div>
+    <div class="meta">Posted on 2007-03-06 03:45:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-188327">
+    <div class="subject"><a href="#post-188327">Re: Read/Write Locking library</a></div>
+    <div class="body">The attached article is the exact html posted for the site - there I got 2,000 views in just a day or two .. and the obvious bugs were detected after whole 10 days XD</div>
+    <div class="meta">Posted on 2007-03-06 13:50:00 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188331">
+    <div class="subject"><a href="#post-188331">Re: Read/Write Locking library</a></div>
+    <div class="body">Well, it would still be nice if you made <strong>absolute</strong> URLs for the .asp files - that way one can browse to them even when viewing locally.</div>
+    <div class="meta">Posted on 2007-03-06 17:23:37 by f0dder</div>
+   </div>
+   <div class="post" id="post-188853">
+    <div class="subject"><a href="#post-188853">Re: Read/Write Locking library</a></div>
+    <div class="body">I guess it&#39;s worth linking to the <a target="_blank" href="http://www.codeproject.com/useritems/FastReadWriteLock.asp">CodeProject</a> page for this :)<br /></div>
+    <div class="meta">Posted on 2007-04-15 10:52:16 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

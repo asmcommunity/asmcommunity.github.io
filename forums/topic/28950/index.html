@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ExitProcess undeclared + no valid entrypoint? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28950" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=28950">ExitProcess undeclared + no valid entrypoint?</a></p>
+   <div class="post" id="post-204698">
+    <div class="subject"><a href="#post-204698">ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">Hi guys, <br />This is my first post on these nice forums :O<br />I am using nasmx..<br /><br /><pre><code><br /><br />%include &quot;C:\nasmx\inc\nasmx.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\windows.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\kernel32.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\user32.inc&quot;<br /><br /><br />	var db &quot;OMG&quot;, 0<br /><br /><br /><br />	uvar resb 256<br /><br /><br />	<br />	mov eax, <br />	push 0<br />	call ExitProcess</code></pre><br /><br />It says ExitProcess is undeclared but it should be declared in kernel32.inc (i think)<br />When I remove it it compiles fine, but it gives a linker warning that there is no valid entrypoint.<br />Sorry for being noobish I don&#039;t have a lot of experience with asm.<br /><br /><br /></div>
+    <div class="meta">Posted on 2008-02-04 12:59:35 by ASMFreak</div>
+   </div>
+   <div class="post" id="post-204700">
+    <div class="subject"><a href="#post-204700">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">NASMX has to do some macro magic to wrap up those external function calls that have extra formatting symbols and whatnot.<br /><br />What you are looking for is to use <strong>invoke</strong> for those particular calls, not <strong>call</strong>...<br /><br /><pre><code><br />invoke ExitProcess, DWORD 0<br /></code></pre><br /><br />HtH ;)</div>
+    <div class="meta">Posted on 2008-02-04 14:58:18 by SpooK</div>
+   </div>
+   <div class="post" id="post-204703">
+    <div class="subject"><a href="#post-204703">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">You problem is you havn&#039;t defined the starting point in your program. I havn&#039;t studied the nasmx macros, but try:<br /><br /><pre><code><br /><br />%include &quot;C:\nasmx\inc\nasmx.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\windows.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\kernel32.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\user32.inc&quot;<br /><br />global start<br /><br /><br />	var db &quot;OMG&quot;, 0<br /><br /><br /><br />	uvar resb 256<br /><br /><br />	start:<br />	mov eax, <br />	push dword 0<br />	call ExitProcess</code></pre><br /><br />this should get you to assemble atleast</div>
+    <div class="meta">Posted on 2008-02-04 15:39:56 by jakor</div>
+   </div>
+   <div class="post" id="post-204704">
+    <div class="subject"><a href="#post-204704">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">Nice catch jakor, as &quot;global start&quot; would solve the other half of his problem by satisfy liking requirements.<br /><br />However, <strong>invoke</strong> is still needed, so take a look at the following code and adapt accordingly...<br /><br /><pre><code><br /><br /><br />%include &quot;C:\nasmx\inc\nasmx.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\windows.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\kernel32.inc&quot;<br />%include &quot;C:\nasmx\inc\win32\user32.inc&quot;<br /><br />global start<br /><br /><br />	var db &quot;OMG&quot;, 0<br /><br /><br />	uvar resb 256<br /><br /><br />	start:<br />	mov eax, DWORD<br />	invoke ExitProcess, DWORD 0<br /></code></pre><br /><br />HtH ;)</div>
+    <div class="meta">Posted on 2008-02-04 16:25:25 by SpooK</div>
+   </div>
+   <div class="post" id="post-204705">
+    <div class="subject"><a href="#post-204705">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">but invoke would just be a macro to handle the parameters.<br />push dword 0 ; = 0x00000000<br />call ExitProcess ; = 0x00000000<br />; = Return Address<br />;now a &quot;long jump&quot; is made to ExitProcess<br />;which takes care of cleaning everything up</div>
+    <div class="meta">Posted on 2008-02-04 17:15:54 by jakor</div>
+   </div>
+   <div class="post" id="post-204706">
+    <div class="subject"><a href="#post-204706">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body"><div class="quote"><br />but invoke would just be a macro to handle the parameters.<br /></div><br /><br />To what extent are you familiar with the actual <strong>invoke</strong> macro? Handling the parameters is only half of what <strong>invoke</strong> does.<br /><br />If you look at the naming (mangling) conventions in Kernel32.dll, you will notice that <strong>ExitProcess</strong> is actually <strong>_ExitProcess@4</strong>. This, or something like this, is the case for almost every other function/variable found in the DLLs... and really most other linked code developed/used in a higher level language.<br /><br /><strong>Invoke</strong> encapsulates the full symbolic library name so that you don&#039;t have to deal with junk symbols. Secondly, <strong>invoke</strong> tracks library call declarations and ensures <strong>EXTERN</strong> is issued appropriately, only once, and only if needed.</div>
+    <div class="meta">Posted on 2008-02-04 18:23:17 by SpooK</div>
+   </div>
+   <div class="post" id="post-204707">
+    <div class="subject"><a href="#post-204707">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">ah... got it, I was using a different macro which let me name my imports, and figured that the kernel32.inc he had renamed them to their standard names. interesting information though!</div>
+    <div class="meta">Posted on 2008-02-04 20:51:02 by jakor</div>
+   </div>
+   <div class="post" id="post-204708">
+    <div class="subject"><a href="#post-204708">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">If you want to use CALL with the new NASMX system (since things have changed from NASM32) you can use this new CALL macro.<br /><br /><pre><code>%imacro CALL 1<br />%push call<br />	%ifdef __imp_defined_%1<br />		%ifndef __imp_declared_%1<br />			EXTERN	__imp_defined_%1<br />			%define	__imp_declared_%1<br />		%endif<br />		call __imp_defined_%1<br />	%else<br />		call	%1<br />	%endif<br />%pop<br />%endmacro</code></pre><br /><br />I&#039;ve put it in my BKMACROS.INC file for when I use my &quot;NASMX_COMPATIBLITY&quot; mode, but you could add it straight to your NASMX.INC file so you wouldn&#039;t have to add any extra includes later on. Below is a rewrite of DEMO1.ASM using the above macro located in NASMX.INC<br /><br /><pre><code>%include &#039;..\..\..\inc\nasmx.inc&#039;<br />%include &#039;..\..\..\inc\win32\windows.inc&#039;<br />%include &#039;..\..\..\inc\win32\kernel32.inc&#039;<br />%include &#039;..\..\..\inc\win32\user32.inc&#039;<br /><br />entry&nbsp; &nbsp; demo1<br /><br /><br />proc&nbsp; &nbsp;  demo1<br /><br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword szTitleTwo<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword szContentTwo<br />&nbsp; &nbsp; call&nbsp; &nbsp; &nbsp; my_p<br /><br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword MB_OK<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword szTitle<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword szContent<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword NULL<br />&nbsp; &nbsp; call&nbsp; &nbsp; &nbsp; MessageBoxA<br /><br />&nbsp; &nbsp; xor&nbsp; &nbsp; &nbsp;  EAX, EAX<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; EAX<br />&nbsp; &nbsp; call&nbsp; &nbsp; &nbsp; ExitProcess<br />&nbsp; &nbsp; ret<br /><br />endproc<br /><br />proc&nbsp; &nbsp;  my_p<br />sz_Content&nbsp; &nbsp; argd<br />sz_Title&nbsp; &nbsp; &nbsp; argd<br /><br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword MB_OK<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword argv(sz_Title)<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword argv(sz_Content)<br />&nbsp; &nbsp; push&nbsp; &nbsp; &nbsp; dword NULL<br />&nbsp; &nbsp; call&nbsp; &nbsp; &nbsp; MessageBoxA<br />&nbsp; &nbsp; ret<br /><br />endproc<br /><br />_data<br />&nbsp; &nbsp; szTitle:&nbsp; &nbsp; &nbsp;  db&nbsp;  &#039;Demo1&#039;, 0x0<br />&nbsp; &nbsp; szTitleTwo:&nbsp; &nbsp; db&nbsp;  &#039;Demo1 Procedure&#039;, 0x0<br />&nbsp; &nbsp; szContent:&nbsp; &nbsp;  db&nbsp;  &#039;Hello from the Application!&#039;, 0x0<br />&nbsp; &nbsp; szContentTwo:&nbsp; db&nbsp;  &#039;Hello from the Procedure!&#039;, 0x0</code></pre><br /><br />Hopefully this helps you do what you want with NASMX. This wasn&#039;t added to NASM32 because there wasn&#039;t a high enough demand for it and we wanted to keep overloading of opcodes to a minimum. IIRC there was also one or two bugs that occured due to how the old system worked with doing this (I think it was the argument counting or something like that) it&#039;s been a while.. that doesn&#039;t apply anymore with the NASMX versions.<br /><br />Regards,<br />Bryant Keller<br /></div>
+    <div class="meta">Posted on 2008-02-04 22:26:03 by Synfire</div>
+   </div>
+   <div class="post" id="post-204709">
+    <div class="subject"><a href="#post-204709">Re: ExitProcess undeclared + no valid entrypoint?</a></div>
+    <div class="body">Thanks alot guys, I have it working :D<br /><br />Ps. Expect some more questions from me :P</div>
+    <div class="meta">Posted on 2008-02-05 01:20:33 by ASMFreak</div>
+   </div>
+  </div>
+ </body>
+</html>

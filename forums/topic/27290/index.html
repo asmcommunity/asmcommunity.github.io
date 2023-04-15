@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>binary file to text file ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27290" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27290">binary file to text file ?</a></p>
+   <div class="post" id="post-195493">
+    <div class="subject"><a href="#post-195493">binary file to text file ?</a></div>
+    <div class="body">does any body have code to convert binary file to text file ?
+
+
+for example i have file (binary file) that contain binary ascii for example AB??.... and so on
+
+i want to translate it to file text that contain number represents that binary ascii above so it must contain :
+
+65
+66
+and so on
+
+if anybody have the code please send me please :-></div>
+    <div class="meta">Posted on 2001-03-19 03:38:00 by newbies</div>
+   </div>
+   <div class="post" id="post-195494">
+    <div class="subject"><a href="#post-195494">binary file to text file ?</a></div>
+    <div class="body">This is a fairly simple task.  First, you open your 'binary' file,
+and load a specific number of bytes.  The classic way is to load
+either a quad word (8 bytes) or a paragraph (16 bytes), but feel
+free to use your own system (32 bytes, 256 bytes, etc.)  I will
+say it's better to put an even binary (2, 4, 8, 16, etc.) number
+on a single line.  This will make the file a little bit less
+confusing, and also make it easier to figure out addresses.
+
+Once you've done that, simply use wsprintf (or another number
+displaying routine) and copy the text into a destination file.
+Repeat this until the file is finished.  You can even add base
+addresses, or an ASCII output (like some debuggers do), but, as
+you can see, the routine is really not that difficult.</div>
+    <div class="meta">Posted on 2001-03-19 10:25:00 by Racso</div>
+   </div>
+   <div class="post" id="post-195495">
+    <div class="subject"><a href="#post-195495">binary file to text file ?</a></div>
+    <div class="body">My thank go out to Rasco with his idea so i try the code
+
+like this:
+
+
+
+.386
+.model flat,stdcall
+option casemap:none
+WinMain proto :DWORD,:DWORD,:DWORD,:DWORD
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\comdlg32.inc
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\comdlg32.lib
+
+.const
+IDM_OPEN equ 1
+IDM_SAVE equ 2
+IDM_EXIT equ 3
+MAXSIZE equ 260
+
+.data
+ClassName db "fileclass",0
+AppName  db "binary to text",0
+MenuName db "WinMenu",0
+ofn   OPENFILENAME <>
+FilterString db "All Files",0,"*.*",0,0
+            
+buffer db MAXSIZE dup(0)
+hMapFile HANDLE 0
+template db "%ld",0
+binary    db 4 dup(0),13,10
+
+
+
+.data?
+hInstance HINSTANCE ?
+CommandLine LPSTR ?
+hFileRead HANDLE ?
+hFileWrite HANDLE ?
+hMenu HANDLE ?
+pMemory DWORD ?
+SizeWritten DWORD ?
+
+.code
+start:
+	invoke GetModuleHandle, NULL
+	mov    hInstance,eax
+	invoke GetCommandLine
+	invoke WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT
+	invoke ExitProcess,eax
+
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
+	LOCAL wc:WNDCLASSEX
+	LOCAL msg:MSG
+	LOCAL hwnd:HWND
+	mov   wc.cbSize,SIZEOF WNDCLASSEX
+	mov   wc.style, CS_HREDRAW or CS_VREDRAW
+	mov   wc.lpfnWndProc, OFFSET WndProc
+	mov   wc.cbClsExtra,NULL
+	mov   wc.cbWndExtra,NULL
+	push  hInst
+	pop   wc.hInstance
+	mov   wc.hbrBackground,COLOR_WINDOW+1
+	mov   wc.lpszMenuName,OFFSET MenuName
+	mov   wc.lpszClassName,OFFSET ClassName
+	invoke LoadIcon,NULL,IDI_APPLICATION
+	mov   wc.hIcon,eax
+	mov   wc.hIconSm,eax
+	invoke LoadCursor,NULL,IDC_ARROW
+	mov   wc.hCursor,eax
+	invoke RegisterClassEx, addr wc
+	invoke CreateWindowEx,WS_EX_CLIENTEDGE,ADDR ClassName,ADDR AppName,\
+           WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,\
+           CW_USEDEFAULT,300,200,NULL,NULL,\
+           hInst,NULL
+	mov   hwnd,eax
+	invoke ShowWindow, hwnd,SW_SHOWNORMAL
+	invoke UpdateWindow, hwnd
+	.WHILE TRUE
+                invoke GetMessage, ADDR msg,NULL,0,0
+                .BREAK .IF (!eax)
+                invoke TranslateMessage, ADDR msg
+                invoke DispatchMessage, ADDR msg
+	.ENDW
+	mov     eax,msg.wParam
+	ret
+WinMain endp
+
+WndProc proc uses esi hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	.IF uMsg==WM_CREATE
+		invoke GetMenu,hWnd
+		mov  hMenu,eax
+		mov ofn.lStructSize,SIZEOF ofn
+		push hWnd
+		pop  ofn.hWndOwner
+		push hInstance
+		pop  ofn.hInstance
+		mov  ofn.lpstrFilter, OFFSET FilterString
+		mov  ofn.lpstrFile, OFFSET buffer
+		mov  ofn.nMaxFile,MAXSIZE
+	.ELSEIF uMsg==WM_DESTROY
+		.if hMapFile!=0
+			call CloseMapFile
+		.endif
+		invoke PostQuitMessage,NULL
+	.ELSEIF uMsg==WM_COMMAND
+		mov eax,wParam
+		.if lParam==0
+			.if ax==IDM_OPEN
+				mov  ofn.Flags, OFN_FILEMUSTEXIST or \
+                                OFN_PATHMUSTEXIST or OFN_LONGNAMES or\
+                                OFN_EXPLORER or OFN_HIDEREADONLY
+				invoke GetOpenFileName, ADDR ofn
+				.if eax==TRUE
+					invoke CreateFile,ADDR buffer,\
+                                                GENERIC_READ ,\
+                                                0,\
+                                                NULL,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,\
+                                                NULL
+					mov hFileRead,eax
+					invoke CreateFileMapping,hFileRead,NULL,PAGE_READONLY,0,0,NULL
+					mov  hMapFile,eax
+					mov    eax,OFFSET buffer
+					movzx  edx,ofn.nFileOffset
+					add    eax,edx
+					invoke SetWindowText,hWnd,eax
+					invoke EnableMenuItem,hMenu,IDM_OPEN,MF_GRAYED
+					invoke EnableMenuItem,hMenu,IDM_SAVE,MF_ENABLED
+				.endif
+			.elseif ax==IDM_SAVE
+
+
+				mov ofn.Flags,OFN_LONGNAMES or\
+                                OFN_EXPLORER or OFN_HIDEREADONLY
+				invoke GetSaveFileName, ADDR ofn
+				.if eax==TRUE
+					invoke CreateFile,ADDR buffer,\
+                                                GENERIC_READ or GENERIC_WRITE ,\
+                                                FILE_SHARE_READ</div>
+    <div class="meta">Posted on 2001-03-19 23:12:00 by newbies</div>
+   </div>
+   <div class="post" id="post-195496">
+    <div class="subject"><a href="#post-195496">binary file to text file ?</a></div>
+    <div class="body">Dude, use the 'code' statements for adding code. Like so:
+
+<pre><code>
+<pre><code>
+     .const
+       IDM_OPEN equ 1
+       IDM_SAVE equ 2
+       IDM_EXIT equ 3
+       MAXSIZE equ 260
+</code></pre>
+</code></pre> 
+
+Thats hard on the eyes, nevermind debuggin it...
+
+NaN</div>
+    <div class="meta">Posted on 2001-03-19 23:54:00 by NaN</div>
+   </div>
+   <div class="post" id="post-195497">
+    <div class="subject"><a href="#post-195497">binary file to text file ?</a></div>
+    <div class="body">I haven't tried, but I guess this is the error:
+<pre><code>
+mov ecx,eax
+mov esi,pMemory
+looping:
+   cld 
+   lodsb
+   invoke wsprintf,addr binary,addr template,al
+   invoke WriteFile,hFileWrite,addr binary,6,ADDR SizeWritten,NULL
+loop looping
+</code></pre>
+
+ecx is used as a counter in the loop, but both API functions (wsprintf, WriteFile) don't preserve ecx. Either push ecx before the API functions and pop it after them, or use some other loop:
+<pre><code>
+mov esi, pMemory
+mov edi, esi
+add edi, FileSize
+cld 
+.WHILE esi<edi
+   lodsb
+   invoke wsprintf,addr binary,addr template,al
+   invoke WriteFile,hFileWrite,addr binary,6,ADDR SizeWritten,NULL
+inc esi
+.ENDW
+</code></pre>
+
+Thomas</div>
+    <div class="meta">Posted on 2001-03-20 01:09:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-195498">
+    <div class="subject"><a href="#post-195498">binary file to text file ?</a></div>
+    <div class="body">My thank go out to Thomas that give me alternative way
+and i have tried but there was still got the same message :-<
+
+i change my code with yours like this :
+
+<pre><code>
+invoke GetFileSize,hFileRead,NULL
+mov esi, pMemory
+mov edi, esi
+add edi, FileSize
+cld 
+.WHILE esi<edi
+   lodsb
+   invoke wsprintf,addr binary,addr template,al
+   invoke WriteFile,hFileWrite,addr binary,6,ADDR SizeWritten,NULL
+inc edi
+.ENDW
+</code></pre>
+
+but there was an error message like this :
+(although i got file with correct number represents binary number)
+
+the instruction at bla bla .. referenced memory at bla bla ....
+can not read memory
+
+does any body help ?</div>
+    <div class="meta">Posted on 2001-03-20 02:09:00 by newbies</div>
+   </div>
+   <div class="post" id="post-195499">
+    <div class="subject"><a href="#post-195499">binary file to text file ?</a></div>
+    <div class="body">i found that the problem is in wsprintf function because if i mark it
+
+;invoke wsprintf,addr binary,addr template,al
+
+there is no message error again but as a result we fail to convert binary ascii to number
+
+i don't know what is going on inside wsprintf ?
+it seems it fails to read or convert number in memory :-<</div>
+    <div class="meta">Posted on 2001-03-20 21:13:00 by newbies</div>
+   </div>
+   <div class="post" id="post-195500">
+    <div class="subject"><a href="#post-195500">binary file to text file ?</a></div>
+    <div class="body">There is no error again after i change wsprintf with dwtoa function in masm32.inc. So it was correct that wsprintf is the main problem. i am curious if we can translate binary exe to text file and convert it again to binary and still run. may be this is what compiler done i don't know</div>
+    <div class="meta">Posted on 2001-03-21 22:37:00 by newbies</div>
+   </div>
+   <div class="post" id="post-195501">
+    <div class="subject"><a href="#post-195501">binary file to text file ?</a></div>
+    <div class="body">Funnily enough dwtoa calls wsprintf!
+
+But to anwser your question, - there's no reason why you can't convert a program to hex string, then back into an .exe file again, in fact this will work for any sort of file even an ascii one ! .
+
+Reasons for doing it however would be odd, I mean, why bother? the .exe is a lot smaller...
+
+umbongo</div>
+    <div class="meta">Posted on 2001-03-22 03:05:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195502">
+    <div class="subject"><a href="#post-195502">binary file to text file ?</a></div>
+    <div class="body">it is not about smaller or not concerned with files but i need this converting to analyse files contained digital stuff like sound or image that may be easier for the next processing. I just take an example for exe file. Ok may be i am a stupid person or odds guy, i still newbie</div>
+    <div class="meta">Posted on 2001-03-22 04:08:00 by newbies</div>
+   </div>
+   <div class="post" id="post-195503">
+    <div class="subject"><a href="#post-195503">binary file to text file ?</a></div>
+    <div class="body">You could try using a hex dump program, there are 100's of those around :)
+
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-03-22 04:21:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195504">
+    <div class="subject"><a href="#post-195504">binary file to text file ?</a></div>
+    <div class="body">thank's for your suggestion :-> but only human being can decide which is which.
+by the way where can i find a routine in win32asm connected with signal processing ? is it possible ?</div>
+    <div class="meta">Posted on 2001-03-22 04:53:00 by newbies</div>
+   </div>
+  </div>
+ </body>
+</html>

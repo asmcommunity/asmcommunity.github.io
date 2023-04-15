@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Call Gate &amp; Task Gate...???? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14677" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=14677">Call Gate &amp; Task Gate...????</a></p>
+   <div class="post" id="post-113708">
+    <div class="subject"><a href="#post-113708">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body">Why are &quot;Call Gate&quot; &amp; &quot;Task Gate&quot; necessary?<br /><br />Firstly, when someone wants to &quot;jump to or call&quot; procedure in another segment(which is a non-conforming code segment with a higher privilege level than caller), they may use &quot;Call Gate&quot;.<br />But, in my opinion, this is not necessary. <br />Since ever anyone wants to do that, just use &quot;INT&quot; opcode in order to excute a procedure programmed in a higher code segment as likely as &quot;SERVICE CALL&quot; used in many popular OSs, such as Windows and Linux.<br />So i can't imagine WHY &quot;CALL GATE&quot; IS EXIST!!<br /><br />Secondly, the &quot;Task Gate&quot;! you know, &quot;task switching&quot; can be perfomed without &quot;Task Gate&quot;!<br />Just copy some registers and change its value.<br />So! i really don't know and catch the purpose of WHY &quot;TASK GATE&quot; is EXIST!!<br /><br />anyone who has any idea about these..... plz help me.. save me! :confused:<br />thankyou for reading.<br /><br />Regards.</div>
+    <div class="meta">Posted on 2003-08-12 06:59:59 by Yeori</div>
+   </div>
+   <div class="post" id="post-113725">
+    <div class="subject"><a href="#post-113725">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body">Well first of all INTs are intended for exceptions and hardware IRQs  and NOT for API calls. The fact that Linux and by copy Windows kernel parts use them like that is a mistake IMHO.<br /><br />INTS can not use paramaeters on stack and have to use registers to transfer them, arguabely but true this method of parameter transfer is slower and more problematic with many parameters<br /><br />As FreeBsd shows the Callgates are faster than INTs whan  used for OS API<br /><br />So Callgates SHOULD be used for OS API!<br /><br />Besides the entrys in IDT are just a version od a callgate but without the advantage of parameter transfer (however with other advantages specific to IRQs)<br /><br />Task Gates are the standard way to use TSS and task switch also. The fact that Windows and Unix use different method is just a HACK for speed purposes :D<br /><br />Not very safe BTW</div>
+    <div class="meta">Posted on 2003-08-12 10:54:05 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-113750">
+    <div class="subject"><a href="#post-113750">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body">today i found out the real sense of task gates. they are an entry in the idt. if an interrupt occours and that goes to the task gate the cpu switches to that task. this is needed in the following case:<br /><br />if you use paging and a program pushes parameters on the stack - in an endless slope. somewhen a push will generate a pagefault, the cpu wants to jump to the interrupt-handler, if its a normal exception handler. it wants to push the cs:eip and the eflags on the stack - but that's not possible since a push generates a page fault. finally the cpu comes to a triple-fault and the cpu resets - so, just because a ring0-task overflows its task the system resets.<br />this won't happen if you use a task gate, the cpu will push the parameters (cs:eip and eflags) on the new tasks stack.<br /><br />@<strong>BogdanOntanu</strong>: actually it's possible to use ints for apicalls with the parameters on the stack, i've implemented it in my os - it was difficult anyway and slow, i guess. but i want to find a better way :) (-&gt; callgate?)</div>
+    <div class="meta">Posted on 2003-08-12 15:21:50 by hartyl</div>
+   </div>
+   <div class="post" id="post-113759">
+    <div class="subject"><a href="#post-113759">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body"><strong>BogdanOntanu</strong>, do you have a reference to a discussion of the speed of call gates / task gates / INT's?  Is this slowness on all CPU's?  Is there any way to speed it up?  Personnally, I'd prefer to use the mechanism as outlined by Intel mainly because of the hardware protection of code (can the same level of protection be achieved in code?).</div>
+    <div class="meta">Posted on 2003-08-12 16:41:40 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-113762">
+    <div class="subject"><a href="#post-113762">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body">Operatings system calls shouldn't need to be fast. If applications need to call operating system functions in a tight loop, then the application and/or system design is probably flawed. Why not go for the Windows approach? Have some of the system be running in user mode to avoid the overhead.</div>
+    <div class="meta">Posted on 2003-08-12 17:16:10 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-113764">
+    <div class="subject"><a href="#post-113764">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body">(Probably off topic)<br /><div class="quote"><em>Originally posted by Sephiroth3 </em><br />Operatings system calls shouldn't need to be fast.<br /></div><br />I agree this part in general, but,<br /><div class="quote"><br /> If applications need to call operating system functions in a tight loop, then the application and/or system design is probably flawed.</div><br />I don't really understand what you mean here.<br />For example, reading in standard input is usually implemented like this:<br />(FreeBSD syscall, MASM-like pseudo code)<br /><pre><code><br />read_again&#58;<br />    push 1<br />    push offset char_variable<br />    push 0<br />    mov eax,SYSCALL_READ<br />    int 80h<br />    lea esp,&#91;esp+12&#93;<br />    jc error<br />    ; do something with input<br />    jmp read_again<br /></code></pre><br />I'm just curious what you would say about this loop, especially when stdin is redirected.</div>
+    <div class="meta">Posted on 2003-08-12 18:04:05 by Starless</div>
+   </div>
+   <div class="post" id="post-113773">
+    <div class="subject"><a href="#post-113773">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body"><div class="quote"><br />Why not go for the Windows approach? Have some of the system be running in user mode to avoid the overhead.</div>Because it would be flawed (in regaurd to protection) in a way that is not fixable by additional software. :)</div>
+    <div class="meta">Posted on 2003-08-12 19:49:06 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-113807">
+    <div class="subject"><a href="#post-113807">Call Gate &amp; Task Gate...????</a></div>
+    <div class="body">Starless: The system could have an API that reads a whole line at a time, which would solve the problem. And the first disk access would be slow anyway. The part where it does something with the input would also usually take some time (for example, in a command-line interpreter that reads a shell script that starts a compiler).<br />Anyway, a call to a call gate takes 7 bytes, whereas an interrupt call takes 2. This could make programs bigger if they use a lot of system calls. But hey, who says you can't have both? There could be a call gate and an interrupt that both put you into system code, and you could use the call gate when you want that tiny speed increase.<br /><br />bitRAKE: I was thinking of having the &quot;safe&quot; part in user mode. For example, it could be a library that translates key codes, handles synchronization (by setting some flags in a structure that the system mode part would check when switching threads), or performs other version-specific functions that are still safe to handle in user mode.</div>
+    <div class="meta">Posted on 2003-08-13 04:00:48 by Sephiroth3</div>
+   </div>
+  </div>
+ </body>
+</html>

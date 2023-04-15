@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Greatest common divisor with FPU ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18433" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18433">Greatest common divisor with FPU ?</a></p>
+   <div class="post" id="post-142758">
+    <div class="subject"><a href="#post-142758">Greatest common divisor with FPU ?</a></div>
+    <div class="body">Hello,<br /><br />I'm trying to do a program that compute the GCD (greatest common divisor).<br /><br />It's very simple to do it with integer (ALU), but I can't do it with the math coprocessor (FPU).<br /><br />Reading the Intel Manual I've seen the FPREM1 instruction, but when trying to use it it doesn't work. In fact it seems this instruction is waiting for a division just before...<br /><br />The only thing I'm trying to achieve is something like a modulo operation with the FPU.<br /><br />Does someone has a clue ?<br /><br />Thank you very much !<br /><br />Regards, Neitsa.</div>
+    <div class="meta">Posted on 2004-06-03 02:01:50 by Neitsa</div>
+   </div>
+   <div class="post" id="post-142784">
+    <div class="subject"><a href="#post-142784">Greatest common divisor with FPU ?</a></div>
+    <div class="body">Might be of some help:<br /><a target="_blank" href="http://www.azillionmonkeys.com/qed/asmexample.html">http://www.azillionmonkeys.com/qed/asmexample.html</a><br /><br />IMHO, if you are using divide then it is going to be too slow.</div>
+    <div class="meta">Posted on 2004-06-03 10:03:41 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-142796">
+    <div class="subject"><a href="#post-142796">Greatest common divisor with FPU ?</a></div>
+    <div class="body">GCD of what?! real numbers?<br />You need first explain what whoul you name GCD for real numbers in math terms then ask for realization.<br />Or you are talking of long integers? Like 64 bit and bigger?</div>
+    <div class="meta">Posted on 2004-06-03 13:14:28 by The Svin</div>
+   </div>
+   <div class="post" id="post-142813">
+    <div class="subject"><a href="#post-142813">Greatest common divisor with FPU ?</a></div>
+    <div class="body">Hi ,<br /><br />Bitrake : Thanks a lot for your link !<br /><br />The Svin:<br /><br />I'm trying to use math coprocessor to overcome the limitation of ALU register's (0xFFFFFFFF). I'm not talking about using the decimal part of real number, just using the bigger capacacity offered by FPU numbers.<br />To be sure that those numbers doesn't have decimal part I'm doing this:<br /><br /><pre><code><br />		invoke FpuAtoFL,int1, addr FLOAT1,DEST_MEM		;convert string to REAL<br />		invoke FpuAtoFL,int2, addr FLOAT2,DEST_MEM<br />		FINIT<br />		<br />		FLD FLOAT1 ;push on FPU stack<br />		FRNDINT       ; round it<br />		FLD FLOAT2<br />		FRNDINT<br /></code></pre><br /><br />int1 and int2 are declared with TBYTE due to FpuAtoFL.<br /><br />Thanks. Neitsa.</div>
+    <div class="meta">Posted on 2004-06-03 16:57:42 by Neitsa</div>
+   </div>
+   <div class="post" id="post-142822">
+    <div class="subject"><a href="#post-142822">Greatest common divisor with FPU ?</a></div>
+    <div class="body">The FpuAtoFL function is designed to convert an ASCII text representation of the number you want to convert to a float. The first parameter must be the address of the null-terminated ASCII string. You can find all those details in the extensive Help file describing each function and provided with the FPULIB.<br /><br />The FPREM instruction is of no use for what you are trying to achieve. Following is the general process you should follow:<pre><code><br />fild  qword   ;Load the 64-bit integer to the FPU<br />fidiv dword   ;Divide it by whatever integer you have to<br />fld   st      ;Copy the result to the FPU<br />frndint       ;Round it to an integer<br />fsub          ;Subtract it from the original result<br />fxam          ;Examine the modulo<br />fstsw ax      ;Transfer result to AX<br />fwait<br />sahf          ;  and to the flag register<br />jz    zero_modulo</code></pre><br />Raymond</div>
+    <div class="meta">Posted on 2004-06-03 21:18:41 by Raymond</div>
+   </div>
+   <div class="post" id="post-142829">
+    <div class="subject"><a href="#post-142829">Greatest common divisor with FPU ?</a></div>
+    <div class="body"><div class="quote">I'm trying to use math coprocessor to overcome the limitation of ALU register's (0xFFFFFFFF).</div><br /><br />You realize that you can use 64 bit operations very easily on x86 ALU? add/adc, sub/sbb, shrd/shld?<br />I would say those are a much better alternative than setting x87 to extended precision (everything else would be way less accurate), and trying to calc on that while making sure you lose no precision, and work without shifts.</div>
+    <div class="meta">Posted on 2004-06-04 02:07:26 by Scali</div>
+   </div>
+   <div class="post" id="post-142859">
+    <div class="subject"><a href="#post-142859">Greatest common divisor with FPU ?</a></div>
+    <div class="body">This might work?<pre><code>NEG64 MACRO<br />	not edx<br />	neg eax<br />	sbb edx, -1<br />ENDM<br /><br />SUB64 MACRO<br />	sub eax, ebx<br />	sbb edx, ecx<br />ENDM<br /><br />ADD64 MACRO<br />	add eax, ebx<br />	adc edx, ecx<br />ENDM<br /><br /><br /><br />GCD64&#58;<br />	NEG64<br /><br />	je _1a<br /><br />_0&#58;	NEG64<br /><br />	xchg eax, ebx<br />	xchg edx, ecx<br /><br />_1&#58;	SUB64<br /><br />	jg _1<br /><br />	jne _0<br />_1a&#58;	test eax, eax<br />	jne _0<br /><br />_2&#58;	ADD64<br /><br />	jne _3<br />	test eax, eax<br />	jne _3<br /><br />	inc eax<br />_3&#58;	retn</code></pre>Untested, but surely almost there...<br /><br />Note: signed 64-bit numbers used EAX:EDX and EBX:ECX.<br />EDX and ECX are the most significant DWORDs.</div>
+    <div class="meta">Posted on 2004-06-04 11:48:23 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-142863">
+    <div class="subject"><a href="#post-142863">Greatest common divisor with FPU ?</a></div>
+    <div class="body">edx::eax would be a nice way to mention then. That's MASM syntax, and it's customary to put the most significant part up first anyway.</div>
+    <div class="meta">Posted on 2004-06-04 12:20:29 by Scali</div>
+   </div>
+   <div class="post" id="post-142865">
+    <div class="subject"><a href="#post-142865">Greatest common divisor with FPU ?</a></div>
+    <div class="body">EAX:EDX is the memory representation.  The usage is purely based on the preferences of the individual and as long as it is stated to eliminate ambiguity I'm fine with either notation.</div>
+    <div class="meta">Posted on 2004-06-04 12:47:53 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-142866">
+    <div class="subject"><a href="#post-142866">Greatest common divisor with FPU ?</a></div>
+    <div class="body">Hrm, usage is purely based on the preferences of the individual? I thought EDX:EAX was the standard notation?</div>
+    <div class="meta">Posted on 2004-06-04 12:50:04 by f0dder</div>
+   </div>
+   <div class="post" id="post-142868">
+    <div class="subject"><a href="#post-142868">Greatest common divisor with FPU ?</a></div>
+    <div class="body">If I state the usage what difference does it make?  I create notation to solve a problem as it suits me - as long as the notation is documented there is no problem.  I'm sorry if this causes others difficulty, but it is something I've gotten used to as I explore different areas each with their own notation.</div>
+    <div class="meta">Posted on 2004-06-04 12:59:32 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-142941">
+    <div class="subject"><a href="#post-142941">Greatest common divisor with FPU ?</a></div>
+    <div class="body">Hello,<br /><br />Just to thank you all for your answers and replies !<br /><br />I think I have all in my hands to implement in 64 bits or with FPU.<br /><br />Thanks again.<br /><br />Regards, Neitsa.</div>
+    <div class="meta">Posted on 2004-06-05 21:02:05 by Neitsa</div>
+   </div>
+  </div>
+ </body>
+</html>

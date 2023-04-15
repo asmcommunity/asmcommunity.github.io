@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Theory.. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26958" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26958">Theory..</a></p>
+   <div class="post" id="post-193833">
+    <div class="subject"><a href="#post-193833">Theory..</a></div>
+    <div class="body">I have a questions about the nature of ASM vs. HLL...
+
+I realize the importance of hiding data like OOP style of encapsulation. As i was working an a practice experiment wit dialog boxs passing information to the source window, i realized that event though i defined a local stucture to contain information, it has to br placed in global memory anyways for the dialog proc...
+
+I did the following:
+
+Made a stucture:
+<pre><code>
+     INFOSTRUCT STRUCT
+        lpData1   DWORD       ?
+        lpData2   DWORD       ?
+     INFOSTRUCT ENDS
+</code></pre>
+
+Call my dialog box:
+<pre><code>
+
+      LOCAL INFO  :INFOSTRUCT
+      invoke DialogBoxParam,hInstance, addr szDialogName,hWnd,OFFSET DlgProc, addr INFO
+</code></pre>
+
+and in the dialog proc...
+<pre><code>
+DlgProc proc DWnd:DWORD,dMsg:DWORD,dwParam:DWORD, dlParam:DWORD
+
+  LOCAL lpInfo  :DWORD
+
+  .if dMsg==WM_INITDIALOG
+    
+    ; Save the infor struct poitner
+    m2m     lpInfo, dlParam
+</code></pre>
+
+since the dlg proc will enter/exit often (as i understand it) the stored lparam in the local stack varaible will be lost after the initialization.. the only alternative i see is using the a global variable.. but then this defeats the purpose of passing the structure pointer in the first place..  
+
+I know im overlooking something here (or else this method would not be suported).. can someone enlighten me...
+
+NaN</div>
+    <div class="meta">Posted on 2001-02-20 13:07:00 by NaN</div>
+   </div>
+   <div class="post" id="post-193834">
+    <div class="subject"><a href="#post-193834">Theory..</a></div>
+    <div class="body">Nan,
+
+  Congratulations. You seem to deeply understand the problem you're up against.
+
+  Briefly stated, your problem is LOCAL data is too transient, GLOBAL data too permament to use for a DIALOG instance. You're quite correct there.
+
+  So... use the third kind of .data memory: run time allocated. My prefered method is HeapAlloc/HeapFree, this is good for 'small' bits of memory, small defined as <<4K. (Use VirtualAlloc for 4K chunks).
+
+  So, your dialog creation would now go like this:
+
+<pre><code>
+      ; create INFOSTRUCT memory
+      invoke HeapAlloc, hHeap, NULL, SIZEOF INFOSTRUCT
+      invoke DialogBoxParam,hInstance, addr szDialogName,hWnd,OFFSET DlgProc, eax
+</code></pre>
+
+and in the dialog proc...
+
+<pre><code>
+DlgProc proc DWnd:DWORD,dMsg:DWORD,dwParam:DWORD, dlParam:DWORD
+
+  LOCAL lpInfo  :DWORD
+
+  .if dMsg==WM_INITDIALOG
+    
+    ; Save the infor struct pointer
+    mov eax, dlParam
+    invoke SetWindowLong, DWnd, GWL_USERDATA, eax
+    ; init this data
+    mov ecx, dlParam
+    mov (INFOSTRUCT PTR ).lpData1, someData
+    mov (INFOSTRUCT PTR ).lpData2, someOtherData
+    
+  .elseif dMsg==WM_DESTROY
+    ; clean up the heap memory
+    invoke GetWindowLong, DWnd, GWL_USERDATA
+    invoke HeapFree, hHeap, NULL, eax
+
+   .else ....
+
+</code></pre>
+
+
+Two things: I use this technique ALOT with standard windows, I rairly use dialogs, so I'm not 100% sure offhand how dialogs work. WM_DESTROY may be the wrong message for final termination, and also I'm not sure they supposr USERDATA like other windows.
+
+But these are good guesses and I think you can fix this as needs be.  :-)</div>
+    <div class="meta">Posted on 2001-02-20 13:53:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193835">
+    <div class="subject"><a href="#post-193835">Theory..</a></div>
+    <div class="body">Thanx Ernie,
+
+But i got some more Q's on this.. (i did my homework with MSDN on the Heap and Set/GetWindowLong).
+
+I revised my code to this (Main Window)
+<pre><code>
+   LOCAL hHand  :DWORD
+
+    .if uMsg == WM_COMMAND
+        .if wParam == 50
+            invoke HeapCreate, NULL, 0 , 500
+            mov hHand, eax
+            DPrintValH eax, "Heap Handle"
+
+            invoke HeapAlloc, eax, NULL, SIZEOF INFOSTRUCT
+            mov ecx, eax       
+            DPrintValH eax, "Memory Addr"
+            
+            szText szDialogName, "InDialog"
+            invoke DialogBoxParam,hInstance, addr szDialogName,hWnd,OFFSET DlgProc, ecx
+                
+            invoke MessageBox,hWin,addr (INFOSTRUCT PTR ).Data1,
+                              ADDR szDisplayName,MB_OK
+                              
+            invoke HeapFree, hHand, NULL, ecx
+            invoke HeapDestroy, hHand
+       .elseif ...
+</code></pre>
+
+As well i revised the struct to:
+<pre><code>
+     INFOSTRUCT STRUCT
+        Data1   BYTE 128 DUP(0)
+        Data2   BYTE 128 DUP(0)
+     INFOSTRUCT ENDS 
+</code></pre>
+
+and the dialog proc to (pretty well what you showed me)
+<pre><code>
+DlgProc proc DWnd:DWORD,dMsg:DWORD,dwParam:DWORD, dlParam:DWORD
+
+  .if diMsg==WM_INITDIALOG
+    ; Save the infor struct poitner
+    mov     eax, dlParam
+    DPrintValH eax, "Mem Add Passed"
+
+    invoke  SetWindowLong, DWnd, DWL_USER, eax
+     
+    invoke  GetDlgItem, DWnd, IDC_EDIT1
+    mov     hEdit,eax       
+    invoke  SetFocus,eax
+    
+ .elseif diMsg==WM_CLOSE
+    invoke EndDialog,DWnd,NULL
+    
+ .elseif diMsg==WM_COMMAND
+    mov eax,dwParam
+    mov edx,eax
+    shr edx,16
+    .if dx==BN_CLICKED
+      .if eax==IDCANCEL
+	      invoke SendMessage,DWnd,WM_CLOSE,NULL,NULL
+      .elseif eax==IDOK
+      
+        invoke GetWindowLong, DWnd, DWL_USER
+        mov    ecx, eax
+        DPrintValH ecx, "MemAddRestor"
+        
+        invoke  GetDlgItemText, DWnd,   IDC_EDIT1, addr (INFOSTRUCT PTR ).Data1 , 30
+        
+        szText NNN, "Show Me the GOODS!"
+        invoke MessageBox,DWnd,addr (INFOSTRUCT PTR ).Data1,
+                              ADDR NNN,MB_OK
+        
+        ...
+</code></pre>
+
+Its all full of your nifty Debug macro's as well :D , but the outcome is not of much help.. All the values are the same.. Addresses are the same when pases thru as expected.  But the message boxes both in the dialog window and the main window fail so show what is entered in the edit box.
+
+The same code worked using a global varible but when using the heap memory it fails to show readable characters in the buffer.  Is there some problem here with window adress spaces here? 
+
+Also as i understand it, the SetWindowLong data will be destroyed with the window and doesn't neccessarily need to be Get'd as you indicated (right??).  I ask this because i do not want to start any memory leaks etc (MSDN gave no indication on this.. ).
+
+NaN</div>
+    <div class="meta">Posted on 2001-02-20 16:45:00 by NaN</div>
+   </div>
+   <div class="post" id="post-193836">
+    <div class="subject"><a href="#post-193836">Theory..</a></div>
+    <div class="body">Nan,
+
+  You're on the right track, just a few things to clear up.
+
+  First off, every process is born with it's own heap, so you need not create one, GetProcessHeap will return you the default heap. 
+
+  However, if you do something very involved on the heap, like make LOTS of little structs, you can make clean-up a snap by first creating a new heap (you can have many heaps), and when done with it, simple delete the thing. No need to first kill every byte you put there.
+
+  Now on to the main things. Here's your code with some comments of what I see (I think you just let the pointer get steped on):
+
+<pre><code>
+   LOCAL hHand  :DWORD
+   LOCAL pInfoStruct      ; **** new LOCAL
+
+    .if uMsg == WM_COMMAND
+        .if wParam == 50
+            invoke GetProcessHeap ; **** simpler, faster
+            mov hHand, eax
+            DPrintValH eax, "Heap Handle"
+
+            invoke HeapAlloc, eax, NULL, SIZEOF INFOSTRUCT
+            mov ecx, eax       
+            mov pInfoStruct, ecx   ; explicitly save the pointer
+            DPrintValH eax, "Memory Addr"
+            
+            szText szDialogName, "InDialog"
+            invoke DialogBoxParam,hInstance, addr szDialogName,hWnd,OFFSET DlgProc, ecx
+                
+            ; **** since we can't be sure DialogBoxParam didn't change ecx
+            ; (and it probably did), get pInfoStruct back
+            mov ecx, pInfoStruct
+            invoke MessageBox,hWin,addr (INFOSTRUCT PTR ).Data1,
+                              ADDR szDisplayName,MB_OK
+                              
+            invoke HeapFree, hHand, NULL, ecx
+;            invoke HeapDestroy, hHand  **** see GetProcessHeap line 
+; (we borrowed the heap, so don't delete it)
+       .elseif ...
+
+
+DlgProc proc DWnd:DWORD,dMsg:DWORD,dwParam:DWORD, dlParam:DWORD
+   LOCAL pInfoStruct      ; **** new LOCAL
+
+  .if diMsg==WM_INITDIALOG
+    ; Save the infor struct poitner
+    mov     eax, dlParam
+    DPrintValH eax, "Mem Add Passed"
+
+    invoke  SetWindowLong, DWnd, DWL_USER, eax
+     
+    invoke  GetDlgItem, DWnd, IDC_EDIT1
+    mov     hEdit,eax       
+    invoke  SetFocus,eax
+    
+ .elseif diMsg==WM_CLOSE
+    invoke EndDialog,DWnd,NULL
+    
+ .elseif diMsg==WM_COMMAND
+    mov eax,dwParam
+    mov edx,eax
+    shr edx,16
+    .if dx==BN_CLICKED
+      .if eax==IDCANCEL
+         invoke SendMessage,DWnd,WM_CLOSE,NULL,NULL
+      .elseif eax==IDOK
+      
+        invoke GetWindowLong, DWnd, DWL_USER
+        mov    ecx, eax
+        DPrintValH ecx, "MemAddRestor"
+        mov pInfoStruct, ecx    ; **** preserve the pointer        
+        invoke  GetDlgItemText, DWnd,   IDC_EDIT1, addr (INFOSTRUCT PTR ).Data1 , 30
+        
+        szText NNN, "Show Me the GOODS!"
+        mov ecx, pInfoStruct     ; retrieve our pointer
+        invoke MessageBox,DWnd,addr (INFOSTRUCT PTR ).Data1,
+                              ADDR NNN,MB_OK
+        
+        ...
+</code></pre>
+
+
+Lemmy know if this helps, I'll be checking again in a few hours.
+
+And nice to see someone reads my webpage.  :-)
+
+
+This message was edited by Ernie, on 2/20/2001 7:32:32 PM</div>
+    <div class="meta">Posted on 2001-02-20 19:31:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193837">
+    <div class="subject"><a href="#post-193837">Theory..</a></div>
+    <div class="body">Thanx again Ernie,
+
+Worked like a charm.. I later commented out the:
+
+mov ecx, pInfoStruct
+
+in both the dialog and the main window separetly on separate compiles, and each time the error came back... 
+<pre><code>
+A     L E S S O N     W E L L     L E A R N E D! 
+</code></pre>
+It funny how you can read about things like this, but it take the practice of screwing up to remember it, I looked at the ecx and said to myself..
+
+ ".. ecx holds an address so that value will be copied into the functions argument, ecx will remain transparent to the process and unmodified because the function returns eax.. "
+
+  ... duh!, dont trust windows!
+
+
+
+As for my inquiry on the Set/GetWindowLong, is there any problems with me not Get'n on the Dialog box's Destory?
+
+And yes, I do read your page and many others, I personally think your 'Extracting Words from DWORDS' essay as well as your Debbing Macro's should be handed out in the MASM32 package...
+
+NaN
+
+
+This message was edited by NaN, on 2/20/2001 8:19:45 PM</div>
+    <div class="meta">Posted on 2001-02-20 20:15:00 by NaN</div>
+   </div>
+   <div class="post" id="post-193838">
+    <div class="subject"><a href="#post-193838">Theory..</a></div>
+    <div class="body">Great, happy it works, more happy you understand why.
+
+About GetWindowLong in the WM_DESTROY...
+
+Yes, you SHOULD get the heap data, and invoke HeapFree on it's butt. Windows has no idea HOW that memory got there, it only frees the address where the only pointer to it resides. IE, if you don't free it there, then it hangs around forever (well, till the app terminates or you replace your process heap).
+
+Just general windows clean-up stuff (the things C++ people do in their destructors)</div>
+    <div class="meta">Posted on 2001-02-20 21:45:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193839">
+    <div class="subject"><a href="#post-193839">Theory..</a></div>
+    <div class="body">I hate to keep naggin' on this topic, but im a bit confused about what your implying with GetWindowLong:
+
+- The above program gets the process heap, allocates 'private' memory for a structure.
+
+- Then it creates a dialog box and passes it the stucture address.
+
+- The address is stored in some magic LONG varible of the dialog window (the only one provision for this as i understand it, and is done using SetWindowLong).
+
+- Somewhere down the line, the address is retieved by the Dialog box from an event, using GetWindowLong, and the stucture is filled.
+
+- When the dialog box is closed. I have done nothing about the address stored in the magic box (since it is an address and its in a sinking ship..) ~ The dialog box is destroyed (This is the source of my query is this the right assumption? ).
+
+- The main window carries on after the invoke dialog call, does something with the structure full of data, and when done calls HeapFree and kills the structure of data.
+
+I think our thoughs got confused somewhere on this, the GetWindowLong is a new API to me (as well as the heap), but im having an hard time *knowing* just what Get/SetWindowLong is doing, which is why im wondering if im cleaning up after it ok.
+
+The MSDN implied there is an extra DWORD for every window created just to store one critical value/address in.  If this is ture then my assumption should be right, if not, then i could be overlooking something here.
+
+I hope im not becoming,
+NaNnoying?
+:D</div>
+    <div class="meta">Posted on 2001-02-20 23:01:00 by NaN</div>
+   </div>
+   <div class="post" id="post-193840">
+    <div class="subject"><a href="#post-193840">Theory..</a></div>
+    <div class="body">dear NaNnoying,
+
+  (I had to say that)
+
+  OK, my mistake. I "forgot" that we had the main window loop destroying the heap we asked for. That's an acceptable place to free the heap for this example, as that loop stops to wait for the dialog to close.
+
+  However, say we had a toolwindow which goes off on it's own merry way until it's destroyed way later on. Then it makes far more sense to let the toolwindow itself destroy the heap data inside it. In fact, I'd also move the allocator inside the WM_CREATE (dialogs use a different message) of this window to more 'contain' the code (IE, not have fragments of a procedure spread in areas where they don't 'logically' belong).
+
+  This way, every time you create a toolwindow of this class, it makes it's own little heap area to store stuff on, and when it's done with it, it cleans it up. You don't have to track how many windows are open and keep lists of heap pointers, each window will manage it's own mess.
+
+  Anything else we can wrangle out of this nice example?  :-)</div>
+    <div class="meta">Posted on 2001-02-21 00:40:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193841">
+    <div class="subject"><a href="#post-193841">Theory..</a></div>
+    <div class="body">LoL...
+
+  No i will let that it alown at this point.. Thanx for the advice and your patience. You've helped me learn some vital tools to get my ideas off the ground, much apprechiate.
+
+Tomorrow, I do File/IO  :D
+
+NaN</div>
+    <div class="meta">Posted on 2001-02-21 02:02:00 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

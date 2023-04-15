@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Hooking/Intercepting functions/classes - using breakpoints? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18628" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18628">Hooking/Intercepting functions/classes - using breakpoints?</a></p>
+   <div class="post" id="post-144301">
+    <div class="subject"><a href="#post-144301">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">A couple of years ago I wrote a program in C++ to which I lost all source. The program isn't important at all, but it got me thinking of hooking the existing functions and/or classes. I wanted to write pretty generic and clean hooking classes, and they do work nicely, but the fact is that these functions strongly rely on the fact that the first 6 or more bytes must have instructions that use direct addressing. If I were to intercept the function/class (diverge control flow by substituting with a jmp instruction), this doesn't pose any problems, since I don't really care about the original instruction, but what if I were to hook it instead, sort of &quot;chain&quot; the functions. If the instruction uses direct addressing, it will be the same no matter where it's executed, but if it's relative, the whole concept fails. Also, you must know the minimum size of the instruction block to move. I was wondering if exception handling is theasable to achieve a &quot;clean&quot; hooking process? Mind you that the overhead could count significantly, especially if hooking a 3D rendering routine... Could I setup an interupt instead and a handler routine, process my code and return to point of origin/execute original instruction? (I think this is what OllyDbg does when setting a breakpoint, although I'm not 100% on that...)</div>
+    <div class="meta">Posted on 2004-06-20 05:51:31 by FearHQ</div>
+   </div>
+   <div class="post" id="post-144302">
+    <div class="subject"><a href="#post-144302">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">You mean: patch int 3 at start of the function, save original byte. Set up int 3 handler that runs new code, and replaces byte so it can run the old code.<br />It could work, but it'd be horribly slow. And afterwards you'd have to put the int 3 back again. So I guess that means you'll have to single-step the restored instruction, and then set the int 3 back, and then run the program again. Even slower.</div>
+    <div class="meta">Posted on 2004-06-20 05:57:20 by Scali</div>
+   </div>
+   <div class="post" id="post-144303">
+    <div class="subject"><a href="#post-144303">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">Quick reply Scali :)<br /><br />It's pretty much what I though... But it's not great now either. I use a hooking class right now (most is written in C++) and that requires me to set ECX to the object in adition to the call to the chaining routine (I can have more than one hook on same function, in a linked list). This requires 13 bytes if I remember, could probably cut back, but still something like that. After the chaining routine, I pop back ecx, execute first instruction and jmp to wherever I left off at. It looks really messy and I hate messy code :rolleyes:</div>
+    <div class="meta">Posted on 2004-06-20 06:03:54 by FearHQ</div>
+   </div>
+   <div class="post" id="post-144389">
+    <div class="subject"><a href="#post-144389">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">have a look at <a target="_blank" href="http://research.microsoft.com/sn/detours/">http://research.microsoft.com/sn/detours/</a></div>
+    <div class="meta">Posted on 2004-06-21 06:54:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-144416">
+    <div class="subject"><a href="#post-144416">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">for apihooking, i would go with patching the first 6 bytes, or use some sort of lde to predetermine entire opcode lengths, and copy them into a seperate buffer that way. I'm pretty sure microsoft's detour uses this same method. What you would first need to do is backup the bytes in a buffer, initiate the hook, and within the hooked function, somehow restore the api, or execute the first few instructions. you have several ways to do this, you can either:<br /><br />1.) simply back up the bytes/opcodes, in a normal buffer, and overwrite it with a jmp, and retn (if needed). inside the hooked function, restore the original function in the beginning, do whatever you want (or call the original function, and do stuff afterwards), and then in the end restore the hook. <br /><br />2.) allocate a buffer of nops (0x90), and in your hook procedure, fill the first few instructions of the procedure you're trying to hook into this buffer, so that you have enough space to build a jmp. save the original EP plus the length of the total number of opcodes you fetched, and then jump there instead. you would need a lde for this method, but it's the better of the two.<br /><br />there are probably other methods as well, however there is a problem with the first method, that is, if you have multiple threads that are calling the same API, since the hook function restores the api in order to call it, another thread calling this api at the same time might lose the hook.<br /><br />however, this is possibly the easiest and most reliable method, as if you were to instead hook IAT, i think you also need to patch every module loaded as well. As Scali stated, hooking apis with the int3 method is extremely slow, as the win32 debugging apis aren't exactly the fastest thing out there. <br /><br />if you want, check out holy_father's article on apihooking, people on this board might call the source 'unorthodox', but it is a pretty detailed summary of apihooking using several methods. i won't post the link here, so maybe try google.</div>
+    <div class="meta">Posted on 2004-06-21 12:01:07 by Drocon</div>
+   </div>
+   <div class="post" id="post-144423">
+    <div class="subject"><a href="#post-144423">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">The disassembly method is good, but you need to fix up some instructions after copying them to your buffer - think eip-relative calls and such...</div>
+    <div class="meta">Posted on 2004-06-21 12:24:49 by f0dder</div>
+   </div>
+   <div class="post" id="post-144543">
+    <div class="subject"><a href="#post-144543">Hooking/Intercepting functions/classes - using breakpoints?</a></div>
+    <div class="body">The first method is what I based my work on... Aparently it's the best way to handle this. The two major problems are knowing instruction lengths by disassembly in advance and fixing relative (as f0dder put it, EIP-relative) instructions.<br /><br />Is there a quick way to figgure out EIP-relative instructions though? Some overhead is acceptable since you would calculate it only once per hooking, not every time the hooked function is called :) I don't think determining instruction lengths manually is a good idea, but it could still be a possilibity. Time to put those manuals to good use!</div>
+    <div class="meta">Posted on 2004-06-22 16:32:16 by FearHQ</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Creating a &quot;networked&quot; text based game - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3862" />
+    <link rel="next" href="../?id=3862&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=3862">Creating a &quot;networked&quot; text based game</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=3862&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=3862&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="3862" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=3862&amp;page=2">&gt;</a><a href="../?id=3862&amp;page=2">&raquo;</a></form>   <div class="post" id="post-26180">
+    <div class="subject"><a href="#post-26180">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Ok, I've downloaded a few applications that demonstrate the basics in creating connections and sending and reciving data...<br /><br />The question is (and although I'm not up to the &quot;networking part&quot; I'm asking in advance for help):  How do you write a multiple client server?  Or more simply:<br /><br />Does anyone have an example of a multiple client server (the real basics), where you can send some command and have the server respond back (over 1 character both sending and recieving)<br /><br />ie.<br />You logged on to 197.43.234.32<br />(This server allows multiple connections)<br />&gt; time<br />the current time is: 99:99:99<br /><br />I'm struggling with this concept of multi user and being able to process string through a &quot;read&quot; message from telnet<br /><br />Any help in this area would be appreciated<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-02-27 10:34:42 by Sliver</div>
+   </div>
+   <div class="post" id="post-26182">
+    <div class="subject"><a href="#post-26182">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">The best method in my opinion is to use a separate thread for every client, in combination with the correct synchronization.<br />Have one socket listening for incomming connections. As soon as a client connects, create a new thread and pass the socket handle (you get with accept) to it. Then let the thread handle all communication.<br />For the synchronization (event notification etc) there are several ways. One is using blocking sockets inside the thread but I personally don't like this as you loose control over the thread when it's blocking.<br />In my webserver I use WSAEventSelect to let winsock set an event object when a network event occurs. I have two events actually, one for the network events, and one for internal communication. <br />You can also try to create your own sort of message queue inside the thread (I used that in a very early version of my server), and then pass FD_* messages to the thread, but events are easier to use.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-27 10:47:59 by Thomas</div>
+   </div>
+   <div class="post" id="post-26186">
+    <div class="subject"><a href="#post-26186">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">About the string parsing:<br />A common mistake most beginners in winsock make is to assume data is received exactly the way they need it (for example, when the client sends 100 byte in one <strong>send</strong> call, the server doesn't necessarily receive those 100 bytes in one <strong>recv</strong>). <br />Especially with telnet sessions, where telnet sends the characters while the user is typing, it's most likely that you receive your string char by char.<br />Make sure you got the receive notification and waiting for data right, don't just loop <strong>recv</strong> hoping data arrives, instead wait for the right notification that tells you data is waiting for you.<br />Then you need a buffer for the command. Keep adding the data you receive to this buffer. Watch out for buffer overflow, or your program can have a serious security bug. <br />Each time you've added data to the buffer, scan through it looking for CRLF (or CR or LF :( ), if you found one you have a complete line in your buffer. Process it, do something with it and when you're done, remove this line from the buffer, shifting all data behind it (possibly from the next command) back to the buffer base, freeing the rest of your buffer space. <br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-27 11:03:17 by Thomas</div>
+   </div>
+   <div class="post" id="post-26188">
+    <div class="subject"><a href="#post-26188">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">That is part of my problem... <br />I know that sometimes the telnet works by sending 1 character at a time... some what if someone is typing the word &quot;time&quot; and another person types it at the same instance?<br /><br />ie.<br />Person 1:<br />tim<br />Person 2&quot;<br />time (return)<br /><br />I'm not even sure how the server is suppose to handle that :(<br /><br />I'm usually a guy who learns from example :( Thanks Thomas (you help is always appreciated)... and anyone else too who may have examples or just ideas...<br /><br />Sliver<br /><br />ps. In the game programming forum is the &quot;text based game&quot; that I want to try and make networked... if that helps any</div>
+    <div class="meta">Posted on 2002-02-27 11:16:53 by Sliver</div>
+   </div>
+   <div class="post" id="post-26191">
+    <div class="subject"><a href="#post-26191">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Well person 1 and person 2 both have different sockets wichh you can handle in differnet threads and allocate seperate buffers for so they don't interfear with each other.</div>
+    <div class="meta">Posted on 2002-02-27 11:28:31 by Quantum</div>
+   </div>
+   <div class="post" id="post-26193">
+    <div class="subject"><a href="#post-26193">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Quantum is right, every client has it's own socket and his own thread, so everything is nicely seperated. Just make sure that every thread has it's own data set (local vars or dynamically allocated memory) so they won't interfere which each other. Unless of couse the data that has to be global, for example if you want users to meet each other in a room, they all use the same room data, if one user picks up an item, the others shoudn't be able to after that.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-27 11:56:53 by Thomas</div>
+   </div>
+   <div class="post" id="post-26196">
+    <div class="subject"><a href="#post-26196">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Maybe I'm in over my head... <br /><br />Can either of you suggest a place to learn to use threads within the context of my desired goal of making a multi cliented server?<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-02-27 12:03:46 by Sliver</div>
+   </div>
+   <div class="post" id="post-26197">
+    <div class="subject"><a href="#post-26197">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body"><div class="quote"><br />Quantum is right, every client has it's own socket and his own thread, so everything is nicely seperated. Just make sure that every thread has it's own data set (local vars or dynamically allocated memory) so they won't interfere which each other. Unless of couse the data that has to be global, for example if you want users to meet each other in a room, they all use the same room data, if one user picks up an item, the others shoudn't be able to after that.<br /></div><br /><br />Hi thomas, <br />well i've to say i'm really interested in this kinda game project <br />My advice about this probl is to create the game this way: <br />u've to have a single server with all data about game <br />it means whats inside rooms, personal data of each character, everything and clients r only &quot;stupid&quot; clients they only have to provide a user friendly interface to communicate with the user <br />and they'll send all the user actions to the server that will process them and notify the clients with the results <br />The server should be designed this way: <br />one main game engine as a single thread which will be the only to perfrom operations on the game datas <br />and many threads as the clients connected to the server <br />Every server side thread listening to a client should notify the only server thread about the user action with messages <br />this way the only work the only server thread has to do is <br />to handle messages they will be sent to its own thread <br />So u've to use PostThreadMessage() to communicate and the GetMessage() to take messages <br /><br />See ya <br />NikDH</div>
+    <div class="meta">Posted on 2002-02-27 12:09:52 by NikDH</div>
+   </div>
+   <div class="post" id="post-26198">
+    <div class="subject"><a href="#post-26198">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body"><div class="quote"><br />Maybe I'm in over my head... <br /><br />Can either of you suggest a place to learn to use threads within the context of my desired goal of making a multi cliented server?<br /></div><br /><br />Hi sliver, <br />if u can code with the windows gui so u r familiar with concepts like window procedure, messages handling,... u're already done <br />Its the best example of thread communication under windows <br /><br />See ya <br />NikDH</div>
+    <div class="meta">Posted on 2002-02-27 12:12:09 by NikDH</div>
+   </div>
+   <div class="post" id="post-26200">
+    <div class="subject"><a href="#post-26200">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">NikDH: That's a good way to do it, one thing I want to add is that you should take care of the synchronization of the main thread (that performs all the operations), i.e. make sure threads cannot do the same thing at the same time, for example you wouldn't want two users being able to simultaniously pick up an item :).<br />Like NikDH said, you're client are 'stupid' clients, which isn't hard to understand as they are telnet programs... <br /><br />Sliver: working with threads isn't hard. Iczelion has a tutorial about them. Basically you have one procedure (with one required parameter). When you pass this procedure to CreateThread, a seperate thread is setup, running your procedure. Just think of that procedure running simultaniously for all clients.. It isn't hard.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-27 12:20:25 by Thomas</div>
+   </div>
+   <div class="post" id="post-26203">
+    <div class="subject"><a href="#post-26203">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">I think I may need to take a step back...<br /><br />I think I'll search the web for some information on &quot;threads&quot;, &quot;client/server applications&quot;, &quot;multi socketed connections&quot;... Is that it?  I think so... <br /><br />The problem is I don't know how to even start a multi socketed server that even *has* a main thread?<br /><br />I just wish there was an example of this somewhere on this board... :(  (like the time example)... Oh, well I'll look first and then come back and reread everyones posts...<br /><br />Maybe a better inital question would have been:<br />&quot;how do you create a program so that a few people can logon (via telnet) and check the time or whatever -- and have the server handle all the clients at one time. Or possible an example...&quot;<br /><br />Thanks for all the help so far... I have a long way to go :)<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-02-27 12:35:05 by Sliver</div>
+   </div>
+   <div class="post" id="post-26210">
+    <div class="subject"><a href="#post-26210">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">You can also use a mutex to protect your global data.  Like Thomas said, you don't want two people picking up an object at the same time so lock all thread execution at the point someone attempts to pick up the object to ensure no conflict.  You can think of a mutex like a token on a token ring network.  Only the nic that has the token can transmit data on the network.  If all you do is lock the mutex, change the variable, then unlock it, I don't think the other clients would be adversely affected with lag.</div>
+    <div class="meta">Posted on 2002-02-27 13:05:11 by rdaneel</div>
+   </div>
+   <div class="post" id="post-26211">
+    <div class="subject"><a href="#post-26211">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Sorry I don't have such an example nor the time to write one for you..<br />Here's the pseudo code:<br /><br />- Initalize winsock, create socket, set socket listening and set window message to receive notifications<br />- on FD_ACCEPT, call accept to accept the connection. It returns a socket handle. You need a table that associates threads with sockets (say an interleaved table: socket handle, thread, next socket handle, next thread, and so on). Create a new thread for your socket, put the socket handle and threadID in the table, and set a new custom window message (say WM_CLIENTSOCKET) for the new socket. Let it notify on FD_CLOSE, FD_READ and FD_WRITE messages. You can use the same message for all client sockets!<br />- In the WM_CLIENTSOCKET handler, you will receive FD_CLOSE, FD_READ and FD_WRITE notifications. However these are for all clients. So you'll have to find out for which socket it was meant. The socket handle is in wParam. Look up this socket handle in your socket-thread table (see above) to find out the threadID of the thread you created for that specific socket.<br />- Call PostThreadMessage to send a message to that thread (using it's ID). You can create any message you like for this, just define some equates for them (say TM_READ, TM_CLOSE, TM_WRITE ).<br />- In the procedure you used to set up the thread, you should have a message loop (GetMessage etc), just like in your WinMain.<br />For example:<br /><br />...<br />LOCAL threadMsg:MSG<br />...<br />.WHILE TRUE<br /> invoke GetMessage, addr threadMsg,0,0,0<br /> .BREAK .IF (!eax) ; eax is zero on WM_QUIT, send that message  to stop the thread!<br />...<br />mov ecx, MSG.message<br />.IF ecx==TM_READ<br />  ... put your read data handling code here...<br />.ELSEIF ecx==TM_CLOSE<br />  ...on closed connection....<br />.ELSEIF ecx==TM_WRITE<br />  ...on 'ready to write' notification...<br />.ENDIF<br />.....<br /><br />Hope this helps,<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-27 13:05:23 by Thomas</div>
+   </div>
+   <div class="post" id="post-26214">
+    <div class="subject"><a href="#post-26214">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">the per-client threads should only send/receive data, they shouldn't<br />perform any game actions (like NikDH says). Input from clients should<br />be queued, not directly acted on (otherwise clients with fast linespeeds<br />and low latency will have an unfair advantage over the rest).<br /><br />The main game thread will do its actions in &quot;heartbeats&quot;, so you get<br />a consistant game speed. Also, in each heartbeat, it should randomize<br />the order of client processing, so all clients will eg have a fair chance<br />of picking up an object, instead of having the first connected client<br />being favored.<br /><br />This way there shouldn't be synchronization problems with accessing<br />game structures - you'll need some critical sections around the<br />client command queues though.</div>
+    <div class="meta">Posted on 2002-02-27 13:19:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-26234">
+    <div class="subject"><a href="#post-26234">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">The algo. for the random client processing sounds like the hardest part.  Fodder, would you create one command queue and then randomly place client commands from each thread in the main queue, or create a seperate queue for each thread and access each queue randomly.</div>
+    <div class="meta">Posted on 2002-02-27 14:37:42 by rdaneel</div>
+   </div>
+   <div class="post" id="post-26235">
+    <div class="subject"><a href="#post-26235">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">I'd probably have one queue for each client.</div>
+    <div class="meta">Posted on 2002-02-27 14:42:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-26389">
+    <div class="subject"><a href="#post-26389">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body"><div class="quote"><br />The main game thread will do its actions in &quot;heartbeats&quot;, so you get<br />a consistant game speed. Also, in each heartbeat, it should randomize<br />the order of client processing, so all clients will eg have a fair chance<br />of picking up an object, instead of having the first connected client<br />being favored.<br /><br />This way there shouldn't be synchronization problems with accessing<br />game structures - you'll need some critical sections around the<br />client command queues though. </div><br /><br />Hi f0dder, <br />well i like this idea of having one main thread performing all actions upon data in heartbeats to avoid sync problems <br />but i dont agree so much about random clients execution order <br />Perhaps i'll suggest this way: <br />when a character tries to pick up an object from the ground <br />(so hes performing an operation where other ppl should be involved coz in the same time some other characters should try to pick up the object) u should set sorta timeout 4 performing the operation (of coz little time so its not nagging) in the meanwhile should arrive others msgs notification of other guys trying <br />to pick up the same object so we've n guys trying to pick up the same object at almost the same time <br />When timeout it reached we've to process the operation and so we've to give the object to the guys that have tried to pick it up <br />We should check some abilities of the characters such as speed <br />and luck and so on and so we decide who has succeded in the operation <br />Well i think this idea of setting a timeout 4 an operation that should involve many ppl is quite near to reality <br />In the real world the action of picking up a thing takes some seconds and in the meanwhile should come someone stronger <br />or faster that should break our balls <br /><br />See ya <br />NikDH</div>
+    <div class="meta">Posted on 2002-02-28 06:23:09 by NikDH</div>
+   </div>
+   <div class="post" id="post-26460">
+    <div class="subject"><a href="#post-26460">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Sliver: for more winsock related information, have a look at the winsock faq here: <a target="_blank" href="http://tangentsoft.net/wskfaq/">http://tangentsoft.net/wskfaq/</a>. <br />There are several examples (in C), also with multithreading.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-28 15:26:26 by Thomas</div>
+   </div>
+   <div class="post" id="post-33663">
+    <div class="subject"><a href="#post-33663">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">Hola,<br />I've used Qweerdy idea of a simple telnet server to get my network idea back on track... (thanks Qweerdy -- the work you've done is perfect for this test bed)<br /><br />So I've scrapped &quot;part of&quot;my original network set-up and used a modified version...<br /><br />The problem is I'm now at the sync point...<br /><br />So I was hoping someone could run the program and  <br /><br />just use<br />127.0.0.1 port 75<br /><br />and tell me how can I form a set up to sync the players and an possible even allow for communication between thread (ie. players talking to each other -- who are in the same room)<br /><br />All help is needed and appreciated,<br />Sliver</div>
+    <div class="meta">Posted on 2002-04-15 23:52:49 by Sliver</div>
+   </div>
+   <div class="post" id="post-33700">
+    <div class="subject"><a href="#post-33700">Creating a &quot;networked&quot; text based game</a></div>
+    <div class="body">I tested your program but it ignores everything I type. I've traced your code and it seems that your recv (the one with MSG_PEEK) keeps on receiving the same char (the first char I tyed), everytime it's called. <br /><br />I think your method of getting a full line won't work this way, as it probably won't fill the internal buffer with more chars until you've really received the first.<br /><br />A better method is to receive data when it arrives, and add it to a buffer until the buffer contains a newline char. When this is the case, process the buffer upto the newline char and after processing, shift the rest of it (after the newline) to the start of the buffer.<br /><br />Also, don't use sleep to wait for data. <strong>select</strong> is much better as it waits until a network event happens. But the asynchronous functions (WSAAsyncSelect or better, WSAEventSelect) are faster and allow more control (e.g. the thread doesn't hang when waiting for something).<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-04-16 11:19:20 by Thomas</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=3862&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=3862&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="3862" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=3862&amp;page=2">&gt;</a><a href="../?id=3862&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

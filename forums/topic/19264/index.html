@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Expat XML parser - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19264" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19264">Expat XML parser</a></p>
+   <div class="post" id="post-148737">
+    <div class="subject"><a href="#post-148737">Expat XML parser</a></div>
+    <div class="body">G'day All,<br /><br />I am trying to use the Expat XML parser from within my ASM Win32<br />application.<br /><br />I have built a library &quot;lib&quot; file as per Iczelion's &quot;How toCreate your <br />own MASM Import Libraries&quot; instructions. I can load the library and call <br />some expat functions without error:<br /><br /><pre><code><br />  invoke XML_ParserCreate, 0<br />  ...<br />  invoke XML_SetElementHandler, hXMLParser, funStart, funEnd<br />  ...<br /></code></pre><br /><br />However when I call &quot;XML_Parse&quot;, the program crashes:<br /><pre><code><br />  invoke XML_Parse, hXMLParser, buff, 21, 0	; BANG<br /></code></pre><br /><br />So I tried to load the &quot;libexpat.dll&quot; dynamically, with much the <br />same result:<br /><pre><code><br />.data<br />	...<br />	; Dynamically load the DLL<br />	; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />	MyDLLName					db &quot;libexpat.dll&quot;,0<br />	XMLParse						db &quot;XML_Parse&quot;,0<br />	XMLParserCreate			db &quot;XML_ParserCreate&quot;,0<br />	XMLSetElementHandler		db &quot;XML_SetElementHandler&quot;,0<br />	...<br />	hMyDLL						dd ?<br />	addrParse					dd ?<br />	addrParserCreate			dd ?<br />	addrSetElementHandler	dd ?<br />	...<br /><br />	; Expat XML processing callback functions<br />	fStart						db 'funStart',0<br />	fEnd							db 'funEnd',0<br /><br />	buff							db '&lt;action&gt; id &lt;/action&gt;',0<br /><br />.code<br /><br />start&#58;<br />	...<br /><br />	; Dynamically load the DLL<br />	; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />	invoke LoadLibrary, OFFSET MyDLLName<br />	mov &#91;hMyDLL&#93;, eax<br /><br />	; XML_ParserCreate<br />		invoke GetProcAddress, &#91;hMyDLL&#93;, offset XMLParserCreate<br />		.if&#40;eax == NULL&#41;<br />			invoke Beep, 1000, 100<br />		.endif<br />		mov	&#91;addrParserCreate&#93;, eax<br />		; p = XML_ParserCreate&#40;NULL&#41;; <br />		push 	NULL               ; dword1<br />		call	&#91;addrParserCreate&#93;<br />		mov hXMLParser, eax<br /><br />	; XML_SetElementHandler<br />		invoke GetProcAddress, &#91;hMyDLL&#93;, offset XMLSetElementHandler<br />		.if&#40;eax == NULL&#41;<br />			invoke Beep, 1000, 100<br />		.endif<br />		mov	&#91;addrSetElementHandler&#93;, eax<br />		; XML_SetElementHandler&#40;p, start, end&#41;;<br />		push	offset fEnd       ; dword3<br />		push	offset fStart     ; dword2<br />		push	&#91;hXMLParser&#93;   ; dword1<br />		call	&#91;addrSetElementHandler&#93;<br /><br />	; XML_Parse &#91;CRASH&#93;<br />	invoke GetProcAddress, &#91;hMyDLL&#93;, offset XMLParse<br />		.if&#40;eax == NULL&#41;<br />			invoke Beep, 1000, 100<br />		.endif<br />		mov	&#91;addrParse&#93;, eax<br />		; XML_Parse&#40;XML_Parser p, const char *s, int len, int isFinal&#41;<br />		push	0                     ; dword4<br />		push	21                   ; dword3<br />		push	offset buff        ; dword2<br />		push	&#91;hXMLParser&#93;    ; dword1<br />		call	&#91;addrParse&#93;        ; BANG<br /></code></pre><br /><br /><br />Does anyone know what I have done wrong, and why the XMLParse function<br />crashes my application. I have also tried the LibXML XML C parser with <br />no luck :(<br /><br /><br />Links:<br />  Expat XML Parser         http://www.libexpat.org<br />  LibXML XML C parser      http://www.xmlsoft.org/<br /><br />Also:<br />  I am fairly new to ASM amd Win32 programming<br /><br /><br />Thanks<br /><br />Dorf</div>
+    <div class="meta">Posted on 2004-08-30 00:36:52 by dorf</div>
+   </div>
+   <div class="post" id="post-148741">
+    <div class="subject"><a href="#post-148741">Expat XML parser</a></div>
+    <div class="body">Try:<br /><div class="quote"><br />invoke XML_Parse, hXMLParser, <strong>addr</strong> buff, <strong>sizeof buff</strong>, 0<br /></div><br /><br />- if you don't use addr/sizeof, masm will pass the first element (byte) of buff, expat will treat that as a pointer, and *boom*. Also, it's bad to use hardcoded magic values (ie: 21), especially when masm has 'sizeof' :-)</div>
+    <div class="meta">Posted on 2004-08-30 01:10:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-148742">
+    <div class="subject"><a href="#post-148742">Expat XML parser</a></div>
+    <div class="body">G'day f0dder,<br /><br />Thanks for the quick response<br /><br />That helped. The app still crashes however.<br /><br /><br />The parser now calls my start function and pops a message box<br />with the opening tag &quot;&lt;action&gt;&quot;.  :) <br /><br />But it crashes before calling the end function  :( <br /><br /><br /><pre><code><br />; start&#40;void *data, const char *el, const char **attr&#41;<br />funStart proc	data&#58;DWORD, el&#58;DWORD, attr&#58;DWORD<br />	;invoke Beep, 1000, 100	; Bell<br />	invoke	MessageBox, NULL, el, NULL, MB_OK<br />	ret<br />funStart endp<br /><br />; end&#40;void *data, const char *el&#41; &#123;<br />funEnd proc	data&#58;DWORD, el&#58;DWORD<br />	invoke Beep, 100, 100	; Bell<br />	ret<br />funEnd endp<br /></code></pre><br /><br />Thanks for your help<br />Dorf</div>
+    <div class="meta">Posted on 2004-08-30 02:01:02 by dorf</div>
+   </div>
+   <div class="post" id="post-148743">
+    <div class="subject"><a href="#post-148743">Expat XML parser</a></div>
+    <div class="body">If you're doing a typical masm file, you have &quot;.model flat,stdcall&quot; somewhere - this sets the default calling convention for all further PROCs to <strong>stdcall</strong>. I assume EXPAT is written in C, and that it doesn't have &quot;__stdcall&quot; or similar qualifiers for it's callbacks.<br /><br />So, try adding a 'C' to your callback procs - like<br /><pre><code><br />funStart proc C  data&#58;DWORD, el&#58;DWORD, attr&#58;DWORD <br />   ;invoke Beep, 1000, 100   ; Bell <br />   invoke   MessageBox, NULL, el, NULL, MB_OK <br />   ret <br />funStart endp <br /><br />; end&#40;void *data, const char *el&#41; &#123; <br />funEnd proc  C data&#58;DWORD, el&#58;DWORD <br />   invoke Beep, 100, 100   ; Bell <br />   ret <br />funEnd endp <br /></code></pre></div>
+    <div class="meta">Posted on 2004-08-30 02:04:49 by f0dder</div>
+   </div>
+   <div class="post" id="post-148746">
+    <div class="subject"><a href="#post-148746">Expat XML parser</a></div>
+    <div class="body">G'day f0dder,<br /><br />Yep ... that seems to have done the trick :)<br /><br />Just for the record, I had to now define the start/end function<br />prototypes as:<br /><br /><pre><code><br />funStart         proto C &#58;DWORD, &#58;DWORD, &#58;DWORD<br />funEnd           proto C &#58;DWORD, &#58;DWORD<br /></code></pre><br /><br />Now I can start testing the expat parser :-D <br /><br />Thank you very much<br /><br />I think Win32Asm is very cool<br /><br />Thanks again<br />Dorf</div>
+    <div class="meta">Posted on 2004-08-30 02:36:01 by dorf</div>
+   </div>
+   <div class="post" id="post-148796">
+    <div class="subject"><a href="#post-148796">Expat XML parser</a></div>
+    <div class="body">G'day All,<br /><br />Next problem ... <br />Does anyone know how to access a pointer-to-a-pointer (const char **attr&quot;) in MASM. <br /><br />The Expat XML parser - in C <br /><pre><code><br />/* Read an XML document from standard input and print an element */<br />/* outline on standard output. */<br />void start&#40;void *data, const char *el, const char **attr&#41; &#123;<br />  int i;<br />  ...<br />  printf&#40;&quot;%s&quot;, el&#41;;<br /><br />  for &#40;i = 0; attr&#91;i&#93;; i += 2&#41; &#123;<br />    printf&#40;&quot; %s='%s'&quot;, attr&#91;i&#93;, attr&#91;i + 1&#93;&#41;;<br />  &#125;<br />  ...<br />&#125;<br /></code></pre><br /><br />To the Expat XML parser - in RadASM/MASM<br /><pre><code><br />funStart proc C data&#58;DWORD, el&#58;DWORD, attr&#58;DWORD<br /><br />	invoke	SaveIndent<br />	invoke lstrcat, addr strBuff, el<br />	invoke lstrcat, addr strBuff, addr szNewLine<br /><br />	inc level<br />	invoke SaveIndent<br />	<br />	; Handle the element attributes<br />	; *** HOW TO DEREFERENCE A POINTER TO A POINTER &#40;&quot;const char **attr&quot;&#41;***<br />	invoke lstrcat, addr strBuff, attr<br />	invoke lstrcat, addr strBuff, addr szNewLine<br />	;inc level<br />	<br />	ret<br />funStart endp<br /></code></pre><br /><br />Thanks<br /><br />Dorf</div>
+    <div class="meta">Posted on 2004-08-30 21:22:04 by dorf</div>
+   </div>
+   <div class="post" id="post-148828">
+    <div class="subject"><a href="#post-148828">Expat XML parser</a></div>
+    <div class="body">Looking at the C code attr seems to be a pointer to an array of pointers to strings so you could try for example this code which should mimic the &quot;for&quot; loop given. I haven't tested this though :)<br /><pre><code>;Loop through attrs<br />mov ecx,attr	; ecx point to attr array<br />cmp &#91;ecx&#93;,0	; test ecx for NULL<br />jz endLoop<br />startLoop&#58;<br />	mov eax,&#91;ecx&#93;	; eax points to string<br /><br />	; ... do something here ...<br /><br />	; move ecx onto next string and recheck for NULL<br />	add ecx,4<br />	cmp &#91;ecx&#93;,0<br />	jnz startLoop<br />endLooop&#58;</code></pre><br />Basically if a memory variable is a pointer to a point then the following will get you to the &quot;thing&quot;<br /><pre><code>mov eax,attr	; eax is pointer to pointer<br />mov eax,&#91;eax&#93;	; eax is pointer<br />mov eax,&#91;eax&#93;	; eax is the &quot;thing&quot;</code></pre><br />For strings though you wont need the last mov cause you'll be dealing with their pointers anyway.</div>
+    <div class="meta">Posted on 2004-08-31 08:59:22 by Eóin</div>
+   </div>
+   <div class="post" id="post-148891">
+    <div class="subject"><a href="#post-148891">Expat XML parser</a></div>
+    <div class="body">G'day E?in,<br /><br />That helped a lot :)<br /><br />I'm having some trouble with the loop ... detecting null<br />attributes, but it basically works.<br /><br />I'll post my little demo of parsing an XML file into<br />a Treeview control in a day or so.<br /><br />Thanks<br /><br />Dorf</div>
+    <div class="meta">Posted on 2004-09-01 03:03:24 by dorf</div>
+   </div>
+   <div class="post" id="post-148892">
+    <div class="subject"><a href="#post-148892">Expat XML parser</a></div>
+    <div class="body">Just thinking it might be important to also check ecx for NULL ie <br /><pre><code>;Loop through attrs<br />mov ecx,attr   ; ecx point to attr array<br />cmp ecx,0  ; &lt;-- check if attr is null<br />jz endLoop<br />cmp &#91;ecx&#93;,0   ; test ecx for NULL<br />jz endLoop<br />startLoop&#58;</code></pre></div>
+    <div class="meta">Posted on 2004-09-01 03:28:28 by Eóin</div>
+   </div>
+   <div class="post" id="post-148916">
+    <div class="subject"><a href="#post-148916">Expat XML parser</a></div>
+    <div class="body">You can make use of jecxz if the displacement is less than 127 bytes.</div>
+    <div class="meta">Posted on 2004-09-01 07:08:57 by roticv</div>
+   </div>
+   <div class="post" id="post-149109">
+    <div class="subject"><a href="#post-149109">Expat XML parser</a></div>
+    <div class="body">G'day All,<br /><br />Here is my little demo of using the Expat XML parser in an <br />RadASM/MASM project.<br /><br />This application parses an XML file into a Treeview control.<br />See the included &quot;Readme.txt&quot; for a more detailed description.<br /><br />I've also included a project to create the import library <br />for the Expat XML parser C library.<br /><br />Issues:<br />After reading the XML file into a string buffer, I cannot get<br />the actual length of the XML contents (with sizeof buff). <br />If I pass this buffer to Expat, it complains about malformed<br />document, or something.<br /><br />As a workaround I get the size of the XML file:<br />  invoke GetFileSizeFile, fileName<br />and pass this return value (eax) to Expat.<br />  invoke XML_Parse, hXMLParser, addr buff, eax, 0<br />and Expat seems happy with this.<br /><br />Someone that knows what they're doing may be able to figure this<br />out ... perhaps!<br /><br /><br />Use this at your own risk - I am fairly new to ASM/Win32 :)<br /><br />Thanks for the help<br /><br />ASM/Win32 rocks.<br /><br />dorf</div>
+    <div class="meta">Posted on 2004-09-04 00:39:30 by dorf</div>
+   </div>
+   <div class="post" id="post-149110">
+    <div class="subject"><a href="#post-149110">Expat XML parser</a></div>
+    <div class="body"><div class="quote"><br />After reading the XML file into a string buffer, I cannot get <br />the actual length of the XML contents (with sizeof buff). <br /></div><br /><br />Sizeof works at assemble-time - it returns the size the assembler has reserved for the data object. The assembler has no notion of &quot;the size of the contents&quot;, you'll need some runtime code for that. In case of an ASCII text file, you could use a strlen routine, or - as you're doing right now - simply the filesize.</div>
+    <div class="meta">Posted on 2004-09-04 00:55:03 by f0dder</div>
+   </div>
+   <div class="post" id="post-169611">
+    <div class="subject"><a href="#post-169611">Re: Expat XML parser</a></div>
+    <div class="body">dorf:<br /><br />&nbsp;  Hello, I could not find the demo you mentioned. Will you please check the link?<br /><br />&nbsp; Thank you.</div>
+    <div class="meta">Posted on 2006-01-17 02:57:13 by seasea</div>
+   </div>
+   <div class="post" id="post-169633">
+    <div class="subject"><a href="#post-169633">Re: Expat XML parser</a></div>
+    <div class="body">The link got zapped when the board got hacked some time back, I think.<br /><br />The Expat XML parser demo is here, also a couple of other Masm32 examples:<br /><br /><a target="_blank" href="http://www.phpmvc.net/asm/">http://www.phpmvc.net/asm/</a><br /><br />Download -&nbsp; 83,888 Bytes<br /><a target="_blank" href="http://www.phpmvc.net/asm/expat-xml-parser-test.zip">http://www.phpmvc.net/asm/expat-xml-parser-test.zip</a><br /><br />Regards<br />dorf<br /></div>
+    <div class="meta">Posted on 2006-01-17 15:19:11 by dorf</div>
+   </div>
+  </div>
+ </body>
+</html>

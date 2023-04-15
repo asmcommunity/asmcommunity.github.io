@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. examples - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27456" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27456">Basics of Asm32 in opt. examples</a></p>
+   <div class="post" id="post-196387">
+    <div class="subject"><a href="#post-196387">Basics of Asm32 in opt. examples</a></div>
+    <div class="body">Optimizing Frame3D:
+Loop optimization.
+Passing parameters to invoke optimizations.
+
+Well, I wrote big lecture with comments, and accidently close editor with unsaved 
+treasuries of my wisdome :)
+So I' ll be more laconic for now ( to myself - press F2 you idiot!)
+1. If you are not asm programmer first thing you need to learn is not how to create your
+first window, but basic and powerfull magic spells
+- JCC and flags
+- Logic operators and flags 
+- ADD,ADC,SUB,SBB and flags
+- Basic memory addressing
+And I'm going to discuss complex algo topics before a feel people learnt alphabet.
+
+--------------------------------------------
+
+I love Frame3D, all glory to Hutch, I'm just going to do my dirty work for speed and size sake.
+Look at the original:
+<pre><code>
+Frame3D proc hDC:DWORD,btn_hi:DWORD,btn_lo:DWORD,
+             tx:DWORD, ty:DWORD, lx:DWORD, ly:DWORD,bdrWid:DWORD
+
+  ; ------------------
+  ; Example usage code
+  ; ------------------
+
+  ; LOCAL btn_hi   :DWORD
+  ; LOCAL btn_lo   :DWORD
+
+  ; invoke GetSysColor,COLOR_BTNHIGHLIGHT
+  ; mov btn_hi, eax
+
+  ; invoke GetSysColor,COLOR_BTNSHADOW
+  ; mov btn_lo, eax
+
+  ; invoke Frame3D,hDC,btn_lo,btn_hi,50,50,150,100,2
+  ; invoke Frame3D,hDC,btn_hi,btn_lo,47,47,153,103,2
+  ; --------------------------------
+
+    LOCAL hPen     :DWORD
+    LOCAL hPen2    :DWORD
+    LOCAL hpenOld  :DWORD
+
+    invoke CreatePen,0,1,btn_hi
+    mov hPen, eax
+  
+    invoke SelectObject,hDC,hPen
+    mov hpenOld, eax
+
+    ; ------------------------------------
+    ; Save copy of parameters for 2nd loop
+    ; ------------------------------------
+    push tx
+    push ty
+    push lx
+    push ly
+    push bdrWid
+
+    ; ------------
+
+       lpOne:
+
+        invoke MoveToEx,hDC,tx,ty,NULL
+        invoke LineTo,hDC,lx,ty
+
+        invoke MoveToEx,hDC,tx,ty,NULL
+        invoke LineTo,hDC,tx,ly
+
+        dec tx
+        dec ty
+        inc lx
+        inc ly
+
+        dec bdrWid
+        cmp bdrWid, 0
+        je lp1Out
+        jmp lpOne
+      lp1Out:
+
+    ; ------------
+    invoke CreatePen,0,1,btn_lo
+    mov hPen2, eax
+    invoke SelectObject,hDC,hPen2
+    mov hPen, eax
+    invoke DeleteObject,hPen
+    ; ------------
+
+    pop bdrWid
+    pop ly
+    pop lx
+    pop ty
+    pop tx
+
+       lpTwo:
+
+        invoke MoveToEx,hDC,tx,ly,NULL
+        invoke LineTo,hDC,lx,ly
+
+        invoke MoveToEx,hDC,lx,ty,NULL
+        inc ly        
+        invoke LineTo,hDC,lx,ly
+        dec ly
+
+        dec tx
+        dec ty
+        inc lx
+        inc ly
+
+        dec bdrWid
+        cmp bdrWid, 0
+        je lp2Out
+        jmp lpTwo
+      lp2Out:
+
+    ; ------------
+    invoke SelectObject,hDC,hpenOld
+    invoke DeleteObject,hPen2
+
+    ret
+
+Frame3D endp
+</code></pre>
+1. First strange things is how 2 loops are organized:
+
+        dec bdrWid
+        cmp bdrWid, 0
+        je lp1Out
+        jmp lpOne
+      lp1Out:
+-----------------------
+        dec bdrWid
+        cmp bdrWid, 0
+        je lp2Out
+        jmp lpTwo
+      lp2Out:
+
+There are redandent instructions in each. We can do it with 2 instruction
+
+     dec bdrWid ;sets ZF if bdrWid will be 0 after decreament
+     jnz lpOne    ;if it isn't 0 yet - loop
+;The same about second loop:
+
+     dec bdrWid
+     jne  lpTwo
+2. Push reg = 1 byte, 1 clock and UVP, push memory addressed by ebp-+num (arguments and locals) 2 clocks 3 bytes
+Now look at:
+    invoke CreatePen,0,1,btn_hi
+    mov hPen, eax  
+    invoke SelectObject,hDC,hPen ;?!
+You need save result in hPen? - Save it then, but don't pass it as parameter to invoke since you already have it in eax!
+
+    invoke CreatePen,0,1,btn_hi
+    mov hPen, eax  
+    invoke SelectObject,hDC,EAX ;!
+   
+There are three such cases in the proc when it pass locals to invoke though it's already in registers.
+3. Count how many times hDC used as parameter? Many times. 11.
+edi esi ebx unchangable by API. We can use of of the reg.
+All we need to use any of the reg - save it at the begining and restore it afterwords.
+It's just 2</div>
+    <div class="meta">Posted on 2001-03-30 07:50:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

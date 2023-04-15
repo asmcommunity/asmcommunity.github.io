@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>MemCopy in reverse. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8242" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=8242">MemCopy in reverse.</a></p>
+   <div class="post" id="post-60310">
+    <div class="subject"><a href="#post-60310">MemCopy in reverse.</a></div>
+    <div class="body">Hello.. I wrote this quite optimized routine to copy memory:<br /><pre><code><br />        cld<br />        mov     eax,ecx<br />        sub     ecx,edi<br />        sub     ecx,eax<br />        and     ecx,3<br />        sub     eax,ecx<br />        jle     short @exit<br />        rep movsb<br />        mov     ecx,eax<br />        and     eax,3<br />        shr     ecx,2<br />        rep movsd<br />        @exit&#58;<br />        add     ecx,eax<br />        rep movsb<br /></code></pre><br />Now I'd like to make a &quot;reversed&quot; version, so I can copy also overlapped regions.. but I'm quite confused on how to modify the routine above to make it reversed (let away the std instruction in place of cld).<br /><br />Does anybody have a complete suite (i.e. including also reversed versions) of optimized memory copy routines to share?</div>
+    <div class="meta">Posted on 2002-10-01 16:28:19 by Bugs' Bounty Hunter</div>
+   </div>
+   <div class="post" id="post-60311">
+    <div class="subject"><a href="#post-60311">MemCopy in reverse.</a></div>
+    <div class="body">??? string reverse ??? - <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=3416&amp;highlight=string+reverse">http://www.asmcommunity.net/board/index.php?topic=3416&amp;highlight=string+reverse</a> - not optimized :)</div>
+    <div class="meta">Posted on 2002-10-01 16:43:09 by stryker</div>
+   </div>
+   <div class="post" id="post-60313">
+    <div class="subject"><a href="#post-60313">MemCopy in reverse.</a></div>
+    <div class="body">Actually, if you are going to use <strong>rep movs</strong>, it is quite simple.  Just move to the end of the array and do what you did.  For example,<br /><pre><code><br />    std<br />    lea edi,&#91;edi+ecx-1&#93;<br />    lea esi,&#91;esi+ecx-1&#93;<br />    mov edx,ecx<br />    and ecx,3<br />    rep movsb<br />    mov ecx,edx<br />    shr ecx,2<br />    sub edi,3<br />    sub esi,3<br />    rep movsd<br /></code></pre><br />Of course, this is not optimal.  Using <strong>rep movsb</strong> to something less than 4 bytes long is never going to be optimal.  :)</div>
+    <div class="meta">Posted on 2002-10-01 16:45:32 by Starless</div>
+   </div>
+   <div class="post" id="post-60377">
+    <div class="subject"><a href="#post-60377">MemCopy in reverse.</a></div>
+    <div class="body">Instead of having two versions just combine them.<br /><br />Assumes direction flag is clear, which it should be on win32.<br /><br /><pre><code>&#91;size=12&#93;MemCopy proc uses esi edi, pSrc&#58;DWORD, pDest&#58;DWORD, dwLen&#58;DWORD<br /><br />    mov esi, pSrc<br />    mov edi, pDest<br />    mov ecx, dwLen<br /><br />    mov eax, ecx<br />    and ecx, 3<br />    cmp edi, esi<br />    jb  @f<br />    std<br />    lea edi, &#91;edi+eax-1&#93;<br />    lea esi, &#91;esi+eax-1&#93;<br />@@&#58; rep movsb<br />    jb @f<br />    sub edi, 3<br />    sub esi, 3<br />@@&#58; mov ecx, eax<br />    shr ecx, 2<br />    rep movsd<br />    cld<br /><br />MemCopy endp&#91;/size&#93;</code></pre></div>
+    <div class="meta">Posted on 2002-10-02 08:19:37 by iblis</div>
+   </div>
+   <div class="post" id="post-60518">
+    <div class="subject"><a href="#post-60518">MemCopy in reverse.</a></div>
+    <div class="body">This is always an interesting topic.<br />From a look at the source <strong>Bugs' Bounty Hunter</strong> posted one may notice<br />that it enforces destination alignment, which is a known technique to optimize<br />memory copy performance, expecially when the destination is not write-combining.<br /><br />So a &quot;reverse&quot;, or &quot;backward&quot; version should do that as well (i.e. it is a feature,<br />not a bug :grin: ).<br /><br />Here's my quick attempt to a &quot;conversion&quot; of the original routine to keep<br />the destination alignment quality, but copy in reverse (as is indispensible<br />for example when src/dst regions overlap and dst&gt;src). I could dedicate only<br />few minutes to it.. I leave to you the clever optimizations. What I realized<br />is that MOVSx, when the direction flag is set, behaves in a very non-optimal<br />way, i.e. it post-decrements rather than pre-decrements.. which would be much<br />more logical and intelligent. Bad design, or I didn't bother enough to look<br />for optimizations. Your time now to go and do justice. ;)<br /><br />EDI = Destination Pt<br />ESI = Source Pt<br />EAX = Length in bytes (can be zero without a permanent damage to your SDRAM)<br /><br /><pre><code><br />               ;STD<br />                LEA             EDI,&#91;EDI+EAX-1&#93;<br />                LEA             ESI,&#91;ESI+EAX-1&#93;<br />                CMP             EAX,4<br />                JB SHORT        .last<br />                LEA             ECX,&#91;EDI+1&#93;<br />                AND             ECX,3<br />                SUB             EAX,ECX<br />            REP MOVSB<br />                MOV             ECX,EAX<br />                SHR             ECX,2<br />                SUB             EDI,3<br />                SUB             ESI,3<br />            REP MOVSD<br />                ADD             EDI,3<br />                ADD             ESI,3<br />                AND             EAX,3<br />.last&#58;          MOV             ECX,EAX<br />            REP MOVSB<br /></code></pre><br /><br />PS: Just to be complete, here is a well known &quot;forward&quot; version, this one was cleverly optimized by Ken Silverman:<br /><pre><code><br />               ;cld<br />                lea             ecx,&#91;edi+edi*2&#93;<br />                and             ecx,3<br />                sub             eax,ecx<br />                jle             short LEndBytes<br />            rep movsb<br />                mov             ecx,eax<br />                and             eax,3<br />                shr             ecx,2<br />            rep movsd<br />LEndBytes&#58;      add             ecx,eax<br />            rep movsb<br /></code></pre></div>
+    <div class="meta">Posted on 2002-10-03 16:11:39 by Maverick</div>
+   </div>
+   <div class="post" id="post-60521">
+    <div class="subject"><a href="#post-60521">MemCopy in reverse.</a></div>
+    <div class="body">In Place-Memory Reverse. No need for an extra buffer. Just the length of the string and the pointer to the string is needed.<pre><code>memrev&#58;<br /><br />    push    ebx<br />    push    esi<br />    mov     ecx, &#91;esp+16&#93;<br />    mov     ebx, &#91;esp+12&#93;<br />    xor     edx, edx<br />    mov     esi, ecx<br />    shr     esi, 1<br />    inc     esi<br />    <br />    __copy&#58;<br />        <br />        dec     esi<br />        jz      __finish<br />        dec     ecx<br />        mov     al, &#91;ebx+edx&#93;<br />        mov     ah, &#91;ebx+ecx&#93;<br />        mov     &#91;ebx+ecx&#93;, al<br />        mov     &#91;ebx+edx&#93;, ah<br />        inc     edx<br />        jmp     __copy<br />    <br />    __finish&#58;<br />    <br />    pop     esi<br />    pop     ebx<br />    retn    8</code></pre>sample usage:<pre><code>    invoke  lstrlen, text<br />    push    eax<br />    push    text  ;&#91;OFFSET text&#93; for MASM....<br />    call    memrev</code></pre><br /><br /><br /><br />This has nothing to do with the main topic. This is for those who wants to reverse the text without using an extra buffer. BTW, I didn't check for a string length of 0. You can check ecx if it's 0 before <em>mov ebx, </em>. :)</div>
+    <div class="meta">Posted on 2002-10-03 19:59:33 by stryker</div>
+   </div>
+   <div class="post" id="post-60524">
+    <div class="subject"><a href="#post-60524">MemCopy in reverse.</a></div>
+    <div class="body">Well done, <strong>stryker</strong> :)<br />If I can give you a suggestion, your can take advantage of BSWAP to optimize a bit.</div>
+    <div class="meta">Posted on 2002-10-04 01:58:09 by Maverick</div>
+   </div>
+   <div class="post" id="post-61109">
+    <div class="subject"><a href="#post-61109">MemCopy in reverse.</a></div>
+    <div class="body"><pre><code>count   1234567890123 == 13 bytes<br />string  ThisIsAString</code></pre>1. Swap byte T(1) and g(13) -&gt; Actual Memory Offset(count - 1)<br />2. Swap byte h(2) and n(12) -&gt; Actual Memory Offset(count - 1)<br />n.....<br /><br />It does work like BSWAP. I'll see what I can do. :)<br /><br />Sorry for the delay of this response, I was very busy with projects, homeworks... at school.<br /><br /><br /><br />BTW, no need for checking for string length of 0. I don't know what I was thinking on the previous post. :)</div>
+    <div class="meta">Posted on 2002-10-09 22:04:22 by stryker</div>
+   </div>
+  </div>
+ </body>
+</html>

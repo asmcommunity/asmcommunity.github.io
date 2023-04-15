@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to clear a buffer? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26793" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26793">How to clear a buffer?</a></p>
+   <div class="post" id="post-193022">
+    <div class="subject"><a href="#post-193022">How to clear a buffer?</a></div>
+    <div class="body">Suppose I stored some values or data in a buffer (say myBuffer)
+Now myBuffer contains say "Win32ASM Is Great." How do I clean
+"myBuffer" so that I can store "Win32ASM Is Cool?"
+
+e-nigma</div>
+    <div class="meta">Posted on 2001-02-06 10:44:00 by e-nigma</div>
+   </div>
+   <div class="post" id="post-193023">
+    <div class="subject"><a href="#post-193023">How to clear a buffer?</a></div>
+    <div class="body">The only way to blank it is to manually go from position 0 in the buffer to position x, placing 0 in every byte....
+
+But if you are only using the buffer for text, remember text is null terminated, and so you don't need to blank data to overwrite it, just add a zero to the end of it!
+
+Once a null terminator is reached, the rest of the buffer will be ignored, so if:
+myBuffer db "12345678",0,"blah blah blah",0
+
+is essentially read as "12345678", and myBuffer + 9 is equal to "blah blah blah blah"!
+
+This means it is easy to cut strings short too! e.g.
+myBuffer db "Win32ASM is great and cool!",0
+mov eax, ADDR myBuffer
+add eax, 9
+mov , 0 ;<- This is a 32bit zero
+;now myBuffer = "Win32ASM",0,0,0,0,"great and cool!",0
+;4 Zeros cos it is a 32bit zero we move to the memory
+
+Mirno</div>
+    <div class="meta">Posted on 2001-02-06 11:29:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-193024">
+    <div class="subject"><a href="#post-193024">How to clear a buffer?</a></div>
+    <div class="body">Mirno is exactly correct. However, there's no need to move a 32 bit zero. A single byte will do:
+
+myBuffer db "Win32ASM is great and cool!",0
+mov eax, OFFSET myBuffer
+add eax, 8
+mov BTYE PTR , 0 ;<- This is an 8 bit zero
+;now myBuffer = "Win32ASM",0," is great and cool!",0
+;1 Zero 'cos it is a 8 bit zero we move to the memory</div>
+    <div class="meta">Posted on 2001-02-06 11:35:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193025">
+    <div class="subject"><a href="#post-193025">How to clear a buffer?</a></div>
+    <div class="body">i think there is an api to do that, right? RtlZeroMemory</div>
+    <div class="meta">Posted on 2001-02-06 12:17:00 by [SaFc0n]</div>
+   </div>
+   <div class="post" id="post-193026">
+    <div class="subject"><a href="#post-193026">How to clear a buffer?</a></div>
+    <div class="body">if you just put a zero at the first byte, your buffer will appear to be clear for most functions.
+(s)</div>
+    <div class="meta">Posted on 2001-02-06 12:28:00 by (scalp)</div>
+   </div>
+   <div class="post" id="post-193027">
+    <div class="subject"><a href="#post-193027">How to clear a buffer?</a></div>
+    <div class="body">You guys are correct. But I don't see why we have to clear the buffer first. If you want to replace one text with another, simply call lstrcpy.</div>
+    <div class="meta">Posted on 2001-02-06 18:44:00 by Iczelion</div>
+   </div>
+   <div class="post" id="post-193028">
+    <div class="subject"><a href="#post-193028">How to clear a buffer?</a></div>
+    <div class="body">It really depends what is needed, in some instances, a full buffer needs to be set to a value, there is a fast function in the current MASM32.LIB called "memfill", about 190 meg/sec on my PIII. ( next version is faster :) )
+
+If you need the buffer recognised as an empty string buffer, Ernie's suggestion is the easiest and fastest way to do it, just write an ascii zero at byte one.
+
+If as in the example, you want to place a new string in the buffer, Icz is right, just write the new string to it as the string is zero terminated and it will read correctly. If you need to do this on a recursive basis, forget the API, it is too slow.
+
+Use a memory copy function written in assembler, on a short string < 64 bytes, use BYTE copy, on longer strings, use DWORD copy and do the remainder as bytes.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-02-06 19:22:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-193029">
+    <div class="subject"><a href="#post-193029">How to clear a buffer?</a></div>
+    <div class="body">i would juts like to say, one of the great things about assembly langauge is that you can do a lot of things simply and easily without the surport of higher level functions:
+
+ie:
+<pre><code>
+mov edi,Offset of buffer to fill
+mov ecx,bytes to fill
+add ecx,edi
+mov al,byte to fill, ie NULL
+
+@@:
+mov byte ptr ,al or immed8 
+inc edi 
+cmp ecx,edi 
+jne @B 
+
+</code></pre>
+will fill ecx bytes of memory with al, without the need for a function call. It will fill 64Mb of mem (67,108,864 bytes), in appox 402,653,188 clocks (or 0.8 seconds on a 500Mtz pc).
+
+This doesn't include pentiums dual pipes or p3 tlb caches, branch predictions or out of order instruction execution etc. I think that everybody here, should expect to never see a call to some function like RtlZeroMem, cause really, unless you are gonna be zeroing extremly large amount of mem, in which disk caching will sloow everything down anyway, size should be your primery optimization.</div>
+    <div class="meta">Posted on 2001-02-08 04:23:00 by George</div>
+   </div>
+   <div class="post" id="post-193030">
+    <div class="subject"><a href="#post-193030">How to clear a buffer?</a></div>
+    <div class="body">I don't see why you'd want to use an API. It is way overbloated. And if you want to put in zeros, rather that a loop with mov, I'd use rep stosb.</div>
+    <div class="meta">Posted on 2001-02-08 11:15:00 by Hel</div>
+   </div>
+  </div>
+ </body>
+</html>

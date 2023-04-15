@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Am I using mmx wrongly here? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2595" />
+    <link rel="next" href="../?id=2595&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2595">Am I using mmx wrongly here?</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=2595&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=2595&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="2595" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=2595&amp;page=2">&gt;</a><a href="../?id=2595&amp;page=2">&raquo;</a></form>   <div class="post" id="post-16500">
+    <div class="subject"><a href="#post-16500">Am I using mmx wrongly here?</a></div>
+    <div class="body">I was rewriting an old pixel blending routine to mmx to try and speed it up. Here is the main calculating part of the origional code, I realise it hard to follow without the full thing, but this is the part I changed to mmx<br /><br />	push ebx<br />	mov ebx,dword ptr <br /><br />	mov eax,ebx<br />	mov edx,<br />	and edx,0ffh<br />	and eax,0ffh<br />	sub edx,eax<br />	imul edx,ecx<br />	sar edx,8<br />	add eax,edx<br />	mov byte ptr tddb,al<br /><br />	mov eax,ebx<br />	mov edx,<br />	shr eax,8<br />	shr edx,8<br />	and edx,0ffh<br />	and eax,0ffh<br />	sub edx,eax<br />	imul edx,ecx<br />	sar edx,8<br />	add eax,edx<br />	mov byte ptr tddb[1],al<br /><br />	mov eax,ebx<br />	mov edx,<br />	shr eax,16<br />	shr edx,16<br />	and edx,0ffh<br />	and eax,0ffh<br />	sub edx,eax<br />	imul edx,ecx<br />	sar edx,8<br />	add eax,edx<br />	mov byte ptr tddb[2],al<br /><br />	mov eax,tddb<br />	pop ebx<br />	mov dword ptr ,eax <br /><br />You can esailly see from this that I did the blending seperatly for the red, green &amp; blue colours. I though mmx would speed things up seen as it could do all this at the same time. <br /><br />Heres the code I came up with.<br /><br />	mov al,[3]<br />	shr al,1<br />	mov ah,al<br /><br />	mov [0],ax<br />	mov [2],ax<br />	<br />	movd mm(0),<br />	movd mm(1),<br />	movd mm(2),<br />	<br />	punpcklbw mm(0),zer<br />	punpcklbw mm(1),zer<br />	punpcklbw mm(2),zer<br />	<br />	psubw mm(0),mm(1)<br />	pmullw mm(0),mm(2)<br />	psraw mm(0),7<br />	paddw mm(0),mm(1)<br /><br />	packuswb mm(0),mm(0)<br />	movd ,mm(0)<br /><br />The mmx code is much smaller, however timings reveal it only runs 2 ticks faster, 35 as opposed to 37 for the first method. <br /><br />I know every bit helps, but actually the mmx algo does not do exactly what the initial one did, it only allows 127 steps of blending while the former allowed for the full 255.<br /><br />Perhaps there a better way of doing this in mmx, I very new still the mmx coding. One thing I dislike is the initial setup required for the values before the calculation which itself is just fours instructions.<br /><br />Anyone have any opinions? I suppose given that the reduction in blending is minor and that 2 ticks could well build up over large images the second algo looks better.</div>
+    <div class="meta">Posted on 2001-12-28 13:12:16 by Eóin</div>
+   </div>
+   <div class="post" id="post-16514">
+    <div class="subject"><a href="#post-16514">Am I using mmx wrongly here?</a></div>
+    <div class="body">Use the registers, there are eight of them.  :grin:</div>
+    <div class="meta">Posted on 2001-12-28 14:14:08 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16547">
+    <div class="subject"><a href="#post-16547">Am I using mmx wrongly here?</a></div>
+    <div class="body">I dont quite get you, I don't really know how to fit more registers into the algo without trying to process more than one pixel at a time And that would introduce additional complications. Heres what I'm trying to do.<br /><br />esi points to a pixel: RRGGBBAA<br />&amp;nbsp &amp;nbsp <em>AA is the alpha value of the pixel.</em><br /><br />ebx similarly point to: RRGGBB??<br />&amp;nbsp &amp;nbsp <em>The alpha value of this pixel is never used.</em><br /><br />edx point to four bytes set to the alpha value of esi. The code I used to create this is:<br />&amp;nbsp &amp;nbsp mov al,[3] <br />&amp;nbsp &amp;nbsp shr al,1 <br />&amp;nbsp &amp;nbsp mov ah,al <br />&amp;nbsp &amp;nbsp <em>The shr was necessary to avoid over flow in the mmx registers, this causes the mmx algo to be less precise</em><br /><br />Basically the following calculation is then done to each colour.<br />ebx = (esi-ebx)(edx/128)+ebx<br /><br />The movd and punpcklbw combination convert the bytes into words, while packuswb converts them back to bytes. <br /><br />Beyond this I don't know how to improve the code, any suggestions. :confused:</div>
+    <div class="meta">Posted on 2001-12-28 20:10:59 by Eóin</div>
+   </div>
+   <div class="post" id="post-16551">
+    <div class="subject"><a href="#post-16551">Am I using mmx wrongly here?</a></div>
+    <div class="body">Well, I do mean processing multiple pixels at a time, and handy tricks like: <strong>pxor mm0,mm0</strong> to get zero.  Look at all the dependancies in the code!  Mixing in another pixel would eliminate almost all of those.  Don't store the alpha as bytes, only to load it into the mmx reg!  It was already in a register, why store-load to-from memory!  These are basic things you should be thinking about.<br /><br />Draw diagrams of where the data flows and how it is transformed.  It will require some work, but the results will be something you can be very proud of.</div>
+    <div class="meta">Posted on 2001-12-28 20:33:46 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16553">
+    <div class="subject"><a href="#post-16553">Am I using mmx wrongly here?</a></div>
+    <div class="body">Right so, I'll give that a shot. It should be easy to add one more pixel in anyway.<br /><br />BTW, do you have any more handy tricks :)</div>
+    <div class="meta">Posted on 2001-12-28 20:39:48 by Eóin</div>
+   </div>
+   <div class="post" id="post-16555">
+    <div class="subject"><a href="#post-16555">Am I using mmx wrongly here?</a></div>
+    <div class="body">Of course, here are some starters:<pre><code>;constants<br />pxor mm0,mm0 ;0000000000000000<br />pcmpeqb mm0,mm0 ;FFFFFFFFFFFFFFFF<br /><br />pxor mm0, mm0<br />pcmpeqb mm1, mm1<br />psubb mm0,mm1 ;0101010101010101<br /><br />pxor mm0, mm0<br />pcmpeqb mm1, mm1<br />psubw mm0,mm1 ;0001000100010001<br /><br />pxor mm0, mm0<br />pcmpeqb mm1, mm1<br />psubd mm0,mm1 ;0000000100000001<br /><br />pcmpeqb mm1,mm1<br />psrlw mm1,16-n ;2^&#40;n-1&#41; in each word<br /><br />pcmpeqb mm1,mm1<br />psrld mm1, 32-n ;2^&#40;n-1&#41; in each dword<br /><br />pcmpeqb mm1,mm1<br />psllw mm1, n ;-2^n in every word<br /><br />pcmpeqb mm1,mm1<br />pslld mm1, n ;-2^n in every dword</code></pre>...and as always RTFM.  :grin:</div>
+    <div class="meta">Posted on 2001-12-28 20:46:43 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16559">
+    <div class="subject"><a href="#post-16559">Am I using mmx wrongly here?</a></div>
+    <div class="body">Here is a nice explaination of similar code without the code:<br /><a target="_blank" href="http://courses.ece.uiuc.edu/ece291/mp/mp4/graphics.html">http://courses.ece.uiuc.edu/ece291/mp/mp4/graphics.html</a><br /><br />And here are example code:<br /><a target="_blank" href="http://www.gamedev.net/reference/programming/features/mmxblend/page8.asp">http://www.gamedev.net/reference/programming/features/mmxblend/page8.asp</a><br /><a target="_blank" href="http://7gods.sk/coding_mmx.html">http://7gods.sk/coding_mmx.html</a><br /><a target="_blank" href="http://www.fides.dti.ne.jp/~tokai/vc/mmxab3.html">http://www.fides.dti.ne.jp/~tokai/vc/mmxab3.html</a><br /><a target="_blank" href="http://www.supelec-rennes.fr/ren/perso/jweiss/microp/mmx/mmx.htm">http://www.supelec-rennes.fr/ren/perso/jweiss/microp/mmx/mmx.htm</a><br /><a target="_blank" href="http://user.cs.tu-berlin.de/~daydream/engine/transp.html">http://user.cs.tu-berlin.de/~daydream/engine/transp.html</a></div>
+    <div class="meta">Posted on 2001-12-28 21:51:37 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16627">
+    <div class="subject"><a href="#post-16627">Am I using mmx wrongly here?</a></div>
+    <div class="body">Thanks for those links, from them I figured out (or rather read) how to get the full 255 levels of blending. Also thanks for suggest that I process two pixel together, it now calculate two pixels in about 43 ticks, as oppsoed to the 74 the first method I used would have taken.<br /><br />I have one final question please. As i said I the fourth bytw of the pixle data is the alpha value. Ultimatly I need to create a QWORD as follows. 0A0A0A0A. The other methos is to construst a dword of four bytes all set to the alpha value, then mmx instrunctions can convert that to the qword format required.<br /><br />Can anyone suggest an efficient method for doing this, I know bitRAKE said not to store them, only later to load them but I can't figure out a cleaner solution.<br /><br />Also I wonder, seeing as I'll have to do it for both pixels seperatly, is there a neat method to do both together.<br /><br />Any and all help is appreciated, I hope I don't sound like I'm asking to have the job done for me, I'd just like to get this as fast a possible. Thanks all. :)</div>
+    <div class="meta">Posted on 2001-12-29 13:20:35 by Eóin</div>
+   </div>
+   <div class="post" id="post-16664">
+    <div class="subject"><a href="#post-16664">Am I using mmx wrongly here?</a></div>
+    <div class="body"><pre><code>movd mm2,ALPHA    ; Copy ALPHA into mm2<br />punpcklwd mm2,mm2 ; Unpack mm2 - 0000 0000 00aa 00aa<br />punpckldq mm2,mm2 ; Unpack mm2 - 00aa 00aa 00aa 00aa</code></pre>...or...<pre><code>movq mm0,&#91;esi&#93;    ; 2def1abc<br />   ; &#123;put something here - like&#58; add esi,8&#125;<br />psrlw mm0,8       ; 020e010b<br />   ; &#123;put something here&#125;<br />movq mm1,mm0      ; 020e010b<br />punpcklwd mm0,mm0 ; 01010b0b<br />punpckhwd mm1,mm1 ; 02020e0e<br />punpckhdq mm0,mm0 ; 01010101<br />punpckhdq mm1,mm1 ; 02020202</code></pre>You should have only two qword reads and one qword write to memory.  Maybe, you can get it down to ~34 ticks for two pixels?  :grin:</div>
+    <div class="meta">Posted on 2001-12-29 17:35:54 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16674">
+    <div class="subject"><a href="#post-16674">Am I using mmx wrongly here?</a></div>
+    <div class="body">Right, I got the first method working, now I see you have a second method so I'll try that out as well and compare them. Thanks for all this help.<br /><br />Oh yeah as for <em>&quot;Maybe, you can get it down to ~34 ticks for two pixels?&quot;</em> Why? Is that what you managed, you evil genius. :grin: Currently I'm at about 41.<br /><br />EDIT -&gt; Ok, second method is 1 tick faster. Where do you come up with this stuff?</div>
+    <div class="meta">Posted on 2001-12-29 19:13:32 by Eóin</div>
+   </div>
+   <div class="post" id="post-16710">
+    <div class="subject"><a href="#post-16710">Am I using mmx wrongly here?</a></div>
+    <div class="body">Currently, I'm at  ~32 on Athlon<br /><br />...~28! Only two non-MMX instructions in the loop.<pre><code>	dec ecx<br />	jns @Loop</code></pre>...now I need to test it on some images...<br /><br /><strong>Edit:</strong> <span style="font-size:24px>~14!</span> (maybe a little more?)<br /><br /><strong>Edit:</strong> Yes, <span style="font-size:24px>~13!!</span> I could improve the output by adding one to the alpha, but it'd cost a tick.  11 or 12 might be the best possible with only two pixels at once - let me think about it some more...maybe getting rid of the shifts?  ...maybe packing earlier and doing a paddsb?  Let me know when you want me to post the code?  I'm curious how it will time on your CPU?</div>
+    <div class="meta">Posted on 2001-12-29 23:09:46 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16777">
+    <div class="subject"><a href="#post-16777">Am I using mmx wrongly here?</a></div>
+    <div class="body">Post the code whenever you think its ready. I'm pretty sure now I won't be able to compete with it, but I can still learn from it.<br /><br />Ps, thats a very big jump from 28 to 14, did you try a completely different approach or just optimise the method you were using?</div>
+    <div class="meta">Posted on 2001-12-30 07:21:03 by Eóin</div>
+   </div>
+   <div class="post" id="post-16909">
+    <div class="subject"><a href="#post-16909">Am I using mmx wrongly here?</a></div>
+    <div class="body">Okay, I out did myself - very proud of this.  :)<br /><br /><span style="font-size:18px>~11 ticks per quad.</span><br /><span style="font-size:9px>(Of couse, this assumes all data is in the cache - which it isn't in real life.)</span><br /><br />Actual use clocks it around ~??, but that is because your waiting on memory to load into the cache.  I'll do more tests myself with prefetching the data to improve actual usage speed.<br /><br />It was some real work, but it feels great when it comes together.<br />Please, look at the time program to see how I measured.<br />What does it do on your machine?</div>
+    <div class="meta">Posted on 2001-12-31 00:28:45 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16931">
+    <div class="subject"><a href="#post-16931">Am I using mmx wrongly here?</a></div>
+    <div class="body">Athlon-700 thingie... alpha-time:<br /><div class="quote"><br />---------------------------<br />Minimum Time:<br />---------------------------<br />10912 ticks for 1000 quads. <br />---------------------------<br />OK   <br />---------------------------<br /></div><br /><br />The xfade picture test went very smooth, but also slow (255 full<br />levels with some waiting between each? :) ).</div>
+    <div class="meta">Posted on 2001-12-31 04:54:19 by f0dder</div>
+   </div>
+   <div class="post" id="post-16972">
+    <div class="subject"><a href="#post-16972">Am I using mmx wrongly here?</a></div>
+    <div class="body">Athlon 800,<br /><div class="quote"><br />---------------------------<br />Minimum Time:<br />---------------------------<br />10912 ticks for 1000 quads. <br />---------------------------<br />OK   <br />---------------------------<br /></div><br /><span style="font-size:9px>i love &quot;ctrl+c in msgbox&quot; feature</span> <br /><br />Same as you, f0dder? :rolleyes: <br />xfade was slow, too... but looked great :)</div>
+    <div class="meta">Posted on 2001-12-31 07:47:57 by bazik</div>
+   </div>
+   <div class="post" id="post-16974">
+    <div class="subject"><a href="#post-16974">Am I using mmx wrongly here?</a></div>
+    <div class="body">:tongue: Celeron 333,<br /><br /><div class="quote"><br />--------------------------- <br />Minimum Time: <br />--------------------------- <br />11440 ticks for 1000 quads. <br />--------------------------- <br />OK <br />--------------------------- <br /></div><br /><br /><br />other program just starts and displays only the underlying desktop-content at that position<br />strange?</div>
+    <div class="meta">Posted on 2001-12-31 08:13:14 by sys64738</div>
+   </div>
+   <div class="post" id="post-16987">
+    <div class="subject"><a href="#post-16987">Am I using mmx wrongly here?</a></div>
+    <div class="body">AMD Athalon XP 1.53GHz<br />-- -------------------------<br />Minimum Time:<br />---------------------------<br />10912 ticks for 1000 quads. <br />---------------------------<br />OK   <br />---------------------------<br /><br /><br />Do AMD's actually support MMX instructions or do they just emulate it?</div>
+    <div class="meta">Posted on 2001-12-31 11:11:27 by Mecurius</div>
+   </div>
+   <div class="post" id="post-16993">
+    <div class="subject"><a href="#post-16993">Am I using mmx wrongly here?</a></div>
+    <div class="body">I don't process WM_PAINT messages in the xFade program.  Hey, it's just a little test and I was being lazy.  If there wasn't a pause, you wouldn't see much.<br /><br />I guess the timing thingie works - At least, on Athlons.  :)<br />Emulated or not, you can't tell in the code - besides it running faster.  ;)  They actually support MMX.</div>
+    <div class="meta">Posted on 2001-12-31 12:21:14 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-16999">
+    <div class="subject"><a href="#post-16999">Am I using mmx wrongly here?</a></div>
+    <div class="body">11424 ticks on a PIII 700, beautiful work.<br />And I wasn't as far behind as I thought, my method clocked in at 17568 on your timer program.<br /><br />But, eemmh, I hate to say this, but I don't thinks it works properly :( .<br /><br />Now I can't be sure so please prove me wrong, but it seems to suffer from the exact problem I was having when I first changed to algo to mmx. You can't represent 255 levels of alpha if your going to use the equation d+(s-d)(255/a). the proble is s-d can range from -255 to 255, beyond the range of a byte. Because you use unsiged addition and subtraction your code will blend perfectly when s-d &gt; 0 and that happend whenever the destination is darker than the source. <br /><br />In the fade example it just so happens that this is the case for most of the image. however if you look closely at the red circle closest to the top-left you'll see some of the tree showing through where it was brighter than the circle.<br /><br />There are two solutions to this problem, the first is to perform the addition and subtraction of the wrod form of the pixels, however this means two additional instructions. <br /><br />Theres a second problem here that will also occur if (s-d)(a) &gt; the range of a singed word. This tends to occur for a &gt; 128 and s-d &gt; 128. The solution here is limit a to a range from 0 - 127, and you also have to use psraw mm(i),7 for the division.<br /><br />The second solution is the one I opted for in my code. I found it on those links you gave me, it just your standard method of transforming points and the advantage is that it doesn't involve any negatives so you get the full 255 levels.<br /><br />You use the equation d((255-a)/255) + s(a/255). Heres the code I came up with:<pre><code><br />	movq mm&#40;0&#41;,&#91;eax&#93;&#91;ecx*8&#93;<br />	movq mm&#40;1&#41;,&#91;edx&#93;&#91;ecx*8&#93;<br />	<br />@@&#58;	movq mm&#40;2&#41;,mm&#40;0&#41;    <br />	movq mm&#40;4&#41;,mm&#40;0&#41;<br /><br />	psrlw mm&#40;2&#41;,8<br />	movq mm&#40;5&#41;,mm&#40;1&#41;<br /><br />	movq mm&#40;6&#41;,mm&#40;2&#41;  <br />	dec ecx	<br />	  <br />	punpcklwd mm&#40;2&#41;,mm&#40;2&#41;<br />	punpckhwd mm&#40;6&#41;,mm&#40;6&#41;<br />	punpckhdq mm&#40;2&#41;,mm&#40;2&#41;<br />	punpckhdq mm&#40;6&#41;,mm&#40;6&#41;<br />	<br />	pxor mm&#40;7&#41;,mm&#40;7&#41;	<br />	movq mm&#40;3&#41;,max 	<br />	<br />	punpckhbw mm&#40;4&#41;,mm&#40;7&#41;<br />	punpckhbw mm&#40;5&#41;,mm&#40;7&#41;<br />	psubw mm&#40;3&#41;,mm&#40;2&#41;<br />	punpcklbw mm&#40;0&#41;,mm&#40;7&#41;	<br />	punpcklbw mm&#40;1&#41;,mm&#40;7&#41;<br />	<br />	movq mm&#40;7&#41;,max<br />	pmullw mm&#40;0&#41;,mm&#40;2&#41;<br />	psubw mm&#40;7&#41;,mm&#40;6&#41;	<br />	<br />	pmullw mm&#40;4&#41;,mm&#40;6&#41;<br />	pmullw mm&#40;5&#41;,mm&#40;7&#41;<br />	pmullw mm&#40;1&#41;,mm&#40;3&#41;<br />	<br />	paddw mm&#40;4&#41;,mm&#40;5&#41;<br />	paddw mm&#40;0&#41;,mm&#40;1&#41;<br />	psrlw mm&#40;4&#41;,8<br />	psrlw mm&#40;0&#41;,8			<br /><br />	packuswb mm&#40;0&#41;,mm&#40;4&#41;<br />	movq &#91;edx&#93;&#91;ecx*8&#93;&#91;8&#93;,mm&#40;0&#41;<br /><br />	movq mm&#40;0&#41;,&#91;eax&#93;&#91;ecx*8&#93;<br />	movq mm&#40;1&#41;,&#91;edx&#93;&#91;ecx*8&#93;<br />jns @B</code></pre><br />I really do hate to be the one to tell you this after all the effort you put into it and in helping me, and I do hope I'm wrong.</div>
+    <div class="meta">Posted on 2001-12-31 13:05:57 by Eóin</div>
+   </div>
+   <div class="post" id="post-17002">
+    <div class="subject"><a href="#post-17002">Am I using mmx wrongly here?</a></div>
+    <div class="body">Your not wrong at all.  :)<br />Nice work.<br /><br />Another fix would be to make the alpha a signed byte, and use the highword of the mul.  This eliminates a shift and the multiplies.  Your absolutely correct though - you can't do saturated byte math at all without loosing data.</div>
+    <div class="meta">Posted on 2001-12-31 13:31:04 by bitRAKE</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=2595&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=2595&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="2595" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=2595&amp;page=2">&gt;</a><a href="../?id=2595&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to obtain the file offset from an RVA??? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18817" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18817">How to obtain the file offset from an RVA???</a></p>
+   <div class="post" id="post-145674">
+    <div class="subject"><a href="#post-145674">How to obtain the file offset from an RVA???</a></div>
+    <div class="body">Hello,<br /><br />I'm writing a bit of code to better understand PE format, but one thing I still can't get is how a file offset (position in the physical file on disk) is obtained from an RVA. I don't need a tool, I'd need to understand. Can anyone explain (or provide the function) it in terms of the members of the C structures used to read the DOS, COFF, PE, Section headers???<br />Thx.<br /><br />yaa</div>
+    <div class="meta">Posted on 2004-07-08 18:46:49 by yaa</div>
+   </div>
+   <div class="post" id="post-145677">
+    <div class="subject"><a href="#post-145677">How to obtain the file offset from an RVA???</a></div>
+    <div class="body">You can look at the System library from my website, it has an RVAToFilePos function that is used in some of the PE tool functions.</div>
+    <div class="meta">Posted on 2004-07-08 18:55:28 by donkey</div>
+   </div>
+   <div class="post" id="post-145685">
+    <div class="subject"><a href="#post-145685">How to obtain the file offset from an RVA???</a></div>
+    <div class="body">yaa,<br />i assume it regard to a section in the PE header (for example the .code section)<br /><br /><br />scan all of the sections, and locate the section that it's VirtualAddress falls or equal to the  RVA you want.<br />*note: don't forget to remove ImageBase if RVA is something like 00402040.<br />so RVA is: 00402040-00400000 =0x0002040 <br /><br /><pre><code><br />if &#40; &#40;RVA &gt;= section_header-&gt;VirtualAddress&#41; &amp;&amp; <br />   &#40;RVA &lt; &#40;section_header-&gt;VirtualAddress + section_header-&gt;Misc.VirtualSize&#41;&#41; &#41;&#123;<br />  return section_header;<br />&#125;<br /></code></pre><br /><br />once u have the section pointer you can easily get its properties and calculate the offset:<br /><br />1.<br />offset = ( importsStartRVA - (VirtualAddress-PointerToRawData) )<br />Offset = ( 0x0002040 - (0x0002000 - 0x00000600) ) ; Offset=0x0000640<br /><br />or<br /><br />2. <br />Offset = (ImportsStartRva - VirtualAddress) + PointerToRawData<br />Offset = (0x0002040 - 0x0002000) + 0x0000600 ; Offset=0x0000640</div>
+    <div class="meta">Posted on 2004-07-08 19:37:13 by wizzra</div>
+   </div>
+   <div class="post" id="post-145701">
+    <div class="subject"><a href="#post-145701">How to obtain the file offset from an RVA???</a></div>
+    <div class="body"><pre><code>rva2raw&#58;	; pointer to start of image &#40;MZ&#41;, rva<br />	xor	eax,eax<br />	mov	edx,&#91;esp+04h&#93;<br />	add	edx,&#91;edx+IMAGE_DOS_HEADER.e_lfanew&#93;<br />	movzx	ecx,&#91;edx+IMAGE_NT_HEADERS.FileHeader.NumberOfSections&#93;<br />	add	edx,sizeof.IMAGE_NT_HEADERS<br />	jecxz	.quit<br />.next&#58;	mov	eax,&#91;edx+IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />	cmp	&#91;esp+08h&#93;,eax<br />	jb	.skip<br />	add	eax,&#91;edx+IMAGE_SECTION_HEADER.VirtualSize&#93;<br />	cmp	&#91;esp+08h&#93;,eax<br />	jae	.skip<br />	mov	eax,&#91;edx+IMAGE_SECTION_HEADER.PointerToRawData&#93;<br />	sub	eax,&#91;edx+IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />	add	eax,&#91;esp+08h&#93;<br />	jmp	.quit<br />.skip&#58;	add	edx,sizeof.IMAGE_SECTION_HEADER<br />	loop	.next<br />	xor	eax,eax<br />.quit&#58;	retn	08h</code></pre></div>
+    <div class="meta">Posted on 2004-07-08 22:59:52 by comrade</div>
+   </div>
+   <div class="post" id="post-145715">
+    <div class="subject"><a href="#post-145715">How to obtain the file offset from an RVA???</a></div>
+    <div class="body">Thank you all.<br /><br />Here is the code from donkey's library if anyone needs it ... donkey, hope you don't mind my posting it.<br /><br /><pre><code><br />RVAToFilePos FRAME pFileMap,RVA<br />	uses edi,esi,edx,ecx<br /><br />	mov esi,&#91;pFileMap&#93;<br />	add esi,&#91;esi+IMAGE_DOS_HEADER.e_lfanew&#93;<br />	mov edi,&#91;RVA&#93;<br />	mov edx,esi<br />	add edx,sizeof IMAGE_NT_HEADERS<br />	movzx ecx,W&#91;esi+IMAGE_NT_HEADERS.FileHeader.NumberOfSections&#93;<br />	jmp &gt;L2<br />	L1&#58;<br />		cmp edi,&#91;edx+IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />		jl &gt;E2<br />			mov eax,&#91;edx+IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />			add eax,&#91;edx+IMAGE_SECTION_HEADER.SizeOfRawData&#93;<br />			cmp edi,eax<br />			jge &gt;E1<br />				mov eax,&#91;edx+IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />				sub edi,eax<br />				mov eax,&#91;edx+IMAGE_SECTION_HEADER.PointerToRawData&#93;<br />				add eax,edi<br />				ret<br />			E1&#58;<br />		E2&#58;<br />		add edx,sizeof IMAGE_SECTION_HEADER<br />		dec ecx<br />	L2&#58;<br />	or ecx,ecx<br />	js &gt;<br />	jnz &lt;L1<br />	&#58;<br /><br />	mov eax,edi<br />	ret<br />ENDF<br /></code></pre><br /><br /><br />yaa</div>
+    <div class="meta">Posted on 2004-07-09 04:42:46 by yaa</div>
+   </div>
+   <div class="post" id="post-145732">
+    <div class="subject"><a href="#post-145732">How to obtain the file offset from an RVA???</a></div>
+    <div class="body"><div class="quote">donkey, hope you don't mind my posting it.</div><br /><br />Nope, don't mind at all. Though anyone can download it at any time from my website, all the source is included with the system library. It was pretty much based on an example I had seen, can't remember where, so I can't claim that it is 100% original work. For normal use you don't need to preserve edx and ecx, that is only because the functions that call it in system.lib expect them to be preserved.</div>
+    <div class="meta">Posted on 2004-07-09 10:35:25 by donkey</div>
+   </div>
+   <div class="post" id="post-145735">
+    <div class="subject"><a href="#post-145735">How to obtain the file offset from an RVA???</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by donkey </em><br /><br />Nope, don't mind at all. Though anyone can download it at any time from my website, all the source is included with the system library. It was pretty much based on an example I had seen, can't remember where, so I can't claim that it is 100% original work. For normal use you don't need to preserve edx and ecx, that is only because the functions that call it in system.lib expect them to be preserved. </div><br /><br />Iczelion's PE tutorials if I am not wrong.:grin:</div>
+    <div class="meta">Posted on 2004-07-09 11:37:50 by roticv</div>
+   </div>
+   <div class="post" id="post-145736">
+    <div class="subject"><a href="#post-145736">How to obtain the file offset from an RVA???</a></div>
+    <div class="body"><div class="quote"><br /><br /><br />Iczelion's PE tutorials if I am not wrong.:grin: </div><br /><br />That could very well be, or someone else who used it as a starting point. I just didn't want to take credit for somebody else's work so I thought I would mention that it was not completely mine.</div>
+    <div class="meta">Posted on 2004-07-09 12:06:45 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

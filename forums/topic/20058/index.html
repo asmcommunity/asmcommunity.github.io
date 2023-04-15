@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>someone discovers a general optimization on loops (?) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20058" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=20058">someone discovers a general optimization on loops (?)</a></p>
+   <div class="post" id="post-153693">
+    <div class="subject"><a href="#post-153693">someone discovers a general optimization on loops (?)</a></div>
+    <div class="body">hi, <br /><br />i found this thing,<br /><br />http://www.onversity.com/load/d-loop.pdf<br /><br />its someone who claims having found a way to do quicker loops if they have many ending conditions.<br /><br />he writes it in C and says he has beaten the standard C librairies that are (well thats what he says) optimized in asm. he wants ppl to spread his method, makes conferences (lectures) about it, has written a big pdf and a statistic model (!) on when its applicable, he shows some asm code the compiler generates, but i m not sure he understands them.<br /><br />basically i think his trick is to have only one ending condition in the inner loop, for ex:<br /><br />you want to count a char in a string, you have <br /><br />-a while for the end char (null), <br />-in which you have an if(currenchar==searchedchar){count++}<br /><br />so that makes 2 tests each time <br />(most of the times, one branch FW (not taken) and one BW(taken) i think)<br />and its baad for new processors, so he makes initialized structures (didnt really go into it) and makes an inner loop with just 1 test.<br /><br />the idea is interesting, but i would say its useful only when the branch prediction mechanism is the bottleneck, but he seems to have results. <br /><br />in asm you could well make test the two conditions sequentially and make just one branch for most cases, i think<br /><br /><br />l1:<br />sub currentchar, zerochar<br />save notZF into eax.b0                 ;rcl or adc or something (slow!)<br />                                              ;or you could add the result of sub to eax<br />sub currentchar, searchedchar<br />save notZF into eax.b1<br /><br />cmp eax,0<br />jz l1    ; most of the times, taken<br />{here you check if it was<br />  -end of str: jmp end<br />  -char found: charcount++; jmp l1}<br /><br />so most of the times you ve just 1 codepath fork, (jz taken)<br /><br />you get the idea, cmov and friends would ease and speed up things.<br /><br />do you think he has made something valuable or ... (?)<br />what do you think of it?<br /><br />the strlen version he shows in his pdf is worth giving a look :)</div>
+    <div class="meta">Posted on 2004-12-04 08:32:28 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-153694">
+    <div class="subject"><a href="#post-153694">someone discovers a general optimization on loops (?)</a></div>
+    <div class="body">or in the special caseof the char_count func:<br /><br />al : 0 (end)<br />ah : searched char <br />ecx: result(init 0)<br />esi: str<br /><br />l1:<br />xor ebx,ebx <br />cmp byte ,ah<br />rcl ebx,1             ;might be a cmovz ebx,1<br />add ecx,ebx<br />cmp byte ,al ; guess its in the cache...<br />                         ;maybe better to put it into a reg the 1st time...<br />jnz l1<br /><br /><br />whaddya think of it?<br /><br />we could also have long code snippets with each instr prefixed by a condition on a flag(there could be many user-settable flags)...<br />so theres no branches anymore...(but hey then we ve got to decode all those instr without jumping so its not better :) )<br /><br />isnt it the road taken by ia64?</div>
+    <div class="meta">Posted on 2004-12-04 08:42:42 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-153698">
+    <div class="subject"><a href="#post-153698">someone discovers a general optimization on loops (?)</a></div>
+    <div class="body">It is a good article - stuff I've been typing around here for years. :)  There is a trade-off between memory speed and processor branching costs in most loops with multiple branches. D-Loop optimization will fail when prep-time and memory costs are greater than branch savings.<br /><br />Another way to state this: (almost) all code can be replaced with data.<br /><br />Let me give an example, say we have a very complex operation that be have coded: it takes EAX and does some wonderful stuff with it then returns.<pre><code>Magic PROC<br />    ; lots of branching and complex code<br />Magic ENDP</code></pre>Now we don't need to use all that complex code. Instead we can replace it with some pre-processing that computes all the possible results of the complex PROC, and just move the result into EAX:<pre><code>PrepMagic PROC<br />    mov ecx, -1<br />@@&#58;<br />    ; lots of branching and complex code<br />    <br />    mov &#91;PREP_DATA&#93;&#91;ecx*4&#93;, eax<br />    sub ecx, 1<br />    jnc @B<br />    retn<br />PrepMagic ENDP<br /><br /><br />Magic PROC<br />    mov eax, &#91;PREP_DATA&#93;&#91;eax*4&#93;<br />    retn<br />Magic ENDP</code></pre>Please, don't take this literally - I'm trying to demostrate two extremes so we may think about generating an optimal solution for our work somewhere in the middle.  Obviously, we are not going to store/compute 2^32 values for the example, but usually we don't have to. In the best situations no pre-compution/memory (at runtime) is required at all.</div>
+    <div class="meta">Posted on 2004-12-04 10:58:15 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-153699">
+    <div class="subject"><a href="#post-153699">someone discovers a general optimization on loops (?)</a></div>
+    <div class="body">Looks like snake-oil.<br /><br />I tested it abit (function - time in seconds):<br /><ul>count_char() - 0.92<br />new_count_char() - 1.38<br />new_count_char() (sec. 7.1) - 1.19<br />std. lib. strstr() - 0.85<br />new_strstr() - 1.44<br />As for his new_strlen(), he breaks a pretty hard requirement. I didn't even test it.<br /><br />I used VC7.1 and the standard library supplied with it for the testing. The test ran 100 rounds of the function with a 1mb null-terminated random string. For new_strstr()/strstr(), a specific word was placed around 734kb and searched for. I use a pIII 733MHz. The tests were run several times.<br /><br />It's logical for it to be slow, as well... it accesses a lookup table in memory. While this technique sometimes fits well, it doesn't work in these cases.<br />Using an internal loop for a common condition is a well-known optimization.<br /><br />His coding style shows that he is not well versed in the C programming language.</div>
+    <div class="meta">Posted on 2004-12-04 11:10:54 by death</div>
+   </div>
+  </div>
+ </body>
+</html>

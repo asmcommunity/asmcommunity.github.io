@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Array Copy - Speeding things Up - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9867" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=9867">Array Copy - Speeding things Up</a></p>
+   <div class="post" id="post-73549">
+    <div class="subject"><a href="#post-73549">Array Copy - Speeding things Up</a></div>
+    <div class="body">well, dunno if someone paste such code (kinda hard to find when searching)<br />but here we go:<br />a really fast array copying<br /><pre><code><br />ARR1 DW 4001 DUP&#40;?&#41;<br />ARR2 DW 4001 DUP&#40;0&#41;<br />...<br />...<br />...<br />MOV CX, LENGTHOF ARR1<br />MOV SI, OFFSET ARR1    ; we can use LEA, no need though<br />MOV DI, OFFSET ARR2    ; &quot; .....              ...... &quot;<br />CLD                       ; lets make SI/DI go up &#40;STD for reverse&#41;<br />SHR CX, 1                       ; for uneven length<br />REP MOVSW                   ; word copy, si+=2/di+=2<br />JNC FINISH                     ; was the length uneven?<br />MOVSB                           ; yes it was<br />FINISH&#58;                           <br />...<br />...<br /></code></pre><br /><br />mabye someome will find a use for it :)</div>
+    <div class="meta">Posted on 2002-12-30 15:57:14 by wizzra</div>
+   </div>
+   <div class="post" id="post-73557">
+    <div class="subject"><a href="#post-73557">Array Copy - Speeding things Up</a></div>
+    <div class="body">wizzra,<br /><br />Just a suggestion, do the bulk of the data with MOVSD and the uneven balance with MOVSB, it should be faster.<br /><pre><code><br />    cld<br />    mov esi, &#91;Source&#93;<br />    mov edi, &#91;Dest&#93;<br />    mov ecx, &#91;ln&#93;<br /><br />    shr ecx, 2<br />    rep movsd<br /><br />    mov ecx, &#91;ln&#93;<br />    and ecx, 3<br />    rep movsb<br /></code></pre><br />Just treat the two arrays as addresses with a known length, you are not bound to use the same data size as the array members.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a><br /><br />NB: Some of the guys in the source code forum in the past have posted even faster ways if you don't mind using MMX or SIMD instructions to do memory copy.</div>
+    <div class="meta">Posted on 2002-12-30 16:11:08 by hutch--</div>
+   </div>
+   <div class="post" id="post-73624">
+    <div class="subject"><a href="#post-73624">Array Copy - Speeding things Up</a></div>
+    <div class="body">hi Hutch :-)<br /><br />i guess MovSD will be much faster in win32asm ;-)<br />but that one above was refering to 16bit ASM.<br />but heck, now we have 2 variations :-)</div>
+    <div class="meta">Posted on 2002-12-31 01:00:31 by wizzra</div>
+   </div>
+   <div class="post" id="post-73633">
+    <div class="subject"><a href="#post-73633">Array Copy - Speeding things Up</a></div>
+    <div class="body">Sorry for interrupting you guys (yet again) with my silly questions.<br /><br />Its probably the asm code which i cant seem to understand most of.<br />How is this faster than normal array copying?<br />Could anyone please explain in a bit in simple terms why this algo is faster?</div>
+    <div class="meta">Posted on 2002-12-31 02:45:41 by clippy</div>
+   </div>
+   <div class="post" id="post-73668">
+    <div class="subject"><a href="#post-73668">Array Copy - Speeding things Up</a></div>
+    <div class="body">faster = means less intructions for the cpu to perform.<br /><br />the algo above is really fast [32/16 depend what u code in]<br />is because the actuall copy (byte/word from arr1 -&gt; arr2) is done via 1 instruction!!<br />think about array with size 1000h ...<br />(1*1000h)/ 2 (2 = word copy) give us really fast cpu time.<br /><br />the REP MOVSW is the instruction that performs the copy.<br /><br />         Destination   Source<br />MOVSW : &lt;-<br />                ADD SI,2<br />                ADD DI,2<br /><br />REP : Repeat while CX&lt;&gt;0 (this instruction get only string instructions)<br /><br />CLD: Clear D(F) Register, this ensure DI/SI will go up via the positive scale.<br /><br />the shr cx,1 ; this check if the number has uneven length, if it does, we copy<br />                    ; untill the last byte and perform an MOVSB on him.<br /><br />well, as u can see it is super fast in w16-bit asm, and even more under win32 :-)</div>
+    <div class="meta">Posted on 2002-12-31 06:30:02 by wizzra</div>
+   </div>
+   <div class="post" id="post-73674">
+    <div class="subject"><a href="#post-73674">Array Copy - Speeding things Up</a></div>
+    <div class="body">Oh i see. Thanks:) <br /><br />Btw, how does normal array copying work in compilers? <br />Dont they use this optimization too?<br /><br />Also if use this as a function in my C code what type of arrays will it work on?<br />ints,longs,chars or custom data types???:confused:</div>
+    <div class="meta">Posted on 2002-12-31 07:26:59 by clippy</div>
+   </div>
+   <div class="post" id="post-73678">
+    <div class="subject"><a href="#post-73678">Array Copy - Speeding things Up</a></div>
+    <div class="body">&quot;REP MOVSD&quot; as an instruction isn't actually that fast!<br />When you're copying small chunks of data it is infact quite slow. When you start moving blocks of data the size of the cache around, the processor switches to a special mode where is picks up, and drops cache sized blocks, and this is very fast. But when ECX is loaded with a value lower than the size of the cache, this special mode isn't used, and things slow down.<br />Its faster in these smaller block sizes to write your own loop, and use eax. If possible though us an MMX register, the 64 bit copying is much faster. As far as I can tell there is no benefit in using the SSE register set, as the memory subsystem doesn't go fast enough!<br /><br />I guess there may also be bonuses to be had from ensuring that at least one of the two sections of memory being copied from/to is aligned properly for the processor. Although I've never tested that.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-12-31 07:58:50 by Mirno</div>
+   </div>
+   <div class="post" id="post-73679">
+    <div class="subject"><a href="#post-73679">Array Copy - Speeding things Up</a></div>
+    <div class="body">i dont really know what junk a compiler add (each and it own junk)..<br />but, an array is an array..<br />if u pass the adrees start of the array, u should also know its type..<br />int = 2bytes [4 in win]<br />long = 4 bytes <br />.....<br />.....<br />do whatever as long as it doesn't exceeded its length.</div>
+    <div class="meta">Posted on 2002-12-31 07:59:11 by wizzra</div>
+   </div>
+   <div class="post" id="post-74259">
+    <div class="subject"><a href="#post-74259">Array Copy - Speeding things Up</a></div>
+    <div class="body">I must point out that less instructions does not mean in any way that the algo will be faster.  In fact optimization for speed *usually* requires more instructions.  A knowledge of the pipeline will help quite a bit.</div>
+    <div class="meta">Posted on 2003-01-04 02:57:16 by Asm_Freak</div>
+   </div>
+   <div class="post" id="post-74604">
+    <div class="subject"><a href="#post-74604">Array Copy - Speeding things Up</a></div>
+    <div class="body">wizzra: that's about as fast as you'll get - for a 286 ;)<br />As Mirno points out, RISC-style copy loops are faster on anything &gt;= Pentium. Nowadays, it's all about making good use of your cache. To get anywhere close to your maximum memory bandwidth, you need to prefetch and read/write 64 bytes at a time (via MMX regs and movntq, so as not to pollute the cache).<br /><br />I think this way's pretty much the best you can do for Athlons:<br /><pre><code><br />for each 8 kb block&#58;<br />  manual prefetch - touch one address in each cache line, *backwards*<br />    &#40;we can't have the CPU generate prefetches of its own, now ;&#41;&#41;<br /><br />  for i = 1 to 128<br />    load 64 bytes<br />    nt store 64 bytes<br /><br />sfence &#40;write combining is cool, but don't forget this ;&#41;&#41;<br /></code></pre><br /><br />_3x faster than rep movsd_!! (~2000 mb/s vs. ~650 mb/s)<br /><br />HTH<br />Jan</div>
+    <div class="meta">Posted on 2003-01-06 05:52:43 by Jan Wassenberg</div>
+   </div>
+  </div>
+ </body>
+</html>

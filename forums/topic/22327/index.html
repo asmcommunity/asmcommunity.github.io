@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Accessing class member variables in built in assembler - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22327" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22327">Accessing class member variables in built in assembler</a></p>
+   <div class="post" id="post-167695">
+    <div class="subject"><a href="#post-167695">Accessing class member variables in built in assembler</a></div>
+    <div class="body">Hey all.<br /><br />I use ASM extensively in a lot of stuff we do at my work.&nbsp; I always use the built in assembler for ease of use and speed but my main peeve is the difficulty in accessing member class variables.<br /><br />Lets say I had this class:<br /><br /><pre><code><br />class TClass<br />{<br />&nbsp; public:<br />&nbsp; &nbsp; dword m_dwVar1;<br />&nbsp; &nbsp; dword m_dwVar2;<br />&nbsp;  <br />&nbsp; &nbsp; void Whatever();<br />}<br /></code></pre><br /><br />So in Whatever() I would like to write some small assembly code that uses the member variables.&nbsp; So far, I know of only 2 methods of doing this:<br /><br /><strong>Method 1</strong><br /><br /><pre><code><br />&nbsp; void TClass::Whatever()<br />&nbsp; {<br />&nbsp; &nbsp; __asm<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; mov ecx, this<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; // access m_dwVar1<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax, <br /><br />&nbsp; &nbsp; &nbsp; &nbsp; // access m_dwVar2<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax, <br />&nbsp; &nbsp;  }<br />}<br /></code></pre><br /><br /><br /><strong>Method 2</strong><br /><pre><code><br />&nbsp; void TClass::Whatever()<br />&nbsp; {<br />&nbsp; &nbsp; dword dwVar1 = m_dwVar1;<br />&nbsp; &nbsp; dword dwVar2 = m_dwVar2;<br /><br />&nbsp; &nbsp; __asm<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax, dwVar1<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax, dwVar2&nbsp; &nbsp;  <br />&nbsp; &nbsp; }<br />}<br /></code></pre><br /><br /><br />As you can see both of these methods would work to get the values of var1 and 2 and with a little changes to the code, you can even write values back into them.&nbsp;  Would I would like to know is if there is a better more straight forward way of doing this sort of thing.<br /><br />I&#39;d like to see what others have done in these cases.<br /><br />Thanks<br /><br />Phred</div>
+    <div class="meta">Posted on 2005-11-09 11:13:42 by Phred</div>
+   </div>
+   <div class="post" id="post-167703">
+    <div class="subject"><a href="#post-167703">Re: Accessing class member variables in built in assembler</a></div>
+    <div class="body">It&#39;s my personal belief that, when combining assembly and HLLs, you should only shell out to assembly when you have a fairly &quot;costly&quot; routine - when there&#39;s enough speed gained that pushing a couple of variables and doing a call won&#39;t be a burden.<br /><br />If you find yourself in need of a lot of small-and-fast routines, a refactor of your source is probably in order; ie, rather than building a &quot;DrawSprite&quot; with a super-fast PutPixel routine... you should drop the putpixel mentality, and do direct pixel manipulation in DrawSprite.<br /><br />Last time I tried, I couldn&#39;t come up with better ways of accessing member variables than what you have posted - vc2003 seems to turn &quot;mov eax, m_blah&quot; into a &quot;mov eax, 0&quot;. Your &quot;this + 0&quot; and &quot;this + 4&quot; is extremely unmanagable, and doing copies back and forth via temps is a bit annoying...<br /><br />So you&#39;d rather see me do a call like &quot;asm_transformvertices(m_transformedVertList, m_blueprintVertList, m_xformMatrix);&quot; instead of implementing it with inline assembly.<br /></div>
+    <div class="meta">Posted on 2005-11-09 12:46:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-167704">
+    <div class="subject"><a href="#post-167704">Re: Accessing class member variables in built in assembler</a></div>
+    <div class="body">Ya that is true... although I don&#39;t mind so much doing a  to get to a variable so long as I make a note in the decleration that member variable order is not to be touched.... :)<br /><br />Or ya... the transfer is safer and yes we need assembler for alot of our stuff... the over head of the call is reduced when I make it a fastcall and the variable transfer is peanuts compared to the main code I&#39;m working with.</div>
+    <div class="meta">Posted on 2005-11-09 14:00:50 by Phred</div>
+   </div>
+   <div class="post" id="post-167712">
+    <div class="subject"><a href="#post-167712">Re: Accessing class member variables in built in assembler</a></div>
+    <div class="body">http://www.ultranos.com/asm<br />See &quot;ATC&quot; there&nbsp; - C++ wrapper for MASM (sorry, no inline asm). Only doesn&#39;t support inheritance of 2 or more classes at once. <br />You&#39;ll need to use &quot;EnterHostedClass&quot; and &quot;LeaveHostedClass&quot; - to make ATC not build constructors. <br />Your above code would need the following asm:<br /><pre><code><br />EnterHostedClass<br /><br />class TClass,,C++ compatible<br />	long m_dwVar1<br />	long m_dwVar2<br />	void Whatever<br />endclass<br /><br />LeaveHostedClass<br /><br /><br />asm_TClass_Whatever proc ; usually would be TClass_Whatever<br />	assume ecx:ptr TClass<br />	<br />	mov eax,.dwVar1<br />	mov eax,.dwVar2<br />	<br />	assume ecx:nothing<br />	ret<br />asm_TClass_Whatever endp<br /></code></pre><br /><br />You could rename asm_TClass_Whatever to the mangled name your C++ compiler makes (the ??TClass????Whatever@0AOZD) , for it to get recognized by the linker immediately...</div>
+    <div class="meta">Posted on 2005-11-10 00:09:31 by Ultrano</div>
+   </div>
+   <div class="post" id="post-167721">
+    <div class="subject"><a href="#post-167721">Re: Accessing class member variables in built in assembler</a></div>
+    <div class="body">That&#39;s an interesting soloution Ultrano!&nbsp; But then I would have to code the whole class in MASM when I really want very few select functions written in ASM :).</div>
+    <div class="meta">Posted on 2005-11-10 07:23:33 by Phred</div>
+   </div>
+   <div class="post" id="post-167722">
+    <div class="subject"><a href="#post-167722">Re: Accessing class member variables in built in assembler</a></div>
+    <div class="body">No no, just define the class definition, even less - only the data-members.<br />It&#39;s mostly copy-paste work :)<br />If your class has no virtual funcs, I forgot to say, it has to be &quot;non-virtual&quot; instead of &quot;C++ compatible&quot;<br />But classes are mostly with virtual funcs (otherwise they&#39;re usually useless). <br /><br />Anyway, it&#39;s recommended to know your compiler&#39;s output, and conform to it - then you&#39;ll be perfectly sure in what you&#39;re doing with that class data in asm. <br /><br />Maybe a fourth solution will be to continue in C++, but have your code like this:<br /><pre><code><br />#define TClass__m_dwVar1	<br />#define TClass__m_dwVar2	<br /><br />class TClass{<br />&nbsp; public:<br />&nbsp; &nbsp; dword m_dwVar1;<br />&nbsp; &nbsp; dword m_dwVar2;<br />&nbsp;  <br />&nbsp; &nbsp; void Whatever();<br />}<br /><br />void TClass::Whatever() {<br />&nbsp; &nbsp; __asm<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; mov ecx, this // btw, isn&#39;t this line useless??<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax,TClass__m_dwVar1<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax,TClass__m_dwVar2<br />&nbsp; &nbsp;  }<br />}<br /><br />//-------- class CVirtual ---------------------<br />#define CVirtual__var1		<br />#define CVirtual__var2		<br /><br />class CVirtual{<br />	virtual ~CVirtual();<br />&nbsp; public:<br />&nbsp; &nbsp; dword m_dwVar1;<br />&nbsp; &nbsp; dword m_dwVar2;<br />&nbsp;  <br />&nbsp; &nbsp; void DoIt();	<br />}<br /><br />void CVirtual::DoIt() {<br />&nbsp; &nbsp; __asm<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax,CVirtual__var1<br />&nbsp; &nbsp; &nbsp; &nbsp; add eax,CVirtual__var2<br />&nbsp; &nbsp;  }<br />}<br /><br /></code></pre><br />Then later, just modify the defines if necessary</div>
+    <div class="meta">Posted on 2005-11-10 07:39:26 by Ultrano</div>
+   </div>
+   <div class="post" id="post-167723">
+    <div class="subject"><a href="#post-167723">Re: Accessing class member variables in built in assembler</a></div>
+    <div class="body">Unfourtunatly at that point it has become enough overkill that using in-line ASM with either method I mentioned isn&#39;t so bad.&nbsp; :)</div>
+    <div class="meta">Posted on 2005-11-10 07:50:21 by Phred</div>
+   </div>
+  </div>
+ </body>
+</html>

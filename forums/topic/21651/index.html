@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>RC6 algo - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21651" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21651">RC6 algo</a></p>
+   <div class="post" id="post-163386">
+    <div class="subject"><a href="#post-163386">RC6 algo</a></div>
+    <div class="body">Hi all !<br />Here is my RC6 implementation in MASM.<br />Any optimisation tips &amp; ideas - welcome! ;)<br /><br /><pre><code><br /><br />include Kernel32.inc<br />includelib Kernel32.lib<br /><br />NROUNDS	equ 20<br />P32 	equ 0B7E15163h<br />Q32 	equ 09E3779B9h<br /><br />RC6_BLOCK struct<br />	_A dd ?<br />	_B dd ?<br />	_C dd ?<br />	_D dd ?<br />RC6_BLOCK ends<br /><br />All_Stage1 macro Src, Dest<br />	mov	eax, Src<br />	mul	eax<br />	add	eax, eax<br />	add	eax, Src<br />	rol	eax, 5<br />	mov	Dest, eax<br />endm<br /><br />Enc_Stage2 macro Operand, XorOp, RolOp, Off<br />	mov	eax, Operand<br />	mov	ecx, RolOp<br />	xor	eax, XorOp<br />	rol	eax, cl<br />	add	eax, <br />	mov	Operand, eax<br />endm<br /><br />Dec_Stage2 macro Operand, XorOp, RorOp, Off<br />	mov	eax, Operand<br />	sub	eax, <br />	mov	ecx, RorOp<br />	ror	eax, cl<br />	xor	eax, XorOp<br />	mov	Operand, eax<br />endm<br /><br />SwapVectors macro a1, a2, a3, a4, b1, b2, b3, b4<br />	push	ebx<br />	mov	eax, b1<br />	mov	ebx, b2<br />	mov	ecx, b3<br />	mov	edx, b4<br />	mov	a1, eax<br />	mov	a2, ebx<br />	mov	a3, ecx<br />	mov	a4, edx	<br />	pop	ebx<br />endm<br /><br />.code<br />RC6_BuildKey proc pUserKey:PDWORD, UserKeyLn:DWORD, ppRoundKey:PDWORD<br />local	v:DWORD<br />local	A:DWORD<br />local	B:DWORD<br />local	i:DWORD<br />local	j:DWORD<br />local	DWUserKeyLn:DWORD<br />local	pDWUserKey:DWORD<br />	pushad<br />	invoke	GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, (2*NROUNDS+4)*4<br />	mov	edi, ppRoundKey<br />	mov	, eax<br />	invoke	GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, 256*4<br />	mov	pDWUserKey, eax<br />	mov	esi, pUserKey<br />	mov	edi, pDWUserKey<br />	mov	ecx, UserKeyLn<br />	rep	movsb<br />	mov	eax, UserKeyLn<br />	add	eax, 3<br />	shr	eax, 2<br />	mov	DWUserKeyLn, eax<br />	<br />	mov	edi, ppRoundKey<br />	mov	edi, <br />	mov	esi, pDWUserKey<br />	mov	DWORD ptr , P32<br />	mov	ecx, 1<br />	.repeat<br />		mov	eax, <br />		add	eax, Q32<br />		mov	, eax<br />		inc	ecx<br />	.until	ecx&gt;2*NROUNDS+3<br />	cmp	ecx, DWUserKeyLn<br />	cmovl	ecx, DWUserKeyLn<br />	mov	eax, ecx<br />	add	ecx, ecx<br />	add	ecx, eax<br />	mov	v, ecx<br />	xor	eax, eax<br />	mov	A, eax<br />	mov	B, eax<br />	mov	i, eax<br />	mov	j, eax<br />	mov	ebx, 1<br />	.repeat<br />		mov	edx, i<br />		mov	eax, <br />		add	eax, A<br />		add	eax, B<br />		rol	eax, 3<br />		mov	, eax<br />		mov	A, eax<br />		<br />		mov	edx, j<br />		mov	ecx, A<br />		add	ecx, B<br />		mov	eax, <br />		add	eax, ecx<br />		rol	eax, cl<br />		mov	, eax<br />		mov	B, eax<br />		<br />		mov	eax, i<br />		inc	eax<br />		mov	ecx, 2*NROUNDS+4<br />		xor	edx, edx<br />		div	ecx<br />		mov	i, edx<br />		<br />		mov	eax, j<br />		inc	eax<br />		mov	ecx, DWUserKeyLn<br />		xor	edx, edx<br />		div	ecx<br />		mov	j, edx<br />		<br />		inc	ebx<br />	.until	ebx&gt;v<br />	mov	edi, pDWUserKey<br />	mov	ecx, 64<br />	xor	eax, eax<br />	rep	stosd<br />	invoke	GlobalFree, pDWUserKey<br />	popad<br />	ret<br />RC6_BuildKey endp<br /><br />RC6_BurnKey proc pRoundKey:PDWORD<br />	mov	edi, pRoundKey<br />	mov	ecx, (2*NROUNDS+4)<br />	xor	eax, eax<br />	rep	stosd<br />	invoke	GlobalFree, pRoundKey<br />	ret<br />RC6_BurnKey endp<br /><br />RC6_Encrypt proc pBlock:ptr RC6_BLOCK, pRoundKey:PDWORD<br />local	t, u:DWORD<br />	pushad<br />	mov	edi, pBlock<br />	mov	esi, pRoundKey<br />	assume	edi:ptr RC6_BLOCK<br />	assume	esi:ptr DWORD<br />	mov	eax, ._B<br />	add	eax, <br />	mov	._B, eax<br />	mov	ebx, ._D<br />	add	ebx, <br />	mov	._D, ebx<br />	mov	ebx, 1<br />	.repeat<br />		All_Stage1 ._B, t<br />		All_Stage1 ._D, u<br />		Enc_Stage2 ._A, t, u, 0<br />		Enc_Stage2 ._C, u, t, 4<br />		SwapVectors ._A, ._B, ._C, ._D, ._B, ._C, ._D, ._A<br />		inc	ebx<br />	.until	ebx==NROUNDS+1<br />	mov	eax, ._A<br />	add	eax, <br />	mov	._A, eax<br />	mov	ebx, ._C<br />	add	ebx, <br />	mov	._C, ebx<br />	assume	edi:nothing<br />	assume	esi:nothing<br />	popad<br />	ret<br />RC6_Encrypt endp<br /><br />RC6_Decrypt proc pBlock:ptr RC6_BLOCK, pRoundKey:PDWORD<br />local	t, u:DWORD<br />	pushad<br />	mov	edi, pBlock<br />	mov	esi, pRoundKey<br />	assume	edi:ptr RC6_BLOCK<br />	assume	esi:ptr DWORD<br />	mov	eax, ._C<br />	sub	eax, <br />	mov	._C, eax<br />	mov	ebx, ._A<br />	sub	ebx, <br />	mov	._A, ebx<br />	mov	ebx, NROUNDS<br />	.repeat<br />		SwapVectors ._A, ._B, ._C, ._D, ._D, ._A, ._B, ._C<br />		All_Stage1 ._D, u<br />		All_Stage1 ._B, t<br />		Dec_Stage2 ._C, u, t, 4<br />		Dec_Stage2 ._A, t, u, 0<br />		dec	ebx<br />	.until	ebx==0<br />	mov	eax, ._D<br />	sub	eax, <br />	mov	._D, eax<br />	mov	ebx, ._B<br />	sub	ebx, <br />	mov	._B, ebx<br />	assume	edi:nothing<br />	assume	esi:nothing<br />	popad<br />	ret<br />RC6_Decrypt endp<br /><br />purge All_Stage1<br />purge Enc_Stage2<br />purge Dec_Stage2<br />purge SwapVectors<br /><br /></code></pre><br /></div>
+    <div class="meta">Posted on 2005-08-17 05:34:47 by Bohdan</div>
+   </div>
+   <div class="post" id="post-163388">
+    <div class="subject"><a href="#post-163388">Re: RC6 algo</a></div>
+    <div class="body">It seems like you&#39;re only handling one block at a time? It might be advantagous to supply routines that work on an arbitrary amount of bytes, including CBC or some other chaining mode.<br /></div>
+    <div class="meta">Posted on 2005-08-17 06:26:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-163406">
+    <div class="subject"><a href="#post-163406">Re: RC6 algo</a></div>
+    <div class="body">bohdan,<br />i posted my implementation a while ago (here: http://www.asmcommunity.net/board/index.php?topic=21136.0). didn&#39;t really try to optimise it, so you could go ahead and run a comparison ;)</div>
+    <div class="meta">Posted on 2005-08-17 15:38:24 by Tola</div>
+   </div>
+   <div class="post" id="post-163640">
+    <div class="subject"><a href="#post-163640">Re: RC6 algo</a></div>
+    <div class="body">Hi Tola and f0dder, tnx for replay&#39;s.<br /><br />I found that somethink like <br />&nbsp; lea edi,<br />is VERY slow on P4, is it normal?<br /><br />My implementation test results (1 000 000 iterations (Encrypt+Decrypt) on same 16 bytes of data)<br /> 1404 mSec on P3-800 i815EP (running on 900MHz 150FSB) and<br /> 1515 mSec on P4-2400 i845G !!!!!!!!!&nbsp; :) :) :)<br /><br />Is it possible to put some MMX/SSE here?<br />I&#39;m just a beginner, sorry for annoying.</div>
+    <div class="meta">Posted on 2005-08-23 04:31:30 by Bohdan</div>
+   </div>
+   <div class="post" id="post-163643">
+    <div class="subject"><a href="#post-163643">Re: RC6 algo</a></div>
+    <div class="body">You aren&#39;t annoying anybody, and posting code like this is a (Y) :)<br /><br />I haven&#39;t had much time or interesting in working on encryption lately, and especially not with optimization of encryption.<br /><br />I would suggeset that, when you benchmark, you should encrypt a large buffer, greater than your L2 cache size - a 4meg buffer would probably do fine. Should provide more realistic results.<br /></div>
+    <div class="meta">Posted on 2005-08-23 05:16:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-163651">
+    <div class="subject"><a href="#post-163651">Re: RC6 algo</a></div>
+    <div class="body"><div class="quote"><br />I found that somethink like <br />&nbsp; lea edi,<br />is VERY slow on P4, is it normal?<br /></div><br />Yes, on a P4. It was mentioned in the optimising manual by Intel. <br /><br />Of course it is possible to post some MMX/SSE code...</div>
+    <div class="meta">Posted on 2005-08-23 06:16:57 by roticv</div>
+   </div>
+  </div>
+ </body>
+</html>

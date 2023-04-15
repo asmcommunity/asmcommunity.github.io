@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Close Another Program - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18114" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18114">Close Another Program</a></p>
+   <div class="post" id="post-139957">
+    <div class="subject"><a href="#post-139957">Close Another Program</a></div>
+    <div class="body">Hi Everyone ! :grin: <br />I have a question how to close another program.<br />I'm using ShellExecute to run NotePad<br /><br />invoke ShellExecute,NULL,SADD(&quot;open&quot;),SADD(&quot;notepad&quot;),NULL,NULL,SW_SHOWDEFAULT<br />mov NotePadhWnd,eax ;Get the hWnd of Notepad<br /><br />Then i want to close it when i want. I tried SendMessage to Handle of that to close NotePad, but still not work. (May be this way not work)<br /><br />invoke SendMessage,NotePadhWnd,WM_QUIT,0,0<br /><br />Can someone give me another way better to do this.<br />Thank.</div>
+    <div class="meta">Posted on 2004-04-24 01:16:08 by neverending</div>
+   </div>
+   <div class="post" id="post-139958">
+    <div class="subject"><a href="#post-139958">Close Another Program</a></div>
+    <div class="body">Afternoon, neverending.<br /><br />Tried WM_CLOSE yet?<br /><br />i.e.<br /><pre><code><br />invoke PostMessage, NotePadhWnd,  WM_CLOSE, NULL, NULL<br />[\code]<br />Note that PostMessage is used - not SendMessage.<br />PostMessage will place the message into that processes Message Queue.<br />SendMessage waits until the call returns before allowing continuation.<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2004-04-24 01:22:39 by Scronty</div>
+   </div>
+   <div class="post" id="post-139960">
+    <div class="subject"><a href="#post-139960">Close Another Program</a></div>
+    <div class="body">First off where did you read that ShellExecute returns a window handle ? You can only send messages to a window handle or a thread. Neither of which is returned by ShellExecute.<br /><br />You can use ShellExecuteEx and get the process ID and use TerminateProcess or as Scronty said use FindWindow to get a window handle and send WM_CLOSE. If you have the PID you can get a thread handle and send the message this long obfuscated, mostly useless way (but it does have a good purpose in the app I wrote it for)...<br /><br /><pre><code>SendThreadMessage FRAME uMsg,wParam,lParam<br />	LOCAL MsgParams		&#58;MSGPARAMS<br /><br />	mov D&#91;MsgParams.Result&#93;,0<br />	cmp D&#91;idThread&#93;,0<br />	je &gt;.EXIT<br /><br />	mov eax,&#91;uMsg&#93;<br />	mov &#91;MsgParams.ID&#93;,eax<br />	mov eax,&#91;wParam&#93;<br />	mov D&#91;MsgParams.lParam&#93;,eax<br />	mov eax,&#91;lParam&#93;<br />	mov D&#91;MsgParams.wParam&#93;,eax<br />	invoke EnumThreadWindows,&#91;idThread&#93;,OFFSET EnumThreadWndProc,OFFSET MsgParams<br />	mov eax,&#91;MsgParams.Result&#93;<br />	.EXIT<br />	RET<br />ENDF<br /><br />FindProcessThread FRAME PID<br />	LOCAL hThreadSnap	&#58;D<br />	LOCAL te32		&#58;THREADENTRY32<br /><br />	/*<br />	Returns a thread ID from a given process<br />	used to send the shutdown messages to the process<br />	<br />	The thread ID is necessary in order to send the messages<br />	to the application<br />	*/<br /><br />	invoke CreateToolhelp32Snapshot,TH32CS_SNAPTHREAD,0<br />	mov &#91;hThreadSnap&#93;,eax<br />	<br />	mov D&#91;te32.dwSize&#93;,SIZEOF THREADENTRY32<br />	invoke Thread32First,&#91;hThreadSnap&#93;,OFFSET te32<br />	or  eax,eax<br />	jz &gt;.EXIT<br />		W1&#58;<br />		mov eax,&#91;te32.th32OwnerProcessID&#93;<br />		cmp eax,&#91;PID&#93;<br />		je &gt;W2<br />			invoke Thread32Next,&#91;hThreadSnap&#93;,OFFSET te32<br />			or eax,eax<br />			jnz &lt;W1<br />			jmp &gt;.EXIT<br />	W2&#58;<br />		mov eax,&#91;te32.th32ThreadID&#93;<br />	.EXIT<br />	push eax<br />	invoke CloseHandle,&#91;hThreadSnap&#93;<br />	pop eax<br />	RET<br />ENDF<br /><br />EnumThreadWndProc FRAME hwnd,lParam<br />	uses edi<br /><br />	/*<br />	This procedure will send a message to the parent application<br />	it requires that lParam contain a pointer to a MSGPARAMS structure<br />	the enumeration will stop when a non-zero result has been recieved<br /><br />	MSGPARAMS STRUCT<br />		MsgID		DD<br />		MsgwParam	DD<br />		MsglParam	DD<br />		Result		DD<br />	ENDS<br /><br />	The procedure will wait a maximum of 2 seconds for a reply from each window<br />	responding to this message from a dialog requires that the parent<br />	use the following syntax to properly return a value&#58;<br /><br />	invoke SetWindowLong,DWL_MSGRESULT,&#91;dwResult&#93;<br />	xor eax,eax<br />	inc<br />	ret <br />	*/<br /><br />	mov edi,&#91;lParam&#93;<br />	mov edx,edi<br /><br />	add edx,MSGPARAMS.Result<br />	mov D&#91;edx&#93;,FALSE<br /><br />	invoke SendMessageTimeout,&#91;hwnd&#93;,&#91;edi+MSGPARAMS.ID&#93;,&#91;edi+MSGPARAMS.wParam&#93;,\<br />		&#91;edi+MSGPARAMS.lParam&#93;,SMTO_ABORTIFHUNG,2000,edx<br /><br />	; Stop the enumeration when we get a non-zero response<br />	mov eax,&#91;edi+MSGPARAMS.Result&#93;<br />	or eax,eax<br />	jz &gt;<br />		xor eax,eax<br />		ret<br />	&#58;<br />		xor eax,eax<br />		inc eax<br />		ret<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-04-24 01:47:08 by donkey</div>
+   </div>
+   <div class="post" id="post-139968">
+    <div class="subject"><a href="#post-139968">Close Another Program</a></div>
+    <div class="body">neverending,<br /><br />Check out:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/search.php?s=&amp;action=showresults&amp;searchid=255229&amp;sortby=lastpost&amp;sortorder=descending">http://www.asmcommunity.net/board/search.php?s=&amp;action=showresults&amp;searchid=255229&amp;sortby=lastpost&amp;sortorder=descending</a><br /><br />It opens WordPad, inserts some text, formats the page. and closes WordPad<br /><br />hth,<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-04-24 05:52:37 by farrier</div>
+   </div>
+   <div class="post" id="post-140097">
+    <div class="subject"><a href="#post-140097">Close Another Program</a></div>
+    <div class="body">Thank :alright:</div>
+    <div class="meta">Posted on 2004-04-25 01:01:22 by neverending</div>
+   </div>
+  </div>
+ </body>
+</html>

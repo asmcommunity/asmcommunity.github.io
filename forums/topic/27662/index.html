@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Formatting Uptime - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27662" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27662">Formatting Uptime</a></p>
+   <div class="post" id="post-197380">
+    <div class="subject"><a href="#post-197380">Formatting Uptime</a></div>
+    <div class="body">This code has been bothering me for the past few days. I know it's quite simple but i'm just not getting it.
+
+I'm trying to display a messagebox with a formatted version of my current windows uptime (Days/Hours/Mins/Secs). Now the first division routine works fine -- converting milliseconds to seconds. When I then divide by minutes, the application crashes and delivers an error message. I would like to go further and completely convert the milliseconds to a formatted uptime. Below is a portion of Hugo Perez's Assembly Tutorial. I understand most of it but I am a little confused about the "even DX:AX register" portion.
+
+<div class="quote">
+If the divider is 8 bits, the 16 bits AX register is taken as dividend and if the divider is 16 bits the even DX:AX register will be taken as dividend, taking the DX high word and AX as the low. 
+
+If the divider was a byte then the quotient will be stored on the AL register and the residue on AH, if it was a word then the quotient is stored on AX and the residue on DX. 
+</div>
+
+With no avail, i've searched all over for examples dealing with assembly arithmatic; any help would be appreciated. By the way, the compiler being used is Masm. Below is a portion of my code...
+
+<pre><code>
+.data        ;initialized variables
+LText          db "%u.", 0
+LCaption       db "System Uptime", 0
+DelayMilli     dd 1000
+DelayDays      dd 86400
+DelayHours     dd 3600
+DelayMins      dd 60
+
+.data?       ;uninitialized variables
+Buffer         db 16 dup (?)
+Days           dd         ?
+Hours          dd         ?
+Minutes        dd         ?
+Seconds        dd         ?
+TickCount      dd         ?
+
+; #########################################################################
+
+.code
+
+start:
+
+    invoke GetTickCount
+    div DelayMilli
+    
+    invoke wsprintf, addr Buffer, addr LText, ax
+    invoke MessageBox, 0, addr Buffer, addr LCaption, MB_OK+MB_ICONINFORMATION
+
+    invoke ExitProcess, 0
+
+; #########################################################################
+
+end start
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-16 00:45:00 by usb</div>
+   </div>
+   <div class="post" id="post-197381">
+    <div class="subject"><a href="#post-197381">Formatting Uptime</a></div>
+    <div class="body">Here is the scoop on DIV (you definition is quite convoluted):
+
+Since we are dividing, you the computer expects that the operation will create a smaller value that what it started with, (there is some problems with this assumption, like divinde by 1).. but non the less, the cpu works this way...
+
+So.. if your dividing 16 bits by a 8 bit value, expect 8 bit answer, with an 8 bit remainer.  In this case, AX is the 16 source, and the answer is then copied over the source with AL holding the answer, and AH holding the remainder.  
+
+Likewise, if your dividing a 32 bit source by 16 bits, it will use DX as the upper 16 bit source, AX as the lower 16 bit source, and divide the equivelant 32bit number by a 16 value, producing a 16 bit answer in AX, and a 16 bit remainder in DX.
+
+I dont fuss with DIV too often, but i believe the newer .386 intruction set provides for a 32 bit divisor as well, using EDX as the upper 32 bits, and EAX as the lower 32bits of a 64 bit source, and it is divided by 32 bits to produce a 32 answer in EAX and remainder in EDX.
+
+Hopefully this paints a better picture.  The thing to remember about all this, is the CPU only realizes the type of source to consider by the size of the divisor. 
+
+Your source has:
+
+div DelayMilli
+
+where delaymilli is defined as a Double 32 bits, so this would imply that the upper 32bits to use is EDX and lower is EAX.  
+
+Since GetTickCount will return a DWORD in eax, there is no guarentees that EDX will remain unchanged (M$ lazyness).  So odds are, the invoke you called will fill EDX with some random 32 bit number, compounded with the tick-count in EAX, will make a very big 64 number to be divided by a relatively small 32 bit number (1000).. If the divisor is too small, the answer will outgrow the size of the destination register (32 bits) and cause a divide overflow error (a fatal error which will cause the program to crash). 
+
+If your still following all this, i would try adding this line:
+<pre><code>
+   invoke GetTickCount
+   mov edx, 0 ; format upper 32 bits of 64 bit source
+   div DelayMilli
+   ...
+</code></pre>
+
+Or... By the same logic, scale down your divsor data type.. 1000 out of 4 Gig is small.  At least 16 bits are 0's, you can easily fit 1000 in a word (16 bits), however, DX will still be used, and thus you will still need to format it to ensure no errors (it may not cause a divide overflow in this case, but you could still have faulty answers if dx is allowed to hold a non zero value)..
+
+
+<pre><code>
+    DelayMilli dw 1000
+
+    invoke GetTickCount
+    mov edx, 0   ; format DX 
+    div DelayMilli
+    ...
+</code></pre>
+
+Well that was much longer than first intended... :)
+Hope it helps..
+
+NaN
+
+
+This message was edited by NaN, on 4/16/2001 2:12:16 AM</div>
+    <div class="meta">Posted on 2001-04-16 02:08:00 by NaN</div>
+   </div>
+   <div class="post" id="post-197382">
+    <div class="subject"><a href="#post-197382">Formatting Uptime</a></div>
+    <div class="body">Thanks so much NaN; I really appreciate the speedy response. I decided I might as well finish the program before I go to sleep. Not only have you helped me in the completion on this project, but also my journey into the world of windows assembly has taken a giant step. Below is the source for my finished application, for those interested in learning or those who would just like to see. Thanks again.
+
+<pre><code>
+; #########################################################################
+
+      .386
+      .model flat, stdcall
+      option casemap :none   ; case sensitive
+
+; #########################################################################
+
+      include \masm32\include\windows.inc
+      include \masm32\include\user32.inc
+      include \masm32\include\kernel32.inc
+
+      includelib \masm32\lib\user32.lib
+      includelib \masm32\lib\kernel32.lib
+
+; #########################################################################
+
+.data        ;initialized variables
+LText          db "%u Days %u Hours %u Minutes %u Seconds", 0
+LCaption       db "System Uptime", 0
+LSpace         db " ", 0
+DelayMilli     dd 1000
+DelayDays      dd 86400
+DelayHours     dd 3600
+DelayMins      dd 60
+
+.data?       ;uninitialized variables
+Buffer         db 16 dup (?)
+Days           dd         ?
+Hours          dd         ?
+Minutes        dd         ?
+Seconds        dd         ?
+TickCount      dd         ?
+
+; #########################################################################
+
+.code
+
+start:
+    invoke GetTickCount
+    mov edx, 0
+    div DelayMilli
+    mov TickCount, eax
+    
+    mov edx, 0
+    div DelayDays
+    .if eax > 0
+        mov Days, eax
+        mov eax, edx
+        mov TickCount, edx
+    .else
+        mov eax, TickCount
+    .endif
+
+    mov edx, 0
+    div DelayHours
+    .if eax > 0
+        mov Hours, eax
+        mov eax, edx
+        mov TickCount, edx
+    .else
+        mov eax, TickCount
+    .endif
+
+    mov edx, 0
+    div DelayMins
+    mov Minutes, eax
+    mov Seconds, edx
+
+    invoke wsprintf, addr Buffer, addr LText, Days, Hours, Minutes, Seconds
+    invoke MessageBox, 0, addr Buffer, addr LCaption, MB_OK+MB_ICONINFORMATION
+    
+    invoke ExitProcess, 0
+end start
+</code></pre>
+
+Good Night ;)</div>
+    <div class="meta">Posted on 2001-04-16 03:00:00 by usb</div>
+   </div>
+   <div class="post" id="post-197383">
+    <div class="subject"><a href="#post-197383">Formatting Uptime</a></div>
+    <div class="body">Glad to help...
+
+NaN</div>
+    <div class="meta">Posted on 2001-04-16 11:48:00 by NaN</div>
+   </div>
+   <div class="post" id="post-197384">
+    <div class="subject"><a href="#post-197384">Formatting Uptime</a></div>
+    <div class="body">This is just a follow up to my previous message. I would like to let those who care know that i've ported my code from Assembly to C++, VC++, Delphi, and Visual Basic. This was just for learning purposes and I got some pretty interesting size comparisons.</div>
+    <div class="meta">Posted on 2001-04-17 00:14:00 by usb</div>
+   </div>
+   <div class="post" id="post-197385">
+    <div class="subject"><a href="#post-197385">Formatting Uptime</a></div>
+    <div class="body">so what are the file sizes ???
+
+:)</div>
+    <div class="meta">Posted on 2001-04-17 17:03:00 by skud</div>
+   </div>
+   <div class="post" id="post-197386">
+    <div class="subject"><a href="#post-197386">Formatting Uptime</a></div>
+    <div class="body">Naturaly I would think VB is the largest, cuz those exe's are just wasted, bloated dll code.  Then delphi its basicaly the same crap just it doesnt need runtime .dll's like VB, I would guess VC++ next cuz its just not strait c++ code, proboly some bloating, then strait c++ cuz thats usualy pretty clean, and i betcha our asm will take the cake! weee!
+
+-brad</div>
+    <div class="meta">Posted on 2001-04-17 21:03:00 by Rage9</div>
+   </div>
+   <div class="post" id="post-197387">
+    <div class="subject"><a href="#post-197387">Formatting Uptime</a></div>
+    <div class="body">Asm    - 2.5kb
+C++    - 9.96kb
+Delphi - 41kb
+Vb     - 20kb (need's msvbvm60.dll [1.32mb])
+VC++   - 148kb</div>
+    <div class="meta">Posted on 2001-04-17 22:39:00 by usb</div>
+   </div>
+   <div class="post" id="post-197388">
+    <div class="subject"><a href="#post-197388">Formatting Uptime</a></div>
+    <div class="body">Well, it at the very least can justify a *worthy* trade off for using Delphi... :rolleyes:
+
+I still like ASM best, but if was to choose a second, i would have gone VC++, which is a surprising difference..
+
+Seeing i don't feel like learning Delphi anytime soon, looks like its ASM all the way... :cool:
+
+BTW: Did you use a VC++ wizard (Currious how it got to be soooooo big.. :) )
+
+NaN</div>
+    <div class="meta">Posted on 2001-04-18 00:57:00 by NaN</div>
+   </div>
+   <div class="post" id="post-197389">
+    <div class="subject"><a href="#post-197389">Formatting Uptime</a></div>
+    <div class="body">Yes, I did use the wizard and basically stripped out the guts. These ported applications were made rather quickly and not much time was taken to provide the smallest and fastest executable.
+With a few minor adjustments in VC++'s linker options, I was able to get the size down to 84kb. Also, I changed the subsystem for the C++ version, which brought my size to 9.97kb. I will probably continue trying to revise each application's code in order to receive the most effecient results.</div>
+    <div class="meta">Posted on 2001-04-18 01:16:00 by usb</div>
+   </div>
+   <div class="post" id="post-197390">
+    <div class="subject"><a href="#post-197390">Formatting Uptime</a></div>
+    <div class="body">Asm - 2.5kb
+C++ - 3.03kb
+Delphi - 41kb
+Vb - 16kb 
+VC++ - 36kb
+
+After numerous trials, I believe i've optimized each language's code to the fullest (except assembly). Correct me if i'm wrong, but the smallest an application will be, if compiled with MASM, is 2.5kb, right? If so, then I only need to optimize my code for speed. I'm pretty proud of the results; Although, I would still like to have the Delphi executable reduce in size. Anyways, I need to get some sleep... ;)</div>
+    <div class="meta">Posted on 2001-04-18 03:37:00 by usb</div>
+   </div>
+   <div class="post" id="post-197391">
+    <div class="subject"><a href="#post-197391">Formatting Uptime</a></div>
+    <div class="body">One last thought, how would you order these in terms of effort required to get the above results (neglecting your debuging of source problems)???
+
+Masm is pretty well type and go, but to squeeze out the air so much outa C++/VC++ etc. i imagine you had to hunt down a few switches etc.
+
+NaN</div>
+    <div class="meta">Posted on 2001-04-19 09:17:00 by NaN</div>
+   </div>
+   <div class="post" id="post-197392">
+    <div class="subject"><a href="#post-197392">Formatting Uptime</a></div>
+    <div class="body">With a little standard library rewrite and some linker settings,
+you can get your VC++ exes about as small as masm exes -- if you
+code in "raw" style (no libc, only pure win32 API calls). You need
+to rewrite "libctrstartup" (or something like it - try linking
+with the no default libaries switch and see what it bitches about),
+and define "_fltused" (or something like it). Ok, I can't remember
+the details off the top of my head, but with trial and error this
+took only half an hour or such.
+
+Remember that delphi (and BCB) depend on huge runtime DLLs just
+like VB. But I think it's possible to strip this off if you're
+only doing console apps. But who'd want to write in pascal when
+they can do C or asm? :).
+
+Oh yes, one more thing: if you're going to strip off the runtimes
+for vc++, be a bit careful with c++ code, it "probably" needs a
+couple things, at least if you're doing dynamic obj allocations.</div>
+    <div class="meta">Posted on 2001-04-19 10:40:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-197393">
+    <div class="subject"><a href="#post-197393">Formatting Uptime</a></div>
+    <div class="body">Basically, the C++ and VC++ executables all boiled down to a few linker and compiler options/switches. It was mostly trial and error that allowed me to reduce the sizes; although it wasn't that hard. I did rewrite a bit of the Vb code in order to limit the size. I'm pretty sure I could have reduced the sizes in C++, VC++, and Delphi a bit more by writing my own library file, but I was lazy.
+
+If I were to order these results by effort, I would say that each was quite simple. I really didn't have a hard time while making or reducing through any language. The one that took the longest to complete (when trying to reduce the size), however, was VC++.
+
+I'm not sure if f0dder was stating that Delphi, like Vb, requires runtime libraries for it's exectables. If he wasn't, then I misinterpreted that section in his post. If otherise, then I have to disagree in that, any executable produced in Delphi (and I believe BCB) does not require a runtime library. :)</div>
+    <div class="meta">Posted on 2001-04-19 13:25:00 by usb</div>
+   </div>
+   <div class="post" id="post-197394">
+    <div class="subject"><a href="#post-197394">Formatting Uptime</a></div>
+    <div class="body">I'm not defending Delphi here but lets get our facts together.
+Delphi does not depend huge runtime dlls. Delphi creates REAL
+stand alone executables. It does create bloated code however,
+especially when using the VCL. But just to prove a point, I
+compiled the code given by usb with Delphi 3 and came up with 16.5k</div>
+    <div class="meta">Posted on 2001-04-19 13:32:00 by anon</div>
+   </div>
+   <div class="post" id="post-197395">
+    <div class="subject"><a href="#post-197395">Formatting Uptime</a></div>
+    <div class="body">You can get 1.5k in ASM if you REALLY want, although it does scarifice some sanity (and readability)....
+<pre><code>
+.386
+.model flat, stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+
+.code
+data:
+LText          db "%u Days %u Hours %u Minutes %u Seconds", 0
+LCaption       db "System Uptime", 0
+LSpace         db " ", 0
+DelayMilli     dd 1000
+DelayDays      dd 86400
+DelayHours     dd 3600
+DelayMins      dd 60
+
+Buffer         db 16 dup (0)
+Days           dd         0
+Hours          dd         0
+Minutes        dd         0
+Seconds        dd         0
+TickCount      dd         0
+
+start:
+    lea edx, 
+    mov eax, offset start
+    push NULL
+    sub eax, offset data
+
+    invoke VirtualProtect, addr data, eax, PAGE_READWRITE, edx
+    pop eax
+
+    invoke GetTickCount
+    mov edx, 0
+    div DelayMilli
+    mov TickCount, eax
+    
+    mov edx, 0
+    div DelayDays
+    .if eax > 0
+        mov Days, eax
+        mov eax, edx
+        mov TickCount, edx
+    .else
+        mov eax, TickCount
+    .endif
+
+    mov edx, 0
+    div DelayHours
+    .if eax > 0
+        mov Hours, eax
+        mov eax, edx
+        mov TickCount, edx
+    .else
+        mov eax, TickCount
+    .endif
+
+    mov edx, 0
+    div DelayMins
+    mov Minutes, eax
+    mov Seconds, edx
+
+    invoke wsprintf, addr Buffer, addr LText, Days, Hours, Minutes, Seconds
+    invoke MessageBox, 0, addr Buffer, addr LCaption, MB_OK+MB_ICONINFORMATION
+    
+    invoke ExitProcess, 0
+end start
+</code></pre>
+
+Its a complete rip of the code usb wrote, I needed to re-format for my own personal consumption ;) .
+
+Basically put all the data in the code section saves 1k (.5k for the .data, and .5k for the .data?), but in order to be able to write to the code section you need to de-protect it using VirtualProtect.
+
+Mirno</div>
+    <div class="meta">Posted on 2001-04-19 13:51:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-197396">
+    <div class="subject"><a href="#post-197396">Formatting Uptime</a></div>
+    <div class="body">For even smaller code and worse readability :), change your code to this:
+<pre><code>
+.386
+.model flat, stdcall
+option casemap:none
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+.code
+data:
+LText          db "%u Days %u Hours %u Minutes %u Seconds", 0
+LCaption       db "System Uptime", 0
+
+start:
+    invoke GetTickCount
+    cdq
+    mov ecx, 1000
+    div ecx
+    
+    cdq
+    mov ecx, 86400
+    div ecx
+    mov ebx, eax
+    mov eax, edx
+    
+    cdq
+    mov ecx, 3600
+    div ecx
+    mov esi, eax
+    mov eax, edx
+    
+    cdq
+    mov ecx, 60
+    div ecx
+
+    invoke wsprintf, offset start, addr LText, ebx, esi, eax, edx
+    invoke MessageBox, 0, offset start, addr LCaption, MB_OK+MB_ICONINFORMATION
+    invoke ExitProcess, 0
+end start
+</code></pre>
+and assemble/link it with:
+<pre><code>
+ml /c /coff usb.asm
+link /ALIGN:4 /subsystem:windows /MERGE:.rdata=.text /SECTION:.text,ERWX usb.obj
+</code></pre>
+Most variables are changed to registers so data can be removed, the rdata and text section are merged and made writable by changing the section flags in the PE header (/SECTION:.text,ERWX). Align for the file is set to 4. I don't think this is a legal size, but it works in win2k. The start of the code section is used as buffer too (when the buffer is used, the first opcodes are overwritten, but we don't need them anymore so it doesn't matter).
+All this assembles to 844 bytes and it's still working.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-04-19 14:52:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-197397">
+    <div class="subject"><a href="#post-197397">Formatting Uptime</a></div>
+    <div class="body">Wow! :) Thanks for such wonderful responses everyone. I can truly say that this has been a learning experience. It's great to see that I received a warm welcome into the community. I also see that I have a long way to go...</div>
+    <div class="meta">Posted on 2001-04-20 03:16:00 by usb</div>
+   </div>
+   <div class="post" id="post-197398">
+    <div class="subject"><a href="#post-197398">Formatting Uptime</a></div>
+    <div class="body">Delphi does not require runtime libraries? How come it bitches if it
+can't find those DPL files (or whatever those files are called).
+I think I'll go home and reinstall delphi just to prove that I'm
+right :). I'm pretty sure about this.</div>
+    <div class="meta">Posted on 2001-04-20 06:21:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-197399">
+    <div class="subject"><a href="#post-197399">Formatting Uptime</a></div>
+    <div class="body">I just wanted to say that if you are using Delphi, you can choose if you want your software to use runtime libraries or if you want them included in your exe. Using runtime libraries will result in a very small exe (but slow) - only a few kb - just like Visual Basic. 
+
+/tcore</div>
+    <div class="meta">Posted on 2001-04-20 07:51:00 by tcore</div>
+   </div>
+  </div>
+ </body>
+</html>

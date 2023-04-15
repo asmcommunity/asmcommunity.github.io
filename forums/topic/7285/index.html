@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Drag and Drop: IDropTarget - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7285" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=7285">Drag and Drop: IDropTarget</a></p>
+   <div class="post" id="post-52747">
+    <div class="subject"><a href="#post-52747">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Hello all,<br />  I'm trying to implement drag and drop in my application. <strong>code1101</strong> suggested I look into RegisterDragDrop and IDropTarget. Of course, everything I can find is in C++.<br /><br />Anyways, RegisterDragDrop accepts a pointer to an IDropTarget interface. IDropTarget is defined in the oleidl.h file (with DevC++) as:<br /><br /><pre><code><br />EXTERN_C const IID IID_IDropTarget;<br />#undef INTERFACE<br />#define INTERFACE IDropTarget<br />DECLARE_INTERFACE_&#40;IDropTarget,IUnknown&#41;<br />&#123;<br />	STDMETHOD&#40;QueryInterface&#41;&#40;THIS_ REFIID,PVOID*&#41; PURE;<br />	STDMETHOD_&#40;ULONG,AddRef&#41;&#40;THIS&#41; PURE;<br />	STDMETHOD_&#40;ULONG,Release&#41;&#40;THIS&#41; PURE;<br />	STDMETHOD&#40;DragEnter&#41;&#40;THIS_ LPDATAOBJECT,DWORD,POINTL,PDWORD&#41; PURE;<br />	STDMETHOD&#40;DragOver&#41;&#40;THIS_ DWORD,POINTL,PDWORD&#41; PURE;<br />	STDMETHOD&#40;DragLeave&#41;&#40;THIS&#41; PURE;<br />	STDMETHOD&#40;Drop&#41;&#40;THIS_ LPDATAOBJECT,DWORD,POINTL,PDWORD&#41; PURE;<br />&#125;;<br /></code></pre><br /><br />Now from what I can tell IDropTarget is just an array of 7 long pointers to functions that we define.<br /><br />So I want to know if the equivalent in ASM would be:<br /><br /><pre><code><br />;protos to match the interfaces of each function<br /><br />MyQueryInterface PROTO &#58;DWORD,&#58;DWORD<br />AddRef           PROTO<br />Release          PROTO <br />DragEnter        PROTO &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD<br />DragOver         PROTO &#58;DWORD,&#58;DWORD,&#58;DWORD<br />DragLeave        PROTO<br />Drop             PROTO &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD<br /><br />;an array of the functions<br />IDropTarget   dd offset MyQueryInterface<br />              dd offset AddRef<br />              dd offset Release<br />              dd offset DragEnter<br />              dd offset DragOver<br />              dd offset DragLeave<br />              dd offset Drop<br /><br />;calling RegisterDragDrop with a pointer to IDropTarget<br />invoke RegisterDragDrop,hwnd,addr IDropTarget<br /></code></pre><br /><br />If anyone can confirm or clarify I would greatly appreciate it.<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-11 17:29:04 by chorus</div>
+   </div>
+   <div class="post" id="post-52751">
+    <div class="subject"><a href="#post-52751">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Hi chorus !<br /><br />i haven't test this function RegisterDragAndDrop but if you only want to drag files to your application use this : <br /><br />( WM_DROPFILES)<br />invoke DragQueryFile,wParam,0,ADDR buffer1,128<br /><br />But if you want another thing, i can't help you, sorry !<br /><br />Bye !</div>
+    <div class="meta">Posted on 2002-08-11 18:25:14 by kylekiller</div>
+   </div>
+   <div class="post" id="post-52752">
+    <div class="subject"><a href="#post-52752">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Thanks kylekiller, but I'm specifically trying to drag and drop urls from WebBrowsers, which can't be handled through WM_DROPFILES (quite unfortunately for me :()<br /><br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-11 18:29:26 by chorus</div>
+   </div>
+   <div class="post" id="post-52780">
+    <div class="subject"><a href="#post-52780">Drag and Drop: IDropTarget</a></div>
+    <div class="body">chorus,<br /><br />  You've got a pretty good definition for the interface there. However, the array of function pointers (which is usually called the <em>virtual table of function pointers,</em> or just <em>vtable</em> for short) needs a bit of indirection to work.<br /><br />  You need to also define a dword pointer variable, inside this store the address of your function table. You pass the address of that extra pointer to RegisterDragDrop.<br /><br />  That may seem round about, but the interface abstraction assumes you have a C++ like object holding the function table reference. Hence you need the extra pointer variable to trick the interface calling code into seeing an object.<br /><br />Objects always get called in a little two-step dance, given the object pointer (here our dword pointer variable), get its contents, and executre the instruction pointed to by the contents of that address. Thus, to invoke an object's method in masm:<br /><br /><pre><code><br />mov eax, pObject<br />mov eax, &#91;eax&#93;<br />call &#91;eax + method offset&#93;<br /></code></pre><br /><br />Note the , they are quite importaint and subtle here.</div>
+    <div class="meta">Posted on 2002-08-11 22:49:41 by Ernie</div>
+   </div>
+   <div class="post" id="post-52781">
+    <div class="subject"><a href="#post-52781">Drag and Drop: IDropTarget</a></div>
+    <div class="body">You possibly should add the THIS parameter to your protos, if you want to use &quot;invoke&quot;.</div>
+    <div class="meta">Posted on 2002-08-11 22:52:43 by japheth</div>
+   </div>
+   <div class="post" id="post-52874">
+    <div class="subject"><a href="#post-52874">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Thank you very much guys! That clarifies things a lot!<br /><br />I've downloaded an example in C++ and have been stepping through the disassembly with the C++ source for reference and trying to see how it all works. It's a mess, you can barely make sense of anything from it.<br /><br />I have one other question though.<br /><br />The C++ source uses the AddRef and Release methods of IUnknown to increment and decrement a reference counter that is kept in the IDropTarget structure. When Release decrements this counter to zero it does <strong>delete this</strong> (because it was allocated by <strong>new</strong>)/ What I want to do, however, is just declare the structure in .data and not even have to worry about HeapAlloc and HeapFree for it (i.e., new and delete). Is this ok? And if so, do I even have to bother inc/dec reference count?<br /><br />Thanks again,<br /><br />--Chorus<br /><br />PS here is the code snippet for reference sake:<br /><br /><pre><code><br />	case WM_INITDIALOG&#58;<br />		&#123;<br />			HRESULT hr;<br />			pDrpTgt = new CDemoDropTarget&#40;&#41;;<br />			// The IDropTarget interface is marshaled by OLE using MSHLFLAGS_TABLEWEAK,<br />			// OLE does not keep a strong lock on IDropTarget. This will result<br />			// in the interface being released after the first drop. To prevent this<br />			// from happening we keep a strong lock on IDropTarget by calling <br />			// CoLockObjectExternal. <br />			if &#40;pDrpTgt&#41;<br />			&#123;<br />				hr = CoLockObjectExternal&#40;pDrpTgt, TRUE, TRUE&#41;;<br />				<br />				if &#40;hr == S_OK&#41;<br />				&#123;<br />					hr = RegisterDragDrop&#40;hWnd, pDrpTgt&#41;;<br />					<br />					if &#40;hr != S_OK&#41;<br />					&#123;<br />						MessageBox&#40;hWnd,&quot;Unable to Register as OLE Object&quot;,&quot;&quot;,MB_OK&#41;;<br />					&#125;<br />				&#125;<br />				else<br />				&#123;<br />					MessageBox&#40;hWnd,&quot;OLE Lock Object Error&quot;,&quot;&quot;,MB_OK&#41;;<br />				&#125;<br />			&#125;<br /></code></pre></div>
+    <div class="meta">Posted on 2002-08-12 07:20:10 by chorus</div>
+   </div>
+   <div class="post" id="post-52982">
+    <div class="subject"><a href="#post-52982">yeah!</a></div>
+    <div class="body">For those who are interested, I have put together an application that accepts drag and drop through the OLE interface. I tried commenting as best as I could.<br /><br />It checks to see if the file being dropped is a text file, and if so will read in a small buffer from the text file and send it to an edit control when the file is dropped.<br /><br />Still not quite sure how to accept URLs from Internet Explorer though<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-12 14:24:40 by chorus</div>
+   </div>
+   <div class="post" id="post-53040">
+    <div class="subject"><a href="#post-53040">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Yes, as you see, ignoring what AddRef and Release tell you to do isn't very harmful. One way to think of this is your app itself is the object containing the interface, and as long as the app is running the object exists.<br /><br />On the other hand, you may have been lucky here with your handeling of QueryInterface. QI is the way clients of your object/interface learn what it is capable of doing. Since you blindly return a legit pointer and an S_OK, you are declaring your object literally capable of doing anything.<br /><br />Here it worked for you, possibly cause windows didn't check if you implemented anything else. This migfht become a huge problem implimenting some other interface, so just kreep it in mind if you keep exploring COM interfaces.<br /><br />Those points are minor. I very much enjoy the way you got COM to work seemingly without very much fuss at all.<br /><br />Very nice work.</div>
+    <div class="meta">Posted on 2002-08-12 21:55:26 by Ernie</div>
+   </div>
+   <div class="post" id="post-53043">
+    <div class="subject"><a href="#post-53043">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Thank you very much. There's still a lot I think I have to do to get URLs however. There isn't a lot of documentation on this subject.<br /><br />Heh.. forgot to make QueryInterface more robust :) To busy trying to get the DragEnter and Drop methods to work. I'll check on that.<br /><br />I have another question though. I figured most of this stuff out by tracing a simple C++ program through OllyDebug. One thing I noticed is that in the C++ program, <strong>this</strong> doesn't seem to point to the beginning of the IDropTarget structure but to the byte just after the vtable portion of IDropTarget. <br /><br />In my program <strong>this</strong> points to the beginning of the IDROPTARGET structure. I tested my program to make sure it was ok by displaying the refcount variable in the edit box, and it incremented as I thought it would.<br /><br />Maybe the C++ program is doing something else I can't find yet, I dunno.<br /><br />Thanks again,<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-12 22:17:53 by chorus</div>
+   </div>
+   <div class="post" id="post-53044">
+    <div class="subject"><a href="#post-53044">Drag and Drop: IDropTarget</a></div>
+    <div class="body">OOP implementation usually works something like this:<br /><br />When the object is created, a chunk of memory is allocated (via New or some command). With C++, the vtable is placed inside the chunk, along with the dword pointer to the vtable.<br /><br />That's like you passing back lpDropTarget, thats the THIS in your code. The method code can take THIS, and by knowing the binary layout it used to create and initialize the object transform THIS into a pointer to any element it chooses.<br /><br />THIS is essentially a pointer to the chunk of memory, and the compiler knows how to use it.<br /><br />That said, since you are building the object, you are free to arrange how THIS works. When I build objects (with CoLib), I leave the vtable static in the .data area, so each object instance need not contain it. This is cmpletely different from C++ (which I believe builds the vtable at runtime to allow for inheritance).<br /><br />So you don't have to copy how C++ does it, you can devise your own method, as long as you are consistant.</div>
+    <div class="meta">Posted on 2002-08-12 22:45:16 by Ernie</div>
+   </div>
+   <div class="post" id="post-53075">
+    <div class="subject"><a href="#post-53075">Drag and Drop: IDropTarget</a></div>
+    <div class="body">The way to get a URL is to use the EnumFormatEtc to get a pointer to allow you to walk through the supported data formats, using Next.  Each call to the Next function will return one of the supported data types of the drop source.  When you find the type you are interested in you, then call GetData with that type.  You can also use the same method to give the correct cursor feedback in the drop target DragEnter routine.<br /><br />Try this app which I found very useful for checking what data types are available:<br /><br /><a target="_blank" href="">http://home.inreach.com/mdunn/code/ClipSpy/clipspy.html</a> <br /><br />Hope this is useful<br /><br />Nick</div>
+    <div class="meta">Posted on 2002-08-13 03:49:05 by Nick</div>
+   </div>
+   <div class="post" id="post-53176">
+    <div class="subject"><a href="#post-53176">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Nick, thank you very much! I'm looking into your method now.<br /><br />In the meantime however, I have found another solution for my problem. Here's how I do it:<br /><br />--Create a string &quot;UniformResourceLocator&quot;<br />--Call RegisterClipboardFormat on that string. This returns the clipboard format uint that is registered already by Internet Explorer for the same name. I save this as CF_URL. (I'm assuming IE has already registered the name...dunno if that's truly correct).<br />--in the FORMATETC struc, instead of asking for CF_HDROP I ask for CF_URL<br />--Call GetData<br />--Call GlobalLock on medium.hGlobal to get a pointer to the data<br />--The data block is exactly the null terminated URL<br />--Copy it :)<br />--GlobalUnlock<br />--continue as before<br /><br />Attached is the program that accepts URLs dragged from IE (and only URLs at the moment). Haven't tested it with Netscape or Opera or anything yet. If anybody tries it with one of these browsers can you let me know if it works?<br /><br />PS Still haven't fixed up QueryInterface... that'll be my next thing<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-13 13:00:23 by chorus</div>
+   </div>
+   <div class="post" id="post-53205">
+    <div class="subject"><a href="#post-53205">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Well... it's getting URL's alright, but not waiting for me to actually drop it.<br /><br />Also, can only asccept the URL direct from MSIE. If I drop it first on my desktop as a shortcut, it doesn't paste. And it no longer accepts text files.<br /><br />I'm sure you know all this. Nice to see your work progressing.</div>
+    <div class="meta">Posted on 2002-08-13 17:56:32 by Ernie</div>
+   </div>
+   <div class="post" id="post-53208">
+    <div class="subject"><a href="#post-53208">Drag and Drop: IDropTarget</a></div>
+    <div class="body">heh... I guess I was too excited about getting the URL to show up... I posted maybe a bit too early.<br /><br /><br />Here's a new version:<br /> --accepts text files and reads a small buffer of text<br /> --accepts URLs from browser; waits until dropped<br /> --shows proper icon when dragging a URL over<br /><br />Doesn't yet accept shortcuts from desktop yet, as desktop converts them to .URL files. Should be easy enough to implement.<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-13 18:38:58 by chorus</div>
+   </div>
+   <div class="post" id="post-53343">
+    <div class="subject"><a href="#post-53343">Drag and Drop: IDropTarget</a></div>
+    <div class="body">Ernie,<br />  I have a quick question. I went back to go implement the QueryInterface function so as to be proper about everything, only to discover that the procedure never gets called! I tested this first by returning E_NOINTERFACE all the time and that didn't change anything (prog still accepts text and URLs). Then I inserted a MessageBox call and got nothing.<br /><br />Do you have any idea why this is happening? I understood that QueryInterface got called with RegisterDragDrop?? And either way, it seems to work regardless... <br /><br />Thanks for any input,<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-14 12:27:29 by chorus</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>binary file over smtp - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17068" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=17068">binary file over smtp</a></p>
+   <div class="post" id="post-132384">
+    <div class="subject"><a href="#post-132384">binary file over smtp</a></div>
+    <div class="body">Hi,<br /><br />I have the following problem,<br />I would like to send a binary file over smtp, the orginal filesize is 16 K, <br />it arrive however only 12K, and the file is incomplete. <br />With normal text file does not give it problems. <br /><br />Where is the error?<br /><br />sniffer<br /><br /><br />   invoke  CreateFileMapping, hFile,NULL,PAGE_READONLY,0,0,NULL<br />   mov     hMapFile,eax	<br />   invoke  MapViewOfFile,eax, FILE_MAP_READ,0,0,0<br />   mov     pMapStart,eax<br />   <br />   push    ecx<br />   mov     ecx,dword ptr  <br />   push    ecx<br />   mov     eax,ml_len<br />   add     Fsize, eax            <br />   add     Fsize,5              <br />   <br />   <br />   invoke  GlobalAlloc, GHND, Fsize<br />   mov     hMem,eax<br />   <br />   invoke  GlobalLock, hMem<br />   mov     pBody,eax<br />      <br />   mov     ecx,ml_len<br /><br />   lea     esi,<br />   mov     edi,pBody<br />   @@:<br />   lodsb <br />   stosb<br />   dec     ecx<br />   jnz     @B<br /><br />   pop     ecx <br />   mov     esi,pMapStart<br />   startcpy:<br />   lodsb<br />   stosb<br />   dec  ecx<br />   jnz  startcpy <br />   pop     ecx<br />   <br />   mov     word ptr ,0a0dh <br />   mov     word ptr ,'.'                <br />   mov     word ptr ,0a0dh  <br />   <br />   invoke printf, addr pBody<br />   invoke printf, addr BigBuf<br />   invoke UnmapViewOfFile, pMapStart<br />   invoke CloseHandle, hFile</div>
+    <div class="meta">Posted on 2004-02-03 08:17:00 by sniffer</div>
+   </div>
+   <div class="post" id="post-132387">
+    <div class="subject"><a href="#post-132387">binary file over smtp</a></div>
+    <div class="body">First a couple of generally 'bad' things: use HeapAlloc instead of GlobalAlloc, and generally avoid file mappings unless they makes your life a lot easier, as file mapping is slower than ReadFile. In your case, there seems to be no reason whatsoever to use filemapping - just ReadFile directly to edi after your first copyloop. This will be faster and use less system resources... not that big an improvement, but this is assembly and you should do proper code, right? ;) besides, the source will be shorter and easier to follow.<br /><br />Your code is pretty ugly and uncommented, and a whole bunch of things are lacking; where does 'BigBuf' come from? Is 'printf' a normal libc printf, or your own function? (In that case, remember that printf stops at a 0 byte, which makes it rather unsuitable for binary data). Are you using some API functions, or are you handling the SMTP protocol yourself? (Remember that not everybody accepts 8-bit mail, so you'll have to use an encoding scheme for binary data), et cetera. Your lodsb/stosb would be much better handled with a rep movsb, or one of the faster equivalents.<br /><br />Your crlf.crlf message termination could &amp; should be handled with a dword and a byte store...<br /><br />Apart from that, it's been a while since I've read up on RFCs... but isn't there something about a max (or recommended) line-width? And encoding of special chars? Then again, perhaps 8bit clean servers and clients are widespread now, and some code that you haven't included nor mentioned is enabled 8bit message sending...</div>
+    <div class="meta">Posted on 2004-02-03 09:18:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-132389">
+    <div class="subject"><a href="#post-132389">binary file over smtp</a></div>
+    <div class="body">Hi F0dder,<br /><br />the Code is from: <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=3759&amp;highlight=farrier">http://www.asmcommunity.net/board/index.php?topic=3759&amp;highlight=farrier</a><br /><br />I begin with assembler, and cannot it not judge whether the code well, or is bad. Sorry!<br /><br />invoke printf should with contents show, what is sent.<br /><br />I try the function ReadFile, many thanks for your help.<br /><br />sniffer</div>
+    <div class="meta">Posted on 2004-02-03 09:50:35 by sniffer</div>
+   </div>
+   <div class="post" id="post-132391">
+    <div class="subject"><a href="#post-132391">binary file over smtp</a></div>
+    <div class="body">Hi sniffer, sorry if I was a bit harsh on you :)<br />printf will work okay for showing normal text messages, but since you're sending a binary file, it's not a very good function - as already mentioned, it will stop at the first 0. Of course it probably does not make too much sense outputting binary data to the console in the first place :)<br /><br />You'll probably want to talk with farrier, or perhaps bazik - he was working on an email client a while ago.</div>
+    <div class="meta">Posted on 2004-02-03 10:14:19 by f0dder</div>
+   </div>
+   <div class="post" id="post-132400">
+    <div class="subject"><a href="#post-132400">binary file over smtp</a></div>
+    <div class="body">SMTP does not support binary transfers, it only supports 7 bit charactersets at most, that's why base64 encoding should be used, it encodes the binary 8 bit data in a way that it can certainly be handled by any SMTP server (it converts everything to standard ASCII-characters).</div>
+    <div class="meta">Posted on 2004-02-03 10:47:53 by Henk-Jan</div>
+   </div>
+   <div class="post" id="post-132402">
+    <div class="subject"><a href="#post-132402">binary file over smtp</a></div>
+    <div class="body">Henk-Jan,<br /><br />Actually, the specification states that only 7-bits are allowed, but from my experience any modern mail system will allow 8-bit transmisssions.  I've been using the basic guts of the m32mail program since I wrote the article almost 2 years ago.  Sending a binary report file by email every night from 17 stores to the home office.  No problems so far.  You are required to specify &quot;application/octet-stream&quot; as the attachment type.<br /><br />sniffer,<br /><br />I have to admit that I don't recognize what you are doing in your program--no comments at all--and can't help you.  Where in your program are you actually sending your e-mail?  I try to help if I can.<br /><br />Hope the mailer program can help you!<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-03 11:09:31 by farrier</div>
+   </div>
+   <div class="post" id="post-132486">
+    <div class="subject"><a href="#post-132486">binary file over smtp</a></div>
+    <div class="body">sniffer,<br /><br />Just a thought:<br /><br />How are you calculating the size of the DATA segment you are sending?  The size must be the total of the data header info after the DATA message, plus the file size, plus the final separator and final 13, 10, &quot;.&quot;, 13, 10<br /><br />One mistake I made--twice--when first working on this program, was calculating the size by scanning the binary file for an ending 0.  Of course this was wrong, as within the binary file there were many 0's as part of the data.<br /><br />I just thought it might be a problem with calculating the size of the DATA.<br /><br />hth<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-04 07:09:34 by farrier</div>
+   </div>
+   <div class="post" id="post-132493">
+    <div class="subject"><a href="#post-132493">binary file over smtp</a></div>
+    <div class="body">Hi Farrier,<br /><br />the file size is different.<br />It passes of 2.6 Mb file size or with a 16K File size.<br /><br />my problem is: I can not recognize whether those is not file completely in the memory is loaded and then copies. <br />I assume, which is file is not completely loaded. <br /><br />The end of the binary File 13,10, &quot;.&quot;,13,10 is correct.<br /><br />sniffer</div>
+    <div class="meta">Posted on 2004-02-04 07:49:21 by sniffer</div>
+   </div>
+   <div class="post" id="post-132494">
+    <div class="subject"><a href="#post-132494">binary file over smtp</a></div>
+    <div class="body"><div class="quote">Actually, the specification states that only 7-bits are allowed, but from my experience any modern mail system will allow 8-bit transmisssions.</div><br /><br />That's my point, 8-bit is out-of-spec, therefore it may or may not work. You should not rely on it.</div>
+    <div class="meta">Posted on 2004-02-04 08:08:45 by Henk-Jan</div>
+   </div>
+   <div class="post" id="post-132516">
+    <div class="subject"><a href="#post-132516">binary file over smtp</a></div>
+    <div class="body">Henk-Jan,<br /><br /><div class="quote">That's my point, 8-bit is out-of-spec, therefore it may or may not work. You should not rely on it.</div> <br /><br />I should have expressed myself more clearly!  I researched this topic fairly extensively, and the 7-bit specification was in place when most serial communication formats were for 1 start bit, 7 data bits, 1 parity bit and 1 stop bit.  That's the only reason to use 7 bits only: if you or your ISP uses only 7 data bits.  That doesn't happen anymore!<br /><br />It has never failed over a wide range of computers, ISP's and even AOL!<br /><br />sniffer,<br /><br />I'll look at your code some time today and try to help.  In my program, the only thing that changes is the size of the file to attach; how are you calculating the size of the DATA segment of the e-mail?<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-04 12:42:38 by farrier</div>
+   </div>
+   <div class="post" id="post-132521">
+    <div class="subject"><a href="#post-132521">binary file over smtp</a></div>
+    <div class="body"><div class="quote"><br />It has never failed over a wide range of computers, ISP's and even AOL!<br /></div><br />Too bad <strong>when</strong> it fails. Btw, will the smtp server &quot;re-encode&quot; the attachments in, say, base64 or uuencode, or will it just pass the attachment along, as binary data? If the latter is the case, you won't only have to worry about SMTP servers, but mail clients as well.</div>
+    <div class="meta">Posted on 2004-02-04 12:55:05 by f0dder</div>
+   </div>
+   <div class="post" id="post-132537">
+    <div class="subject"><a href="#post-132537">binary file over smtp</a></div>
+    <div class="body">I use Outlook.<br /><br />when I send the file over outlook is this not problem, but with smtp_asend.exe<br /><br />outlook and smtp_asend.exe use the same way, on the protocol layer.<br /><br />this is not a problem with 7bit or 8bit on smtp protocol.<br /><br />use packview, ethernal or a other sniffer, and you see, that both programs send the data.<br /><br />smtp_asend it send fewer data does only why? <br /><br /><br />sniffer</div>
+    <div class="meta">Posted on 2004-02-04 14:03:12 by sniffer</div>
+   </div>
+   <div class="post" id="post-132540">
+    <div class="subject"><a href="#post-132540">binary file over smtp</a></div>
+    <div class="body">f0dder,<br /><br />If you have ever received an attachment which was an exe file, chances are it was in binary mode and not encoded in any way.  Apparently, this was not allowed in early specification of SMTP and even now some mail clients will encode the exe with base64 before sending, that is what I have read, I haven't experienced that myself.  The only big draw back to sending non-encoded, is that your only option is to &quot;Save As&quot; to a file, and not have an application perform some action on the file.  Unless you have Outlook/Outlook Express, they might just execute the file for your conveinience!:eek: <br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-04 14:10:45 by farrier</div>
+   </div>
+   <div class="post" id="post-132560">
+    <div class="subject"><a href="#post-132560">binary file over smtp</a></div>
+    <div class="body">sniffer,<br /><br />One thing that seems to be missing is the final separator after the binary data.  In my source you will see:<br /><br /><pre><code><br />body4		db	&quot;--M32_mime_sep_230&quot;, 13, 10, \<br />			&quot;Content-Type&#58; application/octet-stream;&quot;, 13, 10, \<br />			&quot;    Name=firsttry.bin&quot;, 13, 10, \<br />			&quot;Content-Disposition&#58; attachment;&quot;, 13, 10, \<br />			&quot;    FileName=firsttry.bin&quot;, 13, 10, 13, 10, \<br />			&quot;MASM32 Rules!&quot;, \				;File contents go here<br />			 13, 10, \<br />			&quot;--M32_mime_sep_230--&quot;, 13, 10, &quot;.&quot;, 13, 10, 0<br /></code></pre><br />The binary data goes where the text &quot;MASM32 Rules!&quot; appears, followed by the 13, 10  and the final separator &quot;--M32_mime_sep_230--&quot;<br /><br />You will have to include the final separator size in the total DATA size<br /><br />This may be where the problem lies!<br /><br />hth<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-04 15:34:43 by farrier</div>
+   </div>
+   <div class="post" id="post-132564">
+    <div class="subject"><a href="#post-132564">binary file over smtp</a></div>
+    <div class="body">no, this is not the problem.<br /><br />with you body4 is file size 2K and the file.bin 86byte.<br /><br />many thanks for your help.<br /><br />sniffer</div>
+    <div class="meta">Posted on 2004-02-04 15:47:23 by sniffer</div>
+   </div>
+   <div class="post" id="post-132584">
+    <div class="subject"><a href="#post-132584">binary file over smtp</a></div>
+    <div class="body">sniffer,<br /><br />I don't think you understand me, or I don't understand you, or both!:confused: <br /><br />At line 410 you should be adding a CR, LF and the final serarator &quot;--M32_mime_sep_230--&quot; onto pbody, after copying the the contents of your file from pMapStart.  In your program you don't do that!<br /><br />And at line 433 you are using Fsize as the size of the DATA component of the email, but the size should be everything sent after the cmd2 is sent on line 428 and including the length of the last CR, LF, and the final separator.  In your program you don't do that!<br /><br />Also in the DATA header, mine looks like:<br /><br /><pre><code><br />body4	db	&quot;--M32_mime_sep_230&quot;, 13, 10, \<br />		&quot;Content-Type&#58; application/octet-stream;&quot;, 13, 10, \<br />		&quot;    Name=firsttry.bin&quot;, 13, 10, \<br />		&quot;Content-Disposition&#58; attachment;&quot;, 13, 10, \<br />		&quot;    FileName=firsttry.bin&quot;, 13, 10, 13, 10, \<br /></code></pre><br /><br />Yours looks like:<br /><br /><pre><code>body4	db	&quot;--M32_mime_sep_230&quot;, 13, 10, \<br />		&quot;Content-Type&#58; application/octet-stream;&quot;, 13, 10, \<br />		&quot;    Name=firsttry.bin&quot;, 13, 10, \<br />		&quot;Content-Transfer-Encoding&#58; base64&quot;, 13, 10, \<br />		&quot;    FileName=firsttry.bin&quot;, 13, 10<br /></code></pre><br /><br />Yours in no longer a pure attachment!<br /><br />hth<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-04 20:19:39 by farrier</div>
+   </div>
+   <div class="post" id="post-132605">
+    <div class="subject"><a href="#post-132605">binary file over smtp</a></div>
+    <div class="body">Hi Farrier,<br /><br />I tried that out this morning, it functioned also not with that new body.<br />Which is missing, is the end of the file.<br />If I take a file with 2.6Mb, I get only 43 K.<br /><br />the e.mail header is okay.<br /><br />       Header<br />       (crlf.crlf) (send)<br />       File send<br />       (crlf.crlf) (send)<br />       quit...<br /><br />I think, the complete file is loaded, but the copies from memory to socket, is not okay.<br /><br />hmm... if I could nevertheless only program. :o)<br />thanks a lot.<br /><br />sniffer</div>
+    <div class="meta">Posted on 2004-02-05 00:19:01 by sniffer</div>
+   </div>
+   <div class="post" id="post-132626">
+    <div class="subject"><a href="#post-132626">binary file over smtp</a></div>
+    <div class="body">sniffer, you don't use any strlen/strcpy kinda thing on the binary data to get it's length or copy, do you?<br /><br />Also, do you just do a single send() and count on it being able to ship 2.6 megs at once? You have to handle errors gracefully, I think even blocking sockets might not send all your data at once (and async sockets definitely won't) - <a target="_blank" href="www.madwizard.org.">www.madwizard.org.</a></div>
+    <div class="meta">Posted on 2004-02-05 05:25:12 by f0dder</div>
+   </div>
+   <div class="post" id="post-132664">
+    <div class="subject"><a href="#post-132664">binary file over smtp</a></div>
+    <div class="body">I agree with f0dder:alright: <br /><br />Try sending 8K, 16K, or 32K at a time and wait for acknowledgement before continuing!  Even if you have a broadband connection.  Also, update your posted sourcecode so we can see what you're doing now.  I'm not sure if you implemented my suggestions.  You weren't calculating the length of the DATA segment correctly:<br /><br />Total length = ml_len + Fsize + sizeof( CRLF + final separator + CRLF + '.' + CRLF )<br /><br />(untested algorithm)<br /><br />farrier</div>
+    <div class="meta">Posted on 2004-02-05 08:19:12 by farrier</div>
+   </div>
+   <div class="post" id="post-132667">
+    <div class="subject"><a href="#post-132667">binary file over smtp</a></div>
+    <div class="body">even sends of 8k could theoretically fail - check what winsock calls return to you, and handle the situation accordingly. But even when doing this, I would still recommended using a not too big buffer for send - you wouldn't really want risking winsock thinking &quot;okay, I'll try sending it all at once&quot; and locking 2.8 megs of kernel memory - since that's a sparse resource.</div>
+    <div class="meta">Posted on 2004-02-05 08:22:43 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

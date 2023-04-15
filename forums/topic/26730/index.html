@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Programming Tasks #1 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26730" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26730">Programming Tasks #1</a></p>
+   <div class="post" id="post-192773">
+    <div class="subject"><a href="#post-192773">Programming Tasks #1</a></div>
+    <div class="body">This is about Win32Asm programming, not about Win32 reference.
+Tasks for peaple who brave enough give it a try to write his/hers
+own code not paste from given source.
+And brave enough to publish it for discussion in persue of 
+studing programming to be able at the end to learn how to make
+his/hers original code and style.
+I'm going to give some tasks of general perpose and 
+interested in any code compliting these tasks even though from
+some view it might be not optimal.
+Both algo logic and asm specific optimization are important.
+Send solutions!
+We shall over come :)
+TASK #1
+You got file attributes in eax
+(May be as the return from GetFileAttributes function)
+Based on this value construct the string in some buffer
+which will simbolically represent this attributes
+For example if eax==FILE_ATTRIBUTE_READONLY or FILE_ATTRIBUTE_SYSTEM (4 or 1 = 
+5)
+Your proc or macro must formate string 'readonly system',0
+if eax == 1 - just 'readonly'
+and so on
+
+TASK # 2
+
+Write a proc or macros which fill buffer with string info about specified
+file time creation and last modification.
+As to Win32 ref. needed you can obtain this info into WIN32_FIND_DATA
+by calling FindFirstFile.
+It'll be in members:
+
+FILETIME ftCreationTime; 
+FILETIME ftLastAccessTime; 
+FILETIME ftLastWriteTime;
+
+Than you can convert it to somewhat more comfortable to work with by
+calling FileTimeToSystemTime.(If you are advanced coder you don't need even 
+this)
+The rest is your task.
+As a result there must be string filled into specified buffer
+Example of format:
+'Created:      12.11.2001',13,10
+'Last modified 12.14.2001',13,10,0
+
+I'll awaiting your replies
+The Svin.</div>
+    <div class="meta">Posted on 2001-02-01 05:59:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-192774">
+    <div class="subject"><a href="#post-192774">Programming Tasks #1</a></div>
+    <div class="body">You are kidding...dont you? :D
+
+write your own code man...for such mundane tasks...
+
+i have a task for you: write a full RTS game :)
+and send me your code....just to see if you have style..that is of course... :)
+
+now back to reality.sys
+those things are simple mundane taskd ...no big asm gems...so why such tasks..? no fun, no glory, no nothing...
+
+be brave do your homework...
+
+Bogdan</div>
+    <div class="meta">Posted on 2001-02-01 06:47:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-192775">
+    <div class="subject"><a href="#post-192775">Programming Tasks #1</a></div>
+    <div class="body">A reaction as I expected.
+
+BogdanOntanu: I don't think this is what The Svin means. He is offering people a learning opportunity by letting them write a specific code assignment and comparing the published code.
+
+
+
+This message was edited by Hiroshimator, on 2/1/2001 7:13:15 AM</div>
+    <div class="meta">Posted on 2001-02-01 07:12:00 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-192776">
+    <div class="subject"><a href="#post-192776">Programming Tasks #1</a></div>
+    <div class="body">Here's my solution to task #1:
+<pre><code>
+; possible values:
+;FILE_ATTRIBUTE_READONLY    equ 00000001h   ;1st bit 
+;FILE_ATTRIBUTE_HIDDEN      equ 00000002h   ;2nd bit
+;FILE_ATTRIBUTE_SYSTEM      equ 00000004h   ;3rd bit
+;FILE_ATTRIBUTE_DIRECTORY   equ 00000010h   ;5th bit <-4th bit skipped
+;FILE_ATTRIBUTE_ARCHIVE     equ 00000020h   ;6th bit
+;FILE_ATTRIBUTE_NORMAL      equ 00000080h   ;8th bit <-7th bit skipped
+;FILE_ATTRIBUTE_TEMPORARY   equ 00000100h   ;9th bit
+;FILE_ATTRIBUTE_COMPRESSED  equ 00000800h   ;12th bit <-10&11th bits skipped
+;FILE_ATTRIBUTE_OFFLINE     equ 00001000h   ;13th bit
+; --- Text table in the bit order of the attribute values (lsb first) ---
+; --- the format is: skiplength (length of text+1), "attribute text"  ---
+AttReadonly     db       9,"readonly"
+AttHidden       db       7,"hidden"
+AttSystem       db       7,"system",1       ;1 is for skipping of 4th bit
+AttDirectory    db       10,"directory"
+AttArchive      db       8,"archive",1      ;1 is for skipping of 7th bit
+AttNormal       db       7,"normal"   
+AttTemporary    db      10,"temporary",1,1  ;1's are for skipping of 10&11th bits
+AttCompressed   db      11,"compressed"
+AttOffline      db       8,"offline",0 
+
+FileName        db      "C:\scandisk.log",0 ;just some file on my disk
+.data?
+Output      db 50 dup (?)                   ;output buffer
+.code
+start:
+    ; --- get some attributes ---
+    invoke  GetFileAttributes, ADDR FileName    
+    ; --- set pointers ---
+    mov     esi, offset AttReadonly ;first in list
+    mov     edi, offset Output
+    mov     byte ptr ,0 ; if eax=0, no attributes at all (is this possible?)
+    
+    ; --- in this loop, the return value is shifted out bit by bit, and if a ---
+    ; --- bit is set, the right text is added to the output string           ---
+    .WHILE  eax!=0
+        ; --- shift out next bit ---
+        shr eax,1   
+        ; --- if bit is set add attribute text to output ---
+        .IF     CARRY?
+            inc     esi
+            ; --- adds an attribute text, when it encounters a byte value lower ---
+            ; --- than 15, it is assumed to be the skiplength of the next text, ---
+            ; --- and the output for the current attribute is finished          ---
+            .WHILE  1
+                mov bl, 
+                .IF     bl<15 ; could be something else than 15, too
+                    mov byte ptr , " " ;add a space
+                    inc edi
+                    jmp @skip2
+                .ENDIF
+                movsb
+            .ENDW
+        .ENDIF
+        @skip:
+        ; --- if the bit is NOT set, the skiplength is used to jump over the  ---
+        ; --- current attribute text and point to the start of the one that   ---
+        ; --- follows.                                                        ---
+        xor     ebx, ebx
+        mov     bl, 
+        add     esi, ebx
+        @skip2:
+    .ENDW
+    dec     edi
+    mov     , al   ;al = 0 here after while loop (terminating 0)
+    invoke  MessageBox, NULL, ADDR Output, ADDR AppName, NULL
+    invoke  ExitProcess, NULL
+end start
+
+</code></pre>
+
+Thomas
+
+This message was edited by Thomas, on 2/1/2001 11:46:23 AM
+
+it's better to use the  and  tags (remove the x) if you wish to represent code
+
+This message was edited by Hiroshimator, on 2/1/2001 2:57:13 PM</div>
+    <div class="meta">Posted on 2001-02-01 11:46:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-192777">
+    <div class="subject"><a href="#post-192777">Programming Tasks #1</a></div>
+    <div class="body">Thank you, Thomas for your answer.
+I'll be carefully examined.
+And the good think is that you commented your for
+people not just to paste but to study.
+Try other task.
+Always happy to read your ideas.
+The Svin.</div>
+    <div class="meta">Posted on 2001-02-01 13:50:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-192778">
+    <div class="subject"><a href="#post-192778">Programming Tasks #1</a></div>
+    <div class="body">Since nobody has given a try to "Time" task yet
+I show this really slappy code so anybody could laugh at
+me and teach me a lesson :)
+To do it faster and clearly ;)
+It's only partially solves the task, but give the basic idea
+of one of the ways to complit it.
+And there is obviously room for Ernie's work -
+to write "Time" macro wich could fill stack with secvence of
+time values for wsprintf usage.
+Time is in Russian format we display first day and then month
+Demo shows creation time of the module itself -
+I use it to give hints of how system file cache works -
+first time you compile it and run it'll display right time of creation
+but then after next compiling and running it may display the time
+of first creation.
+
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\user32.inc
+include C:\masm32\include\kernel32.inc
+includelib C:\masm32\lib\kernel32.lib
+includelib C:\masm32\lib\user32.lib
+
+.data
+tml db "File %s is created:",13,10
+    db "%02i.%02i.%i %02i:%02i:%02i",0
+buffer db 256 dup(0)
+buffer2 db 256 dup(0)
+
+.data?
+wfd WIN32_FIND_DATA <>
+ft FILETIME <>
+syst SYSTEMTIME <>
+.code
+
+start: 
+	invoke GetModuleFileName,0,addr buffer,256
+	invoke FindFirstFile,addr buffer,addr wfd
+	invoke FileTimeToLocalFileTime,addr wfd.ftCreationTime,addr ft
+	invoke FileTimeToSystemTime,offset ft,addr syst
+	mov ax,syst.wSecond
+	mov esi,eax
+	mov ax,syst.wMinute
+	mov edi,eax
+	mov ax,syst.wYear
+	xor ecx,ecx
+	mov cx,syst.wMonth
+	xor edx,edx
+	mov dx,syst.wDay
+	xor ebx,ebx
+	mov bx,syst.wHour
+	invoke wsprintf,offset buffer2,offset tml,offset buffer,edx,ecx,eax,ebx,edi,esi
+	invoke MessageBox,0,addr buffer2,0,0
+	call ExitProcess
+end	start</div>
+    <div class="meta">Posted on 2001-02-02 03:38:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

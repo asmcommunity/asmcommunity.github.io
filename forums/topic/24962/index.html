@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GetModuleHandle causes Exception Code:0xc0000005 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24962" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24962">GetModuleHandle causes Exception Code:0xc0000005</a></p>
+   <div class="post" id="post-182595">
+    <div class="subject"><a href="#post-182595">GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">I wrote a small program, and it appears (offset is 1) that GetModuleHandle is causing this error. I&#39;m just calling it to recieve my hInstance on the first lone of code...</div>
+    <div class="meta">Posted on 2006-06-28 15:49:01 by Bobbias</div>
+   </div>
+   <div class="post" id="post-182598">
+    <div class="subject"><a href="#post-182598">Re: GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">Please attach the exe.</div>
+    <div class="meta">Posted on 2006-06-28 16:13:36 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-182599">
+    <div class="subject"><a href="#post-182599">Re: GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">Alright, I&#39;ll pack everything into a rar so you can check out what I got.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1756" target="_blank">MoveBitmap.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-06-28 16:46:17 by Bobbias</div>
+   </div>
+   <div class="post" id="post-182607">
+    <div class="subject"><a href="#post-182607">Re: GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">The problem is not related to GetModuleHandle. You are using arguments in WndProc incorrectly.<br /><br /><pre><code>	WndProc	proc	hWnd:HWND, uMsg:DWORD, wParam:WPARAM,lParam:LPARAM<br />	LOCAL	ps:PAINTSTRUCT<br />	LOCAL	rect:RECT<br />	LOCAL	hdc:HDC<br />	<br />	.IF uMsg==WM_DESTROY ;if the user closes our window<br />	invoke PostQuitMessage,NULL ;quit our application<br />	.ELSEIF uMsg==WM_PAINT<br />	invoke	BeginPaint,hWnd,addr ps<br />	mov		hdc,eax<br />	invoke	GetClientRect,hWnd,addr rect<br />	invoke	CreateCompatibleDC,hdc<br />	mov		BackBuf,eax<br />	invoke	SelectObject,BackBuf,Bitmap<br />	invoke 	BitBlt,hdc,BMP_X,BMP_Y,16,128,BackBuf,0,0,SRCCOPY	;Flip<br />	invoke	EndPaint,hWnd,addr ps<br />	invoke	DeleteObject,Bitmap<br />	.ELSEIF	uMsg==WM_KEYDOWN<br />		.IF	wParam==VK_ESCAPE<br />		invoke	PostQuitMessage,0<br />		.ELSEIF	wParam==VK_UP<br />		invoke	MoveBitmapUp<br />		.ELSEIF	wParam==VK_DOWN<br />		invoke	MoveBitmapDown<br />		.ELSEIF	wParam==VK_LEFT<br />		invoke MoveBitmapLeft<br />		.ELSEIF	wParam==VK_RIGHT<br />		invoke	MoveBitmapRight	<br />		.ENDIF<br />	.ELSE<br /><br />	invoke DefWindowProc,hWnd,uMsg,wParam,lParam ;Default message processing<br />	ret<br />	.ENDIF<br /><br />	xor	eax,eax<br />	ret<br />	WndProc endp</code></pre></div>
+    <div class="meta">Posted on 2006-06-28 18:31:54 by arafel</div>
+   </div>
+   <div class="post" id="post-182608">
+    <div class="subject"><a href="#post-182608">Re: GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">:/ now I feel stupid. In any case, I got that working after you popinted that out, and for some reason my nice little MoveBitmap procs don&#39;t seem to do anything (and I did add in the mov BMP_Y(orX),eax instructions I forgot)</div>
+    <div class="meta">Posted on 2006-06-28 18:45:00 by Bobbias</div>
+   </div>
+   <div class="post" id="post-182613">
+    <div class="subject"><a href="#post-182613">Re: GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">Your MoveBitmap procs aren&#39;t doing anything because of the following:<br /><br />(I added comments to explain what you&#39;re doing)<br /><pre><code><br />MoveBitmapUp proc<br />	.IF	BMP_Y&gt;0			<br />		mov	eax,BMP_Y		;mov BMP_Y into EAX<br />		sub	eax,1			;Decrease EAX by 1<br />	.ELSEIF BMP_Y&lt;0<br />		mov	BMP_Y,0<br />	.ENDIF<br />	xor	eax,eax			;Throw away EAX (Zero it) EAX = 0<br />	RET<br />	MoveBitmapUp endp<br /></code></pre><br /><br />You throw away the value after modifying it. Upper proc could be written as follows:<br /><pre><code><br />MoveBitmapUp proc<br />	.IF	BMP_Y&gt;0			<br />		dec BMP_Y		;Decrease BMP_Y by 1<br />	.ELSE<br />		mov	BMP_Y,0<br />	.ENDIF<br />	RET<br />	MoveBitmapUp endp<br /></code></pre><br /><br />The same applies to MoveBitmapLeft - You can replace most of it with one <em>DEC BMP_X</em><br /><br />Now for MoveWindowDown:<br /><pre><code><br />	MoveBitmapDown proc<br />	mov	eax,BMP_Y<br />	mov	ebx,SCR_Y<br />	cmp	eax,ebx<br />	jnb	BMP_ABOV_Y	;jump if BMP_Y is greater than SCR_Y<br />	add	eax,1<br />	jmp	Y_END		;jump past this code<br />BMP_ABOV_Y:<br />	mov	eax,BMP_Y<br />	mov	ebx,SCR_Y<br />	mov	eax,ebx<br />Y_END:<br />	xor	eax,eax		;Throw away any value calculated and return<br />	xor	ebx,ebx<br />	RET<br />	MoveBitmapDown endp<br /></code></pre><br /><br />You have to save the value back into your BMP_Y or you can modify BMP_Y directly using ADD, SUB, etc...</div>
+    <div class="meta">Posted on 2006-06-28 19:44:44 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-182619">
+    <div class="subject"><a href="#post-182619">Re: GetModuleHandle causes Exception Code:0xc0000005</a></div>
+    <div class="body">Thanks, I&#39;m still getting the hang of certain nuances of ASM programming. I&#39;m forever forgetting how much I can do to a value directly and such, lol. Plus, doing it your way is faster (if only marginally), and more compact (not that it matters, with something this small).</div>
+    <div class="meta">Posted on 2006-06-28 21:27:07 by Bobbias</div>
+   </div>
+  </div>
+ </body>
+</html>

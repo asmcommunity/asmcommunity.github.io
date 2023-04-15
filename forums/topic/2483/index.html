@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>flat toolbars - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2483" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2483">flat toolbars</a></p>
+   <div class="post" id="post-15648">
+    <div class="subject"><a href="#post-15648">flat toolbars</a></div>
+    <div class="body">Hi.<br />I have a small problem.<br />I want the buttons of my toolbar look like when the toolbar has the style TBSTYLE_FLAT. But when i use this style, the background becomes transparent. But i don't want the background to become transparent. How can i make a toolbar in which the buttons look like with a TBSTYLE_FLAT style but with no transparent background?</div>
+    <div class="meta">Posted on 2001-12-21 12:43:14 by darester</div>
+   </div>
+   <div class="post" id="post-15652">
+    <div class="subject"><a href="#post-15652">flat toolbars</a></div>
+    <div class="body">to say it more simply:<br />i want to make a toolbar with transparent buttons but not transparent background (the baxkground shall stay gray (COLOR_BTNFACE), which is the standard background color of a toolbar).</div>
+    <div class="meta">Posted on 2001-12-21 13:20:47 by darester</div>
+   </div>
+   <div class="post" id="post-15672">
+    <div class="subject"><a href="#post-15672">flat toolbars</a></div>
+    <div class="body">Hi darester,<br /><br />Just went through this myself.  The trick seems to be to create a Rebar control first and place your toolbar on it as a child.  The rebar is the toolbar's background and is painted in a WM_PAINT messaging loop.<br /><br />You should check out the latest SDK documentation on the new Comctl32.dll functions.  Create a Rebar with CreateWindowEx and the &quot;ReBarWindow32&quot; Class Name.  Then initialize the Toolbar TBBUTTON structures for each of your buttons and separators.  Strings you can put in an .rc STRINGTABLE and load into the TBBUTTON.iString fields with LoadString.  Then create the toolbar with<br /><br /><pre><code><br />invoke CreateToolbarEx, hWnd,\<br />TBSTYLE_FLAT + TBSTYLE_AUTOSIZE +\<br />WS_CHILD + WS_VISIBLE,\<br />NULL,5, NULL, hToolBarBmp,\<br />ADDR TBButtons,0, 16, 16 , 16, 16 , SIZEOF&#40;TBBUTTON&#41;   <br />		      <br />mov rbi.hwndChild, eax	; hwnd to toolbar &#40;child of rebar&#41;<br /></code></pre>	<br /><br />At this point you haven't added the buttons really (iNumButtons = 0). Then send a message to add the rebar and the buttons:<br /><pre><code><br />invoke SendMessage, hWnd_Rebar, RB_INSERTBAND, 0,ADDR rbi<br />invoke SendMessage, rbi.hwndChild, TB_ADDBUTTONS, 8, ADDR TBButtons<br /></code></pre>    <br /><br />You handle painting the rebar background in the WM_PAINT message.  Since it's nice to have the messaging loop working while you're messing with the rest of the code, here's a WM_PAINT routine that works with the flat style toolbar that I scammed from some source from this board ;-)<br /><br /><pre><code><br />	.ELSEIF uMsg == WM_PAINT<br />	<br />        invoke BeginPaint,hWnd, OFFSET Paint_Struct<br />        mov hDC, eax<br /><br />		invoke GetWindowRect, hWnd_Rebar, OFFSET Rect_Struct<br />		mov eax, Rect_Struct.bottom<br />		sub eax, Rect_Struct.top<br />		push eax<br />		invoke GetClientRect, hWnd, OFFSET Rect_Struct<br />		pop Rect_Struct.top<br />		invoke DrawEdge, hDC, OFFSET Rect_Struct, EDGE_SUNKEN, BF_RECT<br />		inc Rect_Struct.top<br />		inc Rect_Struct.left<br />		invoke FillRect, hDC, OFFSET Rect_Struct, COLOR_BTNFACE<br /><br />		invoke EndPaint	,hWnd, OFFSET Paint_Struct<br />		mov eax, TRUE<br />		ret<br /></code></pre>	<br /><br />You'll need to begin with declaring the ICC_COOL_CLASSES version of InitCommonControlsEx<br /><br /><pre><code><br />mov icex.dwSize,sizeof INITCOMMONCONTROLSEX<br />mov icex.dwICC, ICC_COOL_CLASSES   ; ICC_BAR_CLASSES &#40;base class&#41;<br />invoke InitCommonControlsEx,addr icex	<br /></code></pre><br /><br />Also, some of the more recent features such as DropDown buttons don't seem to be supported in the MASMv.7 windows.inc, so these structures would need defining.<br /><br /><br />Hope this helps,<br /><br />Kayaker</div>
+    <div class="meta">Posted on 2001-12-21 16:59:56 by Kayaker</div>
+   </div>
+   <div class="post" id="post-15680">
+    <div class="subject"><a href="#post-15680">flat toolbars</a></div>
+    <div class="body">thanks a lot my friend. you really helped me out!</div>
+    <div class="meta">Posted on 2001-12-21 17:56:04 by darester</div>
+   </div>
+   <div class="post" id="post-15685">
+    <div class="subject"><a href="#post-15685">Another way</a></div>
+    <div class="body">I am making my toolbar with CreateWindowEx <br /><br /><pre><code><br />;---------- &#91;Create the Toolbar Window&#93; ----------<br />  INVOKE     CreateWindowEx, 0, addr ToolClass, 0,<br />      WS_CHILD or WS_VISIBLE or TBSTYLE_TOOLTIPS or CCS_NOPARENTALIGN or\<br />     CCS_NORESIZE or CCS_ADJUSTABLE or TBSTYLE_FLAT or WS_BORDER,\<br />                    0, -2, 1200, 26, hwnd, 0, hInst, 0<br />         .if !eax<br />;Do message<br />            jmp     Ret0<br />         .endif<br />            mov     hWndTool, eax<br /><br />;---------- &#91;Create the ImageList&#93; ----------<br />      INVOKE     ImageList_Create, 16, 16, ILC_COLOR32, 8, 0<br />        mov     hImageList, eax<br /><br />;---------- &#91;Load The Bitmaps&#93; ----------<br />      mov     ID, 701           ; Bitmap ID start address<br />       mov     Cnt, 8            ; Number of bitmaps<br />    .while &#40;Cnt&#41;<br />INVOKE LoadImage,hInst,ID,IMAGE_BITMAP,16,16, LR_LOADMAP3DCOLORS<br /><br />;last param changes backgroundcolor<br />;LR_LOADMAP3DCOLORS &#58;<br /><br />; Searches the color table for the image and replaces the<br />;following shades of gray with the corresponding 3D color<br /><br />;Color	Replaced with<br />;Dk Gray, RGB&#40;128,128,128&#41;	COLOR_3DSHADOW<br />;Gray, RGB&#40;192,192,192&#41;	COLOR_3DFACE<br />;Lt Gray, RGB&#40;223,223,223&#41;	COLOR_3DLIGHT<br />        mov     hTbBmp, eax<br />        INVOKE     ImageList_Add, hImageList, hTbBmp, NULL<br />         INVOKE     DeleteObject, hTbBmp<br />          inc     ID<br />            dec     Cnt<br />         .endw<br />  INVOKE     SendMessage, hWndTool, TB_BUTTONSTRUCTSIZE, sizeof TBBUTTON, 0<br />  INVOKE     SendMessage, hWndTool, TB_SETIMAGELIST, 0, hImageList<br /><br />------- &#91;Size the Bitmap and Button&#93; ----------<br />       mov     ecx, 16  ; loword = bitmap Width<br />        mov     eax, 16  ; hiword = bitmap Height<br />        shl     eax, 16<br />        mov     ax, cx<br />        mov     bSize, eax<br />INVOKE     SendMessage, hWndTool, TB_SETBITMAPSIZE, 0, bSize<br />INVOKE     SendMessage, hWndTool, TB_SETBUTTONSIZE, 0, bSize<br /><br />;---------- &#91;Create the Toolbar structures&#93; ----------<br />         TBButt     hWndTool, 0, 1001, 0<br />         TBButt     hWndTool, 1, 1002, 0<br />         TBButt     hWndTool, 2, 1003, 0<br />          TBSep     hWndTool<br />         TBButt     hWndTool, 3, 1005, 0<br />         TBButt     hWndTool, 4, 1006, 0<br />         TBButt     hWndTool, 5, 1007, 0<br />         TBButt     hWndTool, 6, 1008, 0<br />          TBSep     hWndTool<br />         TBButt     hWndTool, 7, 2001, 0<br /><br /></code></pre><br /><br /><br />I make my button background color gray and load with this parameter.It worked on Win9x and WinXP same.Hope it helps.</div>
+    <div class="meta">Posted on 2001-12-21 18:22:32 by LaptoniC</div>
+   </div>
+   <div class="post" id="post-15936">
+    <div class="subject"><a href="#post-15936">flat toolbars</a></div>
+    <div class="body">I've found an ez way to do this with no side effects (yet).<br /><br />when createing the window class use:<br />hbrBackground,  COLOR_BTNFACE+1</div>
+    <div class="meta">Posted on 2001-12-23 23:01:25 by Guest</div>
+   </div>
+  </div>
+ </body>
+</html>

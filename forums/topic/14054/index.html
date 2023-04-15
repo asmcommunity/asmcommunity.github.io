@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>API imports.  How are they placed? Can I change them? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14054" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=14054">API imports.  How are they placed? Can I change them?</a></p>
+   <div class="post" id="post-108548">
+    <div class="subject"><a href="#post-108548">API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body">What I mean by change, is can I move the import to my own data structure. Like:<br /><br />_DATA SEGMENT<br />    _imp__VirtualAlloc@16  dword ?  ;the linker or whatever puts the entry address in this varible<br />_DATE ENDS<br /><br />The linker always seems to put the imports after the exe in memory.<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2003-06-28 14:41:10 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-108555">
+    <div class="subject"><a href="#post-108555">API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body">Well, you can't really change the offsets of the API calls, they are addresses in the jump table. You can examine the jumptable entry however:<br /><br />push MB_OK<br />push NULL<br />push OFFSET szText<br />push NULL<br />lea eax,MessageBox<br />call eax</div>
+    <div class="meta">Posted on 2003-06-28 14:58:49 by donkey</div>
+   </div>
+   <div class="post" id="post-108557">
+    <div class="subject"><a href="#post-108557">API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body">Oh, I think I misunderstood. You can't do your own import table, the link executable adds these to the file. You would have to rewrite the linker to do that.</div>
+    <div class="meta">Posted on 2003-06-28 15:02:07 by donkey</div>
+   </div>
+   <div class="post" id="post-108656">
+    <div class="subject"><a href="#post-108656">API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body">Ahhhh, I figured it out!!<br /><pre><code><br />_DATA SEGMENT<br /><br />	foo FOO&lt;&gt; <br /><br />	__imp__VirtualAlloc@16&#58; <br /><br />_DATA ENDS<br /></code></pre><br />I interesting what happens here.  My code starts at 0x401000.  __imp__VirtualAlloc@16: is created at 0x402000, and foo is created at 0x403000.  Apparently the linker will only allow imports in their own segment(section?).<br /><br />Anyway, I was trying to find an easy way to call imported functions with call +index:<br /><pre><code><br />WAPI STRUC<br />	VirtualAlloc	FCALL@16 PTR  ?<br />WAPI ENDS<br /><br />ASSUME eax&#58;ptr WAPI<br />_TEXT SEGMENT<br />mainCRTStartup label dword<br /><br />lea ecx,_imp__VirtualAlloc@16<br /><br />invoke &#91;ecx&#93;.VirtualAlloc,0,0,0,0<br />.<br />.<br /></code></pre><br />It looks like I can set the order of the imports, then using ASSUME, cast a structure to the top of the imports, then call by +name. Why?  Just because and a little size optimization:<br /><pre><code><br />00401003 8D 05 00 20 40 00 lea         ecx,&#91;__imp__VirtualAlloc@16 &#40;402000h&#41;&#93;<br /><br /><br />invoke &#91;ecx&#93;.VirtualAlloc,0,0,0,0<br />00401009 6A 00            push        0    <br />0040100B 6A 00            push        0    <br />0040100D 6A 00            push        0    <br />0040100F 6A 00            push        0    <br />00401011 FF 10            call        dword ptr &#91;ecx&#93; <br /><br />VS.<br /><br />invoke FCALL@16 PTR _imp__VirtualAlloc@16,0,0,0,0<br />00401013 6A 00            push        0    <br />00401015 6A 00            push        0    <br />00401017 6A 00            push        0    <br />00401019 6A 00            push        0    <br />0040101B FF 15 00 20 40 00 call        dword ptr &#91;__imp__VirtualAlloc@16 &#40;402000h&#41;&#93;<br /></code></pre><br />Yea. I built my own import table and saved 4 bytes per call.<br /><br />I'm surprised that the import table went before the data section.  I think its usually the other way around.</div>
+    <div class="meta">Posted on 2003-06-29 05:28:53 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-108674">
+    <div class="subject"><a href="#post-108674">API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body">The standard way is produce smaller code (if I am not wrong) if you call the function more than once.</div>
+    <div class="meta">Posted on 2003-06-29 11:05:01 by roticv</div>
+   </div>
+   <div class="post" id="post-108683">
+    <div class="subject"><a href="#post-108683">API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body">LOL. Almost sounds like you are making a joke.<br /><br />I'm not a heavy optomizer.  Just doing this way for fun.<br /><br />Something interrest however.  I'm not sure if this has any anti-RE value.  I should make an exe and see if Olly can handle it.<br /><br />IF you declare the imports in a .data section, the imports go BEFORE your stactic data. I'm pretty sure it work the same for a .data? section.  Its late, time to sleep soon.</div>
+    <div class="meta">Posted on 2003-06-29 12:27:50 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-109042">
+    <div class="subject"><a href="#post-109042">Re: API imports.  How are they placed? Can I change them?</a></div>
+    <div class="body"><div class="quote"><br />What I mean by change, is can I move the import to my own data structure. Like:<br /><br />_DATA SEGMENT<br />    _imp__VirtualAlloc@16  dword ?  ;the linker or whatever puts the entry address in this varible<br />_DATE ENDS<br /><br />The linker always seems to put the imports after the exe in memory.<br /><br />Thanks. </div><br /><br />Try to use EliASM technology, macros iLEA (gives address of import field in import dir of your PE) and iMOV (gives contents (address of API) of import field in import dir of your PE), more in flexible.txt file. Maybe it will bring you some inspiration :)<br /><br /><a target="_blank" href="http://elicz.cjb.net/">Hello, Coder!</a></div>
+    <div class="meta">Posted on 2003-07-02 12:28:34 by MazeGen</div>
+   </div>
+  </div>
+ </body>
+</html>

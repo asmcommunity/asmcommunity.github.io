@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>WriteProcessMemory behavior - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12323" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12323">WriteProcessMemory behavior</a></p>
+   <div class="post" id="post-94952">
+    <div class="subject"><a href="#post-94952">WriteProcessMemory behavior</a></div>
+    <div class="body">Hi all,<br />Anyone knows if WriteProcessMemory modifies in any way the thread context of the process that im writing?.<br /><br />Greets and thanks.</div>
+    <div class="meta">Posted on 2003-04-09 21:11:38 by r00t</div>
+   </div>
+   <div class="post" id="post-94976">
+    <div class="subject"><a href="#post-94976">WriteProcessMemory behavior</a></div>
+    <div class="body">The problem is that SetWindowsHookEx fails if i call writeprocessmemory in the thread and then i try to set the hook. It fails in some .exe's but not in all exe's.<br /><br />Cya.</div>
+    <div class="meta">Posted on 2003-04-09 22:54:54 by r00t</div>
+   </div>
+   <div class="post" id="post-95049">
+    <div class="subject"><a href="#post-95049">WriteProcessMemory behavior</a></div>
+    <div class="body">Humm, it shouldn't change the thread context. However, in a running task, you ought to suspend all threads before WPMing, and resume them afterwards. Also note that it causes COW (Copy On Write), which means that if you're patching a DLL, you will only be changing the image of that DLL in the process you're patching, not globally.</div>
+    <div class="meta">Posted on 2003-04-10 02:42:58 by f0dder</div>
+   </div>
+   <div class="post" id="post-95655">
+    <div class="subject"><a href="#post-95655">WriteProcessMemory behavior</a></div>
+    <div class="body">Look at this code, it makes a DLL injection with SetWindowsHookEx:<br />(NOTE: All error checking was stripped).<br /><br />        invoke 	CreateProcess,OFFSET nomArch,OFFSET nomArch,NULL,NULL,NULL,CREATE_SUSPENDED,NULL,NULL,OFFSET proceso,OFFSET pinfo<br /><br />        invoke 	LoadLibrary,offset nomDll<br />        mov 	dllid,eax<br /><br />        invoke 	GetProcAddress,dllid,offset procname<br />        mov 	procaddy,eax<br /><br />        invoke  RegisterWindowMessage,offset nomMsg<br />        mov	hMsg,eax<br /><br />        invoke 	OpenProcess,PROCESS_VM_OPERATION,NULL,pinfo.dwProcessId<br />        mov	hProcAb,eax<br /><br />        invoke 	ReadProcessMemory,hProcAb,puntoEnt,offset oriBytes,2,NULL<br /><br />; write in the entrypoint the opcode &quot;ebfe&quot;<br />        invoke 	WriteProcessMemory,hProcAb,puntoEnt,offset jmpEip,2,offset alGas<br /><br />        invoke	ResumeThread,pinfo.hThread<br />        mov	aux,20		; maxium tries<br /><br />; wait until the process reaches the entrypoint<br />espero:<br />	dec	aux<br />	jnz	@F<br />	invoke	MsgErr,offset msgerrNoSync<br />@@:	<br />	invoke 	Sleep,50	<br />	mov	hCon.ContextFlags,-1<br />	invoke	GetThreadContext,pinfo.hThread,offset hCon<br />	test	eax,eax<br />	jne 	@F<br />	invoke	MsgErr,offset msgerrNoCon<br />@@:<br />	push	hCon.regEip<br />	pop	eax<br />	cmp	eax,puntoEnt<br />	jne	espero<br /><br />        invoke  SetWindowsHookEx,WH_GETMESSAGE,procaddy,dllid,pinfo.dwThreadId<br />        mov	hookHan,eax<br /><br />; when i send the message the hook is activated<br />	invoke	PostThreadMessage,pinfo.dwThreadId,hMsg,NULL,NULL<br /><br />; write in the process the original bytes<br />	invoke 	WriteProcessMemory,hProcAb,puntoEnt,offset oriBytes,2,offset alGas<br />	invoke 	Sleep,1000	;i need to be sure the message arrived<br />	invoke  CloseHandle,pinfo.hThread<br />	invoke  CloseHandle,pinfo.hProcess<br />	invoke  UnhookWindowsHookEx,hookHan<br />	invoke 	FreeLibrary,dllid<br /><br />ps: This code is based on a thread found in this messageboard.<br /><br /><br />The problem is:<br />In some exe's the SetWindowsHookEx fails, and in some others not.<br /><br />I need to patch the IAT table in the process that is created, before the execution starts, but the process cannot be suspended, bcoz the Hook fails with probability 1.<br /><br />Greets and thanks.<br /><br />I've attached the full code.</div>
+    <div class="meta">Posted on 2003-04-11 19:42:57 by r00t</div>
+   </div>
+   <div class="post" id="post-95726">
+    <div class="subject"><a href="#post-95726">WriteProcessMemory behavior</a></div>
+    <div class="body">The right order of steps (after reaching entrypoint):<br />Write oriBytes back<br />Wait till any thread in the target process enters a msg loop. Check psdk for WaitForInputIdle. (you missed this step)<br />SetWindowsHookEx<br />Post a msg<br />UnhookWindowsHookEx<br /><br />Then again you can't guarantee your DLL is injected before any code in target process executes. So if you use msg hook, there's no need to replace the first bytes. Just wait till msg loop is established.<br />You can do without msg hook, I mean why don't you replace the first bytes (at entrypoint) with &quot;invoke LoadLibrary, offset szDllName&quot;? Of course don't forget to copy szDllName, by WriteProcessMemory + either VirtualAllocEx or using memory-mapped file depending on the OS you aim at.</div>
+    <div class="meta">Posted on 2003-04-11 22:21:54 by C.Z.</div>
+   </div>
+   <div class="post" id="post-95809">
+    <div class="subject"><a href="#post-95809">WriteProcessMemory behavior</a></div>
+    <div class="body">r00t,<br /><br />The problem is about the hProcAb variable.<br /><br />Requirement for the ReadProcessMemory function<br />===================================<br /><br />The handle must have PROCESS_VM_READ access to the process.<br /><br /><pre><code><br /><br />invoke OpenProcess,PROCESS_VM_OPERATION or PROCESS_VM_READ ,NULL,pinfo.dwProcessId<br /><br /></code></pre><br /><br />Try this one.<br /><br />Regards,<br /><br />Vortex</div>
+    <div class="meta">Posted on 2003-04-12 03:16:13 by Vortex</div>
+   </div>
+   <div class="post" id="post-95956">
+    <div class="subject"><a href="#post-95956">WriteProcessMemory behavior</a></div>
+    <div class="body">Vortex:<br />Nothing changes adding PROCESS_VM_READ, (either PROCESS_ALL_ACCESSS).<br /><br />CZ:<br />The main problem is:<br />I must inject the dll (and execute the code in the dll) before any instruction is executed in the target exe, that's the reason i write &quot;ebfe&quot; in the entrypoint and then resume the thread.<br />Note that SetWindowsHookEx always fails if the thread isn't running. The unique way that i can resume the process and it wont execute any instruction is writing &quot;ebfe&quot; in the entrypoint.<br /><br /><br />Greets and thanks all for the ideas.</div>
+    <div class="meta">Posted on 2003-04-12 16:26:59 by r00t</div>
+   </div>
+   <div class="post" id="post-95960">
+    <div class="subject"><a href="#post-95960">WriteProcessMemory behavior</a></div>
+    <div class="body">Hi all,<br />I was rethinking the SetWindowsHookEx method of dll injection and i think it doesn't meet the needs.<br />Anyone there have an asm code for injecting a dll with WriteProcessMemory?.<br />I need to patch the IAT before the exe starts running.<br /><br />Greets and thanks all.</div>
+    <div class="meta">Posted on 2003-04-12 16:47:06 by r00t</div>
+   </div>
+   <div class="post" id="post-95967">
+    <div class="subject"><a href="#post-95967">WriteProcessMemory behavior</a></div>
+    <div class="body">i would suggest writing your code to the end of the .text segment of the exe in memory.theres usally enuf 00000's there for yoor code. just wpm it in then a jump to it and back</div>
+    <div class="meta">Posted on 2003-04-12 17:50:43 by Qages</div>
+   </div>
+   <div class="post" id="post-96452">
+    <div class="subject"><a href="#post-96452">WriteProcessMemory behavior</a></div>
+    <div class="body">r00t, haven't you looked at my XCOM loader yet? It does what you ned, and works on both 9x and NT.</div>
+    <div class="meta">Posted on 2003-04-14 02:01:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-97126">
+    <div class="subject"><a href="#post-97126">WriteProcessMemory behavior</a></div>
+    <div class="body">Thanks all for the replys.<br /><br />f0dder: Sorry my little hurry, and the article about XCOM is perfects. Thanks so much.<br /><br />Cya all.</div>
+    <div class="meta">Posted on 2003-04-15 22:34:30 by r00t</div>
+   </div>
+  </div>
+ </body>
+</html>

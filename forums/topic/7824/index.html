@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DLL HeLL - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7824" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=7824">DLL HeLL</a></p>
+   <div class="post" id="post-56828">
+    <div class="subject"><a href="#post-56828">DLL HeLL</a></div>
+    <div class="body">Hello everyone...first post!<br /><br />I am having problems calling the exported function of a dll that I have written in assembly. I am pretty new to assembly coding on x86 systems so the dll was just a test to see if I could get things going. I am using the NASM and ALINK duo and running windows ME.<br /><br />Here's the code:<br /><br />/***************************************/<br /><br />extern MessageBoxA<br /><br />import MessageBoxA user32.dll<br /><br />global _TestFunc<br />export _TestFunc<br /><br />section data public use32<br /><br />	lpszMsgTitle	db 	&quot;Asm Dll&quot;, 0<br />	lpszMsg		db	&quot;This is an ASM dll&quot;, 0<br /><br />section code public use32<br /><br />	..start:<br /><br />	mov eax, 1<br />	ret 12<br /><br />        _TestFunc:<br /><br />	push dword 0<br />	push dword lpszMsgTitle<br />	push dword lpszMsg<br />	push dword 0<br />	call <br />	ret<br /><br />/*******************************************/<br /><br />As you can see its pretty much a toy dll. I assembled it and built it, declared the function &quot;extern C&quot; in a c++ source file and created an executable that used it. That is where the problems began. The host executable runs fine once then fails with a message like &quot;Unable to run &lt;host program&gt;&quot;, &quot;It is in an incorrect format&quot;. If I use LoadLibrary and GetProcAddress to load the dll it still fails inexplicably at times. Even if the host program is written in assembly the operating system still chokes on the executable at sometimes.<br />The thing is, I built this at school on their XP system and I don't remeber getting these errors...ever.<br /><br />These kind of inconsistent errors are a programmer's nightmare...especially when you are new to something.  :( Anyone have ANY idea what could be wrong?<br /><br />Thanks in advance.  :)</div>
+    <div class="meta">Posted on 2002-09-09 14:30:41 by Thanatos</div>
+   </div>
+   <div class="post" id="post-56834">
+    <div class="subject"><a href="#post-56834">DLL HeLL</a></div>
+    <div class="body">Dunno if this is your problem, but in calling MessageBox you aren't pushing the pointers to the strings, but the first four bytes of the strings themselves.<br /><br />i.e.,<br /><pre><code><br />push dword lpszMsgTitle<br />push dword lpszMsg<br /></code></pre><br />should read<br /><pre><code><br />push offset lpszMsgTitle<br />push offset lpszMsg<br /></code></pre><br />Otherwise MessageBox will interpret &quot;ASM &quot; and &quot;This&quot; as addresses in memory and quite likely cause an invalid page fault. Some versions of windows may happily ignore this, and some may report the errors you described.<br /><br />That's just my best guess<br />--Chorus</div>
+    <div class="meta">Posted on 2002-09-09 15:23:55 by chorus</div>
+   </div>
+   <div class="post" id="post-56841">
+    <div class="subject"><a href="#post-56841">DLL HeLL</a></div>
+    <div class="body">Thanks for the reply but I don't think that is it.<br /><br />NASM does not work like MASM in that respect.<br />Labels are always addresses in NASM so I am passing a 32 bit address when I push &quot;dword label&quot;.<br /><br />The exact same code works fine in an executable. It just goes berzerk when I try to export it from a dll<br />And it only goes berzerk sometimes (most of the times that is). Really weird problem.<br /><br />I think it is more related to the mechanics of loading a dll. I mean, why would it work sometimes then complain that the executable file format is invalid at other times?</div>
+    <div class="meta">Posted on 2002-09-09 17:21:17 by Thanatos</div>
+   </div>
+   <div class="post" id="post-56846">
+    <div class="subject"><a href="#post-56846">DLL HeLL</a></div>
+    <div class="body">Perhaps you need to label the entry point. When using Fasm and Link (the one I got with masm32) I had to use the following label:<br />public __DllMainCRTStartup@12 <br /><br />Don't know how NASM does these things though. :confused:</div>
+    <div class="meta">Posted on 2002-09-09 17:36:28 by Eóin</div>
+   </div>
+   <div class="post" id="post-56862">
+    <div class="subject"><a href="#post-56862">DLL HeLL</a></div>
+    <div class="body">Thanatos,<br /><br />Its been too long since I played with NASM but you must ensure that the DLL has an entry point with a proc that accepts 3 parameters and returns non zero in EAX. In MASM and others this is a LibMain or DLLmain.<br /><br />At a rough guess, try a proc of this design at the start of the code before you write any exported procedures.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-09-09 19:15:49 by hutch--</div>
+   </div>
+   <div class="post" id="post-56871">
+    <div class="subject"><a href="#post-56871">DLL HeLL</a></div>
+    <div class="body">Thanks hutch, I really appreciate all the replies. <br />(BTW, MASM32 is a great package. Made me interested in assembly. I never cared for writing DOS programs :) )<br /><br />Anyway, I am assembling to the OMF obj format (borland style) and NASM uses ..start to label the entry point. In the code above I move 1 to eax and cleanup the stack with a ret 12 since DllMain is __stdcall. That is my DllMain.<br /><br />The erratic behaviour of the error and the fact that the same code worked on an XP system really has me wondering if the problem is bigger than my code. ALINK is convenient becuase it can read information about imports and exports in the OMF .obj file so I don't have to create an import library for imports or a def file for exports. However, I am beggining to wonder whether the linker could be at fault.<br /><br />To give you an example of how weird the problem is:<br /><br />If I drag the exe icon across the folder then click it to run it, it works. If I click it subsequent to that windows fails to load it (complaining about the file format). If I drag it again then click it, it works once....etc. I shutter at the thought of even beginning to debug something like that.<br /><br />You may look <a target="_blank" href="http://www.geocities.com/rare234/index.html">here</a> to see the error messages I am talking about. Please scroll to the bottom of the page. The image on the left is what the program is supposed to do. However, the two messageboxes on the right are displayed far too often for my liking.<br /><br />I have considered trying another linker but since all the others accept coff files and/or don't read any imports/exports in the .obj (for eg. the one that comes with MASM32) so I'll have to create def files and rework the code quite a bit to try to make it assemble and link. And to think that just before this happened I was saying how easy win32 assembly is. I really wasn't having any problems before now. However this seems like a roadblock.<br /><br />Eoin,<br /><br />I haven't seriously used LINK yet but seems as I might have to give it a shot.</div>
+    <div class="meta">Posted on 2002-09-09 21:38:12 by Thanatos</div>
+   </div>
+   <div class="post" id="post-56877">
+    <div class="subject"><a href="#post-56877">DLL HeLL</a></div>
+    <div class="body">Thanatos,<br /><br />Why in particular are you using OMF format, about the only reason I can see for doing that is if you are writing modules to link into Borland C/C++ as it still uses OMF.<br /><br />I would be inclined to use ALINK with NASM but from memory it uses COFF format. I have rarely ever seen successful builds from mixing assemblers/compilers with linkers that are not made for the particular assembler/compiler so you may not get a correct result by using the Microsoft linker in MASM32 from the win98ddk.<br /><br />Hope you do OK with it. We do have a few members who have worked with NASM so they may be able to help you with the problem.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-09-09 22:26:42 by hutch--</div>
+   </div>
+   <div class="post" id="post-56897">
+    <div class="subject"><a href="#post-56897">DLL HeLL</a></div>
+    <div class="body">Post your dll (not the source, the binary file)</div>
+    <div class="meta">Posted on 2002-09-10 00:45:03 by japheth</div>
+   </div>
+   <div class="post" id="post-56900">
+    <div class="subject"><a href="#post-56900">DLL HeLL</a></div>
+    <div class="body">Here's a Small Dll Example. CGI_32.exe is the dll (Windows doesn't care about the extension).<br /><br />FAsm interprets labels the same as NASM -- as addresses.</div>
+    <div class="meta">Posted on 2002-09-10 00:54:31 by eet_1024</div>
+   </div>
+   <div class="post" id="post-56924">
+    <div class="subject"><a href="#post-56924">DLL HeLL</a></div>
+    <div class="body"><strong>&quot;The thing is, I built this at school on their XP system and I don't remeber getting these errors...ever.&quot;</strong> <br /><br />This is only one of the things that i mean about the OS has more so-called Drity Tricks that we are suppose to accept as the so-called OS rules ....<br /><br />Not my cup of tea....<br /><br /><strong> Thanatos </strong> this is more than a guest... It's was all in XP Reg that allowed you to do this but when you leave... YOU HAVE NOTHING.....  the trick goes all the way down to Win 95 after the web revolution.<br /><br />And to talk about &quot;Dirty Tricks&quot;<br /><br /><span style="font-size:9px>Not meant to discorage but to throw something out there that many may have been missing.... &quot;It was working yesterday but today i see nothing&quot;   R E M E M B E R  when this happened to    U  not long ago</span> <br /><br />cmax out  ANY WAY THE WIND BOOOO</div>
+    <div class="meta">Posted on 2002-09-10 02:41:21 by cmax</div>
+   </div>
+   <div class="post" id="post-56932">
+    <div class="subject"><a href="#post-56932">One more thing</a></div>
+    <div class="body">I don't care who this piss off but fasm can't handle app's over 80,000 of code and i think i saw something that was not right with even less in my 2 day venture... Now you know. and to this day i have not seen an single IDE that can handle big apps without slowing down crawl including Utra-Edit.... QEditor is the only thing that never let me down outside of acting like a fool every other month or so.  So when it do that just don't save that file and start all over again....or you can play it at your own risk which will work if you are very careful about what you see happening ....other than that it RULES....<br /><br />Now you know</div>
+    <div class="meta">Posted on 2002-09-10 03:39:32 by cmax</div>
+   </div>
+   <div class="post" id="post-56939">
+    <div class="subject"><a href="#post-56939">DLL HeLL</a></div>
+    <div class="body">cmax,<br /><br />If you must load really large source files or massive assembler dumps, get Alan Phillips PFE. It will load ANY size file up to the amount of memory on your machine. I have comfortably loaded 200 meg assembler dumps in it to test it out and it handled it with no problems at all.<br /><br />The current version of QE will load files around 10 meg without much problem as long as you have the memory but its not really designed to handle the really big stuff.<br /><br />You can get PFE 101e from either the Simtel site or from my own site, I still see PFE as the best of the large capacity editors as it is all grunt and few frills.<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-09-10 04:22:20 by hutch--</div>
+   </div>
+   <div class="post" id="post-56962">
+    <div class="subject"><a href="#post-56962">DLL HeLL</a></div>
+    <div class="body">Hutch, this is from the ALINK documentation<br /><br /><div class="quote">ALINK is a linker for OBJ and LIB files, and generates MSDOS COM and <br />MSDOS EXE files, and Win32 PE files. Win32 resource files are also supported<br />for linking to PE files. MS/Intel OMF and MS-COFF object and library files<br />are supported. MS-COFF import libraries are not supported, and will cause<br />an undefined symbol error in a .idata section.</div><br /><br />Basically, it works (or should work) fine with OMF .objs and I have never had problems building stand alone executables with it. ALINK was basically made as a complement to NASM. The documentation came with a dll example and I modelled my attempt after it. However, I haven't had much luck.<br /><br />Also, I do use borland c/c++ more than MSCV++. It has better templates support (which I use alot),  it's free and it's compiles are fast. So I went for the consistency of using the omf format. Also, I am able to define imports and exports right in the assembly file. No import library etc necessary.<br /><br />cmax,<br /><br />It definitely seems like some OS nasty gotcha. I tried it on my windows 98 system and it has the same problems. There must be something with the NT based kernel that causes it to work find on XP. I just wish I knew what was happening.<br /><br />japheth,<br /><br />I will post the dll soon, when I figure out how to post attachments...heh.</div>
+    <div class="meta">Posted on 2002-09-10 06:28:39 by Thanatos</div>
+   </div>
+   <div class="post" id="post-56990">
+    <div class="subject"><a href="#post-56990">DLL HeLL</a></div>
+    <div class="body">Here's the dll. It has only one export: _TestFunc which uses the C calling convention but takes no arguments and returns no value. It should just display a message box.<br /><br />BTW, Windows NT is version 5.0 right? ALINK defaults to subsystem version 4.0 which should be fine for a windows9x based dll, I think. I don't even know if it matters as far as the kind of execuatble generated is concerned.<br /><br />eet_1024,<br /><br />I am able to write and assembly program (using NASM and ALINK) that uses you DLL's exported functions and it works fine. I am also able to use the functions exported from a &quot;C&quot; Dll in an assembly program. However, whenever I write a dll using NASM and ALINK it isn't very reliable...<br /><br />cmax,<br /><br />I didn't actually run the executable from the XP system on my system I built it again on my system from the assembly source. Furthermore, the dll attached to this post was built on my windows ME system and it runs fine on XP.<br /><br />Ah well. What I might have to do is stop using the tools I am using to see if I can build a dll that works. It a shame cause I was really liking them too.</div>
+    <div class="meta">Posted on 2002-09-10 08:59:42 by Thanatos</div>
+   </div>
+   <div class="post" id="post-57037">
+    <div class="subject"><a href="#post-57037">DLL HeLL</a></div>
+    <div class="body">Thanks everyone for your suggestions. I am now quite sure it is a linker bug. After much experimentation I was finally able to assemble with NASM but link with Microsoft LINK. The DLL that  LINK produced gives me NO problems at all.<br /><br />The downside is that I now have to use import libraries. ALINK supported imports embedded in the obj files. Anyway, the problem is a close to solved as it can be. I just have to use LINK now.</div>
+    <div class="meta">Posted on 2002-09-10 12:51:42 by Thanatos</div>
+   </div>
+   <div class="post" id="post-57042">
+    <div class="subject"><a href="#post-57042">DLL HeLL</a></div>
+    <div class="body">You could try GoLink. No lib files. <br /><a target="_blank" href="http://www.godevtool.com/index.html">http://www.godevtool.com/index.html</a></div>
+    <div class="meta">Posted on 2002-09-10 13:02:33 by assant</div>
+   </div>
+   <div class="post" id="post-57044">
+    <div class="subject"><a href="#post-57044">DLL HeLL</a></div>
+    <div class="body">Yeah...thanks. I saw it before but wondered if it would work with NASM. I'll give it a shot.</div>
+    <div class="meta">Posted on 2002-09-10 13:12:00 by Thanatos</div>
+   </div>
+   <div class="post" id="post-57090">
+    <div class="subject"><a href="#post-57090">My have nothing to do with your question ... BUT</a></div>
+    <div class="body">Hey Thanatos<br /><br />My name is cmax, I am more of an end-user than a programmer even thou i am bad as an newbee, so over look some of my views, as i am sure i am always right but others here truely know better.  But as i said i am still only an near master End-User of an computer since the PC Juior in 1983..... that's not real programming experences..... soooooo. <br /><br />This is what i was beefing about when it come to &quot;working today but not tomorrow&quot;  <br /><br />My app has been running perfec-TOE for over 2 years but sometime i recomply as i all ways do as i add new things to it... And GUEST WHAT even if i add nothing sometimes Windows say No, No, No i get a page fault, so what i LEARNED to do sometime is copy that entire folder to a new name...<br /><br />Example:  Running well of 6 months   G:\MyMeanDreamApp1111<br /><br />I copy it to G:\MyMeanDreamApp11111111<br /><br />RE-Boot the machine and GUEST WHAT The file in G:\MyMeanDreamApp1111 still give the Window page fault but the new same Files all in G:\MyMeanDreamApp11111111 Runs like a dream as ALL ways, This is why i say Windows is full of it sometime makeing you think you did something wrong when you did not.... I have trashed a lot of programs in the past just because i thought Windows was KING, only to learn that It will LIE if it think your App don't quailfy to be moved to another machine... and it never tell you WHY.... c ... Since 1996 i saw this stuff <br /><br /><strong>and now I KNOW...</strong><br /><br /><br />Also what you should know is that you have to delete the old file or either never open it up before your new saved .exe because WINDOWS will put the same error in the S*** all over again and than the new file will no work either...... Get IT... I know well, i mean  very well about this OS bull jive...</div>
+    <div class="meta">Posted on 2002-09-10 21:17:52 by cmax</div>
+   </div>
+   <div class="post" id="post-57106">
+    <div class="subject"><a href="#post-57106">Re: One more thing</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by cmax </em><br />I don't care who this piss off but <strong>fasm can't handle app's over 80,000 of code</strong> and i think i saw something that was not right with even less in my 2 day venture... Now you know. and to this day i have not seen an single IDE that can handle big apps without slowing down crawl including Utra-Edit.... QEditor is the only thing that never let me down outside of acting like a fool every other month or so.  So when it do that just don't save that file and start all over again....or you can play it at your own risk which will work if you are very careful about what you see happening ....other than that it RULES....<br /><br />Now you know </div><br /><br />Do you me to say:<ul><br />[*]That the Flat Assembler can't Parse sources &gt; 80KB or &gt; 80K Lines<br />[*]That the Flat Assembler can't Produce an Output &gt; 80KB<br />[*]That Asm Work Place (The IDE written in FAsm) has the limitation<br /><br /><br />F.Y.I. I use TextPad. I haven't had any problems with it that weren't to blame on Windoz. But I also haven't taken the time to test it under conditions that I don't currently use (and my never need).<br /><br />What do you mean by:<div class="quote">...was not right with even less in my 2 day venture...</div><br /><br />Also, have you been able to use a debugger to isolate the code that windoz page faults on?</div>
+    <div class="meta">Posted on 2002-09-11 02:26:06 by eet_1024</div>
+   </div>
+   <div class="post" id="post-57123">
+    <div class="subject"><a href="#post-57123">I don't use fasm</a></div>
+    <div class="body">eet_1024<br /><br />It was only my first try at fasm and i was using the editor that came with fasm.  So after i finally got the thing to work i than comply one of my larger asm file with it and it did make an executive.. Than i ran the the program and *it crashed my machine*.... When that happened i said forget it,... But to be sure i re-complyed the same file in masm as usual and had no problem as usual ... I think i did have to make some changes to make it work in fasm and i was sure that i did everything right but i could have done something wrong , maybe it still could have been my fault.<br /><br />So this may not really have be fasm fault,But it still did comply in fasm and I was not ready to go seaching and changing stuff again so i just said forget it.<br /><br />Also as far as compying large files it could have been the editor fault or another one of my own so i can't really say and &quot;i have no right to say what i said because i did not go deeper to do any testing&quot;.  But it was still enought to convice me not to go change everything over.  My be in a few years i try again.  But i figure if you using it and know it now as of now, it's on... But in my case i just do have the time switching assembler and taking on new problems...<br /><br />I did try a lot of stuff in those two days that conviced me not to swich but i forgot really why not other than that crash... I rather tranlate any thing posible to masm than the other way around. <br /><br />Sorry about that, i did not contiune testing, it would be too much for me at this point.. I can't risk having 2 type of asm files all over my machine only to get confuss and screw everything up...</div>
+    <div class="meta">Posted on 2002-09-11 05:53:55 by cmax</div>
+   </div>
+  </div>
+ </body>
+</html>

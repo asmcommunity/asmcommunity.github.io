@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DLL usage - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22072" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22072">DLL usage</a></p>
+   <div class="post" id="post-166206">
+    <div class="subject"><a href="#post-166206">DLL usage</a></div>
+    <div class="body">I have a few questions with creating &amp; using DLLs, MAMS, &amp; C/C++.<br /><br />1.) Once I&#39;ve created a DLL, with external functions, how can I use it with MASM?&nbsp; <br /><br />&nbsp; Do I use &quot;LoadLibrary&quot; &amp; then the function name is loaded for me to pass arguments to?<br /><br />2.) Is there any advantage to creating a DLL in MASM over creating it in C/C++ (or vise versa)? <br /><br />Thank you,<br />-#2pencil-</div>
+    <div class="meta">Posted on 2005-09-23 12:41:30 by number2pencil</div>
+   </div>
+   <div class="post" id="post-166207">
+    <div class="subject"><a href="#post-166207">Re: DLL usage</a></div>
+    <div class="body">1) You can build an import library and then call the function like how you do for normal win32api. Just remember to declare the prototypes.<br /><br />2) If you are a good coder, the code will be faster. There is always a high chance that the dll coded in masm will be smaller than those coded in C/C++ (especially C++ I think).</div>
+    <div class="meta">Posted on 2005-09-23 12:57:56 by roticv</div>
+   </div>
+   <div class="post" id="post-166209">
+    <div class="subject"><a href="#post-166209">Re: DLL usage</a></div>
+    <div class="body"><div class="quote"><br />2.) Is there any advantage to creating a DLL in MASM over creating it in C/C++ (or vise versa)? <br /></div><br />Depends on your skills in assembly and C/C++.<br />Use whatever language you&#39;re most familiar with, and you&#39;ll be fine. If you feel that C/C++ is &quot;too large&quot;, you can easily stop including the runtimes if you don&#39;t use them anyway - or take a look at Jibz&#39; WCRT - http://www.ibsensoftware.com<br /></div>
+    <div class="meta">Posted on 2005-09-23 13:50:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-166210">
+    <div class="subject"><a href="#post-166210">Re: DLL usage</a></div>
+    <div class="body">What am I doing wrong here?<br /><br /><pre><code><br />;out_dll.inc<br />include \masm32\include\windows.inc<br />includelib \masm32\lib\kernel32.lib&nbsp; ; you need this one for sure.<br />includelib \masm32\lib\user32.lib&nbsp;  ; if necessary ... usually it is.<br /><br />PUBLIC YourFunc<br />YourFunc PROTO arg1:DWORD, arg2:DWORD<br /></code></pre><br /><br /><pre><code><br />;out.asm<br />.586P<br />.model flat,stdcall<br />option casemap:none<br /><br />;#################################<br />include out_dll.inc<br />;#################################<br /><br />.DATA<br /><br />.CODE<br /><br />start:<br />;#################################<br />DllStart PROC&nbsp;  hInstDLL:DWORD,dwNotify:DWORD,lpReserved:DWORD<br />;#################################<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  eax,dwNotify<br />&nbsp; &nbsp; &nbsp; &nbsp; cmp		eax,01h	;DLL_PROCESS_ATTACH<br />&nbsp; &nbsp; &nbsp; &nbsp; je		@@01<br />&nbsp; &nbsp; &nbsp; &nbsp; cmp		eax,02h ;DLL_THREAD_ATTACH<br />&nbsp; &nbsp; &nbsp; &nbsp; je		@@02<br />&nbsp; &nbsp; &nbsp; &nbsp; cmp		eax,03h ;DLL_THREAD_DETACH<br />&nbsp; &nbsp; &nbsp; &nbsp; je		@@03<br />&nbsp; &nbsp; &nbsp; &nbsp; cmp		eax,00h ;DLL_PROCESS_DETACH<br />&nbsp; &nbsp; &nbsp; &nbsp; je		@@exit<br />@@01:<br />		nop<br />&nbsp; &nbsp; &nbsp; &nbsp; jmp		@@out<br />@@02:	<br />		nop		; thread-specific code<br />		jmp		@@out<br />@@03:	<br />		nop		;thread-specific cleanup code<br />		jmp		@@out<br />@@exit:<br />		nop&nbsp; &nbsp;  ;general cleanup code<br />		jmp		@@out<br />@@out:<br />		mov		eax, 1 <br />		ret&nbsp; 	12 <br />DllStart ENDP<br /><br />YourFunc PROC arg1:DWORD, arg2:DWORD<br /><br />YourFunc ENDP<br />END start <br />end<br />;################################# <br /></code></pre><br /><br /><pre><code><br />#include &lt;windows.h&gt;<br />#include &lt;stdio.h&gt;<br /><br />typedef UINT (CALLBACK* LPFNDLLFUNC1)(VOID);<br /><br />HINSTANCE hDLL;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />LPFNDLLFUNC1 YourFunc;&nbsp; &nbsp; <br />UINT&nbsp; uReturnVal;<br /><br />int main() {<br />	hDLL = LoadLibrary(&quot;out.dll&quot;);<br /><br />	if(hDLL){<br />		YourFunc = (LPFNDLLFUNC1)GetProcAddress(hDLL,&quot;YourFunc&quot;);<br />&nbsp; 		if (!YourFunc){ // || !MyFunc2){<br />			printf(&quot;Function address not found in DLL&quot;);<br />			FreeLibrary(hDLL);&nbsp; &nbsp; &nbsp;  <br />			return false;<br />		}<br />		else{<br />			printf(&quot;done&quot;);<br />			YourFunc();<br />		}<br />	}<br />	else printf(&quot;DLL failed to load&quot;);<br />	return true;<br />}<br /></code></pre><br /><br />If I leave ret 12 in, it crashes after it prints done.&nbsp; If it take ret 12 out, it &quot;fails to load&quot;.&nbsp;  What causes this, &amp; what have I overlooked?<br /><br />Thank you,<br />-#2pencil-<br /><br /><div class="quote"><br />C:\DOCUME~1\user\asm&gt; ml&nbsp; /c&nbsp; /coff&nbsp; /Cx out.asm /Fo out.obj<br />Microsoft (R) Macro Assembler Version 6.14.8444<br />Copyright (C) Microsoft Corp 1981-1997.&nbsp; All rights reserved.<br /><br /> Assembling: out.asm<br /><br />C:\DOCUME~1\user\asm&gt;C:\masm32\bin\link /DLL /SUBSYSTEM:WINDOWS /entry:DllStar<br />t /DEF:out.def&nbsp; /LIBPATH:c:\masm\lib out.obj<br />Microsoft (R) Incremental Linker Version 5.12.8078<br />Copyright (C) Microsoft Corp 1992-1998. All rights reserved.<br /><br />&nbsp;  Creating library out.lib and object out.exp<br /></div></div>
+    <div class="meta">Posted on 2005-09-23 14:47:55 by number2pencil</div>
+   </div>
+   <div class="post" id="post-166212">
+    <div class="subject"><a href="#post-166212">Re: DLL usage</a></div>
+    <div class="body">Since you have &quot;.model flat,stdcall&quot;, and aren&#39;t specifying calling convention, your function is STDCALL by default (you really ought to explicitly tell that it&#39;s STDCALL, it looks better).<br /><br />Anyway, &quot;ret&quot; is a macro, and &quot;ret xx&quot; emits the &quot;ret xx&quot; directly. Use &quot;ret&quot;, it will add the &quot;12&quot; itself, and also tear down the stack frame.<br /><br />Geez my english sucks right now :)</div>
+    <div class="meta">Posted on 2005-09-23 16:36:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-166216">
+    <div class="subject"><a href="#post-166216">Re: DLL usage</a></div>
+    <div class="body">Pencil,<br /><br />This is the minimum you need to get a DLL entry procedure working.<br /><br /><pre><code><br />LibMain:<br />&nbsp; &nbsp; mov eax, 1<br />&nbsp; &nbsp; ret 12<br /><br />&nbsp; ; all of your code inbetween<br /><br />end LibMain<br /></code></pre><br /><br />The linker will display a warning about the calling convention and argument byte count if you don&#39;t use a procedure but it works fine. For a simple startup of a DLL the following code will do the job fine.<br /><br /><pre><code><br />LibMain proc instance:DWORD,reason:DWORD,unused:DWORD <br /><br />&nbsp; &nbsp; .if reason == DLL_PROCESS_ATTACH<br />&nbsp; &nbsp; &nbsp; mov eax, TRUE<br /><br />&nbsp; &nbsp; .elseif reason == DLL_PROCESS_DETACH<br /><br />&nbsp; &nbsp; .elseif reason == DLL_THREAD_ATTACH<br /><br />&nbsp; &nbsp; .elseif reason == DLL_THREAD_DETACH<br /><br />&nbsp; &nbsp; .endif<br /><br />&nbsp; &nbsp; ret<br /><br />LibMain endp<br /></code></pre><br /><br />This will give you direct mnemonic code as follows.<br /><br /><pre><code><br />&nbsp; start:<br />&nbsp; &nbsp; push ebp<br />&nbsp; &nbsp; mov ebp, esp<br /><br />&nbsp; &nbsp; cmp DWORD PTR , 1<br />&nbsp; &nbsp; jnz lbl0<br />&nbsp; &nbsp; mov eax, 1<br />&nbsp; &nbsp; jmp lbl3<br /><br />&nbsp; lbl0:<br />&nbsp; &nbsp; cmp DWORD PTR , 0<br />&nbsp; &nbsp; jnz lbl1<br />&nbsp; &nbsp; jmp lbl3<br /><br />&nbsp; lbl1:<br />&nbsp; &nbsp; cmp DWORD PTR , 2<br />&nbsp; &nbsp; jnz lbl2<br />&nbsp; &nbsp; jmp lbl3<br /><br />&nbsp; lbl2:<br />&nbsp; &nbsp; cmp DWORD PTR , 3<br />&nbsp; &nbsp; jnz lbl3<br /><br />&nbsp; lbl3:<br />&nbsp; &nbsp; leave<br />&nbsp; &nbsp; ret 0Ch<br /></code></pre><br /><br />Regards,<br /><br />hutch at movsd dot com<br /></div>
+    <div class="meta">Posted on 2005-09-23 19:32:58 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

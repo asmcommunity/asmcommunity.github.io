@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Stack size - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1462" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=1462">Stack size</a></p>
+   <div class="post" id="post-9431">
+    <div class="subject"><a href="#post-9431">Stack size</a></div>
+    <div class="body">Lets say i compile a window with MASM32.<br /><br />Is there any way i can retrieve the size of the stack that has been allocated for the thread?<br /><br />thanx in advance<br /><br /> :alright:</div>
+    <div class="meta">Posted on 2001-10-14 21:32:29 by titan</div>
+   </div>
+   <div class="post" id="post-9432">
+    <div class="subject"><a href="#post-9432">Stack size</a></div>
+    <div class="body">I don't know how to do that programatically. But you can specify<br />default stack size at link-time. And if you do your own thread creation,<br />you can specify a stack size in the CreateThread call (or leave at<br />0 to use default (linktime) stack size for the new thread).<br /><br />I'm poking around in MSDN right now to see if I can find some more info.</div>
+    <div class="meta">Posted on 2001-10-14 23:00:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-9434">
+    <div class="subject"><a href="#post-9434">Stack size</a></div>
+    <div class="body">It would seem that the TIB/TEB (Thead Information Block / Thread Environment Block...<br />9x and NT dudes have different names for it) has some stack related<br />information (which is quite logical, of course ;)). You find the TIB at<br /> (fs is updated per-thread). You'll have to &quot;assume fs:nothing&quot;<br />in masm before you can mess with it.<br /><br />The first two DWORD entries are widely used in SEH (structured<br />exception handling), and are<br />FS:00 -- pointer to next handler<br />FS:04 -- handleraddress<br /><br />After that comes stackUserTop at 08h, and stackUserBase at 0Ch.<br />Now, these two values would give you the &quot;remaining stack size&quot;,<br />but not total stack size. And offsets might be wrong, it's 6:15 (AM<br />for you 12h freaks), and I've been up all night.<br /><br />But play around with it :).</div>
+    <div class="meta">Posted on 2001-10-14 23:17:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-9436">
+    <div class="subject"><a href="#post-9436">Stack size</a></div>
+    <div class="body">Ok, I've messed a little with it, and it seems the info was a little wrong :).<br /> is obviously a pointer to an exception structure, where the<br />first DWORD is &quot;next handler&quot; and the second DWORD is &quot;this handler&quot; -<br />the values aren't, as I wrote in the previous post, the first two.<br /><br />This means that<br />stackUserBase = 04h<br />stackUserTop = 08h<br /><br />By subtracting the one from the other, I get the &quot;commit&quot; stack<br />size I specified in the linker settings (I was confused by this at<br />first, until I realized the linker parms were in decimal, not hex...<br />DOH ;). StackUserTop matches my esp pretty well, 16 bytes off.<br />I guess this is because your app starts with &quot;a few undocumented<br />things&quot; on the stack, and the TIB isn't updated until the thread is<br />switched, which doesn't occur in a singlethreaded app (dunno about<br />the windows process preemptive scheduling, though...)<br /><br />Ok, this can give you the amount of committed stack, it seems.<br />But since sackUserBase is a linear address, I dunno how to get the<br />stack size from that. But I think the stuff I've figured out is sorta<br />interesting anyway :).</div>
+    <div class="meta">Posted on 2001-10-14 23:42:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-9437">
+    <div class="subject"><a href="#post-9437">Stack size</a></div>
+    <div class="body">Heh, I topped 500 posts... and it's my 20th birthday... *grin*.<br /><br />Well, I figured out that the two stack thingamagijcs in the TIB of<br />course aren't related to the ESP register... they simply show the<br />max value esp can reach (the top... and I believe esp should always<br />be 4 less than this?), and the lowest committed stack page (if you<br />go lower than this, I believe you will have to pre-touch it in 4k increments...<br />ie, you can't touch 4097 bytes (or more) &quot;further down&quot; than the<br />committed stack size, because the way the stack grows (guard pages),<br />but I might of course be wrong... :))</div>
+    <div class="meta">Posted on 2001-10-14 23:51:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-9439">
+    <div class="subject"><a href="#post-9439">Stack size</a></div>
+    <div class="body">f0dder,<br /><br />may be using VirtualQuery() should work too. Use VirtualQuery with actual ESP and you may get stack size in MEMORY_BASIC_INFORMATION.RegionSize. But I haven't tried yet.<br /><br />japheth</div>
+    <div class="meta">Posted on 2001-10-15 01:56:03 by japheth</div>
+   </div>
+   <div class="post" id="post-9440">
+    <div class="subject"><a href="#post-9440">Stack size</a></div>
+    <div class="body">As I read it, VirtualQuery returns information *beginning* from the<br />address you specify... and stack grows downwards... :/.</div>
+    <div class="meta">Posted on 2001-10-15 02:01:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-9441">
+    <div class="subject"><a href="#post-9441">Stack size</a></div>
+    <div class="body">thats right, f0dder, but in my eyes thats a question of the memory being committed or not. I Think if you specify a stack size of 0x100000 at link time the PE loader will allocate a memory region of 0x100000, with only the last page committed. So VirtualQuery should work.<br /><br />japheth</div>
+    <div class="meta">Posted on 2001-10-15 02:11:23 by japheth</div>
+   </div>
+   <div class="post" id="post-9450">
+    <div class="subject"><a href="#post-9450">Stack size</a></div>
+    <div class="body">Happy birthday you modest one !<br />Only 20 years?<br />grrrrrrrrrrrrrrrrrrrrr<br />hehe<br />Congrats.<br /><br />Latigo</div>
+    <div class="meta">Posted on 2001-10-15 09:35:00 by latigo</div>
+   </div>
+   <div class="post" id="post-9452">
+    <div class="subject"><a href="#post-9452">Stack size</a></div>
+    <div class="body">Happy Birthday f0dder :alright: .  By the time you're 30, we'll all be working on machines of your design. ;)</div>
+    <div class="meta">Posted on 2001-10-15 11:39:28 by lackluster</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Multiplication EDX:EAX - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13595" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=13595">Multiplication EDX:EAX</a></p>
+   <div class="post" id="post-105353">
+    <div class="subject"><a href="#post-105353">Multiplication EDX:EAX</a></div>
+    <div class="body">Hi,<br />Would anyone be willing to teach me how to convert the answer to ascii?<br /><br />mov eax, 123456h<br />mov ecx, 123456h<br />mul ecx<br /><br />Answer is in EDX:EAX (64bit number max:: EDX = 63-&gt;32 bits, EAX = 31-0 bits.<br /><br />Thanks</div>
+    <div class="meta">Posted on 2003-05-29 21:37:21 by bgong68</div>
+   </div>
+   <div class="post" id="post-105356">
+    <div class="subject"><a href="#post-105356">Multiplication EDX:EAX</a></div>
+    <div class="body">Please, look at the FAQ or search the board for some great algorithms.<br /><br />Sorry, I just tried looking and it is not as easy to find as I thought:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=767&amp;highlight=wsprintf">http://www.asmcommunity.net/board/index.php?topic=767&amp;highlight=wsprintf</a><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=5197">http://www.asmcommunity.net/board/index.php?topic=5197</a><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=1182&amp;highlight=qw2a">http://www.asmcommunity.net/board/index.php?topic=1182&amp;highlight=qw2a</a></div>
+    <div class="meta">Posted on 2003-05-29 21:47:20 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-105407">
+    <div class="subject"><a href="#post-105407">Multiplication EDX:EAX</a></div>
+    <div class="body">The FPU can load 64-bit numbers, and then use FPU to convert to packed BCD format.<br /><pre><code>	push	edx<br />	push	eax<br />	fild	QWORD PTR &#91;esp&#93;<br />	sub	esp, 8<br />	fbstp	&#91;esp&#93;<br /><br />A = least significant digit &#40;4 bits each&#41;<br />Q = most significant digit<br />s! = hight bit of byte is the sign of number<br /><br />BA DC FE HG JI LK NM PO RQ s!</code></pre>Look at the number in a debugger to see how the digits are arranged.  Also, note that the FPU only loads signed QWORD integers, so the top bit of the result is not supported.  And the FBSTP instruction only works to 18 digits. :)</div>
+    <div class="meta">Posted on 2003-05-30 08:52:09 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-105430">
+    <div class="subject"><a href="#post-105430">Multiplication EDX:EAX</a></div>
+    <div class="body">bitRAKE's last algo is probably the easiest way to go.<br /><br />The point was mentionned that the FPU only loads signed QWORD integers. Therefore, your code should use <strong>imul</strong> instead of the &quot;mul&quot; instruction for performing your multiplication, unless there is no possibility that either number could ever be negative.<br /><br />The <strong>fbstp</strong> instruction needs a 10-byte variable or buffer to store the result. bitRAKE's code to change the ESP register by only 8 is most probably for maintaining stack alignment while leaving enough space for the data. (Actually, changing the ESP register by 4 would have been sufficient because 8 bytes were already taken by pushing EDX and EAX. The pushed value of EAX would have been trashed anyway by reserving only another 8 bytes.)<br /><br />If you are using the stack for temporary storage such as suggested by bitRAKE, remember to also reset the ESP register at an opportune time.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-05-30 13:38:18 by Raymond</div>
+   </div>
+   <div class="post" id="post-105521">
+    <div class="subject"><a href="#post-105521">Multiplication EDX:EAX</a></div>
+    <div class="body">This worked for me:<pre><code>	mov	eax, -1<br />	mov	edx, -1<br />	mul	edx<br /><br /><br />	push	eax<br />	; set round mode to truncate<br />	fstcw	WORD PTR &#91;esp&#93;		; save for modify<br />	and	WORD PTR &#91;esp&#93;,0F0FFh<br />;	or	WORD PTR &#91;esp&#93;, 0E00h	; truncate/53-bit for 10 output lines<br />	or	WORD PTR &#91;esp&#93;, 0F00h	; truncate/64-bit for 11 output lines<br />	fldcw	WORD PTR &#91;esp&#93;<br /><br />	push	edx<br />	push	eax<br />	sar	edx, 31<br />	fild	QWORD PTR &#91;esp&#93;<br />	push	edx<br />	fld	fpc&#40;&lt;-18446744073709551616&gt;&#41;<br />;	fld	__2to64		; -2^64<br />	fimul	DWORD PTR &#91;esp&#93;<br />	fadd<br /><br />	fld	st<br />	fld	fpc&#40;&lt;100000000&gt;&#41;<br />	fxch<br />	fprem<br />	fbstp	&#91;esp&#93;<br />	fdiv<br />	fbstp	&#91;esp+4&#93;<br /><br /><br />	mov	edx, OFFSET __buffer<br /><br />	mov	ecx, 20/2 - 1<br />@@&#58;	mov	ax, 0<br />	mov	al, &#91;esp + ecx&#93;<br />	ror	ax, 4<br />	ror	ah, 4<br />	add	ax, &quot;00&quot;<br />	mov	&#91;edx&#93;, ax<br />	add	edx, 2<br />	dec	ecx<br />	jns	@B<br /><br />	add	esp, 16<br /><br />	invoke MessageBox, NULL,<br />		OFFSET __buffer,<br />		_T&#40;&quot;64-bit Number&#58;&quot;&#41;, MB_OK or MB_ICONWARNING<br /><br />__buffer db 256 dup &#40;0&#41;</code></pre></div>
+    <div class="meta">Posted on 2003-05-31 08:19:35 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-105549">
+    <div class="subject"><a href="#post-105549">Place the result of EDX:EAX into QWORD</a></div>
+    <div class="body">Hi Bitrake,<br />Thanks for responding. The links you pointed me to were helpful. Everything seemed a little advanced for me, but I will try to go over everything again. Is it possible to place the result of the multiplication EDX:EAX into a QWORD? I am trying to do something like this.<br /><br />.data<br />result qword 0<br /><br />.code<br />mov eax,4000000000<br />mov edx,2<br />mul edx<br /><br />;*************************<br />;after the mul instuction how do<br />;I place EDX:EAX into  my<br />;variable result ?<br />;***************************<br /><br />Thanks,<br />bgong68</div>
+    <div class="meta">Posted on 2003-05-31 12:15:36 by bgong68</div>
+   </div>
+   <div class="post" id="post-105553">
+    <div class="subject"><a href="#post-105553">Multiplication EDX:EAX</a></div>
+    <div class="body">EAX is the low part and goes first<br />EDX is high and goes second<br /><br />mov DWORD PTR , eax<br />mov DWORD PTR , edx<br /><br />...then you can...<br /><br />fild result :)</div>
+    <div class="meta">Posted on 2003-05-31 12:55:06 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-105554">
+    <div class="subject"><a href="#post-105554">Making Some Progress</a></div>
+    <div class="body">Hi Bitrake,<br />Thanks for responding so fast! Why is it that I do not get the result I want?<br /><br />.data<br />buffer 	db		255 dup (?)   <br />format	db		&quot;%lu&quot;,0<br />result	qword	?<br /><br />.code<br />start:<br />	mov eax,4000000000<br />	mov edx,2<br />	mul edx<br />	<br />	mov DWORD PTR , eax<br />	mov DWORD PTR , edx  <br />	<br />	invoke wvsprintf, addr buffer, addr format, addr result<br />	invoke MessageBox, 0, addr buffer, addr buffer, 0<br /><br />ret<br />end start<br /><br />The code above showed result to be 3705032704.  Why won't it display the correct result? <br /><br />If I change, <br /><br />mov edx,2 <br /><br />to <br /><br />mov edx,1  <br /><br />I get the correct result.<br /><br />Thanks,<br />bgong68</div>
+    <div class="meta">Posted on 2003-05-31 13:18:21 by bgong68</div>
+   </div>
+   <div class="post" id="post-105594">
+    <div class="subject"><a href="#post-105594">Multiplication EDX:EAX</a></div>
+    <div class="body">try this format with wsprintf<br /><br />format db &quot;%I64d&quot;,0</div>
+    <div class="meta">Posted on 2003-05-31 19:23:30 by david</div>
+   </div>
+  </div>
+ </body>
+</html>

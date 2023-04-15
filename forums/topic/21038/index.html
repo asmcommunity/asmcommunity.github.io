@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Mixing C++ with MASM makes cin fail! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21038" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21038">Mixing C++ with MASM makes cin fail!</a></p>
+   <div class="post" id="post-159426">
+    <div class="subject"><a href="#post-159426">Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">Hi. I just wrote a nifty little asm function that calculates square root with a root table. I wanted to test my library in Visual C++ and found that my asm function somehow mangles the registers or something and causes cin to read memory from outer space!<br /><br />I&#39;m using the invoke directive with stdcall and I thought that the only registers I had to worry about preserving were esp and ebp (or something like that) My function only uses the general purpose registers and the floating point unit so what gives? (and also makes calls to GetProcessHeap and HeapAlloc)<br /><br />The asm code for the offending function looks like this:<br /><br />InitRootTable proc Precision:DWORD<br />&nbsp; &nbsp; LOCAL ProcHeap:HANDLE<br />&nbsp; &nbsp; LOCAL TableSize:DWORD ; size of RootTable in bytes<br />&nbsp; &nbsp; LOCAL Root:DWORD<br /><br />&nbsp; &nbsp; .IF Precision&gt;23<br />&nbsp; &nbsp; &nbsp; &nbsp; mov Precision,23<br />&nbsp; &nbsp; .ENDIF<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ; calculate TableSize<br />&nbsp; &nbsp; mov ecx,Precision<br />&nbsp; &nbsp; add ecx,2<br />&nbsp; &nbsp; mov eax,1<br />&nbsp; &nbsp; shl eax,cl<br />&nbsp; &nbsp; mov TableSize,eax<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ; calculate MantissaMask (This is &quot;MantissaMask DWORD ?&quot; in my .DATA? section)<br />&nbsp; &nbsp; mov eax,0ffffffffh<br />&nbsp; &nbsp; mov ecx,32<br />&nbsp; &nbsp; sub ecx,Precision<br />&nbsp; &nbsp; shl eax,cl<br />&nbsp; &nbsp; shr eax,9<br />&nbsp; &nbsp; mov MantissaMask,eax<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ; allocate TableSize bytes and make RootTable point to it<br />&nbsp; &nbsp; invoke GetProcessHeap<br />&nbsp; &nbsp; mov ProcHeap,eax<br />&nbsp; &nbsp; invoke HeapAlloc,ProcHeap,0,TableSize<br />&nbsp; &nbsp; mov RootTable,eax<br /><br />&nbsp; &nbsp; ; fill RootTable<br />&nbsp; &nbsp; mov ebx, TableSize<br />&nbsp; &nbsp; shr ebx,2<br />&nbsp; &nbsp; .WHILE ebx != 0<br />&nbsp; &nbsp; &nbsp; &nbsp; dec ebx<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax,ebx<br />&nbsp; &nbsp; &nbsp; &nbsp; mov edx,TableSize<br />&nbsp; &nbsp; &nbsp; &nbsp; shr edx,2<br />&nbsp; &nbsp; &nbsp; &nbsp; add eax,edx<br />&nbsp; &nbsp; &nbsp; &nbsp; mov Root,eax<br />&nbsp; &nbsp; &nbsp; &nbsp; ;fild Root<br />&nbsp; &nbsp; &nbsp; &nbsp; ;fsqrt<br />&nbsp; &nbsp; &nbsp; &nbsp; ;fstp Root<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax,Root<br />&nbsp; &nbsp; &nbsp; &nbsp; and eax,007fffffh<br />&nbsp; &nbsp; &nbsp; &nbsp; mov ,eax<br />&nbsp; &nbsp; .ENDW<br />&nbsp; &nbsp; ret<br />InitRootTable endp<br /><br />Ok, that&#39;s a little long but I assure you all I use is eax-edx, and make a call to GetProcessHeap and HeapAlloc, and use fld, fild, and fsqrt.<br /><br />The C++ program looks like this:<br /><br />extern &quot;C&quot; _stdcall InitRootTable(unsigned int);<br /><br />int main(int argc, char* argv[])<br />{<br />	int x;<br />	InitRootTable(8);<br />	while (cin &gt;&gt; x) {<br />	}<br />	return 0;<br />}<br /><br />At this point I&#39;m guessing that the calls to GetProcessHeap and HeapAlloc are somehow mangling some of the segment registers and this is what is messing up cin... (actually the access violation occurs in istream.cpp)<br /><br />Any help would be greatly appreciated!</div>
+    <div class="meta">Posted on 2005-05-01 06:42:10 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159427">
+    <div class="subject"><a href="#post-159427">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">I think the problem lies in that you did not preserve the value in ebx.</div>
+    <div class="meta">Posted on 2005-05-01 06:47:54 by roticv</div>
+   </div>
+   <div class="post" id="post-159429">
+    <div class="subject"><a href="#post-159429">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">So which registers can you leave mangled and which need to be preserved? What&#39;s so special about ebx?</div>
+    <div class="meta">Posted on 2005-05-01 07:15:40 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159430">
+    <div class="subject"><a href="#post-159430">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">I tried saving eax-edx, ebp and esp and it didn&#39;t change anything. When debugging the program with Visual C++ it shows that the only registers that change after calling InitRootTable are eip and efl. (and MM0 whatever that is) I removed the calls to GetProcessHeap and HeapAlloc and it worked fine. I tried replacing them with calls to malloc and this didn&#39;t change anything. (it still failed)</div>
+    <div class="meta">Posted on 2005-05-01 07:29:14 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159431">
+    <div class="subject"><a href="#post-159431">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">That&#39;s weird. MM0 is a MMX register. Usually ebx, edi, esi, ebp (though the assembler normal preserve for you) needs to be preserved. Do you have any exe to post? Maybe I can debug it. </div>
+    <div class="meta">Posted on 2005-05-01 07:50:45 by roticv</div>
+   </div>
+   <div class="post" id="post-159432">
+    <div class="subject"><a href="#post-159432">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">Here&#39;s the exe with debugging info if you want to give it a shot. I had to change the extension to .txt since it won&#39;t let me upload exe&#39;s. I changed the model to flat,c instead of flat, stdcall and that seemed to help a little bit, now it just jumps into outer space instead of trying to read from outer space... Not much of an improvement though! :-)<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=577" target="_blank">FastSquareRoot.txt</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-05-01 08:32:56 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159433">
+    <div class="subject"><a href="#post-159433">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">Um, you can try and debug that if you&#39;re bored but I think I figured out the problem.<br /><br />BTW, don&#39;t you hate it when things mysteriously start working the way you&#39;d expect them to?</div>
+    <div class="meta">Posted on 2005-05-01 08:42:52 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159442">
+    <div class="subject"><a href="#post-159442">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">Debugging rule #9 : &quot;If you didn&#39;t fix it, it ain&#39;t fixed&quot;&nbsp; :D<br /><br />www.debuggingrules.com</div>
+    <div class="meta">Posted on 2005-05-01 13:47:32 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-159447">
+    <div class="subject"><a href="#post-159447">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">wildgnu,<br /><br />Just try what Victor suggested and preserve EBX. What I would be tempted to do is preserve ALL of the&nbsp; registers except EAX and restore them at the end of the algo to see if you can get it working then remove them one at a time to see which one causes the problem. ESP &amp; EBP are already handled by the PROC layout of the masm procedure so preserve,<br /><br /><span class="mono"><br />push ebx<br />push ecx<br />push edx<br />push esi<br />push edi<br /><br />; run your code<br /><br />pop edi<br />pop esi<br />pop edx<br />pop ecx<br />pop ebx<br /></span><br /><br />Also make sure that you prototype the masm proc as EXTERN C according to the compiler syntax you are using and get the calling convention correct.</div>
+    <div class="meta">Posted on 2005-05-01 18:53:59 by hutch--</div>
+   </div>
+   <div class="post" id="post-159448">
+    <div class="subject"><a href="#post-159448">Re: Mixing C++ with MASM makes cin fail!</a></div>
+    <div class="body">The general rule of thumb is that you should not touch segment registers under windows<br /><br />Anyway all I did was to change your<br /><br /><pre><code><br />...<br />push cs<br />push ds<br />...<br />pop ds<br />pop cs<br />...<br /></code></pre><br />to<br /><pre><code><br />...<br />push ebx<br />nop ;this is used because i was editing the exe in ollydbg<br />...<br />nop ;same as above comments<br />pop ebx <br /></code></pre><br />And it worked fine for me. I guess you did not read my comments. ebp is automatically preserved by masm (you can verify by looking in a debugger), so there is no need to preserve it.</div>
+    <div class="meta">Posted on 2005-05-01 22:33:38 by roticv</div>
+   </div>
+  </div>
+ </body>
+</html>

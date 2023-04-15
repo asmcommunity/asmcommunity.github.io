@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>WM_KEYDOWN, TAB &amp; subclassing not working together - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29307" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29307">WM_KEYDOWN, TAB &amp; subclassing not working together</a></p>
+   <div class="post" id="post-206965">
+    <div class="subject"><a href="#post-206965">WM_KEYDOWN, TAB &amp; subclassing not working together</a></div>
+    <div class="body">There are 2 edit boxes, along with some other controls, on a dialog that is subclassed.<br /><br />The following will intercept WM_CHAR or WM_KEYDOWN, but cannot tab between editboxes.<br /><pre><code>	.while TRUE<br />		invoke GetMessage,addr msg,NULL,0,0<br />		.BREAK .if !eax<br />		invoke TranslateMessage,addr msg<br />		invoke DispatchMessage,addr msg<br />	&nbsp; &nbsp; &nbsp; &nbsp; .endw<br /></code></pre><br /><br />The following will intercept WM_CHAR or tabbing between editboxes, but will not read WM_KEYDOWN:<br /><pre><code> .while TRUE<br />		invoke GetMessage,addr msg,NULL,0,0<br />		.BREAK .if !eax<br />			invoke IsDialogMessage, hWnd, ADDR msg<br />		.if !eax<br />			invoke TranslateMessage,addr msg<br />			invoke DispatchMessage,addr msg<br />		.endif<br />	.endw<br /></code></pre><br /><br />The following will intercept WM_CHAR, WM_KEYDOWN and tabbing between editboxes. The problem is that it will insert 4 characters for everyone typed:<br /><pre><code>	.while TRUE<br />		invoke GetMessage,addr msg,NULL,0,0<br />		.BREAK .if !eax<br />		invoke IsDialogMessage, hWnd, ADDR msg<br />		invoke TranslateMessage,addr msg<br />		invoke DispatchMessage,addr msg<br />	.endw<br /></code></pre><br /><br />How can WM_CHAR, WM_KEYDOWN and tabbing between editboxes be handled correctly?<br /><br />Thanks,</div>
+    <div class="meta">Posted on 2009-03-04 16:48:06 by green</div>
+   </div>
+   <div class="post" id="post-206992">
+    <div class="subject"><a href="#post-206992">Re: WM_KEYDOWN, TAB &amp; subclassing not working together</a></div>
+    <div class="body">The second loop is correct. You should be calling IsDialogMessage, and if that returns 0, calling TranslateMessage/DispatchMessage.<br /><br />The problem with the second loop, like you stated, is that it won&#039;t detect WM_KEYDOWN. This is because the dialog manager (the stuff inside IsDialogMessage) will be swallowing the message. You should modify your loop slightly as described here:<br /><br />http://blogs.msdn.com/oldnewthing/archive/2005/04/07/406012.aspx</div>
+    <div class="meta">Posted on 2009-03-08 06:32:15 by comrade</div>
+   </div>
+   <div class="post" id="post-207004">
+    <div class="subject"><a href="#post-207004">Re: WM_KEYDOWN, TAB &amp; subclassing not working together</a></div>
+    <div class="body">Thanks comrad, but even though this worked, it created another problem with the program shuting down. See the following:<br /><pre><code>	.while TRUE<br />		invoke GetMessage,addr msg,NULL,0,0<br />		.if msg.message==WM_KEYDOWN<br />			invoke GetFocus<br />			.if eax==hCBO_CATAGORY&nbsp; &nbsp;; Combobox<br />				invoke BtnCatProc ; Button<br />			.endif<br />		.endif<br />	&nbsp; .BREAK .if !eax<br />		invoke TranslateMessage,addr msg<br />		invoke DispatchMessage,addr msg<br />	.endw<br /></code></pre><br />This simply changes the caption on a button:<br /><pre><code>BtnCatProc PROC<br />	invoke SendMessage,hCBO_CATAGORY,CB_GETCURSEL,0,0<br />	.if eax==15 ; position in combo<br />		invoke SetWindowText,hBTN_CATAGORY,SADD(&quot;Go to demonstration&quot;)<br />	.endif<br />	ret<br />BtnCatProc endp<br /></code></pre><br />Then comes the shutdown.</div>
+    <div class="meta">Posted on 2009-03-08 11:26:34 by green</div>
+   </div>
+   <div class="post" id="post-207011">
+    <div class="subject"><a href="#post-207011">Re: WM_KEYDOWN, TAB &amp; subclassing not working together</a></div>
+    <div class="body">Your loop is still a bit incorrect. At the line where you do &quot;.break .if !eax&quot;, you should be evaluating the eax from GetMessage. But if WM_KEYDOWN is sent, you will overwrite the contents of eax when calling GetFocus/BtnCatProc. As well, you should not attempt to do any of this for WM_KEYDOWN.<br /><br />Try something like this (this is a literal translation from the oldnewthing blogpost):<br /><pre><code>.while TRUE<br />	invoke GetMessage,addr msg,NULL,0,0<br />	.break if !eax || eax==0xFFFFFFFF<br />	.if msg.message==WM_KEYDOWN<br />		invoke GetFocus<br />		.if eax==hCBO_CATAGORY&nbsp;  ; Combobox<br />			invoke BtnCatProc ; Button<br />		.endif<br />	.else<br />		invoke IsDialogMessage, hWnd, ADDR msg<br />		.if !eax<br />			invoke TranslateMessage,addr msg<br />			invoke DispatchMessage,addr msg<br />		.endif<br />	.endif<br />.endw</code></pre></div>
+    <div class="meta">Posted on 2009-03-09 02:04:58 by comrade</div>
+   </div>
+   <div class="post" id="post-207012">
+    <div class="subject"><a href="#post-207012">Re: WM_KEYDOWN, TAB &amp; subclassing not working together</a></div>
+    <div class="body">Thanks comrad, I appreciate the help. Lot to learn.</div>
+    <div class="meta">Posted on 2009-03-09 07:24:31 by green</div>
+   </div>
+   <div class="post" id="post-207018">
+    <div class="subject"><a href="#post-207018">Re: WM_KEYDOWN, TAB &amp; subclassing not working together</a></div>
+    <div class="body">Sorry about calling you comrad, comrade. Get my finger tangled up in the keyboard.<br /><br />Made a slight change to your code to get the tab key to work:<br /><br /><pre><code>		.while TRUE<br />		invoke GetMessage,addr msg,NULL,0,0 ; New location<br />		.break .if !eax || eax==0FFFFFFFFh<br />			invoke IsDialogMessage, hWnd, ADDR msg<br />		.if msg.message==WM_KEYDOWN<br />			invoke GetFocus<br />			.if msg.wParam==VK_RETURN &amp;&amp; eax==hCBO_CATAGORY<br />				invoke testproc1 ; Button<br />			.endif<br />		.else<br /> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;invoke GetMessage,addr msg,NULL,0,0 ; Old location<br />			.if !eax<br />				invoke TranslateMessage,addr msg<br />				invoke DispatchMessage,addr msg<br />			.endif<br />		.endif<br />	.endw	<br />	<br /></code></pre></div>
+    <div class="meta">Posted on 2009-03-10 06:10:31 by green</div>
+   </div>
+  </div>
+ </body>
+</html>

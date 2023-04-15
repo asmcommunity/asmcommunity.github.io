@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>IDT and Hardware Interrupts - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25762" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25762">IDT and Hardware Interrupts</a></p>
+   <div class="post" id="post-187941">
+    <div class="subject"><a href="#post-187941">IDT and Hardware Interrupts</a></div>
+    <div class="body">I finally set up my first IDT and I have one question. Lets say that I want to handle the Division By Zero hardware interrupt. Can I simply create an IDT with one entry and then load it with LIDT? Do I have to take care of anything else?</div>
+    <div class="meta">Posted on 2007-02-03 02:30:49 by XCHG</div>
+   </div>
+   <div class="post" id="post-187942">
+    <div class="subject"><a href="#post-187942">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">I honestly don&#39;t know how the processor would react. Ideally, as long as your entry length in the IDTR is accurate... it should work. Realistically, well... I never tried it myself... and I don&#39;t know how happy the processor would be if a NMI was explicitly rejected... if at all possible. I always made sure that there were entries to my Interrupt Handler for the first 32 interrupts and the 16 standard IRQs.<br /><br />To clear-up how I do things: All entries in my IDT point to the same Interrupt Handler, which in itself checks for the existence/installation of a Interrupt Service Routine for whatever interrupt is called via lookup table. If the ISR is installed, it is called. If the ISR is not installed, the Interrupt Handler &quot;quietly&quot; returns.<br /><br />It just seems easier to have a little extra data (IDT, lookup-tables, etc...) instead of larger and redundant code in the ISR&#39;s. Moreover, it works like a charm when you are multi-tasking with context switches ;)</div>
+    <div class="meta">Posted on 2007-02-03 03:10:19 by SpooK</div>
+   </div>
+   <div class="post" id="post-187948">
+    <div class="subject"><a href="#post-187948">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">One more thing, some of exception interrupts have error code but the others don&#39;t. This can change stack parameters. be careful about that.</div>
+    <div class="meta">Posted on 2007-02-03 08:29:02 by Dite</div>
+   </div>
+   <div class="post" id="post-187959">
+    <div class="subject"><a href="#post-187959">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body"><div class="quote"><br />One more thing, some of exception interrupts have error code but the others don&#39;t. This can change stack parameters. be careful about that.<br /></div><br /><br />Correct. A common solution is to have an &quot;intermediate&quot; Interrupt Handler that takes this into account before jumping to the actual/primary Interrupt Handler.<br /><br />Interrupts without error codes (and Exceptions) have a &quot;fake&quot; error code pushed onto the stack. Interrupts with error codes simply jump to the Interrupt Handler.<br /><br /><pre><code><br />;INT 0x08 issues error code by design<br />INT_08:<br />	jmp ISR_HANDLER<br /><br />;INT 0x09 has no error code, create a &quot;fake&quot; one to keep the stack consistent<br />INT_09:<br />	push BYTE 0<br />	jmp ISR_HANDLER<br /></code></pre><br /><br />You could even add another push value that gives the number of the interrupt/exception.<br /><br />If you dynamically create your IDT, you could easily add a filler instruction (e.g. two NOPs) to the intermediate Interrupt Handler of Interrupts that give error codes to keep the physical size of the handlers consistent. This way, you can make a loop function that creates a dynamic IDT by only needing the location of the first intermediate Interrupt Handler and adding a constant value for each reiteration/interrupt needed.</div>
+    <div class="meta">Posted on 2007-02-03 17:51:14 by SpooK</div>
+   </div>
+   <div class="post" id="post-187969">
+    <div class="subject"><a href="#post-187969">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">Okay, I got it. I set up an IDT with only one entry hoping that I could handle the Division by Zero interrupt and no dice! It crashed and restarted the machine. While some interrupts change the content of the stack, I assume that it is impossible to refer all interrupts to the same procedure that only has an IRET written for it right? Because it would pop CS and EIP off of the stack and if the last DWORD pushed onto the stack is the error code or whatever, the EIP would be set incorrectly. Is that right?<br /><br />Thank you guys for helping me out.<br /></div>
+    <div class="meta">Posted on 2007-02-04 02:31:56 by XCHG</div>
+   </div>
+   <div class="post" id="post-187970">
+    <div class="subject"><a href="#post-187970">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">Yes. That is the primary purpose of the method I presented above, to avoid stack corruption due to the intermittent existence of error codes.</div>
+    <div class="meta">Posted on 2007-02-04 02:36:06 by SpooK</div>
+   </div>
+   <div class="post" id="post-187971">
+    <div class="subject"><a href="#post-187971">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">I thought something looked funny about this post... looks like I mixed up my technical jargon :P<br /><br /><strong><em>Interrupts</em></strong> are hardware generated.<br /><br /><strong><em>Exceptions</em></strong> are software generated.<br /><br />I have modified the post to reflect the correct usage of such terms ;)</div>
+    <div class="meta">Posted on 2007-02-04 04:36:48 by SpooK</div>
+   </div>
+   <div class="post" id="post-187993">
+    <div class="subject"><a href="#post-187993">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">Okay what if I create an infinite loop in the Interrupt handler having pointed all the Interrupts between 0x00 to 0x32 to the same Interrupt Handler? It should at least avoid the machine from crashing right?<br /><br />Say something like this:<br /><br /><pre><span style="font-size:2>&nbsp; MOV&nbsp; &nbsp;  ECX , 0x32<br />&nbsp; LEA&nbsp; &nbsp;  EBX , <br />&nbsp; MOV&nbsp; &nbsp;  EAX , __InterruptHandler<br />&nbsp; MOV&nbsp; &nbsp;  EDX , EAX<br />&nbsp; ROR&nbsp; &nbsp;  EDX , 0x10<br />&nbsp; @@__MyLoop:<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , AX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , DX<br />&nbsp; &nbsp; LEA&nbsp; &nbsp;  EBX , <br />&nbsp; &nbsp; DEC&nbsp; &nbsp;  ECX<br />&nbsp; &nbsp; JNE&nbsp; &nbsp;  @@__MyLoop<br />&nbsp; LIDT&nbsp; &nbsp; <br />&nbsp; STI</span></pre><br />And then create the ISR and the IDT like this:<br /><br /><pre><span style="font-size:2>&nbsp; __InterruptHandler:<br />&nbsp; &nbsp; JMP&nbsp; &nbsp;  $<br />&nbsp; ; -- ------------------<br />&nbsp; ALIGN 8, NOP<br />&nbsp; IDT:<br />&nbsp; &nbsp; TIMES&nbsp;  50 DD 0x00080000, 0x00008E00<br />&nbsp; IDT_END:<br />&nbsp; IDTR:<br />&nbsp; &nbsp; DW&nbsp; (IDT_END - IDT) - 1<br />&nbsp; &nbsp; DW&nbsp; IDT</span></pre></div>
+    <div class="meta">Posted on 2007-02-05 01:07:22 by XCHG</div>
+   </div>
+   <div class="post" id="post-187997">
+    <div class="subject"><a href="#post-187997">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body"><div class="quote"><br />Say something like this:<br /><pre><span style="font-size:2>&nbsp; MOV&nbsp; &nbsp;  ECX , 0x32<br />&nbsp; LEA&nbsp; &nbsp;  EBX , <br />&nbsp; MOV&nbsp; &nbsp;  EAX , __InterruptHandler<br />&nbsp; MOV&nbsp; &nbsp;  EDX , EAX<br />&nbsp; ROR&nbsp; &nbsp;  EDX , 0x10<br />&nbsp; @@__MyLoop:<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , AX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , DX<br />&nbsp; &nbsp; LEA&nbsp; &nbsp;  EBX , <br />&nbsp; &nbsp; DEC&nbsp; &nbsp;  ECX<br />&nbsp; &nbsp; JNE&nbsp; &nbsp;  @@__MyLoop<br />&nbsp; LIDT&nbsp; &nbsp; <br />&nbsp; STI</span></pre><br /></div><br /><br />If I didn&#39;t get wrong, you missed both segment and type fields<br />Segment field should point a GDT (or LDT but I&#39;m not sure) segment and type field determine whether it&#39;s trap gate or interrupt gate</div>
+    <div class="meta">Posted on 2007-02-05 07:41:14 by Dite</div>
+   </div>
+   <div class="post" id="post-187998">
+    <div class="subject"><a href="#post-187998">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">I have them in the IDT already with the TIMES macro. Right?</div>
+    <div class="meta">Posted on 2007-02-05 08:22:45 by XCHG</div>
+   </div>
+   <div class="post" id="post-188002">
+    <div class="subject"><a href="#post-188002">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">Those two parts are effectively redundant. I suggest just using the top one to help trim down on the fat...<br /><br /><div class="quote"><br /><pre><span style="font-size:2><br />&nbsp; MOV&nbsp; &nbsp;  EBX , IDT ;Put me into the BSS, not DATA<br />&nbsp; MOV&nbsp; &nbsp;  EAX , __InterruptHandler<br />&nbsp; MOV&nbsp; &nbsp;  EDX , EAX<br />&nbsp; SHR&nbsp; &nbsp;  EDX , 0x10 ;Use SHIFTS unless you have to use ROTATES<br />&nbsp; ;Instead of the last two instructions, you could use (MOV DX , __InterruptHandler&gt;&gt;16) as per NASM capabilities<br />&nbsp; @@__MyLoop:<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , AX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , ??? ;Put your pointer to your GDT &quot;Ring 0&quot; Code entry here<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , 0x8E00 ;Entry flags<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  WORD PTR  , DX<br />&nbsp; &nbsp; ADD&nbsp; &nbsp;  EBX , 8<br />&nbsp; &nbsp; CMP&nbsp; &nbsp;  EBX , IDT_END<br />&nbsp; &nbsp; JL&nbsp; &nbsp; &nbsp; @@__MyLoop<br />&nbsp; LIDT&nbsp; &nbsp; <br />&nbsp; STI<br /><br />&nbsp; &nbsp; __InterruptHandler:<br />&nbsp; &nbsp; JMP&nbsp; &nbsp;  $<br />&nbsp; ; --------------------<br /><br /><br />&nbsp; IDTR:<br />&nbsp; &nbsp; DW&nbsp; (IDT_END - IDT) - 1<br />&nbsp; &nbsp; DD&nbsp; IDT ; This was &quot;DW&quot; in your code<br /><br /><br />&nbsp; ALIGN 8 , DB 0x00<br />&nbsp; IDT RESB 8 * 0x32<br />&nbsp; IDT_END:<br /></span></pre><br /></div><br /><br />You don&#39;t really need to use LEA unless you want to do address calculations (e.g. LEA EAX ,  ) all in one instruction.<br /><br />HtH ;)</div>
+    <div class="meta">Posted on 2007-02-05 13:47:47 by SpooK</div>
+   </div>
+   <div class="post" id="post-188009">
+    <div class="subject"><a href="#post-188009">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">Thank you so much Spook. I changed my IDT&#39;s layout and it works now. One question though: wouldn&#39;t it be better if I put the fixed information such as the descriptor of the interrupt handler in the IDT already with the TIMES macro? I mean I will be saving two MOVs right?</div>
+    <div class="meta">Posted on 2007-02-06 00:20:04 by XCHG</div>
+   </div>
+   <div class="post" id="post-188017">
+    <div class="subject"><a href="#post-188017">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body"><div class="quote"><br />Thank you so much Spook. I changed my IDT&#39;s layout and it works now. One question though: wouldn&#39;t it be better if I put the fixed information such as the descriptor of the interrupt handler in the IDT already with the TIMES macro? I mean I will be saving two MOVs right?<br /></div><br /><br />Size vs. Speed... considering the limited size of the IDT... I would pick size (dynamic table)</div>
+    <div class="meta">Posted on 2007-02-06 11:56:10 by SpooK</div>
+   </div>
+   <div class="post" id="post-188028">
+    <div class="subject"><a href="#post-188028">Re: IDT and Hardware Interrupts</a></div>
+    <div class="body">Copy that commander. Thank you again Spook. Over and out.</div>
+    <div class="meta">Posted on 2007-02-08 00:37:54 by XCHG</div>
+   </div>
+  </div>
+ </body>
+</html>

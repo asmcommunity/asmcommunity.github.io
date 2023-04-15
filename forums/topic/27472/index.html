@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>reallocating a struct - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27472" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27472">reallocating a struct</a></p>
+   <div class="post" id="post-196446">
+    <div class="subject"><a href="#post-196446">reallocating a struct</a></div>
+    <div class="body">If you have a STRUCT
+ 
+VARSTRING STRUCT
+dwTotalSize    DWORD ?
+dwNeededSize   DWORD ?
+dwUsedSize     DWORD ?
+dwStringFormat DWORD ?
+dwStringSize   DWORD ? 
+dwStringOffset DWORD ?
+VARSTRING ENDS
+
+in your .data? segment and you use something like
+LOCAL vs:VARSTRING in the proc can you change the size of the struct 
+on the go if a call to fill it produces errors?
+
+I am trying to port this code to asm but don't know what calloc does?
+It looks like it will do something similar to GlobalAlloc.
+The API call will append a DWORD variable to the end of the struct
+given to it.
+
+LONG proctodostuff (DWORD value1, LPSTR string)
+VARSTRING  *vs;
+
+// allocate memory for structure
+vs = (VARSTRING *) calloc (1, sizeof(VARSTRING));
+// set structure size
+        vs->dwTotalSize = sizeof(VARSTRING);
+;API call to fill struct is in here
+	if (vs->dwTotalSize < vs->dwNeededSize) {
+                        dwSize = vs->dwNeededSize;
+                        free (vs);
+                        vs = (VARSTRING *) calloc(1, dwSize);
+                        vs->dwTotalSize = dwSize;
+
+Is there a way to duplicate this in asm using GlobalAlloc and
+making it into the STRUCT with extra space for it to expand?</div>
+    <div class="meta">Posted on 2001-03-30 20:21:00 by brewmanchu</div>
+   </div>
+   <div class="post" id="post-196447">
+    <div class="subject"><a href="#post-196447">reallocating a struct</a></div>
+    <div class="body">Yes there is
+
+but first you have to understand what the C stuff does (easy if you know ASM :) ) 
+sorry for the lack of code but i am just rearangeing my HDD and cant find API reference (has to be here somewhere :( )
+
+So please first note the dwStringOffset member of the structure, and understand that the structure dose not hold the string inside itself. It just keeps a pointer to the string.
+
+The rest is standard:
+======================
+1.call the API that will eventually return the dwNeededSize member
+2.use GloballAlloc to alocate enogh space for the string itself and store the pointer to that memory/string into the "dwStringOffset" member of the structure 
+
+3. :) that is it :) also store something (a zero at the end whould be nice) in that string...o maybe another call to the API will fill it :)
+
+
+1.b ?
+of course if you had previousely allocated some space for another "variable string" the you will have to deallocate that first :)
+
+hope you got the general picture
+Bogdan
+
+
+This message was edited by BogdanOntanu, on 3/30/2001 10:51:09 PM</div>
+    <div class="meta">Posted on 2001-03-30 21:47:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-196448">
+    <div class="subject"><a href="#post-196448">reallocating a struct</a></div>
+    <div class="body">I guess I didn't phrase the question properly. The API states:
+LONG lineGetID(
+
+    HLINE hLine,	
+    DWORD dwAddressID,	
+    HCALL hCall,	
+    DWORD dwSelect,	
+    LPVARSTRING lpDeviceID,	
+    LPCSTR lpszDeviceClass
+.
+.
+.
+lpDeviceID 
+
+A pointer to a memory location of type VARSTRING, where the device ID is returned. Upon successful completion of the request, this location is filled with the device ID. The format of the returned information depends on the method used by the device class API for naming devices. Prior to calling lineGetID, the application should set the dwTotalSize field of this structure to indicate the amount of memory available to TAPI for returning information.
+
+
+
+The lineGetID and phoneGetID functions fill a VARSTRING structure, setting the dwStringFormat member to the STRINGFORMAT_BINARY value and appending this additional member: 
+
+DWORD DeviceId;  // identifier of audio device
+  
+
+The DeviceId member is the identifier of a closed audio device. You use this identifier in a call to the waveOutOpen function to open the device for output. You can use the resulting device handle to play digitized audio data at the line or phone device.
+
+
+->From what I gather you need to create the struct with some extra space (4 bytes) of empty space tagged on the end. Can this be done by using 
+invoke LocalRealloc,addr vs,28 
+(since the struct is 24 bytes to begin with) 
+Then there would be enough space for it to append this member. How does calloc create the memory space and 'overlay' the struct onto it?
+
+This message was edited by brewmanchu, on 4/4/2001 4:05:04 PM
+
+This message was edited by brewmanchu, on 4/4/2001 4:06:19 PM</div>
+    <div class="meta">Posted on 2001-04-04 16:03:00 by brewmanchu</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Using Assembly Coded DLLs in HLLs? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19978" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19978">Using Assembly Coded DLLs in HLLs?</a></p>
+   <div class="post" id="post-153267">
+    <div class="subject"><a href="#post-153267">Using Assembly Coded DLLs in HLLs?</a></div>
+    <div class="body">What do you need to do to be able to use DLL procs in Assembly DLLs in HLLs like VB?<br /><br />For example, let's say, in my assembly DLL, I have:<br /><br /><pre><code><br />	_ByteAPI_String_dwStringLength	PROTO	hString&#58;DWORD<br /><br />.code<br /><br />_ByteAPI_String_dwStringLength	proc	hString&#58;DWORD<br />	;Make sure the handle is valid<br />	mov		eax,hString<br />	test	eax,NULL<br />	je		At_Error<br />	<br />	;Use registers instead of memory for additional speed<br />	ASSUME	eax&#58; ptr BYTE<br />	mov		eax,hString					;The address of the string, incremented by 8 bits &#91;length of a byte&#93; each loop<br />	xor		ebx,ebx						;The string length counter<br />	xor		cx,cx<br />	<br />	Loop_GetLength&#58;<br />		mov		cl,&#91;eax&#93;				;Add the current byte to CL<br />		inc		eax						;Add 1 byte to the address position<br />		test	cl,ch					;Compare to a null character, 0h, which signals the end of a string. This is stored in ch so it is faster than immed<br />	jne		Loop_GetLength<br />		mov		ebx,hString<br />		inc		ebx<br />		sub		eax,ebx<br />		ret<br /><br />	At_Error&#58;<br />		mov		eax,-1					;If a failure occured, simply return -1<br />		ret<br />_ByteAPI_String_dwStringLength	endp<br /></code></pre><br /><br />Now, in my VB program I have:<br /><br /><pre><code><br />Namespace ByteAPI<br />    Public Class &#91;String&#93;<br />        Public Declare Unicode Sub dwStringLength Lib &quot;ByteAPI.dll&quot; Alias &quot;_ByteAPI_String_dwStringLength&quot; &#40;ByVal hString As IntPtr&#41;<br />    End Class<br />End Namespace<br /></code></pre><br /><br />It says it cannot find the entrypoint &quot;_ByteAPI_String_dwStringLength&quot; in ByteAPI.dll. Despite that the functions are defined as such in that DLL.<br /><br />What am I doing wrong?</div>
+    <div class="meta">Posted on 2004-11-20 17:20:30 by &amp;#1500;&amp;#1495;&am</div>
+   </div>
+   <div class="post" id="post-153268">
+    <div class="subject"><a href="#post-153268">Using Assembly Coded DLLs in HLLs?</a></div>
+    <div class="body">Afternoon, ??&amp;am.<br /><br />As you're declaring the function as <em>public</em>, I assume that this declaration is inside the <em>bas</em> file.<br /><br />See if the following works:<br /><pre><code>Public Declare Function dwStringLength Lib &quot;ByteAPI&quot; Alias _ <br />    &quot;_ByteAPI_String_dwStringLength&quot; &#40;ByVal hString As IntPtr&#41; As Long</code></pre><br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2004-11-20 18:07:27 by Scronty</div>
+   </div>
+   <div class="post" id="post-153270">
+    <div class="subject"><a href="#post-153270">Using Assembly Coded DLLs in HLLs?</a></div>
+    <div class="body">I just tested that now. It still gives a run-time error.<br /><br />It must be in the DLL itself. I think that the dll doesn't have the function names, but instead ordinals, because of the way I assembled it.<br /><br />Edit: Appearantly you need to add /export:subname for each and every sub to the linker. I read this in a FAQ, that you add it to the batch file you would run to compile it. Is there an easier way? Doing this for 30 subs in a linker hardly seems fair.</div>
+    <div class="meta">Posted on 2004-11-20 18:17:42 by &amp;#1500;&amp;#1495;&am</div>
+   </div>
+   <div class="post" id="post-153290">
+    <div class="subject"><a href="#post-153290">Using Assembly Coded DLLs in HLLs?</a></div>
+    <div class="body">Default linker option ought to be inserting the subnames by name.<br /><br />You may want to use DUMPBIN (does it come with MASM32?) with the /EXPORTS option to see what the true name is. The true name is what you put in the Alias clause.</div>
+    <div class="meta">Posted on 2004-11-21 02:34:17 by tenkey</div>
+   </div>
+   <div class="post" id="post-153294">
+    <div class="subject"><a href="#post-153294">Using Assembly Coded DLLs in HLLs?</a></div>
+    <div class="body">Afternoon, &quot;??&amp;am&quot;.<br /><br />Are you using a *.def file for the linking?<br />i.e.<br />ByteAPI.asm has your proc:<br />e.g.<br /><pre><code>blah blah<br />...<br />_ByteAPI_String_dwStringLength   proc   hString&#58;DWORD<br />...<br />blah blah</code></pre><br /><br />ByteAPI.def has the exported functions:<br />e.g.<br /><pre><code>LIBRARY ByteAPI<br />EXPORTS <br />_ByteAPI_String_dwStringLength</code></pre><br /><br />Plus you build your Dll file with a *.bat file which has something like:<br /><pre><code>\masm32\bin\ml /c /coff /Cp ByteAPI.ASM<br />\masm32\bin\Link /SECTION&#58;.bss,S /DLL /DEF&#58;ByteAPI.def /SUBSYSTEM&#58;WINDOWS /LIBPATH&#58;\masm32\lib ByteAPI.obj</code></pre><br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2004-11-21 04:32:03 by Scronty</div>
+   </div>
+   <div class="post" id="post-153317">
+    <div class="subject"><a href="#post-153317">Using Assembly Coded DLLs in HLLs?</a></div>
+    <div class="body">Thank you!<br /><br />This forum is really helping me in the basics. Maybe one day I can contribute.</div>
+    <div class="meta">Posted on 2004-11-21 13:47:47 by &amp;#1500;&amp;#1495;&am</div>
+   </div>
+  </div>
+ </body>
+</html>

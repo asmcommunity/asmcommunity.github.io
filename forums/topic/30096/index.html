@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>pre-fetcheable memory range - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30096" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=113">Low Level Concepts</a> &raquo; <a href="../?id=30096">pre-fetcheable memory range</a></p>
+   <div class="post" id="post-212302">
+    <div class="subject"><a href="#post-212302">pre-fetcheable memory range</a></div>
+    <div class="body">What is pre fetcheable memory range of a PCI bridge? What does pre-fetcheable mean? I am talking about PCI-to-PCI bridge spec....</div>
+    <div class="meta">Posted on 2010-07-17 04:59:08 by logicman112</div>
+   </div>
+   <div class="post" id="post-212309">
+    <div class="subject"><a href="#post-212309">Re: pre-fetcheable memory range</a></div>
+    <div class="body"><strong>logicman112</strong>,<br /><br />Some PCI devices indicate that their memory address range is prefetchable (i.e. it has no side-effects on reads and host bridge can merge writes; effectively it behaves like normal memory but doesn&#039;t participate in PCI caching protocol). These ranges are mapped in prefetchable memory address range of corresponding PCI bridge.<br /><br />Essentially memory from prefetchable range can be read/written by host in bigger chunks than program requests without breaking device functionality. Videocontroller&#039;s frame buffer is good example of it.<br /><br />PCI Local Bus Specification contains more detailed information on prefetch feature.</div>
+    <div class="meta">Posted on 2010-07-17 08:12:43 by baldr</div>
+   </div>
+   <div class="post" id="post-212310">
+    <div class="subject"><a href="#post-212310">Re: pre-fetcheable memory range</a></div>
+    <div class="body">Yeah, a framebuffer is a good example of prefetchable memory. It doesn&#039;t matter if you read it byte by byte, or in big chunks or merge writes to it. It&#039;s just data. An example of non-prefetchable memory might be an area where device&#039;s registers are mapped to. Every single read or write operation might affect device&#039;s functionality so you have to carefully perform read and write operations to those regions in very specific ways at very specific moments.</div>
+    <div class="meta">Posted on 2010-07-17 10:29:54 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-212317">
+    <div class="subject"><a href="#post-212317">Re: pre-fetcheable memory range</a></div>
+    <div class="body">Thanks for the replies. <br /><br />Can you please clarify that by an assembly snippet. Pre-fetcheable means I write one byte into memory (this memory is some device&#039;s registers in fact) but CPU writes 10 bytes for example?<br /><br /> </div>
+    <div class="meta">Posted on 2010-07-18 00:09:59 by logicman112</div>
+   </div>
+   <div class="post" id="post-212318">
+    <div class="subject"><a href="#post-212318">Re: pre-fetcheable memory range</a></div>
+    <div class="body">It doesn&#039;t have anything to do with assembly. It&#039;s a hardware thing.<br /><br />It means that another device (any device, not just CPU) can PREFETCH chunks of memory and it won&#039;t have any negative impact on device&#039;s operation.<br /><br />Let&#039;s see an example from CPU&#039;s point of view: It executes a read command of 1 byte from a location. Assuming that the data in not in the L1 cache, L1 cache orders L2 cache to fetch the data. L2 cache, in turn, performs a burst transaction of 64 bytes (1 cache line). The requested 1 byte is somewhere within this 64-byte region. Finally, the CPU&#039;s register is filled with this 1 byte and the execution conitues, but from memory&#039;s point of view the CPU had read 64 bytes, not just one. In most cases it&#039;s not a problem (and actually that&#039;s what caching is for), but in some cases it may be. Let&#039;s say that an external device&#039;s registers are mapped into some address range. This device has 2 1-byte registers (2 bytes in total) which are this device&#039;s timers. Reading from the first byte returns a timer&#039;s actual value, while reading from the secod byte gives another timer&#039;s value _AND_ resets the first timer (this is a very common behavior in many devices). Now imagine what happens if you try to read the first byte with full caching enabled. CPU will burst-in 64-bytes, reseting the first timer in the process. And that&#039;s not what you wanted when you requested only the first byte.<br /><br />The above applies to write operations as well.<br /><br />To prevent such unwanted behaviors, some devices explicitly state that a portion of their memory is NOT prefetchable. By stating that, they mean that you should read exacly those byte that you want to read and not more (in other words: you should not prefetch the data), because -for example- 2 registers may be mapped one next to the other and reading them both at once in 1 burst may give you different results that reading the first one and the the second one.<br /><br />Another scenario is that you may need to read device&#039;s registers in a precisely specified order. Performing a burst prevents you from controlling the order in which you actually read data from an external device.<br /><br />The above also applies to write operations.<br /><br />To sum things up:<br />- Prefetching does not preserve the order in which you request data<br />- Prefetching does not preserve the amount of data requested<br /><br />I hope it&#039;s clear now ^^</div>
+    <div class="meta">Posted on 2010-07-18 01:16:31 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-212321">
+    <div class="subject"><a href="#post-212321">Re: pre-fetcheable memory range</a></div>
+    <div class="body">Moreover, memory read in prefetchable range returns all bytes regardless of PCI BE[3:0]# signals (byte enables); PCI commands <em>Memory Read Line</em> and <em>Memory Read Multiple</em> are used more often than <em>Memory Read</em> to decrease latency of sequential reads.</div>
+    <div class="meta">Posted on 2010-07-18 01:47:52 by baldr</div>
+   </div>
+   <div class="post" id="post-212323">
+    <div class="subject"><a href="#post-212323">Re: pre-fetcheable memory range</a></div>
+    <div class="body">Thanks a lot ti_mo_n.<br /><br />Baldr,<br /><br />How BE works? How can i make BE# signal active for some bytes and inactive for the others? Besides if the second and forth bytes are enabled, for example, how these two bytes are transferred into a 32 bit register(or a 16 bit register)? </div>
+    <div class="meta">Posted on 2010-07-18 06:12:05 by logicman112</div>
+   </div>
+   <div class="post" id="post-212325">
+    <div class="subject"><a href="#post-212325">Re: pre-fetcheable memory range</a></div>
+    <div class="body"><div class="quote"><br />How BE works? How can i make BE# signal active for some bytes and inactive for the others? Besides if the second and forth bytes are enabled, for example, how these two bytes are transferred into a 32 bit register(or a 16 bit register)? <br /></div><br /><br />You can&#039;t, mostly. Two sequential writes to bytes with addresses 4*N+1 and 4*N+3 in prefetchable range <em>probably</em> will cause single <em>Memory Write</em> bus command with BE[1]# and BE[3]# asserted during data phase due to byte merging.<br /><br />Haven&#039;t you read PCI specs yet?</div>
+    <div class="meta">Posted on 2010-07-18 09:55:24 by baldr</div>
+   </div>
+   <div class="post" id="post-212381">
+    <div class="subject"><a href="#post-212381">Re: pre-fetcheable memory range</a></div>
+    <div class="body">How a bridge recognizes to compare an incoming address with its list of pre-fetcheable addresses?&nbsp; Please explain it by PCI signaling.&nbsp;  </div>
+    <div class="meta">Posted on 2010-07-24 01:18:36 by logicman112</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Faster BM algo - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21476" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21476">Faster BM algo</a></p>
+   <div class="post" id="post-162189">
+    <div class="subject"><a href="#post-162189">Faster BM algo</a></div>
+    <div class="body"> :D<br />I played with buliaNaza&#39;s and Hutch&#39;s BM algos and also<br />with cresta&#39;s BM algo (link here):<br />www.wasm.ru/forum/index.php?action=vthread&amp;forum=3&amp;topic=9972&amp;page=3<br /><br />I implemented some new ideas in faster BM algo so please test it<br />and indicate your CPU too<br /><br />A. If we work without End of Buffer Control:<br /> - it will be faster<br /> - we will free one register<br /> - and 1 function parameter less<br /><br />If we move the second buffer with SearchPattern immediately after the big Buffer, our proc will find ALWAYS the SearchPattern,<br />hence we don&#39;t need the End of Buffer Control code.<br /><br />For example we decide to read external file in the big Buffer and we allocate 4096 bytes for it and 255 bytes long SearchPattern<br />buffer and 1 byte more for my program too:<pre><code><br /><br />invoke	GlobalAlloc, GMEM_ZEROINIT, 4096+255+1<br />	mov? hmem, eax<br />	....<br />and later<br />	mov? ecx, hmem	? ? ?; ecx-&gt;lpBuffer1<br />	lea? edx,  ; edx-&gt;address of the? SearchPattern buffer<br />? ? ? ? invoke? BMLin12, ecx, edx, 34	 ; where? 34 &lt; 255 -&gt; length of? the SearchPattern </code></pre><br /><br /><br />Our code will be faster too:<br /><br />B. If we work with dword comparing code only (without byte by byte comparing code)<br /><br />C. If we try to implement a mechanism (without additional code)? to handle the occurrence of most repeated sequences of 4 bytes (first and last searching dwords at the beginning and the end) of the Search Pattern<br /><pre><code><br />Example: If our SearchPattern is 1234567890 and if we have in the big Buffer:? ....12347756340,....12346857380, .... 1234567890 and:<br />	cmp	, ebp? ? ?; ebp-&gt;first dword of the SrchPattern = 1234<br />	jne	@@1_1<br />we will have THREE comparisons in our case if we don?t switch to other code:<br />	cmp	,ebx? ; ebx-&gt;last dword of the SrchPattern = 7890<br />	jne	@@2_1<br />if we switch to it after the first comparison (because the last four bytes are not 7890) we will have total just TWO comparisons </code></pre><br /><br /><br />Here is the result with my P4 3.6 GHz Prescott<br /><br /><pre><code><br />Timing routines by MichaelW? - www.masmforum.com<br />Please terminate any high-priority tasks and press ENTER to begin.<br /><br />Boyer - Moore Tests:<br /><br />BMBinS(BM Hutch -&gt; Begining of the Buffer): 1731 clocks; Return value: 111<br />BMFJT (BM Cresta-&gt; Begining of the Buffer): 1453 clocks; Return value: 111<br />BMLin (BM Lingo -&gt; Begining of the Buffer): 987 clocks; Return value: 111<br />BMBinS(BM Hutch -&gt; Middle of the Buffer): 48214 clocks; Return value: 19384<br />BMFJT (BM Cresta-&gt; Middle of the Buffer): 36940 clocks; Return value: 19384<br />BMLin (BM Lingo -&gt; Middle of the Buffer): 21571 clocks; Return value: 19384<br />BMBinS(BM Hutch -&gt; End of the Buffer): 67942 clocks; Return value: 29621<br />BMFJT (BM Cresta-&gt; End of the Buffer): 43276 clocks; Return value: 29621<br />BMLin (BM Lingo -&gt; End of the Buffer): 27869 clocks; Return value: 29621<br />BMBinS(BM Hutch -&gt; Not found): 94338 clocks; Return value: -1<br />BMFJT (BM Cresta-&gt; Not found): 62079 clocks; Return value: -1<br />BMLin (BM Lingo -&gt; Not found): 35697 clocks; Return value: -1<br /><br />Press ENTER to exit...</code></pre><br /><br />Regards,<br />Lingo<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=765" target="_blank">BMTests.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-07-18 19:13:28 by lingo12</div>
+   </div>
+   <div class="post" id="post-162191">
+    <div class="subject"><a href="#post-162191">Re: Faster BM algo</a></div>
+    <div class="body">For a 16byte search string or less you can do a very easy SSE implementation<br /><br />Pad search string with 0&#39;s and align it on 16bytes<br /><pre><code><br />BMSSE:&nbsp; ; search string Len &lt;= 16<br /> mov eax, ; data addr<br /> mov ecx, ; data len<br /> mov edx, ; search string addr<br /> movdqa xmm1, dqword<br /> mov edx, ; search string Len ; movzx edx, byte ; opt ??<br /> and edx, 1111b&nbsp; ;;; and dl if use movzx ;;&nbsp; <br /> jz .NoMatch<br /> sub ecx,17&nbsp; ; loop will start searching from last 16bytes of data<br /> push ebx<br />.LP:<br /> DEC ecx<br /> js .NoMatch<br /> movdqu xmm0,dqword<br /> pcmpeqb xmm0,xmm1 <br /> pmovmskb ebx,xmm0<br /> and bx,word<br /> cmp bx,word&nbsp; ;;; sub bx,word ;; faster than cmp, nah??<br /> jne .LP<br /> mov eax,ecx ; offset of the match, switch EAX and ECX in above code to remove this line<br /> pop ebx<br /> retn 16<br />.NoMatch:<br /> mov eax,-1<br /> pop ebx<br /> retn 16<br /><br />AndTable dw 0, 1b, 11b, 111b, 1111b, 11111b, 111111b, 1111111b, 11111111b, 111111111b, 1111111111b, 11111111111b, 111111111111b, 1111111111111b, 11111111111111b, 111111111111111b, 1111111111111111b<br /></code></pre><br /><br />Having to use the movdqU&nbsp; might slow it down a bit, but I&#39;d bet it&#39;s still faster than a non SSE implementation.<br />I wrote the above code in the post, it&#39;s not tested.<br /><br /></div>
+    <div class="meta">Posted on 2005-07-19 00:04:12 by r22</div>
+   </div>
+   <div class="post" id="post-162204">
+    <div class="subject"><a href="#post-162204">Re: Faster BM algo</a></div>
+    <div class="body">Thank you r22,? :)<br /><br />&quot;...but I&#39;d bet it&#39;s still faster than a non SSE implementation.&quot;<br /><br />You don&#39;t use any specialized algo and I&#39;m wondering? why do you think so?? :shock:<br /><br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2005-07-19 11:57:41 by lingo12</div>
+   </div>
+   <div class="post" id="post-162211">
+    <div class="subject"><a href="#post-162211">Re: Faster BM algo</a></div>
+    <div class="body">Why I think it would be faster.<br />In general SSE instructions run faster, that&#39;s why.</div>
+    <div class="meta">Posted on 2005-07-19 14:58:29 by r22</div>
+   </div>
+   <div class="post" id="post-162212">
+    <div class="subject"><a href="#post-162212">Re: Faster BM algo</a></div>
+    <div class="body">Thanks again <strong>r22</strong>, :lol:<br /><br /><strong>&quot;In general SSE instructions run faster, that&#39;s why.&quot;</strong><br /><br />Really?? :shock:<br />O boy, you opened my eyes and now I know<br />why my code is so fast...? :D<br />According to you, it is because I use <br />faster SSE instructions rather than the Boyer-Moore algo in it, isn&#39;t it?<br /><br />Regards,<br />Lingo<br /><br /></div>
+    <div class="meta">Posted on 2005-07-19 16:54:00 by lingo12</div>
+   </div>
+  </div>
+ </body>
+</html>

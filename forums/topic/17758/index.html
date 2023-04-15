@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Recursive proc for deleting registry keys - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17758" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17758">Recursive proc for deleting registry keys</a></p>
+   <div class="post" id="post-137089">
+    <div class="subject"><a href="#post-137089">Recursive proc for deleting registry keys</a></div>
+    <div class="body">If you ever wanted to delete some registry key including all its subkeys you probably have seen this<br /><div class="quote"><br />Windows 95: The RegDeleteKey function deletes a key and all its descendents.<br /><br />Windows NT: The RegDeleteKey function deletes the specified key. This function cannot delete a key that has subkeys. <br /></div><br /><br />So I wanted to create compatabile proc for both NT and 9x and here is what I came up for:<br /><br /><pre><code><br />DelRegKeyEx		proc	_hKey&#58;dword,pszKey&#58;dword<br />LOCAL	hKey&#58;dword<br />LOCAL	LastWriteTime&#58;SYSTEMTIME<br />LOCAL	szKeyName&#91;MAX_PATH&#93;&#58;byte<br />LOCAL	dwName&#58;dword<br />LOCAL	dwCounter&#58;dword<br />;int 3<br />	PrintStringByAddr pszKey<br />	; try deleting first, maybe it doesnt have subkeys<br />	invoke	RegDeleteKey,_hKey,pszKey<br />	.if		eax!=ERROR_SUCCESS<br />		invoke	RegOpenKeyEx,_hKey,pszKey,0,\<br />                                                             KEY_ALL_ACCESS,addr hKey<br />		.if		eax==ERROR_SUCCESS<br />			mov		dwCounter,0<br />			.while	1<br />				mov		dwName,MAX_PATH<br />				invoke	memfill,addr szKeyName,MAX_PATH,0<br />				invoke	RegEnumKeyEx,hKey,dwCounter,addr szKeyName,\<br />                                                      addr dwName,0,0,0,0;addr LastWriteTime<br />				.if		eax==ERROR_SUCCESS<br />					INVOKE	DelRegKeyEx,hKey,addr szKeyName<br />				.else<br />					; no more keys under this key<br />					.break<br />				.endif<br />				inc		dwCounter<br />			.endw<br />			invoke	RegCloseKey,hKey<br />		.endif<br />	.endif<br /><br />	ret<br />DelRegKeyEx endp<br /></code></pre><br /><br />But this doesnt work as it should, it only deletes some keys and some doesn't. Looks like RegEnumKeyEx fails and doesnt always enumerate all keys. Does anyone have idea what could be the problem?</div>
+    <div class="meta">Posted on 2004-03-26 20:33:02 by Mikky</div>
+   </div>
+   <div class="post" id="post-137111">
+    <div class="subject"><a href="#post-137111">Recursive proc for deleting registry keys</a></div>
+    <div class="body">You can use the SHDeleteKey function in shlwapi.dll</div>
+    <div class="meta">Posted on 2004-03-27 02:49:58 by TQN</div>
+   </div>
+   <div class="post" id="post-137114">
+    <div class="subject"><a href="#post-137114">Recursive proc for deleting registry keys</a></div>
+    <div class="body">Mikky, have you checked the error value, and seen if it's a trivial thing like not having the necessary permissions to enum/delete on NT?</div>
+    <div class="meta">Posted on 2004-03-27 02:57:53 by f0dder</div>
+   </div>
+   <div class="post" id="post-137138">
+    <div class="subject"><a href="#post-137138">Recursive proc for deleting registry keys</a></div>
+    <div class="body">SHDeleteKey will not delete subkeys on nt, here is quote from MSDN<br /><div class="quote"><br />Windows NT: The specified key must not contain any subkeys. <br /></div><br /><br />Ok I've found the error, <br /><br /><br /><pre><code><br />DelRegKeyEx		proc	_hKey&#58;dword,pszKey&#58;dword<br />LOCAL	hKey&#58;dword<br />LOCAL	LastWriteTime&#58;SYSTEMTIME<br />LOCAL	szKeyName&#91;MAX_PATH&#93;&#58;byte<br />LOCAL	dwName&#58;dword<br />LOCAL	dwCounter&#58;dword<br />;int 3<br />	PrintStringByAddr pszKey<br />	; try deleting first, maybe it doesnt have subkeys<br />	invoke	RegDeleteKey,_hKey,pszKey<br />	.if		eax!=ERROR_SUCCESS<br />		invoke	RegOpenKeyEx,_hKey,pszKey,0,\<br />                                                             KEY_ALL_ACCESS,addr hKey<br />		.if		eax==ERROR_SUCCESS<br />			mov		dwCounter,0<br />			.while	1<br />				mov		dwName,MAX_PATH<br />				invoke	memfill,addr szKeyName,MAX_PATH,0<br />				invoke	RegEnumKeyEx,hKey,dwCounter,addr szKeyName,\<br />                                                      addr dwName,0,0,0,0;addr LastWriteTime<br />				.if		eax==ERROR_SUCCESS<br />					INVOKE	DelRegKeyEx,hKey,addr szKeyName<br />                                   &#91;COLOR=red&#93;dec dwCounter&#91;/COLOR&#93; <br />				.else<br />					; no more keys under this key<br />					.break<br />				.endif<br />				inc		dwCounter<br />			.endw<br />			invoke	RegCloseKey,hKey<br />		.endif<br />	.endif<br /><br />	ret<br />DelRegKeyEx endp<br /></code></pre><br /><br />When you delete some key, RegEnumKeyEx will got messed up because it tracks subkeys with counter.<br />Here I just decrement counter after key deleting and it works ok now (assuming that you will always have priviledges to delete key). Moderators can move this to algo section, it can be useful to someone.</div>
+    <div class="meta">Posted on 2004-03-27 09:01:55 by Mikky</div>
+   </div>
+  </div>
+ </body>
+</html>

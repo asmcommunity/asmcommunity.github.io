@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DLL address retrieving - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18060" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=18060">DLL address retrieving</a></p>
+   <div class="post" id="post-139439">
+    <div class="subject"><a href="#post-139439">DLL address retrieving</a></div>
+    <div class="body">Yes, I know, it has been always said on many places.<br /><br />But maybe this time it is explained more in details?<br /><br /><a target="_blank" href="http://arnold.mcdonald.free.fr/php/Index.php?p=1006">http://arnold.mcdonald.free.fr/php/Index.php?p=1006</a><br /><br />--<br />AMcD?<br /><br /><a target="_blank" href="http://arnold.mcdonald.free.fr/">http://arnold.mcdonald.free.fr/</a></div>
+    <div class="meta">Posted on 2004-04-19 07:38:38 by amcd</div>
+   </div>
+   <div class="post" id="post-139451">
+    <div class="subject"><a href="#post-139451">DLL address retrieving</a></div>
+    <div class="body">Pretty nice - just remember that &quot;always&quot; is a rather strong word to use when talking about internal kernel structures ;) - and a small fix, use sizeof instead of hardcoding the 128 and 260 values - and better use constants like MAX_PATH+1 .<br /><br />But a nice text with a professional layout.</div>
+    <div class="meta">Posted on 2004-04-19 09:42:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-139453">
+    <div class="subject"><a href="#post-139453">DLL address retrieving</a></div>
+    <div class="body">I have the same basic thing in the exception handler that I did for RadASM. Though in that case it's only to find which module a given address is in. But it also has a Windows 9x version...<br /><br /><pre><code>FindModuleByAddr9x FRAME Address,pModuleName<br />	LOCAL pID			&#58;D<br />	LOCAL hSnap			&#58;D<br />	LOCAL me32			&#58;MODULEENTRY32<br />	LOCAL hlib			&#58;D<br />	LOCAL pCreateToolhelp32Snapshot	&#58;D<br />	LOCAL pModule32First		&#58;D<br />	LOCAL pModule32Next		&#58;D<br /><br />	mov D&#91;me32.dwSize&#93;,SIZEOF MODULEENTRY32<br /><br />	invoke LoadLibrary,&quot;Kernel32.dll&quot;<br />	or eax,eax<br />	jnz &gt;<br />	ret<br />	&#58;<br />	mov &#91;hlib&#93;,eax<br />	invoke GetProcAddress,&#91;hlib&#93;,&quot;CreateToolhelp32Snapshot&quot;<br />	mov &#91;pCreateToolhelp32Snapshot&#93;,eax<br />	invoke GetProcAddress,&#91;hlib&#93;,&quot;Module32First&quot;<br />	mov &#91;pModule32First&#93;,eax<br />	invoke GetProcAddress,&#91;hlib&#93;,&quot;Module32Next&quot;<br />	mov &#91;pModule32Next&#93;,eax<br /><br />	invoke lstrcpy,&#91;pModuleName&#93;,&quot;undetermined&quot;<br />	invoke GetCurrentProcessId<br />	mov &#91;pID&#93;,eax<br /><br />	push &#91;pID&#93;<br />	push TH32CS_SNAPMODULE<br />	call &#91;pCreateToolhelp32Snapshot&#93;<br />	mov &#91;hSnap&#93;,eax<br /><br />	push offset me32<br />	push &#91;hSnap&#93;<br />	call &#91;pModule32First&#93;<br />	jmp &gt;L2<br />	L1&#58;<br />		mov eax,&#91;me32.modBaseAddr&#93;<br />		mov ecx,&#91;me32.modBaseSize&#93;<br />		add ecx,eax<br />		cmp &#91;Address&#93;,eax<br />		jb &gt;<br />		cmp &#91;Address&#93;,ecx<br />		ja &gt;<br />		invoke lstrcpy,&#91;pModuleName&#93;,OFFSET me32.szModule<br />		jmp &gt;.DONE<br />		&#58;<br />		push offset me32<br />		push &#91;hSnap&#93;<br />		call &#91;pModule32Next&#93;<br />		L2&#58;<br />		or eax,eax<br />		jnz &lt;L1<br />	.DONE<br />	invoke CloseHandle,&#91;hSnap&#93;<br /><br />	invoke FreeLibrary,&#91;hlib&#93;<br />	RET<br />ENDF<br /><br />FindModuleByAddrNT FRAME Address,pModuleName<br />	uses edi,esi,ebx<br />	LOCAL pID			&#58;D<br />	LOCAL hProcess			&#58;D<br />	LOCAL hMods&#91;1024&#93;		&#58;D<br />	LOCAL cbNeeded			&#58;D<br />	LOCAL modinfo			&#58;MODULEINFO<br />	LOCAL hModule			&#58;D<br />	LOCAL hlib			&#58;D<br />	LOCAL pEnumProcessModules	&#58;D<br />	LOCAL pGetModuleInformation	&#58;D<br />	LOCAL ModName&#91;MAX_PATH&#93;		&#58;B<br /><br />	invoke LoadLibrary,&quot;psapi.dll&quot;<br />	or eax,eax<br />	jnz &gt;<br />	ret<br />	&#58;<br />	mov &#91;hlib&#93;,eax<br />	invoke GetProcAddress,&#91;hlib&#93;,&quot;EnumProcessModules&quot;<br />	mov &#91;pEnumProcessModules&#93;,eax<br />	invoke GetProcAddress,&#91;hlib&#93;,&quot;GetModuleInformation&quot;<br />	mov &#91;pGetModuleInformation&#93;,eax<br /><br />	invoke lstrcpy,&#91;pModuleName&#93;,&quot;undetermined&quot;<br />	mov ebx,&#91;Address&#93;<br />	invoke GetCurrentProcessId<br />	mov &#91;pID&#93;,eax<br />	invoke OpenProcess,PROCESS_QUERY_INFORMATION+\<br />		PROCESS_VM_READ,FALSE,&#91;pID&#93;<br />	mov &#91;hProcess&#93;,eax<br /><br />	push offset cbNeeded<br />	push 1024<br />	push offset hMods<br />	push &#91;hProcess&#93;<br />	call &#91;pEnumProcessModules&#93;<br />	or eax,eax<br />	jz &gt;&gt;.DONE<br />		mov edi,&#91;cbNeeded&#93;<br />		shr edi,2<br />		mov esi,offset hMods<br />		L1&#58;<br />		mov eax,&#91;esi&#93;<br />		mov &#91;hModule&#93;,eax<br />		add esi,4<br /><br />		push SIZEOF MODULEINFO<br />		push offset modinfo<br />		push &#91;hModule&#93;<br />		push &#91;hProcess&#93;<br />		call &#91;pGetModuleInformation&#93;<br />		or eax,eax<br />		jz &gt;.DONE<br />		cmp ebx,&#91;modinfo.lpBaseOfDll&#93;<br />		jg &gt;L2<br />			dec edi<br />			or edi,edi<br />			js &gt;.DONE<br />			jmp &lt;L1<br />		L2&#58;<br />			mov eax,&#91;modinfo.SizeOfImage&#93;<br />			add eax,&#91;modinfo.lpBaseOfDll&#93;<br />			cmp ebx,eax<br />			jl &gt;L3<br />			dec edi<br />			or edi,edi<br />			js &gt;.DONE<br />			jmp &lt;L1<br />		L3&#58;<br />		invoke GetModuleFileName,&#91;hModule&#93;,OFFSET ModName,256<br />		invoke GetFileTitle,OFFSET ModName,&#91;pModuleName&#93;,256<br /><br />	.DONE<br />	invoke CloseHandle,&#91;hProcess&#93;<br />	invoke FreeLibrary,&#91;hlib&#93;<br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-04-19 09:50:20 by donkey</div>
+   </div>
+   <div class="post" id="post-139470">
+    <div class="subject"><a href="#post-139470">DLL address retrieving</a></div>
+    <div class="body">f0dder said<br /><br />&quot;Pretty nice - just remember that &quot;always&quot; is a rather strong word to use when talking about internal kernel structures &quot;<br /><br />Sure! Just look over NT internals structures documended over the web, you'll see diferences with my text :-).<br /><br />&quot;use sizeof instead of hardcoding the 128 and 260 values - and better use constants like MAX_PATH+1&quot;<br /><br />Good point. Actually, the code has been written very fast :-(. I'll Fix that.<br /><br />Thanx<br /><br />--<br />AMcD?<br /><br /><a target="_blank" href="http://arnold.mcdonald.free.fr/">http://arnold.mcdonald.free.fr/</a></div>
+    <div class="meta">Posted on 2004-04-19 12:13:32 by amcd</div>
+   </div>
+  </div>
+ </body>
+</html>

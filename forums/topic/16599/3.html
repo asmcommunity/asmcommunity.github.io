@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bsp Class - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16599" />
+  <link rel="prev" href="../?id=16599&amp;page=2" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=16599">Bsp Class</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=16599&amp;page=1" style="">&laquo;</a><a href="../?id=16599&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="16599" /><input type="number" name="page" min="1" max="3" step="1" value="3" onchange="this.form.submit();" /></form>   <div class="post" id="post-130856">
+    <div class="subject"><a href="#post-130856">Bsp Class</a></div>
+    <div class="body">The next issue I found was in the iterative function BSP_RenderNode which is used to walk the Nodes of the BSP Tree, searching for Leaves to render.<br />It detects Leaves based on the sign of the nodeNum param.<br />I had defined the param type as DWORD, and thus we were never detecting negative values using the highlevel .if &lt; 0 directive. When I used an AND mask of bit 31 the test succeeded and I realized what I'd done, so I removed the AND mask check again and changed the type of nodeNum to SDWORD instead. Now the function correctly detects leaf nodes and attempts to call BSP_RenderLeaf, where we crash :tongue: Well, any progress is good progress.<br /><div class="quote"><br />&quot;Perfection is attained not when there is nothing left to add, but when there is nothing left to take away.&quot;</div></div>
+    <div class="meta">Posted on 2004-01-17 00:13:23 by Homer</div>
+   </div>
+   <div class="post" id="post-130863">
+    <div class="subject"><a href="#post-130863">Bsp Class</a></div>
+    <div class="body">Uh-oh: traced the next problem down to the BSP_ReadClusters procedure, which is examining the 17th LumpsDirectory Header to find the size and offset of the 17th Lump (the last one in the Lumps Directory), which is our VisData Lump, it's telling me the offset of the Lump's data in the file, but its telling me the Size is zero.<br />This leads me to not load the cluster-to-cluster visibility data, and sets clusters.p_Bits to NULL, which screws me in the Render code.<br />It looks like the bsp file itself may be bad !! <br /><br />Here's an update, it's the complete project, embedded in the old Particles demo since I've embedded in the bsp code in its working skeleton.<br />Due to size I've made a split rar that contains a zip. Two part rar. Get both parts before you try to extract, then only extract from part one since this is joined.</div>
+    <div class="meta">Posted on 2004-01-17 04:44:14 by Homer</div>
+   </div>
+   <div class="post" id="post-130864">
+    <div class="subject"><a href="#post-130864">Bsp Class</a></div>
+    <div class="body">Part two of the above rar archive..</div>
+    <div class="meta">Posted on 2004-01-17 04:44:56 by Homer</div>
+   </div>
+   <div class="post" id="post-130865">
+    <div class="subject"><a href="#post-130865">Bsp Class</a></div>
+    <div class="body">Just tried loading a more substantial bsp and got the same result - conclusion is theres a problem in my ReadClusters procedure. Gonna take another look at it.</div>
+    <div class="meta">Posted on 2004-01-17 06:21:28 by Homer</div>
+   </div>
+   <div class="post" id="post-130868">
+    <div class="subject"><a href="#post-130868">Bsp Class</a></div>
+    <div class="body">Having revisited ReadClusters once more, it turns out that BOTH of the above were true, I've now got it (I think) correctly loading the &quot;Clusters Visibility BitPattern&quot;, but the &quot;test.bsp&quot; file still reports a NULL size for the 17th Lump. When loading a larger bsp I found on the web, it reports a believeable Lump size and file offset, and when loaded, that Lump reports a believable #Clusters, ClusterSize and the BitPattern that follows seems to load ok.<br /><br />Here is the updated ReadClusters function:<br /><br /><pre><code><br />;Last edited by Homer 17 Jan 2004<br />;&#40;see &#91;url&#93;http&#58;//graphics.stanford.edu/~kekoa/q3/#Visdata&#91;/url&#93;&#41;<br /><br />BSP_ReadClusters proc uses ebx ecx<br />local ErrBuf&#91;256&#93;&#58;BYTE<br />local _offset&#58;DWORD<br />local _size&#58;DWORD<br />local t&#58;FLOAT<br />local num&#58;DWORD<br />local me&#58;DWORD<br />mov me,ecx<br />;     // Clusters have variable length so we need to read them specially<br />lea ebx,&#91;ecx&#93;.BSP.lumps                        ;where we loaded the &quot;lumps directory&quot; is an actual array of structs, not ptrs<br />mov eax,sizeof BSPLump<br />imul eax,EBSPClusters                           ;calculate offset of specific lump directory entry<br />add ebx,eax                                            ;add offset to base address<br />m2m _offset, &#91;ebx&#93;.BSPLump._offset     ;fetch offset to lump data , relative to start of file<br />m2m _size,  &#91;ebx&#93;.BSPLump._size <br />DebugValue addr ErrBuf,CTEXT&#40;&quot;Clusters lump is at offset %lu,&quot;&#41;,_offset<br />DebugValue addr ErrBuf,CTEXT&#40;&quot; size=%lu&quot;,13,10&#41;,_size<br /><br />mov ebx,_offset<br />;// Check if they exist<br />.if _size== 0<br />        mov &#91;ecx&#93;.BSP.clusters.numClusters,0<br />        mov &#91;ecx&#93;.BSP.clusters.p_Bits,NULL<br />        invoke MessageBox,0,CTEXT&#40;&quot;BSP_ReadClusters &#58; Clusters Directory Lump in Header says size of visdata lump is NULL&quot;&#41;,CTEXT&#40;&quot; Potential Problem&quot;&#41;,MB_OK<br />.else<br />        ;Replacement code added 17 Jan 2004 by Homer<br />         invoke _Read, pTemp,_offset, sizeof BSPCluster, addr &#91;ecx&#93;.BSP.clusters ;&lt;-- Load the Clusters Struct<br />        lea ebx, &#91;ecx&#93;.BSP.clusters <br />        DebugValue addr ErrBuf,CTEXT&#40;&quot;NumClusters=%lu,&quot;&#41;,&#91;ebx&#93;.BSPCluster.numClusters<br />        DebugValue addr ErrBuf,CTEXT&#40;&quot; size=%lu&quot;,13,10&#41;,&#91;ebx&#93;.BSPCluster._size<br /><br />        mov eax,_size                             ;Calculate sizeof Clusters Visibility Bits &#40;new method&#41;<br />        sub eax,sizeof BSPLump            ;Its the Lump Size, minus the Lump Header fields<br />        push eax                                      ;and comes to the same value as ClusterSize * numClusters<br />        DebugValue addr ErrBuf,CTEXT&#40;&quot;bitpattern size=%lu&quot;,13,10&#41;,eax<br />        malloc eax<br />        mov ecx,me<br />        mov &#91;ecx&#93;.BSP.clusters.p_Bits,eax       ;Allocate memory for visibility bitpattern<br />        pop ebx<br />        add _offset,sizeof BSPCluster-4<br />        invoke _Read, pTemp, _offset, ebx, &#91;ecx&#93;.BSP.clusters.p_Bits<br />.endif<br />DebugValue addr ErrBuf,CTEXT&#40;&quot;Found %lu Clusters&quot;,13,10&#41;,&#91;ecx&#93;.BSP.clusters.numClusters<br />ret<br />BSP_ReadClusters endp </code></pre></div>
+    <div class="meta">Posted on 2004-01-17 07:31:25 by Homer</div>
+   </div>
+   <div class="post" id="post-130878">
+    <div class="subject"><a href="#post-130878">Bsp Class</a></div>
+    <div class="body">Now there's a new problem, almost certainly introduced in the new ReadClusters - the field BSP.surfacesVisibleSize is being overwritten.<br />Here is a partial extract of my Debug Log<br /><br />Found 18061 Vertices<br />Found 34449 Indices<br />surfacesVisibleSize=425 &lt;--- This is in BSP_ReadSurfaces<br />Found 3393 Surfaces<br />Found 64 Textures<br />...<br />Found and Processed 7 LightMaps<br />Found 2099 Nodes<br />Found 2110 Leaves<br />Found 5811 LeafSurface Indices<br />Found 4807 LeafBrush Indices<br />Found 2656 Planes<br /><br />Clusters lump is at offset 1529400, size=100024<br />NumClusters=893, size=112<br />bitpattern size=100016<br />Found 893 Clusters<br />Found 1738 Brushes<br />Found 11753 BrushesSides<br />BSP File Maps\devdm3.bsp Read OK<br /><br />Returned to CApp_WndProc from 'InitParticles'<br />CPrimitive_SetupRendering Completed<br />surfacesVisibleSize = 1699000 &lt;--- this is in BSP_Render3D<br /><br />As you can see, ReadSurfaces reports a reasonable surfacesVisibleSize,<br />then further down we see the stuff from ReadClusters, then when we get to Rendering our surfacesVisibleSize value has changed to something big, which causes a problem when we try to zero the associated memory.</div>
+    <div class="meta">Posted on 2004-01-17 08:55:15 by Homer</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=16599&amp;page=1" style="">&laquo;</a><a href="../?id=16599&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="16599" /><input type="number" name="page" min="1" max="3" step="1" value="3" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

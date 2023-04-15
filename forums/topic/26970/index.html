@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Inefficiencies in WM_ERASEBKGND proc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26970" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26970">Inefficiencies in WM_ERASEBKGND proc</a></p>
+   <div class="post" id="post-193894">
+    <div class="subject"><a href="#post-193894">Inefficiencies in WM_ERASEBKGND proc</a></div>
+    <div class="body">Hey Everyone,
+
+I have created my own window style where I'm responsible
+for painting the window's background with WM_ERASEBKGND.
+
+The problem is that my background is 280KB at the smallest
+because its a linear gradient bitmap. To say the least this
+is slowing the window's painting and causing filckers, etc.
+
+Is there a way to "chop up" the bitmap so I can paint only
+the necessary areas like in WM_PAINT? I'd use the MSIMG32
+gradient functions but I still want the app to work on
+Windows 95.</div>
+    <div class="meta">Posted on 2001-02-21 14:05:00 by Xtreme</div>
+   </div>
+   <div class="post" id="post-193895">
+    <div class="subject"><a href="#post-193895">Inefficiencies in WM_ERASEBKGND proc</a></div>
+    <div class="body">Xtreme,
+
+Device Contexts are pretty cheap these days, under Windows 3.1 there used to be 5 of them, and once you has used them up then you were stuck, Windows NT has no limit on them and they are only 800 bytes each, so you can get quite a few into your 2Gb address space. Windows 95 has a limit of 64K for Device contexts, at 800 bytes each you can still get a hell of alot of them. I don't know about win98 but I assume the worst case of 64K. Anyway on to the problem in hand.
+
+As device contexts cheap these days, use them! On startup you app should create a background DC, and a gradient DC, put you gradient bitmap into it, when you need to draw the screen do the following:-
+
+BitBlt your GradientDC into your MemoryDC
+Draw whatever you app needs onto the Memory DC
+BitBlt the MemoryDC onto the ScreenDC.
+
+Now, for WM_ERASEBKGND return non-zero, to say you have already wiped the screen, a WM_PAINT always comes in next, so you'll wipe it anyway.
+
+Note, you can keep the MemoryDC and GradientDC all the time, but then you get a WM_SIZE message, you should re-calculate you bitmap and put it back into the GradientDC.
+
+
+If you want to make it more efficient, then when you get WM_PAINT call BeginPaint, passing it a PAINTSTRUCT, withing PAINTSTRUCT there is a rectangle (rcPaint) which is the area you need to re-draw. With a little calulation you can BitBlt less of the DC's across. However with modern GFX cards, I don't think you will really notice the difference...
+
+
+umbongo</div>
+    <div class="meta">Posted on 2001-02-22 05:15:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-193896">
+    <div class="subject"><a href="#post-193896">Inefficiencies in WM_ERASEBKGND proc</a></div>
+    <div class="body">Thanks.
+
+I was already doing what you suggested with BitBlt but I hate
+the fact that every time notepad or calc moves in front of my
+window a big, clunky 280KB bitmap gets painted across my entire
+client area.
+
+But if I figure out my linear gradient proc maybe things will
+get better!
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-02-22 16:00:00 by Xtreme</div>
+   </div>
+   <div class="post" id="post-193897">
+    <div class="subject"><a href="#post-193897">Inefficiencies in WM_ERASEBKGND proc</a></div>
+    <div class="body">BeginPaint returns a PAINTSTRUCT with the invalid region inside... this is the only part you need paint, actually, all you can paint, the rest is clipped.
+
+Things might speed up a tad if you use param this to limit your blit or re-rainbow-paint.</div>
+    <div class="meta">Posted on 2001-02-23 01:44:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193898">
+    <div class="subject"><a href="#post-193898">Inefficiencies in WM_ERASEBKGND proc</a></div>
+    <div class="body">Hey Ernie,
+
+Yeah, I use the Ps struct to limit painting in the WM_PAINT
+handler but WM_ERASEBKGND passes no such information. Thats
+unfortunate because "rcPaint" would really help...
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-02-24 15:24:00 by Xtreme</div>
+   </div>
+   <div class="post" id="post-193899">
+    <div class="subject"><a href="#post-193899">Inefficiencies in WM_ERASEBKGND proc</a></div>
+    <div class="body">Nothing says you HAVE to re-draw the background during WM_ERASEBK. Just eat that message and do it all in WM_PAINT (where you have an invalid rect)
+
+How to eat a massage:
+
+<pre><code>
+    ...
+    .ELSEIF uMsg == WM_BAD_MESSAGE
+        ; so don't do anything (how ZEN!)
+    .ELSEIF uMsg == {Something else}
+    ...
+</code></pre></div>
+    <div class="meta">Posted on 2001-02-24 18:51:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

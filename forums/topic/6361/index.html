@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>bug for Instring function - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6361" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=6361">bug for Instring function</a></p>
+   <div class="post" id="post-45721">
+    <div class="subject"><a href="#post-45721">bug for Instring function</a></div>
+    <div class="body">I have test several times about Instring function, found a bug, I use the following sample to test:<br /><br />.data<br />buffer1 db &quot;ini;txt;&quot;,0<br />buffer2 db &quot;tst;&quot;,0<br /><br />.code<br /><br />invoke Instring, 1, offset buffer1, offset buffer2<br /><br />it should be return 0( not found buffer2 in buffer1), but the returened eax is 0Ah, I wanna know where it produced the bug?<br /><br />dREAMtHEATER</div>
+    <div class="meta">Posted on 2002-06-29 11:07:48 by dREAMtHEATER</div>
+   </div>
+   <div class="post" id="post-45724">
+    <div class="subject"><a href="#post-45724">bug for Instring function</a></div>
+    <div class="body">Use this instead:<br /><pre><code>strstr proc pszHaystack&#58;PTR BYTE, pszNeedle&#58;PTR BYTE, dwCaseSensitive&#58;DWORD<br />	push	esi<br />	push	edi<br />	xor	eax, eax<br />	xor	ecx, ecx<br />	xor	edx, edx<br />	mov	esi, &#91;pszHaystack&#93;<br />	mov	edi, &#91;pszNeedle&#93;<br />@@char&#58;	mov	al, byte ptr &#91;esi&#93;<br />	mov	ah, byte ptr &#91;edi&#93;<br />	cmp	&#91;dwCaseSensitive&#93;, 0<br />	jne	@@cmp1<br />	cmp	al, &quot;Z&quot;<br />	ja	@@cmp0<br />	cmp	al, &quot;A&quot;<br />	jb	@@cmp0<br />	add	al, 32<br />@@cmp0&#58;	cmp	&#91;dwCaseSensitive&#93;, 0<br />	jne	@@cmp1<br />	cmp	ah, &quot;Z&quot;<br />	ja	@@cmp1<br />	cmp	ah, &quot;A&quot;<br />	jb	@@cmp1<br />	add	ah, 32<br />@@cmp1&#58;	cmp	al, ah<br />	jne	@@next<br />	inc	ecx<br />	mov	eax, esi<br />	inc	edi<br />	inc	esi<br />	cmp	byte ptr &#91;esi&#93;, 0<br />	je	@@quit<br />	inc	eax<br />	cmp	byte ptr &#91;edi&#93;, 0<br />	je	@@quit<br />	jmp	@@char<br />@@next&#58;	mov	edi, &#91;pszNeedle&#93;<br />	test	ecx, ecx<br />	setz	dl<br />	add	esi, edx<br />	xor	ecx, ecx<br />	xor	eax, eax<br />	cmp	byte ptr &#91;esi&#93;, 0<br />	jne	@@char<br />@@quit&#58;	sub	eax, ecx<br />	pop	edi<br />	pop	esi<br />	ret<br />strstr endp</code></pre><br />invoke strstr, ADDR buffer1, ADDR buffer2, 1<br />:)</div>
+    <div class="meta">Posted on 2002-06-29 11:54:21 by comrade</div>
+   </div>
+   <div class="post" id="post-45738">
+    <div class="subject"><a href="#post-45738">bug for Instring function</a></div>
+    <div class="body">it works fine to me ..(optimize version of instring)<br /><br /><pre><code><br />  InString  proc startpos&#58;DWORD,lpSource&#58;DWORD,lpPattern&#58;DWORD <br />    push ebx<br />    push esi<br />    push edi<br />    <br />   <br />   invoke StrLen,lpPattern ; pattern length<br />   push eax          ;because of strlen <br />   invoke StrLen,lpSource ;  mov sLen, eax           ; source length<br /><br /><br />  mov ebx,startpos<br /><br />   pop edx<br />   <br />        cmp ebx,1<br />        jb @ER <br />        cmp eax,ebx<br />        jg @F<br />  @ER&#58;<br /> <br /><br />     	 mov eax, -2<br />     	 jmp isOut               ; exit if startpos is past end OR exit if startpos not 1 or greater<br />  @@&#58;<br />	  dec ebx ;   ; correct from 1 to 0 based index<br /><br />        sub eax,edx<br /> <br />        jg @F<br />  	   	 mov eax, -1<br />        jmp isOut               ; exit if pattern longer than source<br />  @@&#58;<br />       inc eax<br />       mov esi, lpSource<br />       mov sLen, eax    <br /><br /><br />  ; ----------------<br />  ; setup loop code<br />  ; ----------------<br />   <br />  <br />  <br /> <br />   add esi,eax            ;the order is like this to prevent stalls<br />  <br />   <br />   neg eax                ; invert sign<br /><br />   mov edi, lpPattern<br /><br />   <br />   dec edx                ;to save dec later <br /><br /> <br />   mov cl,&#91;edi&#93;           ; get 1st char in pattern   <br /><br />   push edx  <br /><br /><br />   add eax,ebx            ;add startpos <br /><br /><br />;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@<br /><br /><br /><br /><br />Scan_Loop&#58;<br />    cmp cl, &#91;esi+eax&#93;<br />    je Pre_Match<br />@set_counter&#58;<br />    inc eax<br />    jnz Scan_Loop ; the loop set eax to set if not found <br />    jmp @loopout<br /><br /> Pre_Match&#58;<br />    mov edx,&#91;esp&#93; ; we have done dec edx before the push so we dont need to do mov ch,&#91;edi+edx-1&#93;<br />    lea ebx,&#91;esi+eax&#93; ;  	<br />    mov ch, &#91;edi+edx&#93; ; get the last char of the pattern in here .  <br /> Test_Match&#58;<br />    cmp ch, &#91;ebx+edx&#93; ; stall . but only one time per prematch..<br />    jne @set_counter            ; jump back on mismatc;<br />    dec edx<br />    mov ch, &#91;edi+edx&#93;<br />    jnz Test_Match<br />  <br /> <br />    add eax,sLen<br />    inc eax              <br /><br />  <br />@loopout&#58;<br />    add esp,4 ; instead of this . make local var and save edx there<br />    isOut&#58;<br />    pop edi<br />    pop esi<br />    pop ebx<br />    ret<br /><br />  <br /><br />InString endp<br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-29 12:35:27 by eko</div>
+   </div>
+   <div class="post" id="post-45745">
+    <div class="subject"><a href="#post-45745">bug for Instring function</a></div>
+    <div class="body">an alternative way is to use the C library,<br />it's like comrade's strstr function but without the case feature.<br /><pre><code>includelib msvcrt.lib <br />strstr PROTO C &#58;PTR BYTE, &#58;PTR BYTE<br /><br />.data<br />szHaystack	db &quot;haystack&quot;,0<br />szNeedle	db &quot;stack&quot;,0<br /><br />.code<br />invoke strstr, addr szHaystack, addr szNeedle<br /><br />;strstr returns a pointer to the beginning of the<br />;substring or 0 if the substring is not found</code></pre></div>
+    <div class="meta">Posted on 2002-06-29 13:09:57 by savage</div>
+   </div>
+   <div class="post" id="post-45794">
+    <div class="subject"><a href="#post-45794">bug for Instring function</a></div>
+    <div class="body">Currently the algo does not exit the main scan loop so it runs to the end of the string and exits in the compare loop. I am in the middle of writing something complex at the moment so I will finish off the optimisations that EKO designed when I get a bit more time.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a><br /><br />LATER: I have posted a later version that uses an optimisation designed by EKO in the MASM32 forum.</div>
+    <div class="meta">Posted on 2002-06-30 00:25:12 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

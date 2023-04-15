@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Sleeping by the port. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17298" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17298">Sleeping by the port.</a></p>
+   <div class="post" id="post-134053">
+    <div class="subject"><a href="#post-134053">Sleeping by the port.</a></div>
+    <div class="body">Hi there, a question about synchronization.<br /><br />My thread enters an infinite loop and polls the serial port countinuously to read bytes. It works fine. Now I would like to avoid a continuous polling.<br /><br />I would like that my thread enters the infinite loop and<br /><br />Step_1 - falls asleep until a byte is received on port or a timeout elapses.<br />Step_2 - call MessageBox to notify if a byte arrived<br />Step_3 - goto Step_1<br /><br />What I did is:<br />I set a Comm mask with SetCommMask passing EV_RXCHAR.<br /><br />I call CreateEvent with NULL, FALSE, FALSE, NULL parms.<br /><br />Step_1 - I call WaitForSingleObject passing o.hEvent and 3000 (milliseconds).<br />Step_2 - read o.InternalHigh member to check if a byte arrived<br />Step_3 - goto Step_1<br /><br />The problem is that function waits for 3 seconds in any case, doesn't matter if bytes are received or not, it waits for 3 seconds anyway. I want that the thread exits its wait status as a byte arrives.<br /><br />Anyone can help? Thank you</div>
+    <div class="meta">Posted on 2004-02-18 09:31:29 by _OuzO_</div>
+   </div>
+   <div class="post" id="post-134081">
+    <div class="subject"><a href="#post-134081">Have to use interrupt</a></div>
+    <div class="body">Sleep mode? Only interrupts can bring processor out of sleep mode</div>
+    <div class="meta">Posted on 2004-02-18 14:02:45 by mrgone</div>
+   </div>
+   <div class="post" id="post-134083">
+    <div class="subject"><a href="#post-134083">Sleeping by the port.</a></div>
+    <div class="body">You shall not use WaitForSingleObject - that API waits until the object becomes triggered. Since you event object isn't really associated with the comm in any way, your thread will be sleeping until the timeout. Forget about event objects in this case, use WaitCommEvent instead.<br /><br />This will probably work just fine for low-bandwidth serial port stuff - no reason to use interrupts or whatever. If you need high-bandwidth serial (or, especially, parallel) stuff, you might have to write a driver and an ISR - and of course do this the prescribed way, rather than hooking the IDT directly.</div>
+    <div class="meta">Posted on 2004-02-18 14:17:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-134095">
+    <div class="subject"><a href="#post-134095">f0dder you never quit do you?</a></div>
+    <div class="body">Why would you need a driver unless you need to hook the interrupt. You contradict yourself without even knowing it.</div>
+    <div class="meta">Posted on 2004-02-18 15:45:39 by mrgone</div>
+   </div>
+   <div class="post" id="post-134098">
+    <div class="subject"><a href="#post-134098">Sleeping by the port.</a></div>
+    <div class="body">No I don't :) - you should use the HAL to set up your ISR, not direct hooking of the IDT. At least if you want to play nice and have your code be compatible.</div>
+    <div class="meta">Posted on 2004-02-18 16:34:51 by f0dder</div>
+   </div>
+   <div class="post" id="post-134135">
+    <div class="subject"><a href="#post-134135">Sleeping by the port.</a></div>
+    <div class="body">you should use WaitCommEvent i think..</div>
+    <div class="meta">Posted on 2004-02-19 02:52:40 by kamilh</div>
+   </div>
+   <div class="post" id="post-134161">
+    <div class="subject"><a href="#post-134161">But...how many bytes were received?</a></div>
+    <div class="body">Yes! WaitCommEvent works fine even if it immediately returns before completed so I have to wait for 'o.InternalHigh'. I do<br /><br />Step_1:		invoke WaitCommWvent, hCom, &amp;dwEvtMask, &amp;o<br />Step_2:		while o.InternalHigh != 4 Sleep(100)	; when a byte is received InternalHigh = 4<br />Step_3:		mov	o.InternalHigh, 0	; reset otherwise it is kept signaled<br />Step_4:		goto Step_1<br /><br />After that my thread awakes because at least one byte is in input port queue. I can receive on port as one single byte as several bytes. <br />I would like to avoid calling ReadFile with nNumberOfBytesToRead=1 beacause it would read just 1 byte. This way I will call it as many times as many bytes are in the queue. <br /><br />If I call ReadFile passing 10 as number of bytes to read it will work more efficiently... if 10 or more bytes are waiting. In this <br />case I fetch 10 bytes a time.<br />But if less than 10 bytes are waiting in the input queue ReadFile reads nothing! Can I know in advance how many bytes were <br />received?<br /><br />Thanks alot!<br />_OuzO_</div>
+    <div class="meta">Posted on 2004-02-19 07:00:15 by _OuzO_</div>
+   </div>
+   <div class="post" id="post-134277">
+    <div class="subject"><a href="#post-134277">Sleeping by the port.</a></div>
+    <div class="body">ClearCommError api ;<br /><br />COMSTAT.cbInQue will give you number of bytes in receive buffer ..<br /><br />why not :<br /><br />a) waitcomm event<br />b) WaitForSingleObject,<br />c) if WAIT_TIMEOUT	 then do-something;goto c<br />d) getoverlappedresult<br />e) clearcommerror<br />f) if cbinque&lt;&gt;0 read<br />g) goto a<br /><br />---------------------------------------------<br /><br />i think you should call cancelio before calling it again if previous one did not completed yet..</div>
+    <div class="meta">Posted on 2004-02-20 04:22:13 by kamilh</div>
+   </div>
+   <div class="post" id="post-134300">
+    <div class="subject"><a href="#post-134300">Sleeping by the port.</a></div>
+    <div class="body">Wowwwwwww!!!!!!! <br /><br />G R E A T ! ! ! !  It works!  Thank you very much Kamilh! <br /><br />_OuzO_</div>
+    <div class="meta">Posted on 2004-02-20 12:04:10 by _OuzO_</div>
+   </div>
+   <div class="post" id="post-134302">
+    <div class="subject"><a href="#post-134302">Sleeping by the port.</a></div>
+    <div class="body">Perhaps the COM-related contents of this thread should be written up and added to the FAQ?</div>
+    <div class="meta">Posted on 2004-02-20 12:55:32 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

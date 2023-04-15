@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Simple fahrenheight to celsius function using sse - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22458" />
+  <link rel="prev" href="../?id=22458&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22458">Simple fahrenheight to celsius function using sse</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=22458&amp;page=1" style="">&laquo;</a><a href="../?id=22458&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="22458" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-168595">
+    <div class="subject"><a href="#post-168595">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">Hi Lenin,<br />The last bit (the most significant bit) in a floating point number determines the number&#39;s sign (bit 31 for single-precision and bit 63 for double-precision). It is set if the number is negative and clear if the number is positive. to get absolute value of a given operand we need to perfrom a logocal AND on the number to clear its most significant bit.<br /><br />something like:<br /><br /><pre><code>mov eax, 0x7FFFFFFF<br />movd xmm2, eax<br />pand xmm1, xmm2</code></pre><br /><br />pand operates on MMX registers and on XMM1 and XMM2 registers (no other XMM registers are supported). the above assumes that the number to AND is held inside the xmm1 register.<br /><br /><br />Hi roticv,<br />Where? :| If it&#39;s helpful to anyone then you&#39;re free to use it wherever you wish :) This is a &#39;community&#39; after all ;)</div>
+    <div class="meta">Posted on 2005-12-06 15:05:25 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168600">
+    <div class="subject"><a href="#post-168600">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">Hey, there&#39;s no need to clear the bit in the xmm0 register, since it&#39;s already stored in ecx, so is the sign bit the same in 32bit regiters (bit 31)?<br /><br />I tried doing: <pre><code>&nbsp; &nbsp; cvttss2si ecx, xmm1<br />&nbsp; &nbsp; and&nbsp; &nbsp; &nbsp;  ecx, 7FFFFFFEh</code></pre><br /><br />But got -1.2146493648 instead of -1.99</div>
+    <div class="meta">Posted on 2005-12-06 16:18:18 by Lenin</div>
+   </div>
+   <div class="post" id="post-168602">
+    <div class="subject"><a href="#post-168602">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">well yes - if you have a FP-value in a GP register, so you can simply AND it.<br /><br />as for your problem: you&#39;re trying to AND an integer. integers are stored in 2&#39;s-complement arithmetic. use a &quot;neg eax&quot; instruction to make a negative value positive and a positive value negative. you can first check the value&#39;s most significant bit to see if it&#39;s negative<br /><br /><pre><code>or eax, eax<br />jns notneg<br />neg eax<br />notneg:</code></pre><br />no need for SSE here, but you can avoid using branches if you AND it while it&#39;s still FP inside a XMM reg ;)<br /><br />the above changes a negative value to positive and does nothing with a positive one. ask if you don&#39;t know how it works ;)</div>
+    <div class="meta">Posted on 2005-12-06 16:30:33 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168605">
+    <div class="subject"><a href="#post-168605">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">Thanks :)</div>
+    <div class="meta">Posted on 2005-12-06 16:53:20 by Lenin</div>
+   </div>
+   <div class="post" id="post-168607">
+    <div class="subject"><a href="#post-168607">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">I spent almost an hour thinking on how to solve that problem (1.900000) without having to convert the number into a string, but just then I realised &quot;hey, I&#39;m already converting the number into a string :P&quot;, then it got a lot easyer... I came up with this:<br /><br /><pre><code>FloatToAscii proc float:DWORD, lpOut:DWORD<br />.data<br />&nbsp; &nbsp; format&nbsp; db &quot;%d.%d&quot;,0<br />&nbsp; &nbsp; million REAL4 1000000.0<br />.code<br />&nbsp; &nbsp; movss&nbsp; &nbsp;  xmm0, float&nbsp;  ;xmm0 = float<br />&nbsp; &nbsp; cvttss2si eax, float&nbsp; &nbsp; ;eax = integral part of &#39;float&#39; stored as integer<br />&nbsp; &nbsp; cvtsi2ss&nbsp; xmm1, eax&nbsp; &nbsp;  ;xmm1 = integral part of float stored as &#39;float&#39;<br />&nbsp; &nbsp; subss&nbsp; &nbsp;  xmm0, xmm1&nbsp; &nbsp; ;xmm1 = fractional part of &#39;float&#39;&nbsp; &nbsp; <br />&nbsp; &nbsp; mulss&nbsp; &nbsp;  xmm0, million<br />&nbsp; &nbsp; cvttss2si ecx, xmm0<br />&nbsp; &nbsp; or&nbsp; &nbsp; &nbsp; &nbsp; ecx, ecx<br />&nbsp; &nbsp; jns&nbsp; &nbsp; &nbsp;  @F<br />&nbsp; &nbsp; neg&nbsp; &nbsp; &nbsp;  ecx<br />@@: invoke&nbsp; &nbsp; wsprintf, lpOut, addr format, eax, ecx<br /><br />&nbsp; &nbsp; add&nbsp; &nbsp; &nbsp;  eax, offset buffer - 1<br />@@: cmp&nbsp; &nbsp; &nbsp;  byte ptr , &quot;.&quot; ; to avoid numbers like 1.<br />&nbsp; &nbsp; jz&nbsp; &nbsp; &nbsp; &nbsp; @F<br />&nbsp; &nbsp; cmp&nbsp; &nbsp; &nbsp;  byte ptr , &quot;0&quot;<br />&nbsp; &nbsp; jnz&nbsp; &nbsp; &nbsp;  @F<br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;  byte ptr , 0<br />&nbsp; &nbsp; dec eax<br />&nbsp; &nbsp; jmp @B<br />@@:<br /><br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;  eax, lpOut<br />&nbsp; &nbsp; ret<br />FloatToAscii endp</code></pre><br /><br />Most results are pretty sactisfatory (sp?) but with numbers like 1.01 I get some weird results... 1.01 returns me 1.9999</div>
+    <div class="meta">Posted on 2005-12-06 20:25:39 by Lenin</div>
+   </div>
+   <div class="post" id="post-168609">
+    <div class="subject"><a href="#post-168609">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">wsprintf returns the number of copied characters NOT including the terminating NULL, so try<br /><br /><pre><code>add&nbsp; &nbsp; &nbsp;  eax, offset buffer</code></pre><br /><br />instead of<br /><br /><pre><code>add&nbsp; &nbsp; &nbsp;  eax, offset buffer - 1</code></pre></div>
+    <div class="meta">Posted on 2005-12-06 20:34:16 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168610">
+    <div class="subject"><a href="#post-168610">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">Now that part of the function seems to not be working anymore...<br /><br />I enter 1.99 and get 1.990000<br />-1.1 - 1.100000<br />1.0123 - 1.12300</div>
+    <div class="meta">Posted on 2005-12-06 20:42:58 by Lenin</div>
+   </div>
+   <div class="post" id="post-168611">
+    <div class="subject"><a href="#post-168611">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body"><pre><code>&nbsp; &nbsp; add&nbsp; &nbsp; &nbsp;  eax, offset buffer - 1<br />@@: cmp&nbsp; &nbsp; &nbsp;  byte ptr , &quot;.&quot;<br />&nbsp; &nbsp; jz&nbsp; &nbsp; &nbsp; &nbsp; @F<br />&nbsp; &nbsp; cmp&nbsp; &nbsp; &nbsp;  byte ptr , &quot;0&quot;<br />&nbsp; &nbsp; jnz&nbsp; &nbsp; &nbsp;  label2<br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;  byte ptr , 0<br />&nbsp; &nbsp; dec eax<br />&nbsp; &nbsp; jmp @B<br />@@:<br />&nbsp; &nbsp; mov byte ptr , 0<br />label2:</code></pre><br />It&#39;s 3:55 now, so my brain is in shutdown for 2 hours already :P if this diesn&#39;t work, then I can think of something after getting&nbsp; some sleep :)</div>
+    <div class="meta">Posted on 2005-12-06 21:02:52 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168614">
+    <div class="subject"><a href="#post-168614">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">Hey Ti_mo_n,<br /><br />It&#39;s here. http://win.asmcommunity.net/x86book/ It is better you add it for the good of the community.&nbsp; ;)</div>
+    <div class="meta">Posted on 2005-12-06 21:57:42 by roticv</div>
+   </div>
+   <div class="post" id="post-168630">
+    <div class="subject"><a href="#post-168630">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">It works :) I beleive the function is complete now so I&#39;ll just leave it here for future reference:<br /><br /><pre><code>ftoa proc float:DWORD, lpOut:DWORD<br />.data<br />&nbsp; &nbsp; format&nbsp; db &quot;%d.%d&quot;,0<br />&nbsp; &nbsp; million REAL4 1000000.0<br />.code<br />&nbsp; &nbsp; movss&nbsp; &nbsp;  xmm0, float&nbsp;  ;xmm0 = float<br />&nbsp; &nbsp; cvttss2si eax, float&nbsp; &nbsp; ;eax = integral part of &#39;float&#39; stored as integer<br />&nbsp; &nbsp; cvtsi2ss&nbsp; xmm1, eax&nbsp; &nbsp;  ;xmm1 = integral part of float stored as &#39;float&#39;<br />&nbsp; &nbsp; subss&nbsp; &nbsp;  xmm0, xmm1&nbsp; &nbsp; ;xmm0 = fractional part of &#39;float&#39;<br />&nbsp; &nbsp; mulss&nbsp; &nbsp;  xmm0, million<br />&nbsp; &nbsp; cvttss2si ecx, xmm0<br />&nbsp; &nbsp; or&nbsp; &nbsp; &nbsp; &nbsp; ecx, ecx<br />&nbsp; &nbsp; jns&nbsp; &nbsp; &nbsp;  @F<br />&nbsp; &nbsp; neg&nbsp; &nbsp; &nbsp;  ecx<br />@@: invoke&nbsp; &nbsp; wsprintf, lpOut, addr format, eax, ecx<br /><br />&nbsp; &nbsp; add&nbsp; &nbsp; &nbsp;  eax, lpOut<br />&nbsp; &nbsp; dec&nbsp; &nbsp; &nbsp;  eax<br />@@: cmp&nbsp; &nbsp; &nbsp;  byte ptr , &quot;.&quot;<br />&nbsp; &nbsp; jz&nbsp; &nbsp; &nbsp; &nbsp; @F<br />&nbsp; &nbsp; cmp&nbsp; &nbsp; &nbsp;  byte ptr , &quot;0&quot;<br />&nbsp; &nbsp; jnz&nbsp; &nbsp; &nbsp;  label2<br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;  byte ptr , 0<br />&nbsp; &nbsp; dec eax<br />&nbsp; &nbsp; jmp @B<br />@@:<br />&nbsp; &nbsp; mov byte ptr , 0<br />label2:<br /><br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;  eax, lpOut<br />&nbsp; &nbsp; ret<br />ftoa endp</code></pre><br /><br />Thanks ti_mo_n :)</div>
+    <div class="meta">Posted on 2005-12-07 09:32:09 by Lenin</div>
+   </div>
+   <div class="post" id="post-168631">
+    <div class="subject"><a href="#post-168631">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">Hi Lenin,<br />No problem ;)<br /><br />Hi roticv,<br />I&#39;ll learn the wikiwiki and then add the MMX, SSE, SSE2 stuff :)<br /><br />/edit<br />Done :) I&#39;ve added few things to the &#39;glossary&#39;.</div>
+    <div class="meta">Posted on 2005-12-07 09:41:17 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168640">
+    <div class="subject"><a href="#post-168640">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">That&#39;s very nice of you.&nbsp; ;)</div>
+    <div class="meta">Posted on 2005-12-07 12:51:16 by roticv</div>
+   </div>
+   <div class="post" id="post-168788">
+    <div class="subject"><a href="#post-168788">Re: Simple fahrenheight to celsius function using sse</a></div>
+    <div class="body">thanx roticv ;)<br /><br />Lenin,<br /><div class="quote"><br />Oh  :P Still I don&#39;t know how to link to msvcrt.dl ... I searched trough masm32&#39;s include and lib folders but couldn&#39;t find anything.... </div><br />You can use LoadLibrary, GetProcAddress, FreeLibrary<br /><br /><pre><code><br />libhandle dd ?<br />sprintf_ dd ?<br />buffer db 64 dup (?)<br /><br />fmt db &quot;%f&quot;,0<br />funcname db &quot;sprintf&quot;, 0<br />libname1 db &quot;msvcrt70.dll&quot;, 0<br />libname2 db &quot;msvcrt.dll&quot;, 0<br /><br />call LoadLibrary, offset libname1<br />or eax, eax<br />jnz continue<br />call LoadLibrary, offset libname2<br />or eax, eax<br />jz error<br />continue:<br />mov , eax<br />call GetProcAddress, eax, offset funcname<br />or eax, eax<br />jnz noerror<br />call FreeLibrary, <br />jmp error<br />noerror:</code></pre><br /><br />(...)<br /><br /><pre><code>call , offset buffer, offset fmt, <br />add esp, 3 * 4  ; you have to balance the stack because sprintf uses _cdecl</code></pre><br /><br />don&#39;t forget to call &quot;freelibrary&quot; when you no longer need it (usually during WM_CLOSE).<br /><br />this code tries to link to msvcrt70 first and then to msvcrt. it&#39;s because not every windows has msvcrt70.</div>
+    <div class="meta">Posted on 2005-12-11 16:59:44 by ti_mo_n</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=22458&amp;page=1" style="">&laquo;</a><a href="../?id=22458&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="22458" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

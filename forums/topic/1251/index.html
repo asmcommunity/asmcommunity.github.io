@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ret xx and com - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1251" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=1251">ret xx and com</a></p>
+   <div class="post" id="post-8146">
+    <div class="subject"><a href="#post-8146">ret xx and com</a></div>
+    <div class="body">Ok, I have a question for all of you com guys. You seem to get it, and I don't :)<br /><br />So anyways, here's my problem:<br /><br /><pre><code>InitD3D PROC hWnd&#58;DWORD<br />    LOCAL d3ddm&#58;D3DDISPLAYMODE <br />    LOCAL d3dpp&#58;D3DPRESENT_PARAMETERS<br /><br />; To create a Direct3D8 device, we must first create a Direct3D8 object.<br />    invoke Direct3DCreate8, D3D_SDK_VERSION<br />    mov g_pD3D, eax<br />    .if eax == NULL<br />        return 0<br />    .endif<br /><br />; With this Direct3D8 object, we can obtain the current desktop display mode <br />    mcall &#91;g_pD3D&#93;,IDirect3D8_GetAdapterDisplayMode,D3DADAPTER_DEFAULT,ADDR d3ddm<br />    .if eax != D3D_OK<br />        return 0<br />    .endif<br />    <br />; Next, we initialize the parameters for our Direct3D8 device so that the backbuffer<br />; has the same format as the current desktop display.<br />    ZeroMemory &amp;d3dpp,sizeof&#40;D3DPRESENT_PARAMETERS&#41;<br />    mov d3dpp.Windowed, TRUE<br />    mov d3dpp.SwapEffect, D3DSWAPEFFECT_DISCARD<br />    mov eax, d3ddm.Format<br />    mov d3dpp.BackBufferFormat, eax<br /><br />; Finally, we create the Direct3D8 device. <br />    mcall &#91;g_pD3D&#93;,IDirect3D8_CreateDevice, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd,\<br />                                      D3DCREATE_SOFTWARE_VERTEXPROCESSING,\<br />                                      ADDR d3dpp, ADDR g_pd3dDevice<br />    .if eax != D3D_OK<br />        return 0<br />    .endif<br /><br /><br />; Device states would normally be set here<br /><br />    return S_OK<br />InitD3D ENDP</code></pre><br /><br />adds &quot;leave | ret 4&quot; after the proc... why?<br /><br /><pre><code>Render PROC<br /><br />; Make sure that the Direct3D8 device exists.<br />    mov eax, g_pd3dDevice<br />    .if eax == NULL<br />        ret<br />    .endif<br /><br />; Clear the backbuffer to a blue color &#40;the 4th parameter&#41;.<br />    mcall &#91;g_pd3dDevice&#93;,IDirect3DDevice8_Clear,0, NULL, D3DCLEAR_TARGET, 000000ffh, tmpfloat, 0<br />    <br />; Begin the scene.<br />     mcall &#91;g_pd3dDevice&#93;,IDirect3DDevice8_BeginScene<br />    <br />; Rendering of scene objects can happen here<br />  <br />; End the scene.<br />    mcall &#91;g_pd3dDevice&#93;,IDirect3DDevice8_EndScene<br />    <br />; Present the backbuffer contents to the display.<br />    mcall &#91;g_pd3dDevice&#93;,IDirect3DDevice8_Present, NULL, NULL, NULL, NULL<br />    <br />    ret<br />Render ENDP</code></pre><br /><br />this adds &quot;leave | ret 16&quot; why do I need to kill 16 bytes here, and only 4 above??? Seems as if there is some sort of link somewhere because I simply don't get it. How does masm know how many bytes to kill??? I see NOTHING that will hint it, but maybe in the mcall. However, I looked over the source, and I see nothing...<br /><br />PLEASE SOMEONE EXPLAIN!!!!!!!!!!!!!!!!! lol this is driving me nuts.</div>
+    <div class="meta">Posted on 2001-09-27 15:25:52 by Kenny</div>
+   </div>
+   <div class="post" id="post-8148">
+    <div class="subject"><a href="#post-8148">ret xx and com</a></div>
+    <div class="body">Ok, I discovered something:<br /><br />For every D3D function with CONST something* I have to kill 4 bytes of the stack. Why???</div>
+    <div class="meta">Posted on 2001-09-27 15:47:26 by Kenny</div>
+   </div>
+   <div class="post" id="post-8152">
+    <div class="subject"><a href="#post-8152">ret xx and com</a></div>
+    <div class="body">Hello Kenny !<br /><br />I wonder about the second question, I'll look at it later ...<br /><br />The answere for the first question is as follows:<br /><br />A &quot;MyProc: proc ParaA, ParaB, ParaC  : dword   ..............  ret&quot; - sequence produce the following code:<br /><br /><pre><code><br />MyProc&#58; enter   xxx<br />        .<br />        &#58;<br />        leave<br />        ret     12<br /></code></pre><br /><br />By calling MyProc, you push three dwords (ParaA, ParaB, ParaC <strong>= 12 Bytes</strong> onto the stack !)  which have to be freed again after having proceeded MyProc. This is done by <strong>ret 12</strong> !<br /><br />The <strong>enter xxx / leave</strong> instructions are for handling the local-memory onto the stack ... (Well I've never liked them ... ;) )<br /><br />I do not believe that there is a counter for how much mcalls are done (the macro itself doesn't have a machanism like that !) and then do a ret x = 4 * number of calls. So the 16 Bytes are suspicious ! (therefore the first proc will have to release 12 Bytes instead of 4 !)<br /><br />Well are you able to link the disassembled file here ?<br /><br />Greetings, CALEB !</div>
+    <div class="meta">Posted on 2001-09-27 17:49:13 by Caleb</div>
+   </div>
+   <div class="post" id="post-8155">
+    <div class="subject"><a href="#post-8155">ret xx and com</a></div>
+    <div class="body">Ok, this is the best I can come up with right now:<br /><br />In the D3D declarations there are these strange things like this:<br /><br />HRESULT GetAdapterDisplayMode(<br />  UINT Adapter,<br />  D3DDISPLAYMODE* pMode<br />);<br /><br />Now, what happens is this: Every time there is a pointer to something, that pointer is returned after the call is done, and the .lib files know that, so MASM says: OK! Let's kill the stack at the end. (4 bytes for every pointer) So, That's why I have plain ol' code and masm adds the leave and the ret xx at the end of it.<br /><br />I just did a test and after every com call, I would count the pointers and add ebp 4*number and it seemed that I generated no exceptions, but I had to set ret to normal or else I would generate an exception. <br /><br />The other thing I learned is this: When a proc is established, it would be the equivalant of enter, but slightly different: &quot;push ebp | mov ebp esp&quot; and leave is just the same exact thing as saying: &quot;mov ebp esp | pop ebp&quot; So, I can understand the leave at the end because it's just returning the stack to the origional place because before it had reserved stack for that proc.<br /><br />The disassembled file is attached</div>
+    <div class="meta">Posted on 2001-09-27 18:28:15 by Kenny</div>
+   </div>
+   <div class="post" id="post-8189">
+    <div class="subject"><a href="#post-8189">ret xx and com</a></div>
+    <div class="body">Kenny,<br /><br />your problem has nothing to do with COM.<br /><br />For calling convention &quot;stdcall&quot; (which is &quot;standard&quot; in WIN32 ) the called proc is responsible to clean up the stack. So, if your proc has 4 dword parameters when leaving the proc has to pop 4*sizeof dword = 16 bytes from the stack. Masm does this calculation for you at every &quot;ret&quot; it founds inside the proc.<br /><br />In your code the &quot;Render&quot; proc has no parameters, so Masm shouldn't translate &quot;ret&quot; to &quot;ret 16&quot; but to &quot;ret 0&quot;.<br /><br />japheth</div>
+    <div class="meta">Posted on 2001-09-28 05:02:35 by japheth</div>
+   </div>
+   <div class="post" id="post-8207">
+    <div class="subject"><a href="#post-8207">ret xx and com</a></div>
+    <div class="body">Yeah, that's what got me... The thing is when I have ret 0, the program generates an exception. When I have ret 16 or add esp, 12 after present and add esp, 4 after clear, it works fine...<br /><br />Explain that one :alright: hehe</div>
+    <div class="meta">Posted on 2001-09-28 11:48:37 by Kenny</div>
+   </div>
+   <div class="post" id="post-9015">
+    <div class="subject"><a href="#post-9015">ret xx and com</a></div>
+    <div class="body">First a quick disassebly of a very simply program:<br /><pre><code><br /> 00000000                   .code<br /> 00000000                   start&#58;<br /><br />                                invoke ExitProcess, eax<br /> 00000000   2   50            *      push eax<br /> 00000001   7m  E8 00000000 E *      call ExitProcess<br /><br /> 00000006                   Func PROC blah&#58;DWORD<br /> 00000006   2   55		*      push ebp<br /> 00000007   2   8B EC		*	 mov  ebp, esp<br /> 00000009   4   8B 45 08           mov eax, blah<br />                                   ret<br /> 0000000C   4   C9            *      leave	<br /> 0000000D  10m  C2 0004       *      ret  00004h<br /> 00000010                   Func endp<br />                            end start<br /></code></pre><br /><br />I will refer to the Func procedure.<br /><br />If we look at the first two instructions here<br /><pre><code><br />  push ebp<br />  mov ebp, esp<br /></code></pre><br /><br />These are the prologue of the function, and are placed automatically by MASM. It is these functions that allow us to reference local variables (if there were any the code would look slightly different), as <strong>ebp</strong> is now a static reference point.<br />The leave instruction undoes this.<br /><br />Second part of your question, the <strong>ret</strong> command is effectivly:<br /><pre><code><br />  pop eip ;restore the instruction pointer<br />  add esp, &#40;no_of_function_args&#41;*SIZEOF&#40;args&#41;<br /></code></pre><br /><br />This is because a call is a push and a jump in one (it pushes the return address onto the stack, then jumps to the point specified in the call instruction).<br /><br />By not specifying the correct 'xx' in your <strong>ret xx</strong> you will leave things on the stack, and this will eventually cause a stack overflow. By not specifying <strong>leave</strong> you don't clean up the stack frame you created at the start of the function, and hence leave <strong>ebp</strong> on the stack, which will then be popped off when you hit <strong>ret</strong> so your return address will be the stack rather than your code (not what most people intend!).<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-10-09 08:37:42 by Mirno</div>
+   </div>
+   <div class="post" id="post-9019">
+    <div class="subject"><a href="#post-9019">ret xx and com</a></div>
+    <div class="body">Helps a little :)<br /><br />I just need to find out WHERE to put it now... Like this:<br /><br />I have a PLAIN ol' function with no saving of ebp and no enter, and then when I use DX in it, DX makes an exception. However if I save ebp and then call DX, I don't get the exception until I try and ret. This is where I have to clear the stack using ret xx. So, I guess MASM knows because of the .lib files, and it knows the function will be returning a bunch of stuff on the stack, and since I can't read lib files, I'm stuck to figuring it out on my own huh :) OR I can use MASM for my coding :)</div>
+    <div class="meta">Posted on 2001-10-09 09:15:54 by Kenny</div>
+   </div>
+   <div class="post" id="post-9049">
+    <div class="subject"><a href="#post-9049">ret xx and com</a></div>
+    <div class="body">The pascal calling convention - used by most of windows - has the called function correcting the stack - you don't need to do anything, no matter what assembler you use - just push the args and call the function.  The C calling convention has the calling code correct the stack - this is usually used when the number of passed params are variable: wsprintf.<pre><code>    push pARM1<br />    push pARM2<br />    call pPascal<br />        .<br />        .<br />        .<br />    push pARM1<br />    push pARM2<br />    call pC<br />    add esp,8<br />        .<br />        .<br />        .<br />pPascal&#58;<br />    ret 8<br /><br />pC&#58;<br />    ret</code></pre>Usually, nothing is left on the stack - COM or no COM, windows wasn't designed that way.  Parameters are passed for temporary use, and then they are trashed.  All returned information will be in a passed structure or eax - that is by design.</div>
+    <div class="meta">Posted on 2001-10-09 17:34:22 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-9066">
+    <div class="subject"><a href="#post-9066">ret xx and com</a></div>
+    <div class="body">Yeah, but when I miss guess how much to trash, I end up with an exception :)</div>
+    <div class="meta">Posted on 2001-10-10 00:31:02 by Kenny</div>
+   </div>
+   <div class="post" id="post-9068">
+    <div class="subject"><a href="#post-9068">ret xx and com</a></div>
+    <div class="body">OF COURSE you end up with an exception.<br /><br />What's on the stack just after the passed parameters?<br /><br />That would be the return address, and that's very critical. Change the ret addr and you essentially jump to some random address and start executing code there.<br /><br />No wonder it promptly GPFs.<br /><br /><br />MASM has some very concise built in macros to handle this, those being the PROC and ENDP block. Any 'ret' inside such a block will also automatically generate the correct stack clean up code.<br /><br />It's a wheel, it is round, and you cannot generate code any more efficient, so why not use the existing tool?</div>
+    <div class="meta">Posted on 2001-10-10 01:54:02 by Ernie</div>
+   </div>
+   <div class="post" id="post-9123">
+    <div class="subject"><a href="#post-9123">ret xx and com</a></div>
+    <div class="body">You're not getting what I'm saying...<br /><br />I don't want to code in MASM :) I hate the compile times! If I had it my way, I'd program in SpAsm or FASM, but the problem is when I try and use DX8 code that has the stack killing thing is I don't know when to kill it, and when not, so how would I go about finding out, or writing a macro that would do it for me? I don't understand how MASM knows, but I don't.</div>
+    <div class="meta">Posted on 2001-10-10 12:59:54 by Kenny</div>
+   </div>
+   <div class="post" id="post-9128">
+    <div class="subject"><a href="#post-9128">ret xx and com</a></div>
+    <div class="body">Maybe in order for MASM to know, it need a longer compile time :grin:<br /><br /><em>...hardcore MASM fan here!</em><br />NaN</div>
+    <div class="meta">Posted on 2001-10-10 14:07:28 by NaN</div>
+   </div>
+   <div class="post" id="post-9143">
+    <div class="subject"><a href="#post-9143">ret xx and com</a></div>
+    <div class="body"><strong>Ernie</strong>, I have a better wheel, but who cares.  We are not going to rewrite windows for me. :)<br /><br /><strong>Kenny</strong>, I didn't know DX8 had C-calling type functions?<br />(i.e. You shouldn't need to fix the stack?)<br />The <strong>return</strong> is a macro that puts a value into the <strong>EAX</strong> register, and that is what is confusing you?  Or maybe I am wrong? :)<br /><br /><strong>NaN</strong>, a level of understanding is lost in just using the tools without the understanding, and we see that time and again here on the board.  Using a bare bones assembler is one way of knowing what's really going on.  FASM is a great tool for such a small piece of code. :)</div>
+    <div class="meta">Posted on 2001-10-10 17:37:33 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-9191">
+    <div class="subject"><a href="#post-9191">ret xx and com</a></div>
+    <div class="body">OK, when to use:<br />1) When to use &quot;add esp, <em>blah</em>&quot;<br />Use this after a call to a C calling convention function.<br /><br />Because?<br />Because the C calling convention doesn't clean up after itself, so you must do it instead!<br /><br />2) When to use &quot;leave&quot;<br />Use leave when you wish to get rid of the stack frame created by &quot;enter&quot;, or &quot;push ebp&quot;; &quot;mov  ebp, esp&quot;.<br /><br />Because?<br />Because if you don't all the locals will be left on the stack, so when you come to &quot;ret&quot; it will pop one of these local vars instead of the return address (and a whole lot of badness ensues)!<br /><br />3) When to use &quot;ret xx&quot;<br />Use &quot;ret xx&quot; when you wish to leave a function. The value of xx is decided as follows:<br />- Is the function C style? If yes xx = 0<br />- Else xx = (no of arguments passed to the function) * SIZEOF(arguments).<br /><br />Because?<br />Because the ret function will add xx to esp for you, hence removing the need for stack clean-up (except in C calling convention functions which don't want the stack cleaned up in order to fit in with the convention).<br /><br />Mirno<br /><br />P.S. I agree with bitRAKE, we come to depend on the tools to such a degree that we don't understand them anymore.<br />The whole reason I like assembly is because I get away from that, and learn a bit more about why things work the way they do.</div>
+    <div class="meta">Posted on 2001-10-11 08:58:33 by Mirno</div>
+   </div>
+   <div class="post" id="post-9207">
+    <div class="subject"><a href="#post-9207">ret xx and com</a></div>
+    <div class="body">Point taken... :)<br /><br />.. but from an engineering standpoint... &quot;if it aint broke, dont fix it&quot;, this is why i like MASM so much.<br /><br />NaN</div>
+    <div class="meta">Posted on 2001-10-11 13:27:47 by NaN</div>
+   </div>
+   <div class="post" id="post-9219">
+    <div class="subject"><a href="#post-9219">ret xx and com</a></div>
+    <div class="body">Hi,<br /><br />The PROC and ENDP-macros makes it very easy to handle all the local stuff you probably need in a subprocedure ... but it cost you one of 7 useable register ... so I will never like this hll-mechanism for assembly invoked by mnemonics like enter/leave (I don't have liked it on MC-68xxx already ...)<br /><br />What I have did is to define some little macros which handles my locals with direct esp-addressing. The only difficult is that if you use invokes in your procedures you have to recalculate the offsets if locals are used as parameters ... some exercising and you will do this without thinking about it !<br /><br />Greetings, CALEB</div>
+    <div class="meta">Posted on 2001-10-11 18:20:57 by Caleb</div>
+   </div>
+   <div class="post" id="post-9220">
+    <div class="subject"><a href="#post-9220">ret xx and com</a></div>
+    <div class="body">BitRAKE: There are MULTIPLE returns, and they are returned in the stack. I have no clue why, but I would like to know.<br /><br />NaN: I don't care so much as the compile time is longer, I'm more just curious now. I want to know why :)<br /><br />I'll show you guys the code, but I DON'T put anythign on the stack accept to call the function, but when the function is done, I need to add esp,xx or to ret xx. I'll post SpAsm code, but I can whip up some quick FASM code for ya if you want me too.<br /><br />EDIT:<br />Lemme explain what I mean by &quot;return&quot;<br /><br />HRESULT GetIndices(<br />  IDirect3DIndexBuffer8** ppIndexData,<br />  UINT* pBaseVertexIndex<br />);<br /><br />Parameters<br />ppIndexData <br /> Address of a pointer to an IDirect3DIndexBuffer8 interface, representing the returned index data. <br />pBaseVertexIndex <br /> Pointer to a UINT value, holding the returned base value for vertex indices. This value is added to all indices prior to referencing vertex data, defining a starting position in the vertex streams. <br /><br />So what happens is I call GetIndices, and then it goes like this:<br /><br />eax = returnfail/succede<br />esp = ppIndexData<br />esp+4 = pBaseVertexIndex<br /><br />See now kinda?</div>
+    <div class="meta">Posted on 2001-10-11 19:00:04 by Kenny</div>
+   </div>
+   <div class="post" id="post-9229">
+    <div class="subject"><a href="#post-9229">ret xx and com</a></div>
+    <div class="body"><div class="quote">NaN: I don't care so much as the compile time is longer, I'm more just curious now. I want to know why </div><br /><br />This i can truely respect. Sorry, if I was coming across as opposed to your inquest.<br /><br />Best of Luck.. (cause i have no answers :tongue: )<br /><br />NaN</div>
+    <div class="meta">Posted on 2001-10-11 21:48:20 by NaN</div>
+   </div>
+   <div class="post" id="post-9240">
+    <div class="subject"><a href="#post-9240">ret xx and com</a></div>
+    <div class="body">Let's starrt here:<br /><br /><pre><code><br />HRESULT GetIndices&#40; IDirect3DIndexBuffer8** ppIndexData, <br />                                  UINT* pBaseVertexIndex &#41;; <br /></code></pre><br /><br />That means when calling GetIndices you are pushing 3 dwords onto the stack, two pointer addresses, and the object reference. If you are pushing any more, well, that's why you have to adjust the stack yourself.<br /><br /><br />Also, no way will this function adjust register values for you. It wants memory pointers. And yeah, figuring out these pointers is a royal mind-boink. It works like this:<br /><br /><pre><code><br />.data?<br />pSomeBuffer  dword ?<br /><br />.code<br />invoke HeapAlloc hHeap, ByteCount  ; get some memory<br />mov pSomeData, eax                         ; save pointer to memory<br />invoke SomeFunct  ADDR pSomeData<br /><br /></code></pre><br /><br />(don't look too hard at the HeapAlloc line, I didn't check the funct proto)<br /><br />Note we pass WHERE we store the pointer, not the pointer itself. This has some interesting advantages, mostly it allows the called function not only to access our entire structure, but it also allows the function to free the struct we passed in, and create an entirely new one, and by knowing where we store our pointer, change that pointer to this new struct.<br /><br />Knowing WHY things are passed &quot;** ppSomeData&quot; may help you see how to accomplish it.</div>
+    <div class="meta">Posted on 2001-10-11 23:10:52 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Problem with backgroundimage (richedit) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16531" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16531">Problem with backgroundimage (richedit)</a></p>
+   <div class="post" id="post-128556">
+    <div class="subject"><a href="#post-128556">Problem with backgroundimage (richedit)</a></div>
+    <div class="body">Hi, i cant get the background image work:<br /><br /><pre><code><br />	.ELSEIF uMsg==WM_PAINT  ;	<br />	mov eax, hWnd  ;	<br />	.IF eax == h_Dlg  <br />			invoke BeginPaint,hwndRichEdit,addr ps  <br />			mov    hdc,eax  <br />			invoke CreateCompatibleDC,hdc  	<br />		mov    hMemDC,eax  <br />			invoke SelectObject,hMemDC,hBitMap  <br />			invoke GetClientRect,hwndRichEdit,addr rect  <br />			invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY  			<br />invoke DeleteDC,hMemDC  <br />			invoke EndPaint,hwndRichEdit,addr ps  ;	<br />	.ENDIF</code></pre> <br /><br /><pre><code>	.ELSEIF uMsg == WM_INITDIALOG  	<br />	;mov eax,hWnd  		<br />;mov h_Dlg,eax  	<br />	invoke LoadBitmap,hInstance, ADDR DB_Bitmap   	<br />	mov hBitMap,eax  </code></pre> <br /><br />I cant see anything from my picture.<br /><br /><br />Greets</div>
+    <div class="meta">Posted on 2003-12-21 10:41:40 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-128566">
+    <div class="subject"><a href="#post-128566">Problem with backgroundimage (richedit)</a></div>
+    <div class="body">just some ideas.. <br /><br />1) Have you subclassed the richedit ? I think you should paint inside the WM_PAINT of the subclassing procedure, without any IF .<br /><br />2) mmm are hWnd or h_Dlg a local variables ?  If yes, that's the reason, local variables are lost inside a window procedure. <br /><br />B7</div>
+    <div class="meta">Posted on 2003-12-21 12:32:26 by Bit7</div>
+   </div>
+   <div class="post" id="post-128568">
+    <div class="subject"><a href="#post-128568">Problem with backgroundimage (richedit)</a></div>
+    <div class="body">i have both! Subcallsing and global variables.<br /><br />But what now?<br />I have the feeling that its to few.<br />The bmphandle ist right.<br /><br />Do i neet or set mor options?<br /><br /><br />Greets!</div>
+    <div class="meta">Posted on 2003-12-21 12:37:21 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-128651">
+    <div class="subject"><a href="#post-128651">Problem with backgroundimage (richedit)</a></div>
+    <div class="body">ok, i think it's just some code mistake...<br /><br />Sorry, i don't have much time to try the code myself it, but just try some other ideas..<br /><br />1) i don't see the reason of creating the compatibleDC at every WM_PAINT it's just a weaste of resource. Create it in WM_INITDIALOG.  Just leave the select object inside the WM_PAINT and don't Delete the compatible DC inside the WM_PAINT. Do it in a WM_CLOSE.<br /><br />2) i don't see any rason of the .IF inside the WM_PAINT<br /><br />try these suggestions, hope help.<br /><br />B7</div>
+    <div class="meta">Posted on 2003-12-22 12:13:18 by Bit7</div>
+   </div>
+   <div class="post" id="post-128770">
+    <div class="subject"><a href="#post-128770">Re: Problem with backgroundimage (richedit)</a></div>
+    <div class="body">Hi :)<br />This might work...<br />Inside window procedure for subclassed richedit control (NOT dialog box):<br /><pre><code><br />	local rect&#58;RECT<br />	local bitmap&#58;BITMAP<br />	local ps&#58;PAINTSTRUCT<br /><br />	mov eax,uMsg<br />	.IF eax == WM_PAINT<br />		invoke GetClientRect,hWnd,addr rect<br />		invoke GetObject,hBitMap,addr bitmap,sizeof bitmap<br />		mov eax,bmHeight<br />		neg eax<br />		.if ! sign?<br />			mov bmHeight,eax<br />		.endif<br />		invoke BeginPaint,hwndRichEdit,addr ps  <br />		invoke CreateCompatibleDC,eax<br />		mov hMemDC,eax  <br />		invoke SelectObject,hMemDC,hBitMap  <br />		invoke StretchBlt,ps.hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,bitmap.bmWidth,bitmap.bmHeight,SRCCOPY<br />		invoke DeleteDC,hMemDC  <br />		invoke EndPaint,hwndRichEdit,addr ps<br />		xor eax,eax<br />		ret<br />	.ELSEIF eax == WM_ERASEBKGRND<br />		;Prevents flicker... unless we're not painting the whole surface.<br />		xor eax,eax<br />		ret<br />	.ENDIF</code></pre><br />I would also recommend to put uMsg in eax (so it has to be read only once, and smaller code).<br />Try as well to use resource IDs instead of resource names, it's faster and using strings to do the same as a DWORD is bloating your code.<br />At your dialog box procedure: (uMsg in eax)<br /><pre><code>	.ELSEIF eax == WM_INITDIALOG  	<br />		invoke LoadBitmap,hInstance,IDB_BITMAP1	<br />		mov hBitMap,eax  </code></pre> <br />Somewhere else:<br /><pre><code>IDB_BITMAP1 equ 100	;You can use any other number</code></pre><br />And at your resource script:<br /><pre><code>#define IDB_BITMAP 100<br />IDB_BITMAP BITMAP DISCARDABLE &quot;MyBitmap.bmp&quot;</code></pre><br />It's not the optimal way to do it, but IMHO it should work. If it does, try creating the memory DC and getting the bitmap info only once (faster).</div>
+    <div class="meta">Posted on 2003-12-23 17:16:30 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-128948">
+    <div class="subject"><a href="#post-128948">Problem with backgroundimage (richedit)</a></div>
+    <div class="body">**** all! &lt;-- not &quot;fuck all!&quot;, but &quot;**** all!&quot;<br /><br />I didnt get email notification and was quite disappointed, but now i see your helped me! Thanks!<br /><br />I did what you said, but nothing changed. I cant see any picture, when i want to write something only strokes(||| || ||||) appears.<br /><br />Do i neet a speyify option in my dialog? or for the richedeitcreation ?<br /><br />It is possible to set the picture transparent?<br /><br />Something else its possible to load an extern bitmap? - as i tray at the beginning, or have it to bee a resource identifer<br /><br /><br />Thank you all:stupid:</div>
+    <div class="meta">Posted on 2003-12-26 02:58:50 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-128972">
+    <div class="subject"><a href="#post-128972">Problem with backgroundimage (richedit)</a></div>
+    <div class="body"><div class="quote"><br />**** all! &lt;-- not &quot;fuck all!&quot;, but &quot;**** all!&quot;<br /><br />I didnt get email notification and was quite disappointed, but now i see your helped me! Thanks!<br /><br />I did what you said, but nothing changed. I cant see any picture, when i want to write something only strokes(||| || ||||) appears.<br /><br />Do i neet a speyify option in my dialog? or for the richedeitcreation ?<br /><br />It is possible to set the picture transparent?<br /><br />Something else its possible to load an extern bitmap? - as i tray at the beginning, or have it to bee a resource identifer<br /><br /><br />Thank you all:stupid: </div><br />:)<br />My mistake, remove the xor eax,eax/ret and call the default window procedure instead.<br />If that doesn't work, try painting the image on WM_ERASEBKGND instead.<br />If that doesn't work either (and if no one points out a cleaner solution :grin: ) take a look at this thread, and try to use the same approach for a richedit instead of a treeview:<br /><br /><a target="_blank" href="">http://www.asmcommunity.net/board/showthread.php?threadid=13691&amp;highlight=treeview+with+a+background</a> <br /><br />As for the external file, yes, you can load the bitmap from anywhere. The masm32.lib library comes with some picture loading functions that you might find handy, they load jpg and gif files into an hbmp handle.</div>
+    <div class="meta">Posted on 2003-12-26 11:09:05 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

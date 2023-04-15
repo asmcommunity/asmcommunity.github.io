@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Treeview Message Probem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19426" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19426">Treeview Message Probem</a></p>
+   <div class="post" id="post-149788">
+    <div class="subject"><a href="#post-149788">Treeview Message Probem</a></div>
+    <div class="body">G'day All,<br /><br />I am trying to use a Treeview control in a way that changes the item image of a particular item when some other item is clicked. This is used to indicate that a particular item is a valid drop target.<br /><br />I have got this Treeview control to work, based on Iczelion?s Treeview tutorial #19 . <br /><br /><br />The problem is that the &quot;WM_LBUTTONUP&quot; mouse-up in a Treeview item does not work as expected. <br /><br />When left-clicking a Treeview item, a &quot;WM_LBUTTONUP&quot; message is not sent to the Treeview window procedure on left-mouse-up. It works if the cursor is moved to another node before the left-mouse-up, but that is not very practical.<br /><br /><pre><code><br />TreeViewProc proc hWin&#58;HWND, uMsg&#58;UINT, wParam&#58;WPARAM, lParam&#58;LPARAM<br />	...<br />	mov		eax, uMsg<br /><br />	.if&#40;eax==WM_COMMAND&#41;<br />		;<br />	...<br />	.elseif&#40;uMsg==WM_LBUTTONUP&#41;<br />		; Mouse-up in a Treeview item does not work as expected !!!<br />	...<br /></code></pre><br /><br />A workaround that seems to work - but not idealy - is to send a custom <br />&quot;WM_LBUTTONUP&quot; message to the Treeview procedure<br /><pre><code><br />	...<br />	.elseif&#40;uMsg==WM_MOUSEMOVE&#41;<br />	<br />		; Simulate a &quot;WM_LBUTTONUP&quot; event ...<br />		.if&#40;...&#41;<br />			invoke SendMessage, hPrjTrv, WM_LBUTTONUP_X, wParam, lParam<br />		.endif<br /><br />	; Custom WM_LBUTTONUP message<br />	.elseif&#40;uMsg==WM_LBUTTONUP_X&#41;<br />		; Handle the mouse-up in the Treeview item<br />		...<br /></code></pre><br /><br />Does anyone know how to handle the &quot;WM_LBUTTONUP&quot; message correctly,<br />in the Treeview item ?<br /><br /><br />Thanks<br />Dorf</div>
+    <div class="meta">Posted on 2004-09-14 18:12:42 by dorf</div>
+   </div>
+   <div class="post" id="post-149821">
+    <div class="subject"><a href="#post-149821">Treeview Message Probem</a></div>
+    <div class="body">how about processing the TVN_SELCHANGING or TVN_SELCHANGED?<br /><br />you can also process the NM_CLICK message. then use GetCursorPos,ScreenToClient,TVM_HITTEST to determine the what item is clicked.<br /><br />WM_LBUTTONUP is processed only when someone clicks in the treeview but not on an item or subitem.</div>
+    <div class="meta">Posted on 2004-09-15 13:50:12 by smurf</div>
+   </div>
+   <div class="post" id="post-149828">
+    <div class="subject"><a href="#post-149828">Treeview Message Probem</a></div>
+    <div class="body">Thanks smurf,<br /><br />I still cannot handle any of these messages on a mouse-up in the<br />Treeview node (with no mouse move).<br /><br />But that gave me an idea :)<br />I'll just add another call to my custom mouse-up message handler<br />in the regular &quot;WM_LBUTTONUP&quot; handler to handle all scenarios.<br /><br />Any better ideas ...<br /><br /><pre><code><br />TreeViewProc proc hWin&#58;HWND, uMsg&#58;UINT, wParam&#58;WPARAM, lParam&#58;LPARAM<br />	...<br />	.elseif&#40;uMsg==WM_MOUSEMOVE&#41;<br />	<br />		; Handle a mouse-up event in the Treeview item<br />		; &#40;not on a Treeview client area&#41;.<br />		.if&#40;DragTargetLive == TRUE &amp;&amp; DragMode == FALSE&#41;<br />			; Custom mouse-up message<br />			invoke SendMessage, hPrjTrv, WM_LBUTTONUP_X, wParam, lParam<br />		.endif<br />		...<br /><br />	; Custom WM_LBUTTONUP message<br />	.elseif&#40;uMsg==WM_LBUTTONUP_X&#41;<br />		; Note&#58; Mouse-up in a Treeview item does not work as expected !!!<br />		; Revert the original &quot;target&quot; &#40;drag-n-drop candidate&#41; node images if we<br />		; have a WM_LBUTTONUP or WM_MOUSEMOVE<br />		.if&#40;DragTargetLive == TRUE&#41;<br />			mov	tvi.imask, TVIF_IMAGE	; The Treeview image is changing<br />			m2m	tvi.hItem, hTVItem01		; The &quot;target&quot; node handle<br />			mov	tvi.iImage, 1				; The old &quot;target&quot; image index. zero based<br />			invoke SendMessage, hPrjTrv, TVM_SETITEM, 0, addr tvi			<br />			mov DragTargetLive, FALSE		; The &quot;target&quot; node is no longer &quot;live&quot;<br />		.endif<br /><br /><br />	.elseif&#40;uMsg==WM_LBUTTONUP&#41;<br /><br />		; Handle a mouse-up event in the Treeview client area <br />		; &#40;not on a Treeview item&#41;.<br />		.if&#40;DragTargetLive == TRUE &amp;&amp; DragMode == FALSE&#41;<br />			; Custom mouse-up message if any drag targets are &quot;live&quot; <br />			; &#40;and user is not draging&#41;.<br />			invoke SendMessage, hPrjTrv, WM_LBUTTONUP_X, wParam, lParam<br />		.endif<br /><br />		...<br /></code></pre><br /><br /><br />Heres my revised Treeview drag-and-drop demo.<br /><img src="http://www.phpmvc.net/asm/art/Treeview-drag-n-drop.png" /><br /><br /><br />Thanks to all the ASM guys for the awesome tutorials and source/examples.<br /><br />Dorf</div>
+    <div class="meta">Posted on 2004-09-15 21:24:26 by dorf</div>
+   </div>
+  </div>
+ </body>
+</html>

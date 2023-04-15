@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>C++ &amp; asm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29804" />
+  <link rel="prev" href="../?id=29804&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=29804">C++ &amp; asm</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=29804&amp;page=1" style="">&laquo;</a><a href="../?id=29804&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="29804" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-212256">
+    <div class="subject"><a href="#post-212256">Re: C++ &amp; asm</a></div>
+    <div class="body"><pre><code><br />popcount:<br />;eax = value to count bits.<br />;return eax = count of bits.<br />mov ebx,eax<br />and eax,33333333h<br />xor ebx,eax<br />shr ebx,2<br />add eax,ebx<br /><br />mov ebx,eax<br />and eax,0f0f0f0fh<br />xor ebx,eax<br />shr ebx,4<br />add eax,ebx<br /><br />mov ebx,eax<br />and eax,00ff00fffh<br />xor ebx,eax<br />shr ebx,8<br />add eax,ebx<br /><br />mov ebx,eax<br />and eax,0000fffffh<br />xor ebx,eax<br />shr ebx,16<br />add eax,ebx<br />ret<br /></code></pre><br /><br />as you can see, the fast asm method is not so fast.<br />but is faster than a loop.<br /></div>
+    <div class="meta">Posted on 2010-07-09 06:43:29 by edfed</div>
+   </div>
+   <div class="post" id="post-212259">
+    <div class="subject"><a href="#post-212259">Re: C++ &amp; asm</a></div>
+    <div class="body"><div class="quote"><br />as you can see, the fast asm method is not so fast.<br />but is faster than a loop.<br /></div><br /><br />Yes, you are right, but where did you find this code ?<br />The links I proposed include SSE code, like:<br /><br /><pre><code><br />; xmm0 - input (16 bytes)<br />; xmm7 - POPCOUNT_4bit&nbsp; -- lookup table<br />; xmm6 - MASK_bits03 = packed_byte(0x0f) -- mask 4 lower bits<br /><br />movdqa&nbsp; %%xmm0, %%xmm1<br />psrlw&nbsp; &nbsp; &nbsp;  $4, %%xmm1<br /><br />pand&nbsp; &nbsp; %%xmm6, %%xmm0&nbsp; ; xmm0 - lower nibbles<br />pand&nbsp; &nbsp; %%xmm6, %%xmm1&nbsp; ; xmm1 - higher nibbles<br /><br />movdqa&nbsp; %%xmm7, %%xmm2&nbsp; ; since instruction pshufb modifes LUT<br />movdqa&nbsp; %%xmm7, %%xmm3&nbsp; ; it must be saved for further use<br /><br />pshufb&nbsp; %%xmm0, %%xmm2&nbsp; ; xmm2 = vector of popcount for lower nibbles<br />pshufb&nbsp; %%xmm1, %%xmm3&nbsp; ; xmm3 = vector of popcount for higher nibbles<br /><br />paddb&nbsp;  %%xmm3, %%xmm2&nbsp; ; xmm2 += xmm3 -- vector of popcount for bytes<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2010-07-10 17:06:54 by MCoder</div>
+   </div>
+   <div class="post" id="post-212329">
+    <div class="subject"><a href="#post-212329">Re: C++ &amp; asm</a></div>
+    <div class="body">I have now some 64 bits popcount, but it needs more optimizations (most notably by reducing the number of registers used).<br /><br />Code for SSE2:<br /><pre><code><br />Mask0x55	DD	055555555H,055555555H,055555555H,055555555H<br />Mask0x33	DD	033333333H,033333333H,033333333H,033333333H<br />Mask0x0F	DD	00f0f0f0fH,00f0f0f0fH,00f0f0f0fH,00f0f0f0fH<br /><br />POPCNT_SSE2:<br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm0, XMMWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm2, XMMWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm6, xmm2<br />&nbsp; &nbsp; &nbsp; &nbsp; movq&nbsp; &nbsp; &nbsp; xmm1, QWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm3, xmm1<br />&nbsp; &nbsp; &nbsp; &nbsp; psrlw&nbsp; &nbsp;  xmm1, 1<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm1, xmm0<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm3, xmm0<br />&nbsp; &nbsp; &nbsp; &nbsp; paddb&nbsp; &nbsp;  xmm3, xmm1<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm6, xmm3<br />&nbsp; &nbsp; &nbsp; &nbsp; psrlw&nbsp; &nbsp;  xmm3, 2<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm3, xmm2<br />&nbsp; &nbsp; &nbsp; &nbsp; paddb&nbsp; &nbsp;  xmm6, xmm3<br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm4, xmm6<br />&nbsp; &nbsp; &nbsp; &nbsp; pxor&nbsp; &nbsp; &nbsp; xmm5, xmm5<br />&nbsp; &nbsp; &nbsp; &nbsp; psrlw&nbsp; &nbsp;  xmm4, 4<br />&nbsp; &nbsp; &nbsp; &nbsp; paddb&nbsp; &nbsp;  xmm6, xmm4<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm6, XMMWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; psadbw&nbsp; &nbsp; xmm6, xmm5<br />&nbsp; &nbsp; &nbsp; &nbsp; movd&nbsp; &nbsp; &nbsp; eax, xmm6<br />&nbsp; &nbsp; &nbsp; &nbsp; ret<br /></code></pre><br /><br />Code for SSE3:<br /><pre><code><br />Mask0x0F	DD	00f0f0f0fH,00f0f0f0fH,00f0f0f0fH,00f0f0f0fH<br />BitCount	DD	002010100H,003020201H,003020201H,004030302H<br />POPCNT_SSE3:<br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm1, XMMWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm5, XMMWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; movq&nbsp; &nbsp; &nbsp; xmm2, QWORD PTR <br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm0, xmm2<br />&nbsp; &nbsp; &nbsp; &nbsp; movdqa&nbsp; &nbsp; xmm3, xmm5<br />&nbsp; &nbsp; &nbsp; &nbsp; psrlw&nbsp; &nbsp;  xmm2, 4<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm0, xmm1<br />&nbsp; &nbsp; &nbsp; &nbsp; pand&nbsp; &nbsp; &nbsp; xmm2, xmm1<br />&nbsp; &nbsp; &nbsp; &nbsp; pxor&nbsp; &nbsp; &nbsp; xmm4, xmm4<br />&nbsp; &nbsp; &nbsp; &nbsp; pshufb&nbsp; &nbsp; xmm5, xmm0<br />&nbsp; &nbsp; &nbsp; &nbsp; pshufb&nbsp; &nbsp; xmm3, xmm2<br />&nbsp; &nbsp; &nbsp; &nbsp; paddb&nbsp; &nbsp;  xmm5, xmm3<br />&nbsp; &nbsp; &nbsp; &nbsp; psadbw&nbsp; &nbsp; xmm5, xmm4<br />&nbsp; &nbsp; &nbsp; &nbsp; movd&nbsp; &nbsp; &nbsp; eax, xmm5<br />&nbsp; &nbsp; &nbsp; &nbsp; ret<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2010-07-18 20:12:39 by MCoder</div>
+   </div>
+   <div class="post" id="post-212443">
+    <div class="subject"><a href="#post-212443">Re: C++ &amp; asm</a></div>
+    <div class="body"><div class="quote"><br />I have now some 64 bits popcount, but it needs more optimizations (most notably by reducing the number of registers used).<br /></div><br /><pre><code>	; algo from hackers delight<br />.data<br />	align 16<br />	msk77 dd 77777777h,77777777h,77777777h,77777777h<br />	msk0F dd 0F0F0F0Fh,0F0F0F0Fh,0F0F0F0Fh,0F0F0F0Fh<br />.code<br />	movq xmm0,val<br />	movdqa xmm1,xmm0<br />	repeat 3<br />	psrld xmm1,1<br />	pand xmm1,oword ptr msk77<br />	psubd xmm0,xmm1<br />	endm<br />	movdqa xmm1,xmm0<br />	psrld xmm1,4<br />	paddd xmm0,xmm1<br />	pand xmm0,oword ptr msk0F<br />	pxor xmm1,xmm1<br />	psadbw xmm0,xmm1<br />	movd eax,xmm0</code></pre></div>
+    <div class="meta">Posted on 2010-07-26 16:41:11 by drizz</div>
+   </div>
+   <div class="post" id="post-212447">
+    <div class="subject"><a href="#post-212447">Re: C++ &amp; asm</a></div>
+    <div class="body">Nice, and I confirm that this works !</div>
+    <div class="meta">Posted on 2010-07-26 18:25:09 by MCoder</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=29804&amp;page=1" style="">&laquo;</a><a href="../?id=29804&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="29804" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

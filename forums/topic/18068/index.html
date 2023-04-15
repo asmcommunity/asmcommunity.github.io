@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>stack probe - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18068" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=18068">stack probe</a></p>
+   <div class="post" id="post-139499">
+    <div class="subject"><a href="#post-139499">stack probe</a></div>
+    <div class="body"><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=18062">http://www.asmcommunity.net/board/index.php?topic=18062</a><br />After reading this thread, I felt like writing a stack probe routine :)<br />I needed it for my own small C runtime anyway, and thought it would be nicer to write my own rather than stealing microsoft's. The MS version also seemed more complicated than need be :)<br /><br />I guess the main focus ought to be size rather than speed - how often do you call routines that uses huge amount of local storage? That said, there's no reason to make it overly slow, either. On my machine (P4) the first routine clocks somewhat slower than the MS version, and the second is about the same speed. Nope, I didn't do very comprehensive tests :)<br /><br />I'm posting this mainly for fun, but somebody might find it useful. And if you feel like improving size or speed or both :), it would be fun to see what you can come up with, my code is fairly lame ^_^<br /><br /><div class="quote"><br />;Purpose:<br />;	Probe each page of stack memory for routines with a large stack frames,<br />;	thus utilizing the guard page mechanism to get all the memory committed.<br />;	<a target="_blank" href="http://support.microsoft.com/default.aspx?scid=kb;en-us;100775">http://support.microsoft.com/default.aspx?scid=kb;en-us;100775</a><br />;<br />;Entry:	EAX = size of local frame<br />;Exit:	ESP = new stackframe, if successful<br />;Uses:	EAX<br /></div></div>
+    <div class="meta">Posted on 2004-04-19 17:53:18 by f0dder</div>
+   </div>
+   <div class="post" id="post-139501">
+    <div class="subject"><a href="#post-139501">stack probe</a></div>
+    <div class="body">Can't this be done with a couple ENTER instructions or one in a loop. ;)</div>
+    <div class="meta">Posted on 2004-04-19 18:34:50 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-139524">
+    <div class="subject"><a href="#post-139524">stack probe</a></div>
+    <div class="body">Hmm.<br /><br />ENTER sets up EBP and doesn't actually touch the pages on the stack? (except of course from the ebp-pushing).<br /><br />But perhaps you're thinking of saving ebp, and using &quot;ENTER 0, 4096&quot; in a loop? Hm, let's see... :p</div>
+    <div class="meta">Posted on 2004-04-20 00:32:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-139525">
+    <div class="subject"><a href="#post-139525">stack probe</a></div>
+    <div class="body"><pre><code>; ensure stack pages commited for large local data<br />TouchStack MACRO iSize&#58;REQ<br />	LOCAL tag<br /><br />	lea eax, &#91;esp - &#40;iSize&#41;&#93;<br />  tag&#58;	enter PAGE_SIZE - 4, 0<br />	cmp eax, esp<br />	jc tag<br />	mov esp, eax<br />ENDM</code></pre>...really small if you don't care about EBP. :)</div>
+    <div class="meta">Posted on 2004-04-20 00:47:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-139526">
+    <div class="subject"><a href="#post-139526">stack probe</a></div>
+    <div class="body">I think it's a requirement of _chkstk to only touch EAX though :/ - but yes, if you don't care about EBP, that is pretty small :)<br /><br />(and slow ;))</div>
+    <div class="meta">Posted on 2004-04-20 00:50:28 by f0dder</div>
+   </div>
+   <div class="post" id="post-139527">
+    <div class="subject"><a href="#post-139527">stack probe</a></div>
+    <div class="body">Here's a silly one - slower&amp;larger than _chkstk2, I probably missed something very obvious :stupid:<br /><br /><pre><code><br />_chkstk3 PROC		; 1Bh bytes<br />	push	ebp<br />	push	eax<br />	mov		eax, esp<br /><br />@@touchloop&#58;<br />	enter	PAGESIZE-4, 0			; touch &#40;because of push ebp&#41; + sub stack<br />	sub		dword ptr &#91;eax&#93;, 4096	; one less page to go<br />	jns		@@touchloop<br /><br />	sub		esp, &#91;eax&#93;				; sub negative value = re-increase ESP<br /><br />	add		esp, 12					; adjust for push ebp + push eax + ret-eip<br />	mov		ebp, &#91;eax+4&#93;<br />	jmp		dword ptr &#91;eax+8&#93;		; ret<br />_chkstk3 ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2004-04-20 00:53:31 by f0dder</div>
+   </div>
+   <div class="post" id="post-139528">
+    <div class="subject"><a href="#post-139528">stack probe</a></div>
+    <div class="body">If you want to create a small executable that is compressed then use a fully unrolled version producing code like...<pre><code>	mov eax, ebp<br />	enter PAGE_SIZE-4, 0<br />	...&#40;n times&#41;...<br />	enter PAGE_SIZE-4, 0<br />	enter iSize - n*&#40;PAGE_SIZE&#41;-4, 0<br />	mov ebp, eax</code></pre>...of course saving EBP only if you need it.<br /><br />Also, a compressor that supports scaling should be used for maximum compression.  The scaling can be in the compression algorithm itself (<a target="_blank" href="http://sequence.rutgers.edu/sequitur/">Sequitur</a>) or through some type of preprocessing (n-RLE) that colapses instruction patterns of variable length.</div>
+    <div class="meta">Posted on 2004-04-20 01:01:12 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-139531">
+    <div class="subject"><a href="#post-139531">stack probe</a></div>
+    <div class="body">Cute trick :) - got any ideas on improving the version that takes the frame size in eax? Here's another early-morning version based on your idea :)<br /><br /><div class="quote"><br />_chkstk4 PROC		; 1Ah bytes<br />	neg		eax<br />	lea		eax, 		; target esp<br /><br />	push	ebp						; save ebp for later<br />	push	eax<br />	mov		eax, esp<br /><br />@@touchloop:<br />	enter	PAGESIZE-4, 0			; touch (because of push ebp) + sub stack<br />	cmp		dword ptr , esp	; below target yet?<br />	jc		@@touchloop<br /><br />	mov		esp, 				; set up final esp<br />	mov		ebp, 			; restore ebp<br />	jmp		dword ptr 		; ret<br />_chkstk4 ENDP<br /></div></div>
+    <div class="meta">Posted on 2004-04-20 01:10:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-139600">
+    <div class="subject"><a href="#post-139600">stack probe</a></div>
+    <div class="body">I played with it a little, but haven't tested:<br /><pre><code>sub eax, esp<br />push ebp<br />lea ebp, &#91;esp+8&#93;<br />neg eax<br />@@touchloop&#58;<br />enter PAGESIZE - 4*3, 2<br />cmp eax, esp<br />jc @@touchloop<br />mov ebp, &#91;ebp-8&#93;<br />mov &#91;eax&#93;, ebp<br />mov ebp, &#91;esp+PAGESIZE - 4*2&#93;<br />mov esp, eax<br />retn</code></pre>Too, tricky and even slower. :(  I don't like supporting such rigid interfaces at run-time.  They should colapse into optimal code when the routines are so small.</div>
+    <div class="meta">Posted on 2004-04-20 15:55:42 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-139601">
+    <div class="subject"><a href="#post-139601">stack probe</a></div>
+    <div class="body">*shrug*<br /><br />I don't think chkstk2 is too bad... but yes, you could get it smaller if you inlined the code in the function body and relied on a compile-time known frame size. I guess they opted for the mov &quot;eax, size&quot; + &quot;call _chkesp&quot; method to possibly save some bytes in large programs with many functions with a large amount of locals :rolleyes:.<br /><br />I think the speed of the algorithm drowns in the exceptions caused - then again, I don't know if stack pages are ever decommitted, so it might be a &quot;few-times&quot; hit only, when entering deeper nested functions, or the next function with a larger stack frame size.<br /><br />I guess it's also nice having control of the _chkesp function - perhaps one could consider using VirtualAlloc to commit all the pages in one go, instead of touching each one and possibly causing a lot of pagefaults? Dunno if it's a good idea and if there's speed benefits from this in the long run :)<br /><br />Of course the _chkesp can be turned completely off, if it's not required for your target platform (like, using a dos extender with PE file support).<br /><br />It might have been an idea to support a stackprobe switch that would insert per-function code.</div>
+    <div class="meta">Posted on 2004-04-20 16:31:56 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

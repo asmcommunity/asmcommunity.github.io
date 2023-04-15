@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>references to fields inside the same structure - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8551" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=8551">references to fields inside the same structure</a></p>
+   <div class="post" id="post-62797">
+    <div class="subject"><a href="#post-62797">references to fields inside the same structure</a></div>
+    <div class="body">...Not shure if this is a right place to put the thread in, but anyway,<br /><br />Imagine that You have a memory layout (I'll call it a structure), and at the end of this <br />layout You have two or more strings, each with length undefined.<br />However You also have two corresponding fields inside the same structure telling You the length of each string.<br />Suppose that these fields can be filled in by your program at run-time.<br /><pre><code><br />STRTESTSTRUCT STRUC<br />	str1_len	WORD ?<br />	str2_len	WORD ?<br />	str1		BYTE str1_len dup &#40;?&#41;	;&lt;--Sure, This gives A2006 'undefined symbol' error<br />	str2		BYTE &#40;STRTESTSTRUCT.str2_len&#41; dup &#40;?&#41; ;&lt;--A2006 too<br />STRTESTSTRUCT ENDS<br /></code></pre><br />The question is: How to put the right number of symbols (dup) into each string, knowing these<br />lengths from upper fileds of the structure? The offset of second string is undefined, lengths of both strings <br />are undefined too.<br /><br />Thanks for reading ;-)</div>
+    <div class="meta">Posted on 2002-10-21 06:16:46 by Andycar</div>
+   </div>
+   <div class="post" id="post-62801">
+    <div class="subject"><a href="#post-62801">references to fields inside the same structure</a></div>
+    <div class="body">Hi, Andy!<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=8432">Labels inside STRUCs</a> <br /><br />It's not exact solution but hope helps you.</div>
+    <div class="meta">Posted on 2002-10-21 06:43:34 by Four-F</div>
+   </div>
+   <div class="post" id="post-62811">
+    <div class="subject"><a href="#post-62811">references to fields inside the same structure</a></div>
+    <div class="body">That you want to do is very similar to UNICODE_STRING structure.<br />Try this. Not exactly what you want but may be it suits to your need.<br /><pre><code>.386<br />.model flat, stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />includelib \masm32\lib\user32.lib<br /><br />COUNTED_STRING STRUC<br />	str_len		WORD	?<br />	pstr		LPVOID	?<br />COUNTED_STRING ENDS<br /><br />DefineCS MACRO lbl, str&#58;REQ<br />	local dum<br />	dum db str, 0<br />	lbl COUNTED_STRING &#123;&#40;sizeof dum&#41;, offset dum&#125;<br />ENDM<br /><br />.data<br />DefineCS sname1, &quot;String2&quot;<br />DefineCS sname2, &quot;String4&quot;<br /><br />.code<br />start&#58;<br />invoke MessageBox, NULL, sname1.pstr, NULL, MB_OK<br />invoke MessageBox, NULL, sname2.pstr, NULL, MB_OK<br />ret<br />end start</code></pre><br /><br />And you'll  have:<br /><pre><code>.data&#58;00403000 szString2       db 'String2', 0<br />.data&#58;00403008                 dw 8<br />.data&#58;0040300A lpszString2     dd offset szString2<br />.data&#58;0040300E szString4       db 'String4', 0<br />.data&#58;00403016                 dw 8<br />.data&#58;00403018 lpszString2     dd offset szString4</code></pre></div>
+    <div class="meta">Posted on 2002-10-21 08:08:45 by Four-F</div>
+   </div>
+   <div class="post" id="post-62820">
+    <div class="subject"><a href="#post-62820">references to fields inside the same structure</a></div>
+    <div class="body"><div class="quote"><br />That you want to do is very similar to UNICODE_STRING structure.<br />Try this. Not exactly what you want but may be it suits to your need.<br /></div><br /><br />Privet, tezka ;-)<br /><br />Thanks for quick replies.<br />I think, the last solution is almost exactly what i need.<br />Thanks, man ;-)</div>
+    <div class="meta">Posted on 2002-10-21 09:09:10 by Andycar</div>
+   </div>
+   <div class="post" id="post-62895">
+    <div class="subject"><a href="#post-62895">references to fields inside the same structure</a></div>
+    <div class="body">Another solution: :)<pre><code>STRTESTSTRUCT MACRO nme&#58;REQ, string1&#58;REQ, string2&#58;REQ<br />	LOCAL s1, s2<br /><br />	s1 = @SizeStr&#40;string1&#41; - 1<br />	s2 = @SizeStr&#40;string2&#41; - 1<br /><br />	s_&amp;nme STRUCT<br />		str1_len	WORD ?<br />		str2_len	WORD ?<br />		str1		BYTE s1 dup &#40;0&#41;<br />		str2		BYTE s2 dup &#40;0&#41;<br />	s_&amp;nme ENDS<br /><br />	nme s_&amp;nme &#123;s1,s2,string1,string2&#125;<br />ENDM<br /><br /><br />	_DATA SEGMENT<br />		STRTESTSTRUCT TestName, &quot;String 1&quot;, &quot;String 2&quot;<br />	_DATA ENDS</code></pre>Now you can access TestName structure using the names you originally suggested!<br /><br />TestName.str1_len<br />TestName.str2_len<br />TestName.str1<br />TestName.str2</div>
+    <div class="meta">Posted on 2002-10-21 22:05:48 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-62951">
+    <div class="subject"><a href="#post-62951">references to fields inside the same structure</a></div>
+    <div class="body">I recalled that one time i had similar problem. Solution rof me was here (thanx bitRAKE for the tip):<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=6525">have trouble to define offset.</a> <br /><br />I guess it exactly what you want.<br />Assemble code-snippet below and load it to disassembler and you'll understand how it works.<br />Important here is that you can place $DefineCS macro in arbitrary location in your code.<br />But after linking you'll get consolidate arrays of COUNTED_STRING structures and array of strings.<br /><br /><br /><pre><code>.386<br />.model flat, stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />includelib \masm32\lib\user32.lib<br /><br />_DATA$B SEGMENT<br />_DATA$B ENDS<br /><br />_DATA$A SEGMENT<br />_DATA$A ENDS<br /><br />STR_COUNTER = 0<br /><br />COUNTED_STRING STRUC<br />	str_len		DWORD	?<br />	pstr		LPVOID	?<br />COUNTED_STRING ENDS<br /><br />$DefineCS MACRO str&#58;REQ<br />	local str_cur<br /><br />	STR_COUNTER = STR_COUNTER + 1<br /><br />	_DATA$B SEGMENT<br />		str_cur TEXTEQU @CatStr&#40;&lt;str_&gt;, %&#40;STR_COUNTER&#41;&#41;<br />		str_cur db str, 0<br />	_DATA$B ENDS<br /><br />	_DATA$A SEGMENT<br />		IF STR_COUNTER EQ 1<br />			StrArray label BYTE<br />		ENDIF<br />		dd sizeof str_cur<br />		dd offset str_cur<br />	_DATA$A ENDS<br /><br />	EXITM &lt;offset str_cur&gt;<br />ENDM<br /><br />.code<br />start&#58;<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;Imagine&quot;&#41;,	NULL, MB_OK<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;that&quot;&#41;,	NULL, MB_OK<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;You&quot;&#41;,	NULL, MB_OK<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;have&quot;&#41;,	NULL, MB_OK<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;a&quot;&#41;,	NULL, MB_OK<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;memory&quot;&#41;,	NULL, MB_OK<br />invoke MessageBox, NULL, $DefineCS&#40;&quot;layout&quot;&#41;,	NULL, MB_OK<br /><br />lea eax, StrArray&#91;&#40;sizeof COUNTED_STRING&#41;*5&#93;<br />.if &#91;COUNTED_STRING PTR &#91;eax&#93;&#93;.str_len &lt; 100h<br />	invoke MessageBox, NULL, &#40;COUNTED_STRING PTR &#91;eax&#93;&#41;.pstr, NULL, MB_OK<br />.endif<br /><br />ret<br />end start</code></pre></div>
+    <div class="meta">Posted on 2002-10-22 09:27:13 by Four-F</div>
+   </div>
+   <div class="post" id="post-62967">
+    <div class="subject"><a href="#post-62967">references to fields inside the same structure</a></div>
+    <div class="body">Thanks bitRAKE and Four-F for your solutions!<br /><br />I had a closer look and it appeared that bitRAKE's solution <br />is exactly what I need.<br />Thanks for your help, this board is the best!</div>
+    <div class="meta">Posted on 2002-10-22 13:41:48 by Andycar</div>
+   </div>
+  </div>
+ </body>
+</html>

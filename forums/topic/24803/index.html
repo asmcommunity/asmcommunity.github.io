@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24803" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24803">Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></p>
+   <div class="post" id="post-181238">
+    <div class="subject"><a href="#post-181238">Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body">Hi all,<br /><br />As some of you might know with Windows XP you can use the windowskey+L to lock the workstation.<br />Unfortunately this doesn&#39;t work on Windows 2000.<br /><br />So i wrote a small program which catches this sequence and locks the workstation. This program should run in the background and Lock the computer when &lt;winkey&gt;+&lt;L&gt; is pressed.<br />I know it&#39;s nothing special, but i still have a problem with it.<br /><br /><pre><code><br />.586<br />.model flat,stdcall<br />option casemap:none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\user32.inc<br /><br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\user32.lib<br /><br />;WindowsLock&nbsp; &nbsp;  PROTO<br /><br />.CODE<br />;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />LibMain PROC h:DWORD,r:DWORD,u:DWORD<br />mov eax,1<br />ret<br />LibMain ENDP<br />;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br /><br />;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />;The WindowsLock procedure<br />;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />WindowsLock PROC <br />endless:<br />&nbsp; &nbsp; push 500<br />&nbsp; &nbsp; call Sleep<br />&nbsp; &nbsp; push 5Bh&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Left windowskey<br />&nbsp; &nbsp; call GetAsyncKeyState<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; push 4Ch&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; L-key<br />&nbsp; &nbsp; call GetAsyncKeyState<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; push 5Ch&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;right windowskey<br />&nbsp; &nbsp; call GetAsyncKeyState<br />&nbsp; &nbsp; pop ecx<br />&nbsp; &nbsp; pop ebx<br />&nbsp; &nbsp; cmp ecx,-32767<br />&nbsp; &nbsp; jnz endless<br />&nbsp; &nbsp; cmp ebx,-32767<br />&nbsp; &nbsp; jz lockstation<br />&nbsp; &nbsp; cmp eax,-32767<br />&nbsp; &nbsp; jz lockstation<br />&nbsp; &nbsp; jmp endless<br />lockstation:<br />&nbsp; &nbsp; call LockWorkStation<br />&nbsp; &nbsp; jmp endless<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; ret<br />WindowsLock ENDP<br />;-------------------------------------------------------<br /><br />end LibMain</code></pre><br />This is the dll i have written for it. The dll gets injected into explorer and then uses GetAsyncKeyState to see if the combination of keys is pressed. (I know, process injection isn&#39;t legal here, but thats not the issue, and i&#39;m not going to post code of how to do this).<br /><br />The problem with this approach is that it is difficult to let the program respond immediately. Most of the times you have to press the combination a couple of times before the station gets locked.<br /><br />To my knowledge there are 2 other ways of making such a program:<br />- using a keyboardfilter driver to catch the sequence. Biggest issue here is locking the station from kernelland (i&#39;m not too familiar with kernelland).<br />- using a global keyboardhook. I don&#39;t want to do this since the program would be seen as a possible keylogger, and it would be far too easy for someone to alter the program and use it as a keylogger (even without sourcecode).<br /><br />So my question, what can i do to optimize above code, and which approach would be best for this matter?<br /><br />Thanks in advance!</div>
+    <div class="meta">Posted on 2006-05-31 12:30:37 by white scorpion</div>
+   </div>
+   <div class="post" id="post-181240">
+    <div class="subject"><a href="#post-181240">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"><pre><code><br />IsWinL_pressed proc<br />	invoke Sleep,0<br />	invoke Sleep,200<br />	invoke GetAsyncKeyState,5Bh ; Left Windows<br />	push eax<br />	invoke GetAsyncKeyState,5Ch ; Right Windows<br />	push eax<br />	invoke GetAsyncKeyState,4Ch ; key &quot;L&quot;<br />	pop edx<br />	pop ecx<br />	or edx,ecx<br />	or edx,1<br />	and eax,edx<br />	ret<br />IsWinL_pressed endp<br /><br /><br />WindowsLock PROC <br />		<br />&nbsp; &nbsp; WaitForRelease:<br />	call IsWinL_pressed<br />	jnz WaitForRelease<br />	<br />&nbsp; &nbsp; WaitForPress:<br />	call IsWinL_pressed<br />	jz WaitForPress<br />	<br />&nbsp; &nbsp; lockstation:<br />&nbsp; &nbsp; &nbsp;  ;print &quot;locking&quot;<br />	<br />&nbsp; &nbsp; &nbsp; &nbsp; jmp WaitForRelease<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; ret<br />WindowsLock ENDP<br /></code></pre><br />This one seems a bit better in its response. </div>
+    <div class="meta">Posted on 2006-05-31 14:47:19 by Ultrano</div>
+   </div>
+   <div class="post" id="post-181242">
+    <div class="subject"><a href="#post-181242">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body">Constant polling :(<br /></div>
+    <div class="meta">Posted on 2006-05-31 15:26:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-181245">
+    <div class="subject"><a href="#post-181245">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"> :oops:<br /><pre><code><br />main proc<br />	local msg:MSG<br />	invoke RegisterHotKey,0,0,MOD_WIN,VK_L<br />again:<br />	invoke GetMessage,addr msg,0,0,0<br />	.if msg.message==786<br />		call LockWindowStat<br />	.endif<br />	<br />	;jmp again<br />	ret<br />main endp<br /></code></pre></div>
+    <div class="meta">Posted on 2006-05-31 17:24:23 by Ultrano</div>
+   </div>
+   <div class="post" id="post-181248">
+    <div class="subject"><a href="#post-181248">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"><pre><code><br />main proc<br />	local msg:MSG<br />	invoke RegisterHotKey,0,0,MOD_WIN,VK_L<br />again:<br />	invoke GetMessage,addr msg,0,0,0<br />	.if msg.message==786<br />		call LockWindowStat<br />	.endif<br />	<br />	;jmp again<br />	ret<br />main endp</code></pre><br />This is perfect. I didn&#39;t knew it was that easy to register hotkeys. Thanks a lot!!<br /></div>
+    <div class="meta">Posted on 2006-06-01 01:51:58 by white scorpion</div>
+   </div>
+   <div class="post" id="post-181253">
+    <div class="subject"><a href="#post-181253">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body">Oh, duh - why didn&#39;t I think of that?&nbsp; :oops:<br /><br />By the way, is it possible to register Win+L hotkey on XP, where it&#39;s already defined? Iirc I tried replacing Win+E like that but failed.<br /></div>
+    <div class="meta">Posted on 2006-06-01 06:03:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-181265">
+    <div class="subject"><a href="#post-181265">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body">According to MSDN you cannot register a hotkey which is already in use by another hotkey.<br /><br />Hotkeys are registered directly in the kernel (traced RegisterHotKey), so the only way i can think of is by writing a keyboard filter driver which catches these keys and changes its output.<br />on www.sysinternals.com there is a good example including source on how to do this. the program is called <a target="_blank" href="http://www.sysinternals.com/Utilities/Ctrl2Cap.html">Ctrl2cap</a>.<br /><br /></div>
+    <div class="meta">Posted on 2006-06-01 10:41:28 by white scorpion</div>
+   </div>
+   <div class="post" id="post-181268">
+    <div class="subject"><a href="#post-181268">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"><div class="quote"><br />Hotkeys are registered directly in the kernel (traced RegisterHotKey)<br /></div><br />Nice, pretty efficient then :)<br /><br /><div class="quote"><br />so the only way i can think of is by writing a keyboard filter driver which catches these keys and changes its output.<br /></div><br />A bit overkill probably, but probably the way to go if you NEED to be sure it&#39;s YOUR app getting a key, for security reasons or whatever.<br /></div>
+    <div class="meta">Posted on 2006-06-01 11:07:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-181271">
+    <div class="subject"><a href="#post-181271">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"><div class="quote">A bit overkill probably, but probably the way to go if you NEED to be sure it&#39;s YOUR app getting a key, for security reasons or whatever.</div><br />Or if you want to change the hotkeys which are already created by default in Windows XP&nbsp; :D<br />My guess is that winlogon.exe is registering these hotkeys, so if you would inject code into winlogon.exe which would pick up the handle and closes the hotkey, you might be able to do it in userland as well.<br /><br /></div>
+    <div class="meta">Posted on 2006-06-01 11:24:32 by white scorpion</div>
+   </div>
+   <div class="post" id="post-181272">
+    <div class="subject"><a href="#post-181272">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"><div class="quote"><br />My guess is that winlogon.exe is registering these hotkeys, so if you would inject code into winlogon.exe which would pick up the handle and closes the hotkey, you might be able to do it in userland as well.<br /></div><br />foo foo!<br /><br />Especially the ctrl-alt-del sequence is handled specially for security reasons, and people shouldn&#39;t go about injecting code into winlogon.exe. <br /></div>
+    <div class="meta">Posted on 2006-06-01 11:32:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-181275">
+    <div class="subject"><a href="#post-181275">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body">Now, who has a bad mind???<br />I was still thinking about &lt;winkey&gt;+&lt;E&gt;, the &lt;ctrl&gt;+&lt;alt&gt;+&lt;del&gt; combination is something i didn&#39;t even think about :lol:<br />But if you use a keyboard filter you won&#39;t even need to hook the special key sequence, so that would be even more dangerous regarding security.<br />Luckely this is only theory, and no code is posted, so no-one should find this info useful enough to hack windows&nbsp; ;)<br /></div>
+    <div class="meta">Posted on 2006-06-01 11:40:41 by white scorpion</div>
+   </div>
+   <div class="post" id="post-181279">
+    <div class="subject"><a href="#post-181279">Re: Creating &lt;winkey&gt;+&lt;L&gt; catcher for Windows 2000</a></div>
+    <div class="body"><div class="quote"><br />Now, who has a bad mind???<br /></div><br />Iirc slight paranoia us a requirement for the moderator team :P<br /><br /><div class="quote"><br />Luckely this is only theory, and no code is posted, so no-one should find this info useful enough to hack windows ;)<br /></div><br />Otherwise that code would certainly have been edited out :)<br /></div>
+    <div class="meta">Posted on 2006-06-01 12:48:15 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

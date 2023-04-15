@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Searching A Process - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1990" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=1990">Searching A Process</a></p>
+   <div class="post" id="post-12765">
+    <div class="subject"><a href="#post-12765">Searching A Process</a></div>
+    <div class="body">Hey all. :)<br /><br />I was wondering if someone could help me out here. I'm trying to search the process of a program for certain bytes, but I'm getting some weird results with the code I wrote. Basicly, it'll execute the @@Found code even if the bytes don't exist in the process and I can't figure out why. Heres what I have:<br /><br /><pre><code><br />   .elseif uMsg == WM_COMMAND<br />     .if wParam == IDSEARCH<br /><br />       invoke GetDlgItemText, hWnd, IDC_PROCS, \ <br />                  ADDR FileName, MAX_PATH<br /><br />       invoke GetStartupInfo, ADDR SINFO<br /><br />       invoke CreateProcess, ADDR FileName, NULL,  NULL, \<br />                                           FALSE, NORMAL_PRIORITY_CLASS \<br />                                           OR CREATE_SUSPENDED,  \ <br />                                           NULL, ADDR SINFO, ADDR PINFO<br /><br />       invoke OpenProcess, PROCESS_ALL_ACCESS, FALSE, \<br />                                         PINFO.dwProcessId<br />       mov hProcess, eax<br /><br />         push esi<br />         push edi<br /><br />       @@Search&#58;<br />         invoke ReadProcessMemory, hProcess, ReadBase,  \ <br />                                                       ADDR Buffer, 1024, \<br />                                                       ADDR ReadBytes<br /><br />       xor ecx, ecx<br />       lea esi, Buffer<br /><br />       @@Compare&#58;      <br />         mov edx, dword ptr &#91;ReadBytes&#93;<br /><br />         .if edx != 0<br />           mov eax, dword ptr &#91;Buffer+ecx&#93;<br /><br />           add ecx, 4<br /><br />           .if eax == 68000CC2h<br />             jmp @@Found<br />           .endif<br /><br />           .if ecx != 1024<br />             jmp @@Compare<br />           .else<br />             add ReadBase, edx<br />             jmp @@Search<br />           .endif<br />         .endif<br /><br />       @@Found&#58;<br />         invoke MessageBox, hWnd, ADDR FileName, NULL, MB_OK<br /><br />       @@Done&#58;<br />         pop edi<br />         pop esi<br /><br />       invoke TerminateProcess, hProcess, NULL<br />       invoke TerminateProcess, PINFO.hProcess, NULL<br />       invoke CloseHandle, PINFO.hProcess<br />       invoke CloseHandle, PINFO.hThread<br /><br />       mov ReadBase, 401000h<br />       mov dword ptr &#91;ReadBytes&#93;, 0<br />     .endif<br /></code></pre><br /><br />I don't know if this code is working the why I want it to, (well obviously not, but heres an explaination of what I'm trying to do :) I'm trying to read the process in 1k chunks starting at 401000 to Buffer. Then I'm searching Buffer for C20C0068. If its found, MessageBox, then cleanup. If all 1024 bytes are read without a hit, then the next chunk of the process is read and checked.<br /><br />Any ideas on whats wrong?<br /><br />Thanks for the read :)<br />bl00dbath</div>
+    <div class="meta">Posted on 2001-11-21 23:18:34 by bl00dbath</div>
+   </div>
+   <div class="post" id="post-12772">
+    <div class="subject"><a href="#post-12772">re</a></div>
+    <div class="body">well your searching for C20C0068 maybe the first part is in one buffer and the next part is in the next.</div>
+    <div class="meta">Posted on 2001-11-22 00:55:35 by Predator</div>
+   </div>
+   <div class="post" id="post-12775">
+    <div class="subject"><a href="#post-12775">Searching A Process</a></div>
+    <div class="body">You'd have to jump over found to @@Done, otherwise it'll execute. :)<br />Try this:<pre><code>       @@Compare&#58;      <br />         mov edx, dword ptr &#91;ReadBytes&#93;<br /><br />         .if edx &gt;= 4<br />           mov eax, dword ptr &#91;Buffer+ecx&#93;<br /><br />           add ecx, 4<br /><br />           .if eax == 68000CC2h<br />             invoke MessageBox, hWnd, ADDR FileName, NULL, MB_OK<br />           .else<br />             .if ecx != 1024<br />               jmp @@Compare<br />             .else<br />               add ReadBase, edx<br />               jmp @@Search<br />             .endif<br />           .endif<br />         .endif<br /><br />       @@Done&#58;<br />         pop edi<br />         pop esi</code></pre></div>
+    <div class="meta">Posted on 2001-11-22 01:13:46 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-12777">
+    <div class="subject"><a href="#post-12777">Searching A Process</a></div>
+    <div class="body">Ok, a bit too tired to look closely at your routine right now, but<br />I assume you advance by &quot;buffersize&quot; in your search... as predator<br />hinted, your search might miss the searchvalue if it's located on<br />a cross-buffer boundary...</div>
+    <div class="meta">Posted on 2001-11-22 01:33:21 by f0dder</div>
+   </div>
+   <div class="post" id="post-12780">
+    <div class="subject"><a href="#post-12780">Searching A Process</a></div>
+    <div class="body"><strong>f0dder</strong>, all the comparisons are DWORD aligned, so I assume that is what he wants.  If not, then ecx should be incremented by one, and should add a <strong>sub ReadBase,3</strong> after the <strong>add ReadBase,edx</strong>. :)<br /><br />Oh, and the initial if statement should be <strong>.if edx&lt;4</strong> - in any case of the matter. ;)</div>
+    <div class="meta">Posted on 2001-11-22 02:51:06 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-12796">
+    <div class="subject"><a href="#post-12796">Searching A Process</a></div>
+    <div class="body">Thanks for the quick replies guys :)<br /><br />Good eye bitRAKE, I didn't even notice that I didn't have a jmp to @@Done at all without going through finish. <br /><br />Also, I think you're right Preddy, when I search for a dword thats right at the beginning of the process I get a hit, but if I pick one further away, it doesn't pick it up.<br /><br />Maybe I should try searching 1 word at a time instead of searching by dword? This way I could check ah and al for the first byte I'm searching for, then read another word if its found and check through to see if I get a match.<br /><br />Let me know your thoughts :)<br /><br />Thanks,<br />bl00dbath</div>
+    <div class="meta">Posted on 2001-11-22 09:03:56 by bl00dbath</div>
+   </div>
+  </div>
+ </body>
+</html>

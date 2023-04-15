@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>extracted series of bit index - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5956" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5956">extracted series of bit index</a></p>
+   <div class="post" id="post-42645">
+    <div class="subject"><a href="#post-42645">extracted series of bit index</a></div>
+    <div class="body">i want to extracted the serie of bit.. for example like the following function pototype<br /><br />function extbit(x,start,step)<br />if x = 11011100, start=1, step=3 it mean that it will extract bit at index 1,4,7 so the result is 110.<br /><br />or the other function prototype if it possible with the same performance<br /><br />function extbit(x,mask)<br />if x = 11011100, mask=10010010. this will get the same result with above function which is 110.<br /><br />i need x to be 32 bits number.<br /><br />is there a fast way to implement this two function? (in asm or c) (i dont care about size, just want the highest speed)<br /><br />thank you,<br />Doby</div>
+    <div class="meta">Posted on 2002-06-11 11:58:50 by doby</div>
+   </div>
+   <div class="post" id="post-42664">
+    <div class="subject"><a href="#post-42664">extracted series of bit index</a></div>
+    <div class="body"><pre><code><br />.data<br />shift_table db  0, 16, 22, 24, 26, 27, 28, 28<br />            db 29, 29, 30, 30, 30, 30, 30, 30<br />            db 31, 31, 31, 31, 31, 31, 31, 31<br />            db 31, 31, 31, 31, 31, 31, 31<br /> <br /><br />.code<br />getbits PROC bitString&#58;DWORD, start&#58;DWORD, step&#58;DWORD<br />  xor eax, eax<br />  mov edx, bitString<br />  mov ecx, start<br /><br />@@&#58;<br />  bt edx, ecx<br />  rcr eax, 1<br />  add ecx, step<br />  cmp ecx, 32<br />  jl @B<br /><br />  mov edx, step               ; May be faster to use a div &amp; sub here<br />  mov cl, &#91;shift_table + edx&#93; ; to avoid the bit cache miss.<br />  shr eax, cl<br />  ret<br />getbits ENDP<br /></code></pre><br /><br />Untested off the top of my head stuff here...<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-06-11 13:20:16 by Mirno</div>
+   </div>
+   <div class="post" id="post-42671">
+    <div class="subject"><a href="#post-42671">extracted series of bit index</a></div>
+    <div class="body"><pre><code>getbits PROC bitString&#58;DWORD, start&#58;DWORD, step&#58;DWORD<br />  mov edx, start<br />  xor eax, eax<br />  xor ecx, ecx<br />@@&#58;<br />  bt bitString, edx<br />  rcr eax, 1<br />  add edx, step<br />  inc ecx<br />  cmp edx, 32<br />  jl @B<br />  rol eax,cl<br />  ret<br />getbits ENDP</code></pre></div>
+    <div class="meta">Posted on 2002-06-11 13:46:30 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-42798">
+    <div class="subject"><a href="#post-42798">extracted series of bit index</a></div>
+    <div class="body">hmmm seem there is no trick to make it just two or three operation or without loop on this function.<br /><br />thank you very much for every answers,<br />Doby.</div>
+    <div class="meta">Posted on 2002-06-12 01:21:36 by doby</div>
+   </div>
+   <div class="post" id="post-42800">
+    <div class="subject"><a href="#post-42800">extracted series of bit index</a></div>
+    <div class="body"><pre><code><br />	mov edx,&#91;x&#93;<br />	mov ecx,&#91;start&#93;<br />	xor ebx,ebx<br />	xor eax,eax<br />	inc ecx<br />	shr edx,cl<br />	mov ecx,&#91;step&#93;<br />@@&#58;	rcr eax,1<br />	inc ebx<br />	shr edx,cl<br />	jne @B<br />	rcl eax,1<br />	mov ecx,ebx<br />	rcl eax,cl<br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-12 02:12:29 by Nexo</div>
+   </div>
+   <div class="post" id="post-42813">
+    <div class="subject"><a href="#post-42813">extracted series of bit index</a></div>
+    <div class="body">If you known how many bits gathering:<br /><pre><code><br />	mov ebx,32<br />	sub ebx,&#91;bits&#93;<br />	lea ebx,&#91;gather+4*ebx&#93;<br />	mov edx,&#91;x&#93;<br />	mov ecx,&#91;start&#93;<br />	inc ecx<br />	shr edx,cl<br />	xor eax,eax<br />	jmp ebx<br />gather&#58;<br />REPT 31<br />	rcr eax,1<br />	shr edx,cl<br />ENDM<br />	rcl eax,1<br />	mov ecx,&#91;bits&#93;<br />	dec ecx<br />	rcl eax,cl<br />	ret<br /></code></pre><br />When use loop - clocks=5+2.4*bits, w/o loop clocks=8+bits<br />BT work very slow - clocks=3+10.25*bits, but if use BT reg,reg<br />clocks=3+3.25*bits</div>
+    <div class="meta">Posted on 2002-06-12 03:58:17 by Nexo</div>
+   </div>
+   <div class="post" id="post-42923">
+    <div class="subject"><a href="#post-42923">extracted series of bit index</a></div>
+    <div class="body">A solution with the mask. It's not fast I think (too many dependencies.)<br /><br /><pre><code><br />ExtBit PROC bits&#58;DWORD, _mask&#58;DWORD<br /><br />push	ebx<br />push	esi<br />		<br />mov	ebx, bits<br />mov	esi, _mask<br />xor	eax, eax	;// result<br />xor	ecx, ecx	;// position where to set the next bit<br />and	ebx, esi	<br />@@ &#58;<br />xor	edx, edx	<br />shr	ebx, 1	;// cf = bit<br />adc	edx, 0	;// edx = bit<br />shl	edx, cl	;// shift the bit<br />or	eax, edx	;// set the bit in the result<br />shr	esi, 1	;// cf = mask bit<br />adc	ecx, 0	;// increment the position if the mask bit is 1<br />test	ebx, ebx	;// exit when no more bits to set<br />jnz	@B<br /><br />pop	esi<br />pop	ebx	<br /><br />ret	<br /><br />ExtBit ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-12 15:23:44 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-43428">
+    <div class="subject"><a href="#post-43428">extracted series of bit index</a></div>
+    <div class="body">A shorter solution with the mask:<br /><pre><code><br />ExtBit PROC _bits&#58;DWORD, _mask&#58;DWORD<br /><br />	push	ebx<br /><br />	mov	ebx, _mask<br />	mov	edx, _bits<br />	xor	eax, eax<br />	xor	ecx, ecx<br />	and	edx, ebx<br />@@ &#58;<br />	test	ebx, ebx<br />	sets	cl<br />	shld	eax, edx, cl<br />	shl	edx, 1<br />	shl	ebx, 1<br />	jnz	@B<br /><br />	pop	ebx<br />               <br />	ret<br /><br />ExtBit ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-15 09:08:38 by Dr. Manhattan</div>
+   </div>
+  </div>
+ </body>
+</html>

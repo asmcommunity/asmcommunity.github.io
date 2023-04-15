@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>struct arrays - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15783" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15783">struct arrays</a></p>
+   <div class="post" id="post-122296">
+    <div class="subject"><a href="#post-122296">struct arrays</a></div>
+    <div class="body">How would I reference the struct array? I've spun my wheels long enough on this. Below gives me compile error:<br />wankertest.asm(115) : error A2026: constant expected<br /><br />When I use a reg like ecx instead of NUM, gives me - invalid scale value.<br />When I hardcode the value, it compiles ok (not tested yet).<br /><br /><br /><br />.data?<br />SPRITEBANK STRUCT<br />	BNKNO DWORD 0	;which bank number is this<br />	SX    DWORD 0	;screen xres<br />	SY    DWORD 0	;screen yres, eg. 256x128<br />	SPX   DWORD 0	;sprite xres<br />	SPY   DWORD 0	;sprite yres, eg. 64x64<br />	ANIM  DWORD 32 DUP (0)	;animation holder<br />	fName DB 32 DUP(0)	;filename, for future use of maploading<br />SPRITEBANK ends<br /><br />SBNK SPRITEBANK 7 DUP (&lt;&gt;)    ;simple sprite struct array<br /><br />SIZEOFSBNK equ SIZEOF SPRITEBANK<br /><br /><br />.code<br />:::<br /><br />	mov ecx,NUM<br />	ASSUME edx:PTR SPRITEBANK<br />	mov SBNK.HBMP,eax      ;&lt;=======   constant expression expected??<br />	ASSUME edx:NOTHING</div>
+    <div class="meta">Posted on 2003-10-24 04:46:28 by drarem</div>
+   </div>
+   <div class="post" id="post-122353">
+    <div class="subject"><a href="#post-122353">struct arrays</a></div>
+    <div class="body">1. Is &quot;NUM&quot; your .const value ???<br /><br />2. &quot;When I use a reg like ecx instead of NUM, gives me - invalid scale value.&quot;:<br />It's becouse this construction :<br />index == 1 or (power of 2)<br />displ == &lt;-2*1024^3 , 2*1024^3&gt;</div>
+    <div class="meta">Posted on 2003-10-24 17:25:20 by AceEmbler</div>
+   </div>
+   <div class="post" id="post-122361">
+    <div class="subject"><a href="#post-122361">struct arrays</a></div>
+    <div class="body">For an array element that has a size other than 1, 2, 4, or 8, you must do the index multiplication yourself.<br /><br />imul ecx,SIZEOFSBNK ; scale index to offset value<br />mov SBNK.HBMP,eax<br /><br />If for loop or other reasons you don't want to alter ECX, then the CPU provides another form of multiplication.<br /><br />imul esi,ecx,SIZEOFSBNK ; store scaled value in temporary ESI<br />mov SBNK.HBMP,eax</div>
+    <div class="meta">Posted on 2003-10-24 18:35:44 by tenkey</div>
+   </div>
+   <div class="post" id="post-122381">
+    <div class="subject"><a href="#post-122381">struct arrays</a></div>
+    <div class="body">Thanks much for the replies, I've found another way after letting my brain rest for 24 hours, checking out the imul as you suggested and searching this forum once more..<br /><br />CreateBMP proc BNUM:DWORD, w:DWORD, h:DWORD<br />LOCAL BMP:DWORD<br /><br />	invoke CreateCompatibleBitmap,WND.hDC,w,h<br />	mov BMP,eax<br />	<br />	mov ecx,BNUM<br />	imul ecx,SIZEOFSBNK<br /><br />	m2m ,<br />	m2m ,BNUM<br />	<br />	ret<br />CreateBMP endp<br /><br />And it appears to work :)  I use a function called SetDC to set it to the appropriate bitmap in the structure prior to usage.<br /><br />SetDC proc BNUM:DWORD, BDC:DWORD<br />	invoke CreateCompatibleDC,WND.hDC    ;yes I know this creates a dilemma - will move it to my initialization functions later<br />	mov ecx,BDC<br />	mov ,eax<br />	mov BDC,eax        ;all 3 are needed to populate BDC which is called via ADDR<br /><br />	mov ecx,BNUM<br />	imul ecx,SIZEOFSBNK<br />	invoke SelectObject,BDC,<br /><br />	ret<br />SetDC endp<br /><br />Two quick final questions:<br /><br />1) How do you tell if a bitmap exists so it can be deleted on cleanup, .IF  == NULL  ?<br /><br />2) Although I declared this:<br />SBNK SPRITEBANK 7 DUP (&lt;&gt;)    (see first post for structure)<br /><br />I can use 15,16, etc.. indexes and get valid bitmap pointers without crashing.  Of course if I try 100+ it crashes with a read error.  What gives there?</div>
+    <div class="meta">Posted on 2003-10-24 22:07:11 by drarem</div>
+   </div>
+   <div class="post" id="post-122408">
+    <div class="subject"><a href="#post-122408">struct arrays</a></div>
+    <div class="body"><a target="_blank" href="http://www.web.ms11.net/drarem/WankerLib.zip">http://www.web.ms11.net/drarem/WankerLib.zip</a><br /><br />This is pretty much all I had time for today, kiddies..  the .exe is 6k, total zip is 10k  -  consists of two bitmaps, one program icon, and a test program compiled from the lib..<br /><br />press arrow keys to move blocky image around.. It uses 4 dc's (will not exceed 4) and 5 bitmaps -  no memory leaks thanks to memproof.  <br /><br />what you're seeing is a tile from bitmap1 and bitmap2 as it draws them combining them into the backdc, then overlaying that with the moveable blocky image.<br /><br />To initialize, I use the following:<br /><br /><pre><code>    .elseif uMsg == WM_CREATE<br />		invoke GetDC,hWin<br />		mov WND.hDC,eax<br /><br />		call mainloop<br /><br />		invoke BackBuffer,800,600<br />;initialize both the memDC and backDC for triple buffering..<br />;TODO&#58; go to dirty rectangles and think about dropping a DC<br /><br />		szText fName2,&quot;test1.bmp&quot;<br />		invoke LoadBANK,ADDR fName2,2              ;load the first bitmap<br />		invoke SetDCBNK, 2, bDC<br /><br />		szText fName3,&quot;test.bmp&quot;<br />		invoke LoadBANK,ADDR fName3,3              ;load the second bitmap<br />		invoke SetDCBNK, 3, bDC ; - only one Sprite DC will I allow, so use it wisely<br /><br />		INITRECT WND.hRECT,0,0,800,600</code></pre><br /><br />I hope to get to a point where I can do as below, but that is after I do the code for the sprite masks.<br /><br />	invoke Sprite, WND.memDC, 1, nx, ny, bDC<br /><br />Would there be an interest in this GDI library?  If so supply comments and crits, otherwise I will keep it to meself.<br /><br />Here is the code for the map drawing. I know it aint much but I feel like I've made a little progress. Thanks again, asm community  :)<br /><br /><pre><code>DrawMap proc<br />LOCAL e&#58;DWORD<br />LOCAL f&#58;DWORD<br />LOCAL g&#58;DWORD<br /><br />	mov e,0<br />	mov f,0<br />FLT600&#58;<br />		mov e,0<br />ELT800&#58;	<br />		.IF g &gt;= 2<br />			invoke SetDCBNK,2, bDC<br />			mov g,0<br />		.else<br />			invoke SetDCBNK,3, bDC<br />		.ENDIF<br />		inc g<br />		invoke BitBlt,WND.backDC,e,f,64,64,bDC,128,0,SRCCOPY<br />		<br />			add e,64<br />			cmp e,768	 <br />			jl ELT800   ;if e &lt; 800 then jump to ELT800 to draw out line of tiles<br />			add f,64<br />			cmp f,576	 ; else compare f with 600<br />			jl FLT600   ;if f &lt; 600 then jump to FLT600 and reset e to 0<br />	ret<br />DrawMap endp</code></pre></div>
+    <div class="meta">Posted on 2003-10-25 04:01:26 by drarem</div>
+   </div>
+   <div class="post" id="post-122442">
+    <div class="subject"><a href="#post-122442">struct arrays</a></div>
+    <div class="body">Of course, this GDI library is interesting. :)<br /><br />BTW, I think you could better try accessing your array from a loop:<br /><pre><code><br />push esi<br />mov esi,offset SBNK<br />assume esi&#58;ptr SPRITEBANK<br />.repeat<br />    ;<br />    ; Here goes the code that works on each sprite bank.<br />    ; Access the struct's items like this&#58;<br />    ; mov &#91;esi&#93;.BNKNO,eax<br />    ;<br />    ; If you don't want the &quot;assume&quot; statement, do this&#58;<br />    ; mov &#91;esi&#93;.SBNK.BNKNO,eax<br />    ;<br />    add esi,sizeof SBNK<br />.until esi == offset SBNK + sizeof SBNK<br />assume esi&#58;nothing<br />pop esi<br /></code></pre><br />Hope it helps. :)</div>
+    <div class="meta">Posted on 2003-10-25 10:38:04 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

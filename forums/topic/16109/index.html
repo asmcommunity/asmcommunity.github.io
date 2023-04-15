@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>delete abit of the string - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16109" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16109">delete abit of the string</a></p>
+   <div class="post" id="post-124917">
+    <div class="subject"><a href="#post-124917">delete abit of the string</a></div>
+    <div class="body">hello<br />i want to delete a bit of the returning string from a function...<br />i got something like &quot;hello bla bla - _bj&quot; <br />i want to delete &quot;- _bj&quot; in my string...<br />how?  i alwasy have &quot;- _bj&quot; in the end of the string...</div>
+    <div class="meta">Posted on 2003-11-20 15:05:41 by bj1500</div>
+   </div>
+   <div class="post" id="post-124920">
+    <div class="subject"><a href="#post-124920">I don't unerstand your question</a></div>
+    <div class="body">Will this string be placed in memory where you can operate on it or is this a question about some API function?</div>
+    <div class="meta">Posted on 2003-11-20 15:22:07 by mrgone</div>
+   </div>
+   <div class="post" id="post-124923">
+    <div class="subject"><a href="#post-124923">delete abit of the string</a></div>
+    <div class="body"><div class="quote"> <br /> 	helllo<br />i want to delete a bit of the returning string from a function...<br />i got something like &quot;hello bla bla - _bj&quot;<br />i want to delete &quot;- _bj&quot; in my string...<br />how? i alwasy have &quot;- _bj&quot; in the end of the string...<br /></div> <br /><br />You can use the lstrcpyn function. You can do something like this. <br /><br /><pre><code> <br />.data <br /><br />string db &quot;hello bla bla - _bj &quot;, 0 <br /><br />.code <br />start&#58;<br />          invoke lstrcpyn, addr string, addr string, sizeof string - 2 <br />          .....  <br /></code></pre></div>
+    <div class="meta">Posted on 2003-11-20 15:27:18 by Odyssey</div>
+   </div>
+   <div class="post" id="post-124933">
+    <div class="subject"><a href="#post-124933">delete abit of the string</a></div>
+    <div class="body">To &quot;delete&quot; the last n bytes of a zero terminated string, put a zero n bytes before the end!<br /><br /><pre><code><br />  invoke strlen, ADDR my_string<br />  lea eax, &#91;eax + my_string - 5&#93;<br />  mov BYTE PTR &#91;eax&#93;, 0<br /></code></pre><br /><br />If you want to delete a section of the string that is in the middle, then you must copy the bytes like so:<br /><pre><code><br />  lea esi, &#91;my_string + 8&#93;<br />  lea edi, &#91;my_string + 4&#93;<br /><br />@@&#58;<br />  lodsb<br />  or al, al<br />  stosb<br />  jnz @B<br /></code></pre><br />Because the source is after the destination, the copy will over-write as it increments.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-11-20 17:44:39 by Mirno</div>
+   </div>
+   <div class="post" id="post-124935">
+    <div class="subject"><a href="#post-124935">delete abit of the string</a></div>
+    <div class="body">bj1500,<br /><br />Below is an algo that I have written for the next release of the MASM32 library. It is designed to remove substrings from source strings. You can either use 2 buffers if you want to preserve the original string or you can use the same address in both buffers if overwriting the original is OK.<br /><br />It is not yet exhaustively tested but it appears to be working OK.<br /><br />src = source string<br />dst = destination buffer<br />remv = the address of the zero terminated substring you want to remove from the source string.<br /><br />If you are using it with MASM, slightly rename the algo as the name is being used in the next MASM32 library and you will have name clashes if you end up using the later version.<br /><br /><br /><pre><code><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />align 4<br /><br />szRemove proc src&#58;DWORD,dst&#58;DWORD,remv&#58;DWORD<br /><br />    push esi<br />    push edi<br /><br />    mov edx, remv<br />    mov ah, &#91;edx&#93;           ; 1st remv char in AH<br /><br />    mov esi, src<br />    mov edi, dst<br />    sub esi, 1<br /><br />  ; --------------------------------------------------------<br /><br />  prescan&#58;<br />    add esi, 1<br />  scanloop&#58;<br />    cmp &#91;esi&#93;, ah           ; test for &quot;remv&quot; start char<br />    je presub<br />  backin&#58;<br />    mov al, &#91;esi&#93;<br />    mov &#91;edi&#93;, al<br />    cmp BYTE PTR &#91;edi&#93;, 0   ; exit when zero terminator<br />    je szrOut               ; has been written<br />    add edi, 1<br />    jmp prescan<br /><br />  align 4<br />  presub&#58;<br />    xor ecx, ecx<br />  subloop&#58;<br />    mov al, &#91;esi+ecx&#93;<br />    cmp al, &#91;edx+ecx&#93;<br />    jne backin              ; jump back on mismatch<br />    add ecx, 1<br />    cmp BYTE PTR &#91;edx+ecx&#93;, 0   ; test if next byte is zero<br />    jne subloop<br /><br />    add esi, ecx            ; add len of remv string to ESI<br />    jmp scanloop<br /><br />  ; --------------------------------------------------------<br /><br />  szrOut&#58;<br /><br />    pop edi<br />    pop esi<br /><br />    mov eax, dst            ; return the destination address<br /><br />    ret<br /><br />szRemove endp<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /></code></pre><br /><br />Regards,<br />http://www.asmcommunity.net/board/cryptmail.php?tauntspiders=in.your.face@nomail.for.you&amp;id=2f46ed9f24413347f14439b64bdc03fd</div>
+    <div class="meta">Posted on 2003-11-20 18:04:22 by hutch--</div>
+   </div>
+   <div class="post" id="post-124946">
+    <div class="subject"><a href="#post-124946">Re: delete abit of the string</a></div>
+    <div class="body"><div class="quote"><br />hello<br />i want to delete a bit of the returning string from a function...<br />i got something like &quot;hello bla bla - _bj&quot; <br />i want to delete &quot;- _bj&quot; in my string...<br />how?  i alwasy have &quot;- _bj&quot; in the end of the string... </div><br /><br />You might look at the str.delete function in the HLA Standard Library.<br />If you're deleting text at the end of the string, then (as others have<br />noted) just store a zero over the first char you want to delete (assuming<br />the use of zero-terminated strings). If the stuff you want to delete is<br />in the middle of the string, then you do the equivalent of an strcpy<br />from the last part of the string you want to keep over the top of the<br />characters you want to delete. Again, look at the source code<br />for the HLA str.delete function for details.<br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2003-11-20 22:16:20 by rhyde</div>
+   </div>
+   <div class="post" id="post-124971">
+    <div class="subject"><a href="#post-124971">delete abit of the string</a></div>
+    <div class="body">hello, thx for all help<br />this solved my problem:<br /><pre><code> <br />    	  invoke lstrlen,ADDR buf<br />  		  lea eax, &#91;eax + buf - 8&#93;<br />          mov BYTE PTR &#91;eax&#93;, 0<br /></code></pre></div>
+    <div class="meta">Posted on 2003-11-21 04:12:16 by bj1500</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>String Copy routine: unknown length - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7136" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=7136">String Copy routine: unknown length</a></p>
+   <div class="post" id="post-51613">
+    <div class="subject"><a href="#post-51613">String Copy routine: unknown length</a></div>
+    <div class="body">Hey everybody,<br />  I'm writing a string copy routine where the source string is of unknown length. I figure there are two approaches:<br /><br />1) First, call StringLength on the source, then copy that number of bytes from Source to Dest<br />2) Or, while copying the bytes, test for the end of the string.<br /><br />I'm currently running with option 2 using the following code because I figure one loop is better than two. It uses the string length-testing that was posted as Jens' in the string length thread.<br /><br />Just wondering if people have some better ideas.<br /><br />Thanks,<br /><br /><pre><code><br />StringCopy              PROC uses esi edi ebx ecx edx source,dest&#58;DWORD<br />                        mov esi,source<br />                        mov edi,dest<br />                        xor eax,eax<br /><br />@@&#58;                     mov edx,&#91;esi+eax&#93;             ;read a dword<br />                        mov ebx,edx                   ;use some regs to determine if dword<br />                        lea ecx,&#91;edx - 01010101h&#93;     ;contains a zero byte<br />                        xor edx,ecx<br />                        and edx,80808080h<br />                        and edx,ecx                   ;so does it contain a zero byte<br />                        jnz @@CopyBytes               ;if yes, jump to copy remaining bytes<br />                        mov DWORD PTR &#91;edi+eax&#93;,ebx   ;if no copy the whole dword over<br />                        add eax,4<br />                        jmp @B<br />@@&#58;                     shr ebx,8                     <br />@@CopyBytes&#58;            mov BYTE PTR &#91;edi+eax&#93;,bl     ;copy the bytes out of ebx<br />                        inc eax<br />                        test bl,bl<br />                        jnz @B<br />                        lea eax,&#91;eax+edi-1&#93;<br />                        ret<br />StringCopy              ENDP<br /></code></pre><br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-04 09:31:30 by chorus</div>
+   </div>
+   <div class="post" id="post-51637">
+    <div class="subject"><a href="#post-51637">String Copy routine: unknown length</a></div>
+    <div class="body">This is not faster but simpler, shorter and a lamer :grin:<pre><code>&#91;size=9&#93;strcpy PROC USES esi edi lpSrc&#58;DWORD, lpDest&#58;DWORD<br />    mov     esi, lpSrc<br />    xor     ecx, ecx<br />    mov     edi, lpDest<br />    @@&#58;<br />        mov     dl, BYTE PTR &#91;esi+ecx&#93;<br />        mov     BYTE PTR &#91;edi+ecx&#93;, dl<br />        inc     ecx<br />        or      dl, dl<br />        jnz     @B<br />    ret<br />strcpy ENDP&#91;/size&#93;</code></pre>You can even optimize more but I won't 'coz I'm lazy:<br /><br />- just move  in between  and  and insert a -1 on the <br /><br />- use eax to replace either esi or edi<br /><br />- replace  with <br /><br />- you can also insert nops but since I dont know how, I won't :tongue:</div>
+    <div class="meta">Posted on 2002-08-04 15:20:54 by stryker</div>
+   </div>
+   <div class="post" id="post-51646">
+    <div class="subject"><a href="#post-51646">String Copy routine: unknown length</a></div>
+    <div class="body">I'm hoping to move DWORDs at a time if possible ;)<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-04 16:03:42 by chorus</div>
+   </div>
+   <div class="post" id="post-51780">
+    <div class="subject"><a href="#post-51780">String Copy routine: unknown length</a></div>
+    <div class="body">chorus,<br /><br />Your idea is right.<br />I created the same thing (with some additional sanity considerations) for my FreeBSD about a year ago.  After some test, it turned out that the new 4 byte copy routine was faster than the byte copy when the string was longer than X (I don't remember the exact result of my test, so it is some number X, but it was not that big number like MMX memcpy would require).<br /><br />I'm at work now and I don't have my code right now.<br />When I get home, I'll post mine.  :)</div>
+    <div class="meta">Posted on 2002-08-05 14:29:38 by Starless</div>
+   </div>
+   <div class="post" id="post-51781">
+    <div class="subject"><a href="#post-51781">String Copy routine: unknown length</a></div>
+    <div class="body">Thank you, I'd be interested in seeing it :)<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-05 14:32:12 by chorus</div>
+   </div>
+   <div class="post" id="post-51812">
+    <div class="subject"><a href="#post-51812">String Copy routine: unknown length</a></div>
+    <div class="body">Stupid question! Why would one want an exact copy of a string of unknown lenght?<br />I looked now -- now I see you want to copy a null terminated string.<br />Therefore I see you can not have nulls in the string.</div>
+    <div class="meta">Posted on 2002-08-05 18:52:36 by Roy Cline</div>
+   </div>
+   <div class="post" id="post-51816">
+    <div class="subject"><a href="#post-51816">String Copy routine: unknown length</a></div>
+    <div class="body">Don't see too many strings with NULLs in the middle of them Roy. :)<br /><br />The point is that when I want to concatenate strings together, it's nice to just be able to call the StringCopy routine. If you ever use string copying, I'm sure you have to call a proc to get the string length first, and *then* copy the string over. I wanna kill two birds with one stone as they say. Hopefully, so it's faster<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-05 19:01:44 by chorus</div>
+   </div>
+   <div class="post" id="post-51844">
+    <div class="subject"><a href="#post-51844">String Copy routine: unknown length</a></div>
+    <div class="body">OK, here is my code.  It took me some time to convert AT&amp;T syntax into Intel syntax.  ;)<br /><br />The idea is the same as the code by chorus:  Use Agner's <strong>strlen()</strong> to speed up <strong>strcpy</strong>.  Additional code is to make this function robust under general condition --  This was intended to replace FreeBSD libc <strong>strcpy()</strong>.<br /><br />&lt;EDIT&gt;<br />This code was written with P6 in mind.  It would be interesting if someone test this on a different CPU and see whether this function is still fast.<br />&lt;/EDIT&gt;<br /><pre><code><br />; char *strcpy&#40;char *dst, char *src&#41;<br />; engine&#58;  Agner's fast strlen&#40;&#41;.<br />strcpy  PROC C<br />        push    esi<br />        mov     esi,&#91;esp+12&#93;    ; src<br />        mov     edx,esi<br />        push    edi<br />        mov     edi,&#91;esp+12&#93;    ; dst<br />        sub     esi,edi<br />        push    edi             ; save the return value<br /><br />        neg     edx             ; the number of bytes to<br />        and     edx,3           ; the next 4 byte boundary<br />        jz      LoopEntry<br /><br />        mov     edx,edx         ; 2 byte nop<br /><br />; Align src&#58;  byte-by-byte copy<br />; Aligning src &#40;rather than dst&#41; is not just for speed<br />; but also for avoiding SIGSEGV.<br />; Of course, you may still get SIGSEGV from this function,<br />; but that means nothing but the incompetence of the C coder,<br />; who does not secure a large enough buffer, thereby causing<br />; buffer overflow.<br />@@&#58;     mov     al,&#91;esi+edi&#93;<br />        mov     &#91;edi&#93;,al<br />        test    al,al<br />        jz      Done<br />        inc     edi<br />        dec     edx<br />        jnz     @B<br /><br />        jmp     LoopEntry<br /><br />        ALIGN 16<br />LoopTop&#58;<br />        mov     &#91;edi&#93;,eax<br />        add     edi,4<br />LoopEntry&#58;<br />        mov     eax,&#91;esi+edi&#93;<br />        mov     edx,eax<br />        lea     ecx,&#91;eax-01010101h&#93;<br />        not     edx<br />        and     ecx,edx<br />        and     ecx,80808080h   ; end of string?<br />        jz      LoopTop         ; nope.  go ahead and write<br /><br />; We reached the end of the string.<br /><br />; The method of handling the remaining 4 or less bytes<br />; &#40;including NUL&#41; could be byte-by-byte copy.<br />; The choice depends on what the distribution of<br />; &#40;strlen&#40;src&#41; % 4 + 1&#41; looks like.<br />; The distribution is not known a priori, and my choice<br />; is to minimize the number of Jcc's in the worst case.<br />        test    ecx,8080h       ; was NUL in the first 2 bytes?<br />        jnz     @F<br />        mov     &#91;edi&#93;,ax        ; nope.<br />        add     edi,2<br />        shr     eax,16<br />        shr     ecx,16<br />@@&#58;     mov     &#91;edi&#93;,al        ; whether it is NUL or not, we have<br />        test    cl,80h          ; to copy the first byte.<br />        jnz     Done<br />        mov     &#91;edi+1&#93;,ah      ; and copy NUL if necessary.<br /><br />Done&#58;   pop     eax             ; dst saved earlier<br />        pop     edi<br />        pop     esi<br />        ret<br /><br />strcpy  ENDP<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2002-08-05 23:32:57 by Starless</div>
+   </div>
+   <div class="post" id="post-51847">
+    <div class="subject"><a href="#post-51847">String Copy routine: unknown length</a></div>
+    <div class="body"><pre><code>&#91;size=9&#93;strcpy PROC USES ebx lpszPattern&#58;DWORD, lpBuffer&#58;DWORD<br /><br />    mov     ebx, lpszPattern<br />    xor     ecx, ecx<br />    mov     edx, lpBuffer<br />    pxor    MM7, MM7<br /><br />    __8bytecopy&#58;<br /><br />        movq        MM0, &#91;ebx+ecx&#93;<br />        movq        MM1, MM0<br />        pcmpeqb     MM0, MM7<br />        packsswb    MM0, MM0<br />        movd        eax, MM0<br />        test        eax, eax<br />        jnz         __exit8bytecopy<br />        movq        &#91;edx+ecx&#93;, MM1<br />        add         ecx, 8<br />        jmp         __8bytecopy<br /><br />    __exit8bytecopy&#58;<br /><br />        mov         al, BYTE PTR &#91;ebx+ecx&#93;<br />        test        al, al<br />        jz          __exitnowidiot<br />        mov         BYTE PTR &#91;edx+ecx&#93;, al<br />        inc         ecx<br />        jmp         __exit8bytecopy<br /><br />    __exitnowidiot&#58;<br /><br />    emms<br />    ret<br /><br />strcpy ENDP&#91;/size&#93;</code></pre>I'm really tired right now. If you see some errors tell me.</div>
+    <div class="meta">Posted on 2002-08-06 00:54:50 by stryker</div>
+   </div>
+   <div class="post" id="post-51991">
+    <div class="subject"><a href="#post-51991">String Copy routine: unknown length</a></div>
+    <div class="body">Want some more optimizations??<pre><code>&#91;size=9&#93;strcpy&#58;<br /><br />    push    ebx<br />    mov     ebx, &#91;esp+8&#93;<br />    xor     ecx, ecx<br />    mov     edx, &#91;esp+12&#93;<br />    pxor    MM7, MM7<br /><br />    __8bytecopy&#58;<br /><br />        movq        MM0, &#91;ebx+ecx&#93;<br />        movq        MM1, MM0<br />        pcmpeqb     MM0, MM7<br />        packsswb    MM0, MM0<br />        movd        eax, MM0<br />        test        eax, eax<br />        jnz         __1bytecopy<br />        movq        &#91;edx+ecx&#93;, MM1<br />        add         ecx, 8<br />        jmp         __8bytecopy<br /><br />    __1bytecopy&#58;<br /><br />        mov         al, &#91;ebx+ecx&#93;<br />        inc         ecx<br />        mov         &#91;edx+ecx-1&#93;, al<br />        test        al, al<br />        jnz         __1bytecopy<br /><br />    emms    ;femms for AMD<br />    pop     ebx<br />    retn    8&#91;/size&#93;</code></pre>There's a tendency programmers might forget to insert the prologue ... none ... default ... directive in MASM ... Thus creating a  frame. So I changed my code above to add more optimization and be compatible with FASM too. There's also a bug in first version of the code - It doesn't terminate the destination string with 0. :)<br /><br />Usage:<br /><br />push OFFSET destination<br />push OFFSET source<br />call strcpy<br /><br />::edit::<br /><br />I forgot to preserve ebx. Remember source string must be zero terminated.</div>
+    <div class="meta">Posted on 2002-08-06 16:25:59 by stryker</div>
+   </div>
+   <div class="post" id="post-52009">
+    <div class="subject"><a href="#post-52009">String Copy routine: unknown length</a></div>
+    <div class="body">Why not shorter?<pre><code><br />strcpy&#58;<br />        push    ebx 	<br />        xor     eax, eax  <br />        pxor    MM7, MM7<br />        mov     ebx, &#91;esp+8&#93;<br />        mov     edx, &#91;esp+12&#93;<br />strcpyLoop&#58;<br />        movq      MM0, &#91;ebx+eax&#93;    ; Unknown length =<br />        movq      &#91;edx+eax&#93;, MM0    ; Unknown length + 8     <br />        pcmpeqb   MM0, MM7<br />        packsswb  MM0, MM0<br />        movd      ecx, MM0<br />        add       eax, 8<br />        jecxz     strcpyLoop<br />        pop	  ebx<br />        emms     ;femms for AMD<br />        retn     8</code></pre></div>
+    <div class="meta">Posted on 2002-08-06 17:56:55 by lingo12</div>
+   </div>
+   <div class="post" id="post-52011">
+    <div class="subject"><a href="#post-52011">String Copy routine: unknown length</a></div>
+    <div class="body">Yeah, your right :alright: but why not<pre><code>strcpy3&#58;<br />        push    ebx<br />        xor     eax, eax <br />        pxor    MM7, MM7<br />        mov     ebx, &#91;esp+8&#93;<br />        mov     edx, &#91;esp+12&#93;<br />strcpyLoop&#58;<br />        movq      MM0, &#91;ebx+eax&#93;    ; Unknown length =<br />        movq      &#91;edx+eax&#93;, MM0    ; Unknown length + 8    <br />        pcmpeqb   MM0, MM7<br />        pmovmskb  ecx, MM0<br />        add       eax, 8<br />        jecxz     strcpyLoop<br />        pop  ebx<br />        emms     ;femms for AMD<br />        retn     8</code></pre>:grin: of course, now I'm using SSE to do this, which I don't want to use due to the majority of ppl who doesn't have a P3 or AMD Athlon. :grin:<br /><br />Anyway, :alright:</div>
+    <div class="meta">Posted on 2002-08-06 18:08:51 by stryker</div>
+   </div>
+   <div class="post" id="post-52013">
+    <div class="subject"><a href="#post-52013">String Copy routine: unknown length</a></div>
+    <div class="body">Starless, I like your proc. I didn't bother doing any alignment in mine, I think I'll start :) I especially like what you did to copy the remainder bytes, although I'd remove the shr ecx,16 and replace test cl,80h with test al,al.<br /><br />Stryker, very nice :) I'm no good with MMX yet (just starting to learn the instructions), but I'll take a close look at them.<br /><br />lingo, I actually considered this approach when I first took a look at Stryker's code. It does make a shorter proc, and since I always assume the buffer is &quot;large enough&quot; :) It shouldn't be a problem to copy the couple extra bytes. In my case, however, I like the return value to be the pointer to the zero byte so I can make multiple calls in a row, ex:<br /><br /><pre><code><br />  invoke StringCopy,addr szFirstName,addr Buffer<br />  invoke StringCopy,addr szLastName,eax<br />  invoke StringCopy,addr szAddress,eax<br />etc<br /></code></pre><br /><br />I'd have to add some code to scan back for the zero byte, but that wouldn't be a problem.<br /><br /><br />Thanks to all,<br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-06 18:10:14 by chorus</div>
+   </div>
+   <div class="post" id="post-52074">
+    <div class="subject"><a href="#post-52074">String Copy routine: unknown length</a></div>
+    <div class="body">chorus,<br /><br />I can't see that you will get an algo any faster than scanning it for its length then copying it to another buffer, you must allocate the other buffer first unless you know the maximum size first so there seems to be little point trying to include both operations. An algo that works something like Agner Fogs strlen function and any form of copy you like, from REP MOVSD to SIMD/MMX.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-08-07 05:56:23 by hutch--</div>
+   </div>
+   <div class="post" id="post-52129">
+    <div class="subject"><a href="#post-52129">String Copy routine: unknown length</a></div>
+    <div class="body">chorus:<br /><br />Your improvement at the remaining byte handling is valuable.  I must be blind I could not see the obvious thing.  ;)<br /><br />stryker:<br /><br />While you are at using SSE, why not use <strong>movntq , mm0</strong>?  :grin:<br /><br />Anyhow, a quick test result shows that stryker's first MMX version (with <strong>movntq</strong> and his own correction) is unbeatable when the string is longer than 100 bytes.  I would say I would use stryker's version if I know I'm dealing with mostly long strings, and for general purpose libc stuff, I would stick to my old code with improvement by chorus.  :grin:<br /><br />&lt;EDIT&gt;<br />I should clarify the quick test result.  When there is no x87 instruction in use, stryker's version becomes unbeatable when the string is about 60 bytes long.  So, when someone's code does not have any FPU stuff, stryker's version is good for moderate size strings.<br />&lt;/EDIT&gt;</div>
+    <div class="meta">Posted on 2002-08-07 15:50:55 by Starless</div>
+   </div>
+   <div class="post" id="post-52133">
+    <div class="subject"><a href="#post-52133">String Copy routine: unknown length</a></div>
+    <div class="body"><div class="quote">While you are at using SSE, why not use movntq , mm0?</div>yeah I forgot about movntq. :) Thanks for reminding me.  :alright:</div>
+    <div class="meta">Posted on 2002-08-07 17:13:02 by stryker</div>
+   </div>
+  </div>
+ </body>
+</html>

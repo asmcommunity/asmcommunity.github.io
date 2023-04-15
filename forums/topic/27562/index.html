@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>MASM/inc bug, or this invoke sure likes to use eax - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27562" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27562">MASM/inc bug, or this invoke sure likes to use eax</a></p>
+   <div class="post" id="post-196925">
+    <div class="subject"><a href="#post-196925">MASM/inc bug, or this invoke sure likes to use eax</a></div>
+    <div class="body">I been working hard at making a directx program. I've been using the include made by X-Clibre that you can get from Bizzare creations website. Let me try to show the problem:
+(This is for the Blt member function of directx)
+
+From MASM dissasembly:
+
+<pre><code>
+
+00401393   mov         eax,[_lpDDS (00404042)]
+00401398   mov         eax,dword ptr 
+0040139A   push        0
+0040139C   push        1000000h
+004013A1   lea         eax,
+004013A4   push        eax
+004013A5   push        dword ptr 
+004013AB   lea         eax,
+004013AE   push        eax
+004013AF   push        dword ptr [_lpDDS (00404042)]
+004013B5   call        dword ptr 
+</code></pre>
+
+Now from the C program I'm coverting from. Compiled with VC6
+
+<pre><code>
+00401FCB   push        0
+00401FCD   push        1000000h
+00401FD2   lea         ecx,
+00401FD5   push        ecx
+00401FD6   mov         edx,dword ptr 
+00401FDC   push        edx
+00401FDD   lea         eax,
+00401FE0   push        eax
+00401FE1   mov         ecx,dword ptr 
+00401FE7   push        ecx
+00401FE8   mov         edx,dword ptr 
+00401FEE   mov         eax,dword ptr 
+00401FF0   call        dword ptr 
+</code></pre>
+
+If you notice VC6 moves *this into eax just before the call is made.  MASM however, makes it right at the start, then pushes the parameters, using eax to get the addresses of the parameters.  That means *this is destroyed, and I get an exception fault.
+
+<pre><code>
+STDMETHOD	MACRO	name, argl :VARARG
+
+DDSINVOKE	MACRO	func, this, arglist :VARARG
+    mov			eax , 
+    mov			eax , 
+
+    IFB <arglist>
+    INVOKE , this
+    ELSE
+    INVOKE , this, arglist
+    ENDIF
+
+ENDM
+
+IDirectDrawSurfaceVtbl	STRUC
+    STDMETHOD	Blt, :PTR IDirectDrawSurface, :LPRECT,:LPDIRECTDRAWSURFACE,:LPRECT, :DWORD, :LPDDBLTFX
+
+IDirectDrawSurfaceVtbl	ENDS
+</code></pre>
+I know I could just code this not using invoke to make sure *this was moved to eax just before the call, but I want to release this code to the public domain once I'm finished, so I would like it to be clean.  More about this later**.
+
+I do not know MASM macro syntax very well yet. Could someone help me (and hopefully many others in future with this), and rewrite the DDSINVOKE macro so everything is the same except *this is move to eax just before the call?
+
+**For many people, learning to program is easier if they can have a graphic screen.  Somewhere to write pixels and such.  Thats not easy to do in windows without know the api, and maybe directx.  What I want to give the learning programmer, is a pointer to the surface, and eventually a blt and colorkey blt, for a fun introduction.  This could also be used as the basis for a game.  But the main purpose is to give the budding programmer the chance to poke pixels into the display and give them a sense of accomplishment /curiosity to keep learning during the hard first part.</div>
+    <div class="meta">Posted on 2001-04-07 23:56:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-196926">
+    <div class="subject"><a href="#post-196926">MASM/inc bug, or this invoke sure likes to use eax</a></div>
+    <div class="body">The function you are trying to use calls a COM object method. These calls all fit the same pattern: the method's parameters are all pushed onto the stack, followed by the THIS object reference lastly pushed.  eax is not used in the call (it usually holds the hResult upon return).
+
+If you need eax for a parameter passed by reference with ADDR, just change the macro to use another register. edx comes to mind (as that's what I use in my coinvoke macro).
+
+-----------------------
+"I think Smithers picked me because of my motivational skills. Everyone says they have to work a lot harder when I'm around."</div>
+    <div class="meta">Posted on 2001-04-08 01:04:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-196927">
+    <div class="subject"><a href="#post-196927">MASM/inc bug, or this invoke sure likes to use eax</a></div>
+    <div class="body">Invoke always uses eax when resolving pointers and such, the only thing
+that you can do is to replace invoke with a macro that doesn't use eax
+or push the params load eax with  and then use call.
+
+This should work, it might have a few bugs.
+
+Since you mentioned that you know how to use call you could probably figure out
+whether it'll work or not.
+
+Write back with info on any bugs that you find.
+
+The macro to replace Invoke is InvokeFixStdCall.  It will only work with StdCall type
+PROCs.  The idea is that you tell the macro which variable to use instead of eax.
+
+For DWORD POINTERS you may have to do this:
+<pre><code>InvokeFixStdCall func,ebx,<DWORD PTR> var</code></pre>
+
+For ADDR this is probably not neccessary.
+
+<pre><code>
+InterpretParam MACRO param:Req, use:Req
+   ;; the use param says I will allow masm to use this variable.
+   ;; i.e. use ebx/ecx/edx instead of eax
+   IF @INSTR(1,param,<ADDR>) GT 0
+      ;; It's an address, a constant label, load it and push it
+      mov   use,Offset @STRSUB(param,@INSTR(1,param,<ADDR>))
+      push  use
+   ELSIF @INSTR(1,param,<DWORD PTR>) GT 0
+      ;; It's a dword pointer, load it and push it
+      mov   use,param
+      mov   use,
+      push  use
+   ELSIF @INSTR(1,param,<[> GT 0
+      ;; It has [] brackets, use lea and push it
+      lea   use,param
+      push  use
+   ELSE
+      ;; Just push it
+      push  param
+   ENDIF
+ENDM
+
+InvokeFixStdCall MACRO func:Req, use, par1, par2, par3, par4, par5, par6, par7, par8, par9
+   ;; the use param allows InvokeFixStdCall to use the register that you choose
+   ;; instead of eax
+
+   ;; if you need more parameters just copy the below and change to par10, par11, ...
+   ;; and add par10, par11, ... to the MACRO definition
+   IFNB <par9>
+      InterpretParam par9, use
+   ENDIF
+      
+   IFNB <par8>
+      InterpretParam par8, use
+   ENDIF
+   
+   IFNB <par7>
+      InterpretParam par7, use
+   ENDIF
+
+   IFNB <par6>
+      InterpretParam par6, use
+   ENDIF
+
+   IFNB <par5>
+      InterpretParam par5, use
+   ENDIF
+
+   IFNB <par4>
+      InterpretParam par4, use
+   ENDIF
+
+   IFNB <par3>
+      InterpretParam par3, use
+   ENDIF
+
+   IFNB <par2>
+      InterpretParam par2, use
+   ENDIF
+
+   IFNB <par1>
+      InterpretParam par1, use
+   ENDIF
+
+   Call  func
+ENDM
+
+DDSINVOKE   MACRO   func, this, arglist :VARARG
+    mov         eax , 
+    mov         eax , 
+
+    IFB <arglist>
+    InvokeFixStdCall , ebx, this
+    ELSE
+    InvokeFixStdCall , ebx, this, arglist
+    ENDIF
+
+ENDM
+</code></pre>
+
+-another method would be-
+
+<pre><code>
+InterpretParam MACRO param:Req, use:Req
+   ;; the use param says I will allow masm to use this variable.
+   ;; i.e. use ebx/ecx/edx instead of eax
+   IF @INSTR(1,param,<ADDR>) GT 0
+      ;; It's an address, a constant label, load it and push it
+      mov   use,Offset @STRSUB(param,@INSTR(1,param,<ADDR>))
+      push  use
+   ELSIF @INSTR(1,param,<DWORD PTR>) GT 0
+      ;; It's a dword pointer, load it and push it
+      mov   use,param
+      mov   use,
+      push  use
+   ELSIF @INSTR(1,param,<[> GT 0
+      ;; It has [] brackets, use lea and push it
+      lea   use,param
+      push  use
+   ELSE
+      ;; Just push it
+      push  param
+   ENDIF
+ENDM
+
+InvokeFixStdCall MACRO func:Req, par1, par2, par3, par4, par5, par6, par7, par8, par9
+   ;; if you need more parameters just copy the below and change to par10, par11, ...
+   ;; and add par10, par11, ... to the MACRO definition
+   IFNB <par9>
+      InterpretParam par9, eax
+   ENDIF
+      
+   IFNB <par8>
+      InterpretParam par8, eax
+   ENDIF
+   
+   IFNB <par7>
+      InterpretParam par7, eax
+   ENDIF
+
+   IFNB <par6>
+      InterpretParam par6, eax
+   ENDIF
+
+   IFNB <par5>
+      InterpretParam par5, eax
+   ENDIF
+
+   IFNB <par4>
+      InterpretParam par4, eax
+   ENDIF
+
+   IFNB <par3>
+      InterpretParam par3, eax
+   ENDIF
+
+   IFNB <par2>
+      InterpretParam par2, eax
+   ENDIF</div>
+    <div class="meta">Posted on 2001-04-08 02:09:00 by BigBadBob</div>
+   </div>
+   <div class="post" id="post-196928">
+    <div class="subject"><a href="#post-196928">MASM/inc bug, or this invoke sure likes to use eax</a></div>
+    <div class="body">At first I hesitated to mention my existing body of COM work, as the DirectX inc file preceeds it, and works to a different standard. However, to keep people from going off on tangents re-inventing the wheel...
+
+My tuts are all posted on my site. Also, library and example code are included on the MASM32 page in SP2 (V6sp2.zip).
+
+Invoking a COM method isn't very involved (or shouldn't be), it just requires a bit of setup, mostly being defining a structure to hold the 'shape' of the method pointer table of functions (or vtable). I've tossed in a few name decorations to make polymorphism (ie, two different interfaces having the same method name) work inside MASM. 
+
+If the above posts confused you, try reading this material, then back-apply it to the directX lib. Keep in mind that lib does NOT follow the same code standard, but accomplished the same thing (albeit with the eax disaster).
+
+Together, that should arm you with enough information to fix and drive this include file (and any COM object you wish to).
+
+--------------------
+"Our lives are in the hands of men no smarter than you or I. Many of them incompetent boobs. I know this because I’ve worked alongside them, gone bowling with them, watch them pass me over for promotions time and again."</div>
+    <div class="meta">Posted on 2001-04-08 12:56:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-196929">
+    <div class="subject"><a href="#post-196929">MASM/inc bug, or this invoke sure likes to use eax</a></div>
+    <div class="body">Thanks guys. Ernie, I came to the same idea as you and changed it to use edx for *this.  BigBadBob, thanks for all those macros.
+I think changing to edx is better for compatibility.  The macro has to work for many functions with differing numbers/types of parameters.  I think I'll have to make a hotmail account and notify the maker of this ddraw.inc of the error so he can update it.  I spent quite a while tracking down this bug.
+
+As for COM, Ernie, this is my first time using it, and it doesn't seem very hard.  I dynamically linked ddraw.dll and all my directx stuff is working.  Now I just have to figure out the error in my message loop thats keeping my window from being updated:mad::D</div>
+    <div class="meta">Posted on 2001-04-08 17:48:00 by asm_happy</div>
+   </div>
+  </div>
+ </body>
+</html>

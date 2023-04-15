@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>(AMD)OS for x86-64 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16894" />
+  <link rel="prev" href="../?id=16894&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=16894">(AMD)OS for x86-64</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=16894&amp;page=1" style="">&laquo;</a><a href="../?id=16894&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="16894" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-132946">
+    <div class="subject"><a href="#post-132946">(AMD)OS for x86-64</a></div>
+    <div class="body">mmm... much simpler/cleaner code here, adapted from AMD's docs<br /><br />But the first question is : what kind of tempo/display/mark shall I use to witness I can at least enter 64-bit long mode ? I tried a long display after a &quot;db 066h \ db 0eah \ dd my_patched_start64 \ dw selector64 but it failed. <br /><br />And the second : how to quit it properly ? AMD says u cannot use a direct far jmp in long mode so I tried a far jmp , hardcoded db ff 2e \ dq my_patched_offset.<br /><br />Still thinking :sweat: <br /><br /><br />:stupid: I have my first answer : an endless loop works fine :)<br /><br /> mov ecx,100000000<br /> mov ebx,0b8000h + 160*10 + 10<br /> mov eax,33<br /><br /> jmp jmpmemz<br />align 8<br />jmpmem:<br /> dd SKIP64<br /> dd 0<br /> dw bootcode16-gdt<br />jmpmemz:<br /><br />jmp_64:<br /> db 066h<br /> db 0eah<br /> dd main64<br /> dw bootcode64-gdt<br />;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<br />;<br />;;<br />;;;Start of 64-bit code<br />;;<br />;<br />;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<br />main64:;At this point,we're using 64-bit code<br />use32<br />@@:<br /> mov b,al<br /> add al,1<br /> add bl,2<br /> dec ecx<br /> jmp @b ;better than jnz @b !!!<br /><br /><br />Now the 2nd... :sweat:</div>
+    <div class="meta">Posted on 2004-02-08 19:40:28 by valy</div>
+   </div>
+   <div class="post" id="post-133086">
+    <div class="subject"><a href="#post-133086">(AMD)OS for x86-64</a></div>
+    <div class="body">bogdan, i also think this centralmembackbuffer-implementation is the best one for simplicity (but tell me, do you blast the whole screen again at each mouse pointer move?)<br /><br />correct me if i m wrong, but if i remember right all you have to do is to<br /><br />    cli<br />    jmp seg_sel_16:bank_switch<br />  back:<br />    sti<br /><br /><br />where seg_sel_16 is the selector of a seg in the 1st meg with 16b code containing:<br /><br /><br />  bank_switch:<br />    lidt <br />    mov cr0,(cr0 or111...1110)<br />    jmp real_mode_seg_of_this_code_seg:next_instr     (cause int will push the selector if you dont do this)<br />  next_instr:<br />    mov regs, ...<br />    int 0x10     (switch bank)<br />     ...rep movsd (blast the screen to 0x0A0000, hope you ve got a data segment register still having 4GB limits<br />                      (pointing to your src buff,if fs/gs are destroyed by int you must copy the src in lowmem BEFORE int)<br />    mov cr0,(cr0 and 000..0001)<br />    maybe reload data segs (gdtr shouldnt have changed)<br />    lidt <br />    jmp seg_sel_32:back<br /><br /><br />hmmm... that must be all if i didnt forget something :)<br /><br />no?<br /><br />(hope int0x10 dont enable ints again :)  )<br /><br /><br />of course, with this it would be much more complicated to do a mouse handler that only redraws the cursor and not the whole screen and if you need vesa1.2 banking, blasting the whole screen will be ultra slow... or are you using some sort of hw cursor?</div>
+    <div class="meta">Posted on 2004-02-10 08:35:08 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-133115">
+    <div class="subject"><a href="#post-133115">(AMD)OS for x86-64</a></div>
+    <div class="body">NO I do NOT redraw the whole screen at each mouse pointer move :grin:<br /><br />1)Mouse is interupt driven so on IRQ12 (PS/2 mouse) i just get the data from the mouse and after raw interpretation i fill up a queue of mouse simple events (one event per mouse hardware interupt). <br />--&gt;Nothing is redrawn at this point<br /><br />2)Mouse usually reports multiple pixels movements depending on it movement speed and communications speed. So mouse will be drawn to the calculated destination rather than incrementaly move pixel by pixel (check with you Windows mouse : fast move and see it jump chunks on screen NOT single pixel movement<br />--&gt;Nothing is redrawn at this point neither<br /><br />3)When the SOL OS System_Executor checks the Mouse queue it will consume ALL events available and generate appropiate messages to all Windows in OS until the queue is exhausted. <br />--&gt;Nothing is redrawn at this point neither<br /><br />Indeed the Mouse is redrawn the LAST on the system backbuffer on each OS loop <br />(unless i have support for hardware pointer)<br /><br />And the system backbuffer is rep movsd to video LFB after this.<br /><br />Lately, in SOLOS there is an optimization that will redraw ONLY what is DIRTY (aka defined like this by either OS or USER applications). And Mouse always <strong>makes himself dirty</strong> both in the old possitions and the new ones. <br /><br />However such kind of optimizations complicate things a little:  applications should aditionally call Video_Dirty API functions to let OS know what areas to redraw on each loop. Also there is much more work to be done in this area...<br /><br />So in the end tehoretically IF you do NOT move the mouse and NO window makes itself dirty (aka had dymanic content) THEN nothing will be redrawn ON SCREEN ...<br /><br />IF i understand well, what you are proposing is a temporary return to realmode in order to do a BIOS int10 software INT and do a bank switch... well i might give it a try but not very soon, since i will prefer to be ale to do it in 32bits mode without a  &quot;dangerouse&quot; return to realmode. <br /><br />I will have to save first 1M of RAM status and INT tables/BIOS variables in order to be able to do this temporary return <br /><br />i would not actually copy the screen there since i might do it faster in 32bits? I would be tempted to do just the bank switch there....<br /><br />But i agree it is a logical solution without information on how to directly bank switch in 32bit mode for some  video boards</div>
+    <div class="meta">Posted on 2004-02-10 15:00:57 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-133121">
+    <div class="subject"><a href="#post-133121">(AMD)OS for x86-64</a></div>
+    <div class="body">okay...<br />so with no optimizations, if you move the mouse without doing anyting else (dragging windows etc) , you still redraw the whole screen ...<br /><br />with optimizations (dirty areas), if the windows or the OS lag, you still dont redraw the pointer until everyting is calculated.<br /><br />maybe one could make an exception for the mouse pointer since its so important for user responsiveness, and redraw it at every move (to real VRAM), even in the interrupt handling (that might make some of you SCREAM! :) ), maybe thats how i d do it. and then , yes, add messages to the os queue and wait for the next loop...<br /><br />i think in windows when everything lags and you drag a window the window sometimes is a little bit behind the mouse cursor.<br /><br />ofcourse with a banking scheme, all this complicates, if not forbids such a method.<br />(woohoo! PM/RM switch in an ISR! you would be the first to do that! :) )</div>
+    <div class="meta">Posted on 2004-02-10 15:52:14 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-133142">
+    <div class="subject"><a href="#post-133142">(AMD)OS for x86-64</a></div>
+    <div class="body">Not exactly<br /><br /><div class="quote"><br />so with no optimizations, if you move the mouse without doing anyting else (dragging windows etc) , you still redraw the whole screen ...<br /></div><br /><br />I redraw the screeen every once in a while in OS loop with no regard to the mouse move or not move. Yes without optimizations I redraw the screen every OS frame. But OS frames are not related to the mouse.<br /><br />I do this every frame or every once in a while full screen redraw because I want to have an realtime OS and i will hate to miss some action on screen because of an event based error or delay in screen updates, but honestly also to keep things extra simple at startup.<br /><br />Mouse speed/responsiveness depends on IRQ12 and hardware /software setup (acceleratin,dynamics) but has little to do with screen redraw.<br /><br />I will not advice somebody to redraw the whole screen on mouse IRQ :grin: <br />You can get as many as 100 or 1000 mouse IRQs per seccond and this will be too much even for faster CPUs ... you can get by with caching what is under mouse and redrawin only that but still i will not advice this.<br /><br />Besides theoretically most video boards have a hardware cursor designed to avoid such problems. I guess i will just enable that if available on hardware.<br /><br />So basically in my design, moving or not moving the mouse has very little impact on OS speed with or without considering redrawing issues<br /><br /><div class="quote"><br />i think in windows when everything lags and you drag a window the window sometimes is a little bit behind the mouse cursor.<br /></div><br /><br />Well that is a design problem of Windows, basically it delays redraw to gain speed, but on an environment that is event based, multiple events can trigger at most unappropiate times and can cut hardly on such design<br /><br />Instead i hav choosen a design that is slower but allows more heavy dynamic contents and scalles down gracefully and slowly  without bottlenecks and stalls when it has to do heavy overwork<br /><br />Basically my OS will slow don but will NEVER STALL/not redraw contents<br /><br /><div class="quote"><br />ofcourse with a banking scheme, all this complicates, if not forbids such a method.<br />(woohoo! PM/RM switch in an ISR! you would be the first to do that! )<br /></div><br /><br />Nope i will NOT do such thing :grin: is not my style<br />I do not even think it is possible without joining the triple fault club on a free ride...<br /><br />I can deal with banked video board quite easy in the backbuffet to video copy routine, things are much more simple and centralized there...<br /><br />Problem is i do NOT have such an banked video boar so i can not test this<br /><br />Only my old laptop has one NeoMagic 128 with 800K video RAM maximum is 800x600x256colors or 640x480x64656colors<br /><br />So if anybody knows/have the code todo bank switching for this old video board i will like to try it on my laptop</div>
+    <div class="meta">Posted on 2004-02-10 18:10:56 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-133145">
+    <div class="subject"><a href="#post-133145">(AMD)OS for x86-64</a></div>
+    <div class="body"><div class="quote">maybe one could make an exception for the mouse pointer since its so important for user responsiveness</div><br /><br />In Windows it is... You have a hardware mousecursor (it is never actually drawn into videomemory, it is an overlay effect, handled by the hardware) which is always updated, sometimes even if the rest of the system has crashed :)<br />But then you run into the biggest problem when writing your own OS: drivers.<br />Which is why I'll just stick with Windows. At least I can actually use my hardware then :)</div>
+    <div class="meta">Posted on 2004-02-10 18:46:57 by Henk-Jan</div>
+   </div>
+   <div class="post" id="post-133192">
+    <div class="subject"><a href="#post-133192">(AMD)OS for x86-64</a></div>
+    <div class="body">:) I have it ! I am happy :)<br /><br />Oh, and by the way I do not intend to do a full 64-bit OS, there will NOT be any drivers at all (never wrote one ; Win9x is good for all that stuff).</div>
+    <div class="meta">Posted on 2004-02-11 05:24:20 by valy</div>
+   </div>
+   <div class="post" id="post-134015">
+    <div class="subject"><a href="#post-134015">(AMD)OS for x86-64</a></div>
+    <div class="body"><a target="_blank" href="http://alexfru.narod.ru/emiscdocs.html">http://alexfru.narod.ru/emiscdocs.html</a> contains lfbemu22.zip : linear frame buffer implementation, if anybody interested.<br />LFBemu 2.2 is a Linear Frame Buffer (aka LFB) emulator for VESA 1.xx+ cards<br /><br />Otherwise... my current AMDO64 version maps 1 GB memory, I implement basic interrupts/exceptions.</div>
+    <div class="meta">Posted on 2004-02-18 06:38:10 by valy</div>
+   </div>
+   <div class="post" id="post-139533">
+    <div class="subject"><a href="#post-139533">(AMD)OS for x86-64</a></div>
+    <div class="body">Hi<br /><br />I tested funny things like RIP relative-addressing, XMM, a movd that works on 64-bit, a 1 GB paging...<br />but I fail with IRQ/exception handling, so I wonder how I'll code the debugger :confused: <br />Linux kernel consists of 2 million lines... I'm quite afraid to dive into. <br /><br />For my program, get yasm 0.3 from tortall.net, compile under DOS, execute from true DOS.<br /><br /><br />Last minute : <a target="_blank" href="http://www.os-soft.com/default.php?page=main.php">http://www.os-soft.com/default.php?page=main.php</a><br />They seem to have done what I am trying to do. GPL. Not to be compiled from DOS but from a Linux machine. I'll give it a try.</div>
+    <div class="meta">Posted on 2004-04-20 01:34:25 by valy</div>
+   </div>
+   <div class="post" id="post-141427">
+    <div class="subject"><a href="#post-141427">(AMD)OS for x86-64</a></div>
+    <div class="body">I hardly believe it : it works  :) :cool: <br /><br />So here is another alpha/beta version.<br /><br />Now who will code an integrated debugger (profiler/ide/assembler...) ? Who will make it bootable from an USB key ? ;) <br />Too bad, my Opteron bought last August does not seem to have this BIOS option. But I really intend to buy such a device.<br /><br />Regards</div>
+    <div class="meta">Posted on 2004-05-19 05:43:01 by valy</div>
+   </div>
+   <div class="post" id="post-156948">
+    <div class="subject"><a href="#post-156948">(AMD)OS for x86-64</a></div>
+    <div class="body">Hello<br /><br />What's new ?<br />1/ My Opteron CAN and did boot from my new and handful USB key  :) <br />2/ I have a solution for debugging common x86-64 programs, below<br /><br />Here is an easy way to debug x86-64 instructions :<br />get your favourite IDE for C (Bill's of course !),<br />compile and write some x86-64 ASM pseudo-instructions in C<br />with the few routines I give you below.<br />If you accept the syntax is NOT pure asm - C is limited,<br />my imagination too, and if you have smarter ways to do it,<br />please show me your code also. Any positive criticism is welcome.<br />For instance :<br />	as2(mov al,1);	<br />	as2(mov ax,1);	<br />	as3eax(add,eax,dptr);<br />	xor(RAX,RBX);<br />	mmx3i(psllq,MM0,3);<br />	movd64(XMM0,RAX);<br /><br />This is ALPHA work, not even BETA.<br />Indeed it was easier to code this small emulator<br />than directly coding my (future) AMDO64 integrated debugger.<br /><br />/* <br />What is AMDO64 ? My personal OS.<br />Only one mode : PM64 (64-bit long mode)<br />Only one ring : ring0<br />Only one leitmotiv : easier, faster.<br />  EASIER : current OSes are monsters. Huge. Complex. Similar but different. Never as I want. Supporting obsolete hardware and software.<br />Mine may be pure 64-bit, compatible with nothing - except my only needs.<br />I intend mine to may be simple, highly specific.<br />  FASTER : do you realize...<br />the time we take to develop nice apps, to learn one language ?<br />Not as fast as I hope, anyway. C is good but far less powerful<br />than Asm. Asm is efficient but hard to learn and code, and indeed<br />it is a nonsense to write efficient code slowly (slower than C)<br />for non critical parts of your program. So if one day I write my<br />own assembler, I intend to be able to write pure asm only, OR/AND<br />a kind of C syntax. Writing an IDE better than Bill's is a must - very<br />very long term and probably just a dream :-(<br /><br />What's next ?<br />Now that I have a kind of x86-64 debugger, I intend to add a keyboard driver to my released &quot;agner2.asm&quot;, then a few basic screen routines, then an easy and limited way to access FAT32, to read a file, then...<br />*/<br /><br />Have a nice day<br /><br /><a target="_blank" href="http://abyss32.chez.tiscali.fr/agner2.asm">http://abyss32.chez.tiscali.fr/agner2.asm</a><br /><a target="_blank" href="http://abyss32.chez.tiscali.fr/a64ver1.zip">http://abyss32.chez.tiscali.fr/a64ver1.zip</a></div>
+    <div class="meta">Posted on 2005-02-11 05:11:03 by valy</div>
+   </div>
+   <div class="post" id="post-156950">
+    <div class="subject"><a href="#post-156950">(AMD)OS for x86-64</a></div>
+    <div class="body">Does your link work? I keep getting 403 forbidden error.</div>
+    <div class="meta">Posted on 2005-02-11 07:57:20 by roticv</div>
+   </div>
+   <div class="post" id="post-156971">
+    <div class="subject"><a href="#post-156971">(AMD)OS for x86-64</a></div>
+    <div class="body"><div class="quote">Does your link work? I keep getting 403 forbidden error.</div><br />That's probably one of new security protections on this board. Open new window (or panel in Mozzila :)) and copy&amp;paste the link. Then it should work.</div>
+    <div class="meta">Posted on 2005-02-12 02:04:46 by MazeGen</div>
+   </div>
+   <div class="post" id="post-157021">
+    <div class="subject"><a href="#post-157021">(AMD)OS for x86-64</a></div>
+    <div class="body">Thanks MazeGen<br /><br />Yes, a copy&amp;paste is enough. Mozilla opens .asm directly.<br /><br />I worked on that mysterious keyboard this week, and there's one bug less in my new uploaded AGNER2.ASM<br /><br />Preparing a keyboard driver right now.<br /><br />Regards</div>
+    <div class="meta">Posted on 2005-02-14 05:52:42 by valy</div>
+   </div>
+   <div class="post" id="post-159044">
+    <div class="subject"><a href="#post-159044">Re: (AMD)OS for x86-64</a></div>
+    <div class="body">Keyboard driver OK, but no new release? :P<br /><br />I wrote a Win32 version that disassembles most part of x86-64 instructions (no FPU).<br />This is a step to write my integrated debugger into AMDO64.<br />Any bug report is welcome.<br /><br />See my website for download (d64.zip on http://abyss32.chez.tiscali.fr//index.html, you can click on my profile icons that I&#39;ve just updated).<br /><br />Have a nice day</div>
+    <div class="meta">Posted on 2005-04-15 07:41:07 by valy</div>
+   </div>
+   <div class="post" id="post-159061">
+    <div class="subject"><a href="#post-159061">Re: (AMD)OS for x86-64</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">Does your link work? I keep getting 403 forbidden error.</div><br />That&#39;s probably one of new security protections on this board. Open new window (or panel in Mozzila :)) and copy&amp;paste the link. Then it should work.<br /></div><br /><br />Actually it seems more like the opposite. Some sites do not allow linking from other sites.</div>
+    <div class="meta">Posted on 2005-04-15 14:37:39 by SpooK</div>
+   </div>
+   <div class="post" id="post-160824">
+    <div class="subject"><a href="#post-160824">Re: (AMD)OS for x86-64</a></div>
+    <div class="body">Hello<br /><br />I wrote a Win32 version that converts Masm32 src to Yasm.<br />It fits my - light - needs.<br />Alpha version, buggy... just OK for me, and C source? :P<br /><br />See my website for download (m32y64.c on http://abyss32.chez.tiscali.fr//index.html, you can click on my profile icons).<br /><br />Next step for my OS: FAT16.<br /><br />Bye</div>
+    <div class="meta">Posted on 2005-06-06 06:59:42 by valy</div>
+   </div>
+   <div class="post" id="post-160885">
+    <div class="subject"><a href="#post-160885">Re: (AMD)OS for x86-64</a></div>
+    <div class="body">What is this about paging and 64bit OS&#39;s, i thorught you did not need paging, but you are limited to 4GB with out it ?. </div>
+    <div class="meta">Posted on 2005-06-07 14:06:44 by Dex4</div>
+   </div>
+   <div class="post" id="post-160904">
+    <div class="subject"><a href="#post-160904">Re: (AMD)OS for x86-64</a></div>
+    <div class="body">?<br />Hello Dex4u.<br />I don&#39;t understand.<br />Paging is NECESSARYwith AMD64 64-bit long mode.<br />My agner2.* implements a version that will be good enough for upto 4 GB... or more, but no interest for the moment.<br />?<br /><br />Regards<br /><br /><br /></div>
+    <div class="meta">Posted on 2005-06-08 06:10:28 by valy</div>
+   </div>
+   <div class="post" id="post-160906">
+    <div class="subject"><a href="#post-160906">Re: (AMD)OS for x86-64</a></div>
+    <div class="body">Hi valy,<br />? ? ? ? ? I did some more reading and learnt more about the way the 64bit AMD modes work.<br /><br />PS: i found your code very interesting and helpfull thanks :) .</div>
+    <div class="meta">Posted on 2005-06-08 07:08:22 by Dex4</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=16894&amp;page=1" style="">&laquo;</a><a href="../?id=16894&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="16894" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

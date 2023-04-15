@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Using stdin from win32asm console  - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29400" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=29400">Using stdin from win32asm console </a></p>
+   <div class="post" id="post-207537">
+    <div class="subject"><a href="#post-207537">Using stdin from win32asm console </a></div>
+    <div class="body">I&#039;m beginning with win32asm, and having trouble using fputs and fgets from win32 asm code.<br /><br />In *nix, I believe I can just do:<br />push 1 ; stdout<br />push msg<br />call fputs<br /><br />But when I try similar code in Windows (using call _fputs), nothing happens.<br />I believe this is because Windows doesn&#039;t initialize 0,1, and 2 to stin, stdout, and stderr :-(<br />I&#039;ve seen complicated code that initializes these with GetStdHandle, but it&#039;s beyond my comprehension now...<br /><br />So, my question, is: Is there a simpler way to initialize these, or use STDIN, from win32asm console apps?<br />Can I do these in C, and then call the code from win32asm?<br />Can Cygwin do this for me, somehow?<br />Failing that, is there a simple way I can just include some asm which will set these up for me?<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2009-05-08 12:56:56 by srobertjames</div>
+   </div>
+   <div class="post" id="post-207538">
+    <div class="subject"><a href="#post-207538">Re: Using stdin from win32asm console </a></div>
+    <div class="body">- You need your .exe to be a console executable<br />- Push your string, call the puts function in MSVCRT.DLL<br />- It works.<br /><br />Which assembler are you using?</div>
+    <div class="meta">Posted on 2009-05-08 14:11:39 by ChaperonNoir</div>
+   </div>
+   <div class="post" id="post-207541">
+    <div class="subject"><a href="#post-207541">Re: Using stdin from win32asm console </a></div>
+    <div class="body">you can simply use AllocConsole() and GetStdHandle(STD_OUTPUT_HANDLE), then use WriteFile() with the returned file-handle. This is when you didn&#039;t link your app as a console-app. <br />Funcs for reading and writing strings will need to be coded by you, they&#039;re simple. </div>
+    <div class="meta">Posted on 2009-05-08 14:54:12 by Ultrano</div>
+   </div>
+   <div class="post" id="post-207544">
+    <div class="subject"><a href="#post-207544">Re: Using stdin from win32asm console </a></div>
+    <div class="body">I&#039;m using NASM.&nbsp; Console mode app.<br /><br />I&#039;d like to use the standard C functions like fputs, since I&#039;m a lot more familar with those than with MS-specific ones like WriteFile().</div>
+    <div class="meta">Posted on 2009-05-08 18:11:20 by srobertjames</div>
+   </div>
+   <div class="post" id="post-207545">
+    <div class="subject"><a href="#post-207545">Re: Using stdin from win32asm console </a></div>
+    <div class="body">It&#039;s worth knowing that Windows uses a common subsystem for all kinds of IO.<br />You can effectively use the same api to write to file handles, socket handles, pipes, etc.<br />For example, WriteFile will work with any/all of these IO handles.<br /></div>
+    <div class="meta">Posted on 2009-05-08 20:35:54 by Homer</div>
+   </div>
+   <div class="post" id="post-207546">
+    <div class="subject"><a href="#post-207546">Re: Using stdin from win32asm console </a></div>
+    <div class="body">There is function you can call in MSVCRT that returns a pointer to FILE* stdin / STDOUT / STDERR. I have the code around somewhere, it&#039;s something like _iob_func or something like that.<br /><br />It&#039;s really easy to use the C runtime functions from Assembly. Really really easy. fgets, fopen, puts, printf, fprintf, remove, everything works and it&#039;s easy to use.<br /><br />If you want to work with the STDIN stream, why don&#039;t you just use gets() and functions like that where you don&#039;t need to specify the stream.<br />http://www.cplusplus.com/reference/clibrary/cstdio/scanf/<br /></div>
+    <div class="meta">Posted on 2009-05-08 21:14:50 by ChaperonNoir</div>
+   </div>
+   <div class="post" id="post-207551">
+    <div class="subject"><a href="#post-207551">Re: Using stdin from win32asm console </a></div>
+    <div class="body">Hi srobertjames,<br /><br />Here is an example for you :<br /><br /><pre><code><br />.386<br />.model flat, stdcall<br />option casemap:none<br /><br />include&nbsp; &nbsp;  \masm32\include\windows.inc<br />include&nbsp; &nbsp;  \masm32\include\kernel32.inc<br /><br />includelib&nbsp; \masm32\lib\kernel32.lib<br />includelib&nbsp; \masm32\lib\msvcrt.lib<br /><br />fputs&nbsp; &nbsp; &nbsp;  PROTO C :DWORD,:DWORD<br />__p__iob&nbsp; &nbsp; PROTO C<br /><br />_iobuf STRUCT<br />&nbsp; &nbsp; _ptr&nbsp; &nbsp; &nbsp; &nbsp; DWORD ?<br />&nbsp; &nbsp; _cnt&nbsp; &nbsp; &nbsp; &nbsp; DWORD ?<br />&nbsp; &nbsp; _base&nbsp; &nbsp; &nbsp;  DWORD ?<br />&nbsp; &nbsp; _flag&nbsp; &nbsp; &nbsp;  DWORD ?<br />&nbsp; &nbsp; _file&nbsp; &nbsp; &nbsp;  DWORD ?<br />&nbsp; &nbsp; _charbuf&nbsp; &nbsp; DWORD ?<br />&nbsp; &nbsp; _bufsiz&nbsp; &nbsp;  DWORD ?<br />&nbsp; &nbsp; _tmpfname&nbsp;  DWORD ?<br />_iobuf ENDS<br /><br />FILE TYPEDEF _iobuf<br /><br />.data<br /><br />msg&nbsp; &nbsp; &nbsp; &nbsp;  db &#039;This is a test.&#039;,0<br /><br />.data?<br /><br />stdout&nbsp; &nbsp; &nbsp; dd ?<br />stdin&nbsp; &nbsp; &nbsp;  dd ?<br />stderr&nbsp; &nbsp; &nbsp; dd ?<br /><br />.code<br /><br />start:<br /><br />&nbsp; &nbsp; call&nbsp; &nbsp; __p__iob<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; mov&nbsp; &nbsp;  stdin,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; #define stdin&nbsp; (&amp;__iob_func()[0])<br />&nbsp; &nbsp; add&nbsp; &nbsp;  eax,SIZEOF(FILE)<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  stdout,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; #define stdout (&amp;__iob_func()[1])<br />&nbsp; &nbsp; add&nbsp; &nbsp;  eax,SIZEOF(FILE)<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  stderr,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; #define stderr (&amp;__iob_func()[2])<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; invoke&nbsp; fputs,ADDR msg,stdout&nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; invoke&nbsp; ExitProcess,0<br /><br />END start<br /></code></pre></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2768" target="_blank">fputs.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-05-09 06:01:34 by Vortex</div>
+   </div>
+   <div class="post" id="post-207553">
+    <div class="subject"><a href="#post-207553">Re: Using stdin from win32asm console </a></div>
+    <div class="body"><div class="quote"><br />If you want to work with the STDIN stream, why don&#039;t you just use gets() and functions like that where you don&#039;t need to specify the stream.<br /></div><br />Because gets() is a *major* security vulnerability.&nbsp; Any code using gets() is vulnerable.&nbsp; Never use gets().&nbsp; Erase it&#039;s definition from your include files.<br /><br />fgets(), on the other hand, lets you specify a count.&nbsp; But you also need to specify STDIN or the stream handle, which is suprisingly not obvious how to do in Windows.</div>
+    <div class="meta">Posted on 2009-05-09 23:10:07 by srobertjames</div>
+   </div>
+   <div class="post" id="post-207554">
+    <div class="subject"><a href="#post-207554">Re: Using stdin from win32asm console </a></div>
+    <div class="body"><div class="quote"><br />Hi srobertjames,<br /><br />Here is an example for you :<br /><br /><pre><code><br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;stdin,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;; #define stdin&nbsp; (&amp;__iob_func()[0])<br />&nbsp; &nbsp; add&nbsp; &nbsp; &nbsp;eax,SIZEOF(FILE)<br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;stdout,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; #define stdout (&amp;__iob_func()[1])<br />&nbsp; &nbsp; add&nbsp; &nbsp; &nbsp;eax,SIZEOF(FILE)<br />&nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp;stderr,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; #define stderr (&amp;__iob_func()[2])<br /></code></pre><br /></div><br /><br />Neat! Any similar version that will work with NASM + gcc? (That&#039;s what I&#039;m using to assemble / link).</div>
+    <div class="meta">Posted on 2009-05-09 23:18:31 by srobertjames</div>
+   </div>
+   <div class="post" id="post-207555">
+    <div class="subject"><a href="#post-207555">Re: Using stdin from win32asm console </a></div>
+    <div class="body">Use GetStdHandle to retrieve std io handles.<br />I know it seems a little obtuse.</div>
+    <div class="meta">Posted on 2009-05-09 23:23:01 by Homer</div>
+   </div>
+   <div class="post" id="post-207556">
+    <div class="subject"><a href="#post-207556">Re: Using stdin from win32asm console </a></div>
+    <div class="body">Hi srobertjames,<br /><br />You can translate the Masm code to Nasm. It should work for you.</div>
+    <div class="meta">Posted on 2009-05-10 04:22:27 by Vortex</div>
+   </div>
+   <div class="post" id="post-207557">
+    <div class="subject"><a href="#post-207557">Re: Using stdin from win32asm console </a></div>
+    <div class="body">This code should link with crtdll.lib<pre><code>extern __imp__iob<br /><br />main:<br />	push esi<br />	mov&nbsp; esi,[__imp__iob]<br />	%define stdin&nbsp; <br />	%define stdout <br />	%define stderr <br /><br />	lea eax,stdout<br />	cinvoke fputs, &quot;hello&quot;, eax<br />	invoke _getch<br />	pop esi<br />	ret</code></pre></div>
+    <div class="meta">Posted on 2009-05-10 05:57:08 by sapero</div>
+   </div>
+   <div class="post" id="post-207558">
+    <div class="subject"><a href="#post-207558">Re: Using stdin from win32asm console </a></div>
+    <div class="body"><div class="quote"><br /><div class="quote"><br />If you want to work with the STDIN stream, why don&#039;t you just use gets() and functions like that where you don&#039;t need to specify the stream.<br /></div><br />Because gets() is a *major* security vulnerability.&nbsp; Any code using gets() is vulnerable.&nbsp; Never use gets().&nbsp; Erase it&#039;s definition from your include files.<br /><br />fgets(), on the other hand, lets you specify a count.&nbsp; But you also need to specify STDIN or the stream handle, which is suprisingly not obvious how to do in Windows.<br /></div><br /><br />Vulnerable is a big word.&nbsp; How exactly do you think you can take control of the target program using a buffer overflow. You can make the app crash or malfunction but that&#039;s all.<br />You could just use the safe versions of the CRT apis :<br />http://msdn.microsoft.com/en-us/library/5b5x9wc7(VS.80).aspx<br />gets_s for example let&#039;s you specify a size for the console input. But by now I&#039;m sure you&#039;ve found your solution.<br /><br /><br /></div>
+    <div class="meta">Posted on 2009-05-10 09:57:37 by ChaperonNoir</div>
+   </div>
+   <div class="post" id="post-207570">
+    <div class="subject"><a href="#post-207570">Re: Using stdin from win32asm console </a></div>
+    <div class="body">Try <a target="_blank" href="http://www.asmcommunity.net/projects/nasmx/">NASMX</a> ;)</div>
+    <div class="meta">Posted on 2009-05-11 10:17:05 by SpooK</div>
+   </div>
+   <div class="post" id="post-210185">
+    <div class="subject"><a href="#post-210185">Re: Using stdin from win32asm console </a></div>
+    <div class="body">Hi srobertjames,<br /><br />Here is an example for reading and writing to console in NASM<br /><br />Klod</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3045" target="_blank">FileOpen.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-01-04 21:32:12 by Klod</div>
+   </div>
+   <div class="post" id="post-210187">
+    <div class="subject"><a href="#post-210187">Re: Using stdin from win32asm console </a></div>
+    <div class="body"><div class="quote">Vulnerable is a big word.&nbsp; How exactly do you think you can take control of the target program using a buffer overflow. You can make the app crash or malfunction but that&#039;s all.</div>...which is bad enough. Haven&#039;t looked into gets, but often buffer overflows <strong>will</strong> let you take control of applications.<br /><br />Miiiight not be a security issue for most apps using gets, but it&#039;s stil lsomething to consider in the big scheme of things.</div>
+    <div class="meta">Posted on 2010-01-06 09:16:04 by f0dder</div>
+   </div>
+   <div class="post" id="post-210189">
+    <div class="subject"><a href="#post-210189">Re: Using stdin from win32asm console </a></div>
+    <div class="body">ChaperonNoir, it&#039;s true that with eXecutionDisable bit (and Windows DEP) and Vista&#039;s/7&#039;s ASLR much of the exploitation problem has been resolved. But not everyone has still enabled these functionalities in their machines and -as f0dder mentioned- even a simple crash is something you can&#039;t afford to have if you want to call yourself a decent programmer. Many CRT functions are wll-known for their security risks, which pretty much means &quot;do not use them&quot;, except maybe in some small tool-apps you write for yourself only.</div>
+    <div class="meta">Posted on 2010-01-06 14:36:49 by ti_mo_n</div>
+   </div>
+  </div>
+ </body>
+</html>

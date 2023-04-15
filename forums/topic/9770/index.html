@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How come my server not work?? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9770" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=9770">How come my server not work??</a></p>
+   <div class="post" id="post-72611">
+    <div class="subject"><a href="#post-72611">How come my server not work??</a></div>
+    <div class="body">hi,<br /><br />below I have attached my server procedure, its called when the worker thread created on startup.<br /><br />I duno whats wrong with it, it seem that the event messages doesn't get process.<br />it only seem to process the first event, which is the accept event,, it ignore the rest :(<br /><br />and when I tried to connect to the server with a dumy client, the result value for the connect function seem always FFFFFFFFh, I duno y.<br /><br />can someone please help me check my proc below see what I did wrong???<br /><br />thankx alots in adv,<br /><br /><pre><code><br />ListenProc	proc<br /><br />LOCAL	hListenEvent&#58;DWORD<br />LOCAL 	hClientEvent&#58;DWORD<br />LOCAL	pListenEvent&#58;DWORD,pClientEvent&#58;DWORD<br />LOCAL	Count&#58;DWORD<br /><br />	invoke WSAStartup, 101h, addr WSAdata<br />	.IF &#40;eax!=0&#41;<br />		;error initializing winsock lib<br />		xor eax, eax<br />		ret<br />	.ENDIF<br /><br />	invoke socket, AF_INET, SOCK_STREAM, IPPROTO_IP<br />	.IF &#40;eax==INVALID_SOCKET&#41;<br />		;socket creation error<br />		xor eax, eax<br />		ret<br />	.ENDIF<br />	mov hListenSocket, eax<br /><br />	mov SA_IN.sin_family, AF_INET<br />	invoke htons, szPort<br />	mov SA_IN.sin_port, ax<br />	mov SA_IN.sin_addr, INADDR_ANY<br />	invoke bind, hListenSocket, addr SA_IN, sizeof SA_IN<br />	.IF &#40;eax!=0&#41;<br />		;binding error, check for error msg<br />		xor eax, eax<br />		ret<br />	.ENDIF<br /><br />	invoke WSACreateEvent<br />	mov hListenEvent, eax<br />	mov &#91;pListenEvent&#93;, eax<br />	invoke WSAEventSelect, hListenSocket, hListenEvent, FD_ACCEPT+FD_CLOSE<br /><br />	invoke listen, hListenSocket, 5<br />	.IF &#40;eax==INVALID_SOCKET&#41;<br />		;listen error, check for error msg<br />		xor eax, eax<br />		ret<br />	.ENDIF<br />@DoListen&#58;<br />	invoke WSAWaitForMultipleEvents, 1, addr pListenEvent, FALSE, INFINITE, FALSE<br />	invoke WSAEnumNetworkEvents, hListenSocket, hListenEvent, addr WSAEventListen<br />	test WSAEventListen.lNetworkEvents, FD_ACCEPT<br />	jz @CheckServerClose<br />		;accept the client<br />		invoke accept, hListenSocket, addr SA_IN, SIZEOF SA_IN<br />		mov hClientSocket, eax<br />		invoke WSACreateEvent<br />		mov hClientEvent, eax<br />		mov &#91;pClientEvent&#93;, eax<br />		invoke WSAEventSelect, hClientSocket, hClientEvent, FD_READ+FD_WRITE+FD_CLOSE<br />	@CheckClient&#58;<br />		invoke WSAWaitForMultipleEvents, 1, addr pClientEvent, FALSE, INFINITE, FALSE<br />		invoke WSAEnumNetworkEvents, hClientSocket, hClientEvent, addr WSAEventClient<br />		test WSAEventClient.lNetworkEvents, FD_READ<br />		jz @CheckWrite<br />			;do read<br />	@CheckWrite&#58;<br />		test WSAEventClient.lNetworkEvents, FD_WRITE<br />		jz @CheckClose<br />	@CheckClose&#58;<br />			;do write<br />		test WSAEventClient.lNetworkEvents, FD_CLOSE<br />		jz @CheckClient<br />			;do close<br />			invoke closesocket, hClientSocket<br />			invoke WSACloseEvent, hClientEvent<br />			jmp @DoListen<br />@CheckServerClose&#58;<br />	test WSAEventListen.lNetworkEvents, FD_CLOSE<br />	jz @DoListen<br />		;do server close<br />		invoke closesocket, hListenSocket<br />		invoke WSACloseEvent, hListenEvent<br />	mov eax, 1<br />	ret	<br />ListenProc	endp<br /></code></pre><br /><br /><span style="font-size:9px>added code tags -- Thomas</span></div>
+    <div class="meta">Posted on 2002-12-25 02:38:11 by Yanda</div>
+   </div>
+   <div class="post" id="post-72629">
+    <div class="subject"><a href="#post-72629">How come my server not work??</a></div>
+    <div class="body"><pre><code>invoke 	htons, szPort</code></pre><br />I don't know what your szPort var looks like but the 'sz' prefix is normally used for null terminated string pointers. You should use an immediate value here, not a string. If szPort is just a dword it's okay too.<br /><br /><pre><code>	mov 	hListenEvent, eax<br />	mov 	&#91;pListenEvent&#93;, eax</code></pre><br />Not really a problem but those two instructions do exactly the same (but with different vars). Using a variable name with brackets or without is both the same. So pListenEvent will not contain a pointer to anything, it will just hold the same value as hListenEvent. Even if you could store a pointer this way, what should it point to? You can't point to eax...<br /><br /><pre><code>invoke 	WSAWaitForMultipleEvents, 1, addr pListenEvent, FALSE, INFINITE, FALSE</code></pre><br />Change the 'addr pListenEvent' to 'addr hListenEvent', and you can remove the pListenEvent var. As your code is right now, both do the same thing and it works because pListenEvent isn't really a pointer.. If pListenEvent really were a pointer to an event this would be even wrong, since you would get a pointer to a pointer to an event handle then (addr of a pointer). <br />The same thing goes for hClientEvent/pClientEvent.<br /><br /><pre><code>	invoke 	accept, hListenSocket, addr SA_IN, SIZEOF SA_IN</code></pre><br />The last parameter should be a <strong>pointer</strong> to a variable holding the size of sockaddr_in, not the size itself:<br /><pre><code>	mov		saSize, sizeof SA_IN<br />	invoke 	accept, hListenSocket, addr SA_IN, addr saSize</code></pre><br /><br />The last one should be the main problem.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-12-25 05:01:05 by Thomas</div>
+   </div>
+   <div class="post" id="post-72660">
+    <div class="subject"><a href="#post-72660">How come my server not work??</a></div>
+    <div class="body">alrite:alright:  Thomas!<br /><br /><br />thankx alots, let me try to fix it.<br /><br /><br />yanda,</div>
+    <div class="meta">Posted on 2002-12-25 12:41:37 by Yanda</div>
+   </div>
+  </div>
+ </body>
+</html>

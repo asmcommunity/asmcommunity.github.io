@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Listview - copy line - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16485" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16485">Listview - copy line</a></p>
+   <div class="post" id="post-128161">
+    <div class="subject"><a href="#post-128161">Listview - copy line</a></div>
+    <div class="body">Hi,<br /><br />I have a listview. Now I have two questions:<br /><br />1. Is there no way to activate the right mouse button menu?<br /><br />2. If I have a button, &quot;copy&quot;, is there a way to copy a line of this listview box? Normally I would use SendMessage with WM_COPY, but there you need a handle. And I think it doesnt make sense to put in the handle of the Listview. I just need to copy the line and not the whole thing.<br /><br /><br />Am I wrong?<br /><br /><br />Hope for some enlightning<br /><br />DKT</div>
+    <div class="meta">Posted on 2003-12-17 12:23:37 by Kreatief</div>
+   </div>
+   <div class="post" id="post-128168">
+    <div class="subject"><a href="#post-128168">Listview - copy line</a></div>
+    <div class="body">To have a right click menu in a listview process the WM_CONTEXTMENU message and use your own. To copy the text you will have to use LVM_GETITEM to retrieve the text and copy it to the clipboard.</div>
+    <div class="meta">Posted on 2003-12-17 13:22:37 by donkey</div>
+   </div>
+   <div class="post" id="post-128175">
+    <div class="subject"><a href="#post-128175">Listview - copy line</a></div>
+    <div class="body">or <br />i<br />handle the WM_NOTIFY message, wparam should be<br />the listview window id, lparam should point to the NMHDR struct, check the code part (+8h) for the type..<br />should be one of the following<br /><br />NM_CLICK               The user has clicked the left mouse button within the control.<br />NM_DBLCLK	The user has double-clicked the left mouse button within the control.<br />NM_KILLFOCUS	The control has lost the input focus.<br />NM_OUTOFMEMORY	The control could not complete an operation because there was not enough memory available. <br />NM_RCLICK	The user has clicked the right mouse button within the control.<br />NM_RDBLCLK	The user has double-clicked the right mouse button within the control.<br />NM_RETURN	The control has the input focus, and the user has pressed the ENTER key.<br />NM_SETFOCUS	The control has received the input focus.<br /><br />one thing i could never fix well was the flickering caused in scrolling the listview<br />you can reduce it a bit by subclassing and 'faking' the wm_erasebkgnd message which does work, but can sometimes leave undesirable smears if you scroll from one<br />side to the other and back quickly</div>
+    <div class="meta">Posted on 2003-12-17 14:00:43 by evlncrn8</div>
+   </div>
+   <div class="post" id="post-128178">
+    <div class="subject"><a href="#post-128178">Listview - copy line</a></div>
+    <div class="body">Here, this should do it:<br /><br />Create a global variable for the clipboard buffer handle<br /><br /><pre><code>.data?<br />hClipData dd ?</code></pre><br /><br />You must process the WM_CONTEXTMENU and WM_DESTROYCLIPBOARD messages in your WindowProc:<br /><br /><pre><code>.ELSEIF eax == WM_CONTEXTMENU<br />	invoke ShowLVMenu,hWin ;Handle to the parent window<br /><br />.ELSEIF eax == WM_DESTROYCLIPBOARD<br />	invoke GlobalFree,hClipData</code></pre><br /><br />The following function assumes that you have defined hListView, and it holds the handle of the listview control. I have done the <strong>copy</strong> and <strong>paste</strong> functions I have also added support for copy and pasting sub items (common controls 4.70+)<br /><br /><span style="font-size:24px><pre><code>ShowLVMenu proc hWin&#58;DWORD<br />	LOCAL hPopMenu  &#58;DWORD<br />	LOCAL MCommand	&#58;DWORD<br />	LOCAL lvht		&#58;LVHITTESTINFO<br />	LOCAL lvi		&#58;LVITEM<br />	LOCAL pClipData	&#58;DWORD<br /><br />	jmp @F<br />		szCopyM db &quot;Copy&quot;,0<br />		szPasteM db &quot;Paste&quot;,0<br />	@@&#58;<br /><br />	invoke GetCursorPos, ADDR lvht.pt<br />	invoke ScreenToClient,hWin,ADDR lvht.pt<br />	invoke ChildWindowFromPoint, hWin, lvht.pt.x, lvht.pt.y<br />	.IF eax == hListView<br />		invoke GetCursorPos, ADDR lvht.pt<br />		invoke CreatePopupMenu<br />		mov hPopMenu, eax<br />		invoke AppendMenu, hPopMenu, MF_STRING, 100, OFFSET szCopyM<br />		invoke AppendMenu, hPopMenu, MF_STRING, 101, OFFSET szPasteM<br />		invoke TrackPopupMenu, hPopMenu, TPM_LEFTALIGN or TPM_RETURNCMD,\<br />				lvht.pt.x, lvht.pt.y, NULL, hListView, NULL<br />		mov MCommand,eax<br />		invoke ScreenToClient, hListView, ADDR lvht.pt<br />		mov lvht.flags,LVHT_ONITEM<br />		invoke SendMessage, hListView, LVM_SUBITEMHITTEST, 0, ADDR lvht<br />		mov eax,lvht.iItem<br />		.IF SDWORD PTR eax &gt;= 0 &amp;&amp; MCommand == 100<br />			mov lvi.iItem, eax<br />			invoke OpenClipboard, hWin<br />			.IF eax<br />				invoke EmptyClipboard<br />				invoke GlobalAlloc,GMEM_MOVEABLE or GMEM_ZEROINIT,4096<br />				mov hClipData,eax<br />				invoke GlobalLock,hClipData<br />				mov lvi.pszText, eax<br />				mov eax,lvht.iSubItem<br />				mov lvi.iSubItem, eax<br />				mov lvi.imask, LVIF_TEXT<br />				mov lvi.cchTextMax, 4095<br />				invoke SendMessage, hListView, LVM_GETITEM, 0, ADDR lvi<br />				invoke GlobalUnlock,hClipData<br />				invoke SetClipboardData, CF_TEXT, hClipData<br />				invoke CloseClipboard<br />			.ENDIF<br /><br />		.ELSEIF SDWORD PTR eax &gt;= 0 &amp;&amp; MCommand == 101<br />			mov lvi.iItem, eax<br />			mov eax,lvht.iSubItem<br />			mov lvi.iSubItem, eax<br />			mov lvi.imask, LVIF_TEXT<br />			invoke IsClipboardFormatAvailable, CF_TEXT<br />			.IF eax<br />				invoke OpenClipboard, hWin<br />				.IF eax<br />					invoke GetClipboardData, CF_TEXT<br />					.IF eax<br />						push eax<br />						invoke GlobalLock,eax<br />						mov lvi.pszText, eax<br />						invoke SendMessage, hListView, LVM_SETITEM, 0, ADDR lvi<br />						pop eax<br />						invoke GlobalUnlock,eax<br />					.ENDIF<br />					invoke CloseClipboard<br />				.ENDIF<br />			.ENDIF<br />		.ENDIF<br />		invoke DestroyMenu, hPopMenu<br />	.ENDIF<br /><br />	ret<br /><br />ShowLVMenu endp</code></pre></span></div>
+    <div class="meta">Posted on 2003-12-17 14:05:41 by donkey</div>
+   </div>
+   <div class="post" id="post-128180">
+    <div class="subject"><a href="#post-128180">Listview - copy line</a></div>
+    <div class="body">Thats very nice.<br /><br />Thank you.<br /><br />Btw, is there no way to use SendMessage with WM_COPY after LVM_GETITEM with SendMessage? I think the problem lies in the handle. It must be a handle to a editbox or a combobox, right? That cant be a Listview box. Am I right?<br /><br />I will check that Clipboard functions.<br /><br />Thank you both<br /><br /><br />DKT</div>
+    <div class="meta">Posted on 2003-12-17 14:17:49 by Kreatief</div>
+   </div>
+   <div class="post" id="post-128181">
+    <div class="subject"><a href="#post-128181">Listview - copy line</a></div>
+    <div class="body">Could be that WM_COPY might be made to work but I doubt it, I have never looked at the message as I prefer to control the clipboard myself. Never trusted Windows to put in what I wanted and generally I use it only for graphics anyway.</div>
+    <div class="meta">Posted on 2003-12-17 14:22:45 by donkey</div>
+   </div>
+   <div class="post" id="post-128245">
+    <div class="subject"><a href="#post-128245">Listview - copy line</a></div>
+    <div class="body">Hi Kreatief,<br /><br />I tested the code a bit more tonight and there was a possibility of a GPF. I have modified the code I posted to get around this problem. You have to process an extra message and the memory is allocated differently. It is now very reliable from what I have tested.</div>
+    <div class="meta">Posted on 2003-12-18 00:21:48 by donkey</div>
+   </div>
+   <div class="post" id="post-128276">
+    <div class="subject"><a href="#post-128276">Listview - copy line</a></div>
+    <div class="body">Hmm... thats alot of code for it. Its interesting that you need that much code for it. Then it might be usefull to write a dll function in general for it, for later use in several programs (just as you did)<br /><br /><br />Thank you for your help. I will try to get it to work, and to understand every single point.<br /><br /><br />DKT</div>
+    <div class="meta">Posted on 2003-12-18 09:11:02 by Kreatief</div>
+   </div>
+   <div class="post" id="post-128277">
+    <div class="subject"><a href="#post-128277">Listview - copy line</a></div>
+    <div class="body">Hi Kreatief,<br /><br />Yeah, it is alot of code but most of it is the structures and menus, even the msdn sample for copy and pasting from the clipboard is about 30 lines of C. There are shorter ways but if you want it robust you must allow for all eventualities like some app locking the clipboard or yours not being able to obtain ownership etc...<br /><br />This code is not well suited to a DLL, it should be in your main program.</div>
+    <div class="meta">Posted on 2003-12-18 09:17:46 by donkey</div>
+   </div>
+   <div class="post" id="post-129727">
+    <div class="subject"><a href="#post-129727">Listview - copy line</a></div>
+    <div class="body">Hey Donkey, <br /><br />it is long time gone, but now I have time to deal with this problem again...<br /><br />As I saw, the WM_COPY through SendMessage doesnt work.<br />Now I am trying to understand your code.<br /><br />Why do we need to allocate some memory? What is the buffer to put to the clipboard? Is it a structure, no simple text buffer? <br /><br />I am wondering, because I tried to simply use a text buffer, so just the buffer I wanna have in Clipboard. If this doesnt work (as it is in my case), what is the difference to allocating memory, putting the buffer (or structure?!) to it, and using this address as buffer?<br /><br /><br />And a last question: If we really need to allocate memory, is it equal to the VirtualAlloc function?<br /><br /><br />I really hope to get some answers, this all seem weired to me...<br /><br /><br />DKT</div>
+    <div class="meta">Posted on 2004-01-04 06:56:31 by Kreatief</div>
+   </div>
+   <div class="post" id="post-129757">
+    <div class="subject"><a href="#post-129757">Listview - copy line</a></div>
+    <div class="body">AFAIK VirtualAlloc will not work with the clipboard, it is an old thing from the 16 bit days, in order to allow backward compatibility with older apps they left it as GlobalAlloc. The buffer is allocated in order that the data on the clipboard is also available to other applications. Yes, the clipboard is weird :), that is the main reason I posted the whole code for it including message handling instead of just using a sort of pseudo-code. The global buffer cannot be locked as Windows will relocate the buffer into system memory space accessible by all applicaitons (hence the GlobalUnlock) text buffers in your program are always locked so they will not work. The clipboard is a dinosaur that we have to deal with in Win32 programming:<br /><br /><div class="quote"><strong>GlobalAlloc <em>from MSDN</em></strong><br />Note  The global functions are slower than other memory management functions and do not provide as many features. Therefore, new applications should use the heap functions. However, the global functions are still used with DDE, the clipboard functions, and OLE data objects</div></div>
+    <div class="meta">Posted on 2004-01-04 12:57:38 by donkey</div>
+   </div>
+   <div class="post" id="post-129759">
+    <div class="subject"><a href="#post-129759">Listview - copy line</a></div>
+    <div class="body"><div class="quote"> The buffer is allocated in order that the data on the clipboard is also available to other applications.</div><br /><br /><br />Does that mean, I am not allowed to free the allocated memory with GlobalFree? I searched the board and found some examples, and as far as I could see, they werent freed up after using...<br /><br /><br />But thanks for the information. Its really good to know such things... That is another reason to dislike Microsofts work of programming... <br /><br /><br />Thank you Donkey, now this topic should be done...<br /><br /><br />DKT</div>
+    <div class="meta">Posted on 2004-01-04 13:04:14 by Kreatief</div>
+   </div>
+   <div class="post" id="post-129760">
+    <div class="subject"><a href="#post-129760">Listview - copy line</a></div>
+    <div class="body">You must free the memory once the clipboard is done with it, you will be sent a <strong>WM_DESTROYCLIPBOARD</strong> message when it is time to free the memory (see my code above). When your program exits it will decrement the reference count on that buffer and the clipboard will free it for you if your program does not expressly free it before exit.</div>
+    <div class="meta">Posted on 2004-01-04 13:07:19 by donkey</div>
+   </div>
+   <div class="post" id="post-130828">
+    <div class="subject"><a href="#post-130828">Listview - copy line</a></div>
+    <div class="body">well, <br />u don't have to Free the handler if its LOCAL handler cuz it will an exception if u do<br />at least it has here.</div>
+    <div class="meta">Posted on 2004-01-16 18:42:08 by wizzra</div>
+   </div>
+   <div class="post" id="post-130832">
+    <div class="subject"><a href="#post-130832">Listview - copy line</a></div>
+    <div class="body">Hi Wizzra,<br /><br />Could you explain what happened, I tested this thoroughly (Win98SE &amp; 2K) and I am using it in some of my applications. If there is a problem I would really like to know. In MSDN it was not clear if you had to free the memory or not, the example they gave frees the memory on a WM_DESTROYCLIPBOARD message. My tests showed that the memory you allocate to the clipboard is not freed even when ownership is tranferred to another application. I have never gotten an exception but I have never stress tested it either. Could you try the attached program and see if it throws an exception, it is the listview copy routine but that uses my standard clipboard functions:<br /><br /><strong>I have moved this file to my website</strong></div>
+    <div class="meta">Posted on 2004-01-16 19:23:27 by donkey</div>
+   </div>
+   <div class="post" id="post-130838">
+    <div class="subject"><a href="#post-130838">Listview - copy line</a></div>
+    <div class="body">Hi Donkey,<br /><br />your copy routine doesn't crash.<br />i wasn't telling it crashes on ur code specificly.<br />the prob i am getting is while coping several selected lines in the listview (VC++ App),<br />i always get execptions playing with that damn clipboard and global allocated vars ... ;)</div>
+    <div class="meta">Posted on 2004-01-16 20:39:50 by wizzra</div>
+   </div>
+   <div class="post" id="post-130839">
+    <div class="subject"><a href="#post-130839">Listview - copy line</a></div>
+    <div class="body">Hi Wizzra,<br /><br />Ah, I see. My routine was never designed to handle multiple lines as you know so it doesn't apply. Whew ! I thought I had a lot of code to modify tonight in about 20 applicaitons :) BTW I have gotten around to fixing up the header sort images to work with my sort routine, I have uploaded it to the post in this thread, you might like it as it now works exactly as it is expected to. That is the arrow is only visible on one header item at a time and it calls the sort routine to sort in the proper direction. I will also upload it to the proper thread on the other board.</div>
+    <div class="meta">Posted on 2004-01-16 20:44:42 by donkey</div>
+   </div>
+   <div class="post" id="post-130873">
+    <div class="subject"><a href="#post-130873">Listview - copy line</a></div>
+    <div class="body">btw,<br />how much can bytes can i copy to the clipboard?<br />it seems that if i copy from my listview allot of lines, it will get truncked when i paste it.<br /><br />test 1, copying 20 lines...<br /><pre><code><br />	 ; ===========&#91; Program Entry Point &#93;===========		<br />00401000	6A00	        PUSH 00		<br />00401002	68 00304000     PUSH 00403000	;ASCIIZ&#58; &quot;Iczelion's tutorial no.2&quot;	<br />00401007	68 19304000     PUSH 00403019	;ASCIIZ&#58; &quot;Win32 Assembly is Great!&quot;	<br />00401013	6A00	        PUSH 00		<br />00401015	E8 06000000     CALL kernel32!ExitProcess		<br />0040101A	FF2508204000    JMP &#91;user32!MessageBoxA&#93;		<br />00401020	FF2500204000    JMP &#91;kernel32!ExitProcess&#93;		<br />00401026	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401028	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040102E	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401034	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401038	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040103A	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040103E	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401040	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401044	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401046	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401048	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040104A	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br /></code></pre><br /><br />test 2, copying 21 lines:<br /><pre><code><br />	 ; ===========&#91; Program Entry Point &#93;===========		<br />00401000	6A00	        PUSH 00		<br />00401002	68 00304000     PUSH 00403000	;ASCIIZ&#58; &quot;Iczelion's tutorial no.2&quot;	<br />00401007	68 19304000     PUSH 00403019	;ASCIIZ&#58; &quot;Win32 Assembly is Great!&quot;	<br />00401013	6A00	        PUSH 00		<br />00401015	E8 06000000     CALL kernel32!ExitProcess		<br />0040101A	FF2508204000    JMP &#91;user32!MessageBoxA&#93;		<br />00401020	FF2500204000    JMP &#91;kernel32!ExitProcess&#93;		<br />00401026	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401028	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040102E	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401034	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401038	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040103A	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040103E	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401040	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401044	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401046	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />00401048	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br />0040104A	0000	        ADD BYTE PTR DS&#58;&#91;0040104C	0000	        ADD BYTE PTR DS&#58;&#91;EAX&#93;,AL		<br /></code></pre><br /><br />1024 is the max bytes? :( :(<br />iv checked with an ClipSpy..very weird it wont copy more than 1024bytes..<br />any walk around?<br />:confused:</div>
+    <div class="meta">Posted on 2004-01-17 07:57:29 by wizzra</div>
+   </div>
+   <div class="post" id="post-130900">
+    <div class="subject"><a href="#post-130900">Listview - copy line</a></div>
+    <div class="body">Well, obviously there is something wrong there as notepad et al use the clipboard to move much much more than 1024 bytes.</div>
+    <div class="meta">Posted on 2004-01-17 11:32:56 by donkey</div>
+   </div>
+   <div class="post" id="post-130917">
+    <div class="subject"><a href="#post-130917">Listview - copy line</a></div>
+    <div class="body">yup..<br />Hidden NULLs inside the text buffers kept it from growing and became fixed size.<br />problem solved..nothing wrong with clipboard..my bad :)<br />the operation of storing entire ListItem is very slow..<br />consider 300,000 items :)<br />onto Thread...</div>
+    <div class="meta">Posted on 2004-01-17 16:21:30 by wizzra</div>
+   </div>
+  </div>
+ </body>
+</html>

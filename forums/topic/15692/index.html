@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Weird variant values - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15692" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=15692">Weird variant values</a></p>
+   <div class="post" id="post-121587">
+    <div class="subject"><a href="#post-121587">Weird variant values</a></div>
+    <div class="body">I have a strange problem with some numbers going in and out of COM functions. In short, they are two's complements of what they should be. For example, i have a function  <br /><pre><code><br />BEGIN_INTERFACE IAcadDocuments, IDispatch<br />.<br />.<br />.<br />STDMETHOD	Open	, &#58;BSTR,&#58;VARIANT,&#58;ptr ptr IAcadDocument<br />.<br />.<br />.<br />END_INTERFACE<br /></code></pre><br />The variant parameter is defined in Autocad documentation like this:<br /><div class="quote"><br />ReadOnly<br />Variant; input-only; optional; Documents collection only<br />Default setting: FALSE <br />TRUE: Opens the drawing as a read-only drawing. <br />FALSE: Opens the drawing as a read-write drawing. <br /></div><br /><br />I want to open a drawing read-only, so i coded:<br /><pre><code><br />LOCAL openvar&#58;VARIANT<br /><br />mov openvar.vt,VT_BOOL<br />mov openvar.wReserved1,0<br />mov openvar.wReserved2,0<br />mov openvar.wReserved3,0<br />mov openvar.boolVal,&#91;color=red&#93;TRUE&#91;/color&#93;<br />.<br />.<br />.<br />invoke vf&#40;pIAcadDocuments,IAcadDocuments,Open&#41;,ebx,openvar,ecx<br /></code></pre><br /><br />This will open a drawing, but it is opened normally as read-write, not as read-only.<br />It opens as read-only with this:<br /><pre><code><br />mov openvar.vt,VT_BOOL<br />mov openvar.wReserved1,0<br />mov openvar.wReserved2,0<br />mov openvar.wReserved3,0<br />mov openvar.boolVal,&#91;color=red&#93;-1&#91;/color&#93;<br />.<br />.<br />.<br />invoke vf&#40;pIAcadDocuments,IAcadDocuments,Open&#41;,ebx,openvar,ecx<br /></code></pre><br /><br />Another example is a function (different COM server than the above)<br /><pre><code><br />DEFINE_DISPMETHOD	IIfcSpace , GetInstance, 0Fh, METHOD, VT_I4<br /></code></pre><br /><br />With this function, the return values should always be positive. But for example, when the return value should be 123, it is -123. What am i missing here?</div>
+    <div class="meta">Posted on 2003-10-17 16:56:38 by Janne</div>
+   </div>
+   <div class="post" id="post-121605">
+    <div class="subject"><a href="#post-121605">Weird variant values</a></div>
+    <div class="body">Just a thought, try <strong>VT_UI4</strong> in the second one.</div>
+    <div class="meta">Posted on 2003-10-17 21:28:23 by Poimander</div>
+   </div>
+   <div class="post" id="post-121606">
+    <div class="subject"><a href="#post-121606">Weird variant values</a></div>
+    <div class="body">My guess is the alignment is wrong.  <br /><br />Your vairant should have the first word set as the type, followed by 3 words (6 bytes) of NULL's, then your boolean statment (1 or 0), should be 16 bytes long in total.  Hex dump of your variant should look like: <pre><code><br />0B 00 00 00 00 00 00 00 - 01 00 00 00 00 00 00 00<br />\---/                     \---/</code></pre><br /><br />If your struc is not correct some how, it might make sence why things are backwards, since -1 is realy 'FF FF' (all 1's) while 1 is '01 00' with only one &quot;TRUE&quot; in fifteen bits &quot;FALSE&quot;. <br /><br />Have you tried initializing the variant with the prescibed api frunction <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/automat/htm/chap7_19ys.asp">VariantInit</a><br /><br /><br />You can also try this:<pre><code><br />&#91;b&#93;ALIGN 4&#91;/b&#93;<br />LOCAL trueVar&#91;16&#93; &#58;BYTE<br /><br />lea edx trueVar<br />xor eax, eax<br />mov ecx, eax<br />inc ecx<br />mov WORD PTR &#91;edx&#93;, 0Bh<br />mov &#91;edx+2&#93;, ax<br />mov &#91;edx+4&#93;, eax<br />mov &#91;edx+8&#93;, ecx<br />mov &#91;edx+12&#93;, eax</code></pre><br /><br />or this:<pre><code>&#91;b&#93;ALIGN 4&#91;/b&#93;<br />LOCAL trueVar&#91;16&#93; &#58;BYTE<br />invoke VariantInit, addr trueVar<br />lea edx trueVar<br />mov WORD PTR &#91;edx&#93;, 0Bh<br />mov DWORD PTR &#91;edx+8&#93;, TRUE<br />mov DWORD PTR &#91;edx+12&#93;, NULL</code></pre><br /><br />:NaN:</div>
+    <div class="meta">Posted on 2003-10-17 21:29:06 by NaN</div>
+   </div>
+   <div class="post" id="post-121623">
+    <div class="subject"><a href="#post-121623">Weird variant values</a></div>
+    <div class="body">Hi Janne,<br /><br />-1 as TRUE looks absolutely ok for me. The VARIANT type comes from VB, where TRUE is always -1.<br /><br />For the other example I have no explanation, though</div>
+    <div class="meta">Posted on 2003-10-18 01:23:41 by japheth</div>
+   </div>
+   <div class="post" id="post-121627">
+    <div class="subject"><a href="#post-121627">Weird variant values</a></div>
+    <div class="body">Thanks. <br /><br />I just wonder, why they equ True -1.</div>
+    <div class="meta">Posted on 2003-10-18 02:11:16 by Janne</div>
+   </div>
+   <div class="post" id="post-121672">
+    <div class="subject"><a href="#post-121672">Weird variant values</a></div>
+    <div class="body">Wow, I didnt realize that VB did this! (not that i use VB all that much).<br /><br />I guess since the default stack size is 32 bits it does a 'sign extend' equivalent for booleans (since there is no such feature in assembly).  The result would then be the -1 value when observing a 32 bit element in memory.  I can say that this certainly balances the difference between the two, FALSE is all 0000h and TRUE is FFFFh.  The way the windows API works is FALSE is 0000h and TRUE being 0001h.   When you look at the latter its 99% on its way to being FALSE anyways ;)<br /><br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2003-10-18 15:18:44 by NaN</div>
+   </div>
+   <div class="post" id="post-121704">
+    <div class="subject"><a href="#post-121704">Weird variant values</a></div>
+    <div class="body">Using -1 for TRUE probably comes from the BASIC language itself, as it does not support logical NOT, AND, OR &amp; XOR, just bitwise operations. So NOT -1 equals 0... :P</div>
+    <div class="meta">Posted on 2003-10-18 17:52:48 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-121834">
+    <div class="subject"><a href="#post-121834">Weird variant values</a></div>
+    <div class="body">Hi QvasiModo,<br /><br />That is certainly true for the Microsoft BASIC family (especially Visual Basic).  I am not sure that this is true of other flavors of BASIC.  For NaN's purposes, though, you have done a good job of explaining Microsoft's variant format.<br /><br />Charles</div>
+    <div class="meta">Posted on 2003-10-20 10:14:14 by cdquarles</div>
+   </div>
+   <div class="post" id="post-122776">
+    <div class="subject"><a href="#post-122776">Weird variant values</a></div>
+    <div class="body">I was under the impression that FALSE==NULL and TRUE!=NULL<br />Therefore anything not zero is TRUE.<br />I would be willing to bet that internally the VB runtimes use an OR reg,reg or similar &quot;is-it-zero-or-not&quot; test - can anyone confirm this?</div>
+    <div class="meta">Posted on 2003-10-29 03:22:30 by Homer</div>
+   </div>
+   <div class="post" id="post-122864">
+    <div class="subject"><a href="#post-122864">Weird variant values</a></div>
+    <div class="body">Hi EvilHomer2k,<br /><br />False = 0000_0000h and a bitwise NOT False is FFFF_FFFFh or -1.  I don't know the exact machine code that the Microsoft compilers output during compilation, but I suspect that they use a not reg and check the zero or sign flags.  Microsoft Visual Basic (not VB .NET) use either a vbrunx00.dll or msvbvmx0.dll and the msvcrt.dlls.  VB .NET uses the common language runtime, which IIRC is the C style bool, 0 for false and 1 for true.<br /><br />Charles</div>
+    <div class="meta">Posted on 2003-10-29 22:15:04 by cdquarles</div>
+   </div>
+   <div class="post" id="post-122955">
+    <div class="subject"><a href="#post-122955">Weird variant values</a></div>
+    <div class="body"><div class="quote"><br />I was under the impression that FALSE==NULL and TRUE!=NULL<br />Therefore anything not zero is TRUE.</div><br />At least in the BASIC flavors I have tried (MS, under DOS) the IF statement would consider any expression that resolves to a nonozero value as TRUE. Comparison operators were just like the rest - they return a numerical result. So you could evaluate a variable, or store the result of a comparison in a variable for later checking (it was a BASIC optimization many people didn't know about :) ).<br />Since VB is based on MS versions of BASIC under DOS, all of that probably still holds true. But of course I'm just guessing.</div>
+    <div class="meta">Posted on 2003-10-30 16:05:29 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

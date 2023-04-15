@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Paging.... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22588" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=22588">Paging....</a></p>
+   <div class="post" id="post-169436">
+    <div class="subject"><a href="#post-169436">Paging....</a></div>
+    <div class="body">Hi all,<br /><br />I am still bizy whit my OS, and i implemented real paging into the system, so by using 4MB and 4KB pages. <br />Before this i only used 4MB pages, those where paged directly to phisicial memory, so Phisical and virtual memory where the same. <br /><br /><br />but sinds i implemented the new paging method i got a nasty bug in my system, look at this example:<br /><br />Offset             data inside<br /><br />Some data:                                                      ; this the Paged section of memory, so virtual<br />0x80019000: 00,45,AB,00,  00,00,00,00<br />0x80019008: 00,00,00,00,  5F,55,00,00<br /><br /><br />4KB Page Table, for 0x8000.0000:                      ; this is phisical memory<br />0x00802060: 008FF067   ,<u>00901067</u>                   ; &lt;------ Paged to 8F.F000 and 90.0000, Present/User/RW   bit&#39;s<br />0x00802068: 8D001006   ,8D001006                  ; &lt;------ dont exist yet. Present bit == 0<br /><br /><br />Some data, which should be the same as, 0x80019000h:           ; this is phisical memory<br />0x00901000: 00,00,00,00, 00,00,00,00              ; see page table offset <u>00802064</u><br />0x00901008: 00,00,00,00, 00,00,00,00<br /><br /><br />As u can see is the data at offset 0x80019000, completely different from the data at 0x00901000.<br />But how is this possible, could it be related whit wrong cache usage, or what else could go wrong whit paging.<br /><br /><br />Regards.<br />PyroMathic</div>
+    <div class="meta">Posted on 2006-01-10 13:55:15 by pyr0_mathic</div>
+   </div>
+   <div class="post" id="post-169437">
+    <div class="subject"><a href="#post-169437">Re: Paging....</a></div>
+    <div class="body">At what address does that particular PTE start? Also, what does the corresponding PDE/CR3 have at that instant?</div>
+    <div class="meta">Posted on 2006-01-10 14:25:45 by SpooK</div>
+   </div>
+   <div class="post" id="post-169439">
+    <div class="subject"><a href="#post-169439">Re: Paging....</a></div>
+    <div class="body">lo, thx for the quick reply.<br /><br />The PDE entry for offset 0x8000.0000 or 0x80019000, is following: 0x00802027 (so present/RW/User bits) + accessed bit is set<br />so PTE starts at 0x00802000.<br /><br />Whit content:      ; offset 0x80019000, PTE inside 0x00802000:  0x19 th, so 19h * 4 = 64h, so: <u>0x00802064</u><br />0x00802000: ....<br />....<br />0x00802060: 008FF067   ,<u>00901067</u>        ; &lt;------ Paged to 8F.F000 and 90.0000, Present/User/RW   bit&#39;s<br />0x00802068: 8D001006   ,8D001006       ; &lt;------ dont exist yet. Present bit == 0<br /><br /><br /><br />This is the PDE-entry for offset 0x00901000, 0x008000E7 (so present/RW/User bits) + 4MByte bit is set + Accessed/Dirty<br />Data offset == 0x00800000<br /><br /><br />Regards PyroMathic</div>
+    <div class="meta">Posted on 2006-01-10 14:48:14 by pyr0_mathic</div>
+   </div>
+   <div class="post" id="post-169460">
+    <div class="subject"><a href="#post-169460">Re: Paging....</a></div>
+    <div class="body">lo, i tried out a couple of more things<br /><br />I now Reload CR3 after every write to a PTE, so:<br />mov eax,cr3<br />mov cr3,eax<br /><br />i also used added &quot;WBINVD&quot;, so Write back all Cache and invalidate the cache, internal/external. but this only makes the computer slower (a lot...), doesnt change a thing.<br /><br />i also tried to implement &quot;INVLPG&quot;, i just cant find a good description in the intel docs on what the first operator must, so:<br />INVLPG m&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; m, &quot;is a memory location&quot;, but is it the location of the PTE, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  or the content of the PTE or phisical addr of the page...<br /><br />i also made the segment 0x0090.0000 - 0x0100.0000, reserved (so it wouldnt be allocated by, my MemAlloc proc), but then i got the same error as above, only then whit an other phisical address and other content in it.<br /><br /><br />State of CR3:<br />CR3 == 0x0000.1018&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; so PCD/PWT are set resulting in: dont Cashe PageDirectory + Write through enabled.<br /><br /><br />I got a intel Pentium 3, compac<br /><br /><br />Regards PyroMathic<br /></div>
+    <div class="meta">Posted on 2006-01-11 09:46:11 by pyr0_mathic</div>
+   </div>
+   <div class="post" id="post-169463">
+    <div class="subject"><a href="#post-169463">Re: Paging....</a></div>
+    <div class="body">If you need immediate help, check out <a target="_blank" href="http://www.mega-tokyo.com/forum/">this forum</a>. I won&#39;t be able to analyze your problem anytime soon (too in-depth and ambiguous for intuitive troubleshooting purposes and I am strapped for time).</div>
+    <div class="meta">Posted on 2006-01-11 11:25:36 by SpooK</div>
+   </div>
+   <div class="post" id="post-169465">
+    <div class="subject"><a href="#post-169465">Re: Paging....</a></div>
+    <div class="body">&gt; INVLPG m<br /><br />the m is the linear address of the page which is to be invalidated.<br /></div>
+    <div class="meta">Posted on 2006-01-11 12:58:33 by japheth</div>
+   </div>
+   <div class="post" id="post-169466">
+    <div class="subject"><a href="#post-169466">Re: Paging....</a></div>
+    <div class="body">Thx, for the replies.<br /><br />Am still looking inside the forum, seems to have lots of thingis about os-building.<br /><br />Regards PyroMathic.</div>
+    <div class="meta">Posted on 2006-01-11 13:12:03 by pyr0_mathic</div>
+   </div>
+   <div class="post" id="post-169481">
+    <div class="subject"><a href="#post-169481">Re: Paging....</a></div>
+    <div class="body">lo, again...<br /><br />problem is solved, cause was: i used the wrong code to enable the A20 line :S.... but now it works, so i can continue building my OS.<br /><br />1 positive thing about this, now i atleast understand how to use the cashe, MTRRs, etc....<br /><br />Regards.<br />PyroMathic.</div>
+    <div class="meta">Posted on 2006-01-12 06:46:51 by pyr0_mathic</div>
+   </div>
+  </div>
+ </body>
+</html>

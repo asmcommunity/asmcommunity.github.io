@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>sub, add, <= with  ASCII value - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28425" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28425">sub, add, <= with  ASCII value</a></p>
+   <div class="post" id="post-201087">
+    <div class="subject"><a href="#post-201087">sub, add, <= with  ASCII value</a></div>
+    <div class="body">Hi,
+if written a little file splitting routine. I parse the
+"split size" as a parameter to this function.
+My Problem is, how to sub, add or use the "<=" operator
+with the parameter. But first look at the source code:
+
+<pre><code>
+SplitFile proc hParent:DWORD, lpDir:DWORD, lpFile:DWORD, lpSplit:DWORD
+
+    invoke CreateFile, lpFile, GENERIC_READ, 0, 0, OPEN_EXISTING, \
+        FILE_ATTRIBUTE_NORMAL, 0
+    mov hFile, eax ;// handle der geöffneten datei speichern
+
+    invoke GetFileSize, hFile, 0
+    mov hSize, eax ;// dateigrösse speichern
+    
+    invoke GlobalAlloc, GHND, eax
+    mov hMem, eax ;// speicher reservieren
+    
+    invoke GlobalLock, eax
+    mov pMem, eax ;// pointer bekommen
+    
+    invoke ReadFile, hFile, pMem, hSize, addr hRead, 0
+
+    .while hSize != 0
+        inc lpX
+        invoke wsprintf, addr szOutFile, addr szOutMask, lpDir, lpX    
+        
+            .if hSize <= 1024000
+                invoke CreateFile, addr szOutFile, GENERIC_WRITE, 0, 0, \
+                    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0
+                mov hTmp, eax
+                invoke WriteFile, eax, pMem, hSize, addr hWritten, 0
+                invoke CloseHandle, hTmp
+                .break
+            .endif
+
+        invoke CreateFile, addr szOutFile, GENERIC_WRITE, 0, 0, \
+            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0       
+        mov hTmp, eax
+        invoke WriteFile, eax, pMem, 1024000, addr hWritten, 0
+        invoke CloseHandle, hTmp
+        
+        sub hSize, 1024000
+        add pMem, 1024000
+    .endw
+
+    invoke GlobalUnlock, pMem
+    invoke GlobalFree, hMem
+
+    invoke CloseHandle, hFile
+
+    ret
+SplitFile endp
+</code></pre>
+
+I just want to replace the "1024000" with lpSplit. But this causes
+compilation errors on this three lines:
+
+<pre><code>
+.if hSize <= 1024000
+sub hSize, 1024000
+add pMem, 1024000
+</code></pre>
+
+I know, I must convert the lpSplit parameter to a decimal value.
+But how?
+
+P.S.: I forgot one thing:
+lpSplit must be mul'ed by 1000 before starting the "while loop".
+Can this be done with
+
+<pre><code>
+mov eax, lpSplit ;// already converted to decimal
+mov ecx, 1000
+mul ecx
+mov lpSplitMul, eax
+</code></pre>
+
+?
+
+
+
+This message was edited by bAZiK., on 6/16/2001 3:02:04 PM
+
+This message was edited by bAZiK., on 6/16/2001 3:03:54 PM</div>
+    <div class="meta">Posted on 2001-06-16 14:55:00 by bAZiK.</div>
+   </div>
+   <div class="post" id="post-201088">
+    <div class="subject"><a href="#post-201088">sub, add, <= with  ASCII value</a></div>
+    <div class="body">Hi, bAZiK :)
+
+<div class="quote">I just want to replace the "1024000" with lpSplit. But this causes
+compilation errors on this three lines</div>
+
+You cannot directly compare or add/sub two memory locations. You need to move one of them into a register first:
+<pre><code>
+mov eax,lpSplit
+.if hSize <= eax
+sub hSize, eax
+add pMem, eax
+</code></pre>
+
+If lpSplit is a pointer to a string, you will have to convert it to a dword value first. Just use the MASM32 library (I bet there's a proc for it) or the following code:
+<pre><code>
+StrToInt PROC USES ebx esi, lpStr: DWORD
+        mov     esi,lpStr
+        mov     ecx,10
+        xor     edx,edx
+@StrToIntLoop:
+        lodsb
+        test    al,al
+        jz      @StrToIntEnd
+        sub     al,'0'
+        xor     ebx,ebx
+        mov     bl,al
+        lea     eax,
+        lea     eax,
+        lea     edx,
+        dec     ecx
+        jnz     @StrToIntLoop
+@StrToIntEnd:
+        mov     eax,edx
+        ret
+StrToInt ENDP
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-16 22:03:00 by Tola</div>
+   </div>
+   <div class="post" id="post-201089">
+    <div class="subject"><a href="#post-201089">sub, add, <= with  ASCII value</a></div>
+    <div class="body">Thanx, Tola!
+You point me the right direction :)
+
+If anyone is interested, here's my code (perhaps someone can get more speed out of it :D )
+
+<strong>EDIT:</strong>
+Replaced the 
+<pre><code>
+mov hTmp, eax
+</code></pre>
+with
+<pre><code>
+push eax
+</code></pre>
+
+<pre><code>
+SplitFile proc hParent:DWORD, lpDir:DWORD, lpFile:DWORD, lpSplit:DWORD
+
+    invoke CreateFile, lpFile, GENERIC_READ, 0, 0, OPEN_EXISTING, \
+        FILE_ATTRIBUTE_NORMAL, 0
+    mov hFile, eax ;// handle der geöffneten datei speichern
+
+    invoke GetFileSize, hFile, 0
+    mov hSize, eax ;// dateigrösse speichern
+    
+    invoke GlobalAlloc, GHND, eax
+    mov hMem, eax ;// speicher reservieren
+    
+    invoke GlobalLock, eax
+    mov pMem, eax ;// pointer bekommen
+    
+    invoke ReadFile, hFile, pMem, hSize, addr hRead, 0
+    ;// datei in speicher lesen
+
+    invoke atodw, lpSplit ;// ascii to dword
+    mov ecx, 1000  
+    mul ecx ;// eax * ecx
+    mov lpSize, eax
+
+    .while hSize != 0
+        inc lpX ;// counter erhöhen
+        invoke wsprintf, addr szOutFile, addr szOutMask, lpDir, lpX
+        ;// dateinamen erzeugen
+        
+            mov eax, lpSize
+            
+            .if hSize <= eax ;// wenn wir am ende der datei sind ...
+                invoke CreateFile, addr szOutFile, GENERIC_WRITE, 0, 0, \
+                    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0
+                push eax
+                invoke WriteFile, eax, pMem, hSize, addr hWritten, 0
+                ;// ... schreiben wir den rest rein
+                pop eax
+                invoke CloseHandle, eax
+                .break
+            .endif
+
+        invoke CreateFile, addr szOutFile, GENERIC_WRITE, 0, 0, \
+            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0  
+                 
+        push eax
+        invoke WriteFile, eax, pMem, lpSize, addr hWritten, 0
+        pop eax
+        invoke CloseHandle, eax
+
+        mov eax, lpSize
+        sub hSize, eax ;// size verkleinern
+        add pMem, eax ;// pointer verschieben
+    .endw
+
+    invoke GlobalUnlock, pMem ;// speicher freigeben
+    invoke GlobalFree, hMem
+
+    invoke CloseHandle, hFile
+
+    ret
+SplitFile endp
+</code></pre>
+
+
+This message was edited by bAZiK., on 6/17/2001 5:58:26 AM</div>
+    <div class="meta">Posted on 2001-06-17 05:49:00 by bAZiK.</div>
+   </div>
+  </div>
+ </body>
+</html>

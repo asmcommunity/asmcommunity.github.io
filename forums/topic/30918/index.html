@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Calculating modpow problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30918" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30918">Calculating modpow problem</a></p>
+   <div class="post" id="post-216226">
+    <div class="subject"><a href="#post-216226">Calculating modpow problem</a></div>
+    <div class="body">I&#039;d like to calculate (123 ^ 17) mod 233, for example.<br /><br />Found this code at <a target="_blank" href="http://stackoverflow.com/questions/8496182/calculating-powa-b-mod-n">stackoverflow</a>:<br /><pre><code>template &lt;typename T&gt;<br />T modpow(T base, T exp, T modulus)<br />{<br />&nbsp; &nbsp; base %= modulus;<br />&nbsp; &nbsp; T result = 1;<br />&nbsp; &nbsp; while (exp &gt; 0)<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; if (exp &amp; 1) result = (result * base) % modulus;<br />&nbsp; &nbsp; &nbsp; &nbsp; base = (base * base) % modulus;<br />&nbsp; &nbsp; &nbsp; &nbsp; exp &gt;&gt;= 1;<br />&nbsp; &nbsp; }<br />&nbsp; &nbsp; return result;<br />}<br /></code></pre><br /><br />And this is the result of my attempt to translate it:<br /><pre><code>format PE console 4.0<br />entry main<br /><br />;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<br />;	Calculate (123 ^ 17) mod 3233		<br />;	Result should be 855<br />;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<br /><br />include &#039;win32a.inc&#039;<br /><br />section &#039;.data&#039; data readable writeable<br />base dd 123<br />exp dd 17<br />modulus dd 3233<br />result dd 1<br />fmt db &quot;%d&quot;, 13, 10, 0<br /><br />section &#039;.code&#039; code readable executable<br />main:<br />	mov ecx, <br />	mov ebx, <br />	xor edx, edx<br />	<br />_while:<br />	cmp ecx, 0			; check if exp &gt; 0 or not<br />	jg _calculate1			; yes, do the if block<br />	jmp _done				; done<br /><br />_calculate1:<br />	and ecx, 1				<br />	cmp ecx, 0			; check if (exp &amp; 1) &gt; 0<br />	jg _calculate2			; yes, then process the rest of if block<br />	jmp _calculate3			; no, calculate the rest<br />	<br />_calculate2:<br />	mov eax, dword 	; eax is base<br />	imul ebx, eax			; result = result * base, ebx is result<br />	mov eax, ebx			; copy the result to eax<br />	div dword 		; modulo operation, the reminder is stored in edx<br />	mov ebx, edx			; copy edx to result<br />	jmp _calculate3			; do the rest<br />	<br />_calculate3:<br />	imul eax, eax			; base * base<br />	div dword 		; modulo operation<br />	mov eax, edx			; copy the result into eax<br />	shr ecx, 1<br />	jmp _while<br /><br /><br />_done:<br />	cinvoke printf, fmt, ebx	<br />	invoke ExitProcess, 0<br />	<br />	<br />section &#039;.idata&#039; import data readable<br />library kernel32,&#039;kernel32.dll&#039;, msvcrt,&#039;msvcrt.dll&#039;<br />import kernel32, ExitProcess,&#039;ExitProcess&#039;<br />import msvcrt, printf, &#039;printf&#039;</code></pre><br /><br />Wonder why the output is 123, and not 855.<br />These registers juggling make me confused.<br />And sorry if the code is kinda confusing, I&#039;m still trying to make it shorter and cleaner. </div>
+    <div class="meta">Posted on 2012-09-07 11:34:56 by anta40</div>
+   </div>
+   <div class="post" id="post-216227">
+    <div class="subject"><a href="#post-216227">Re: Calculating modpow problem</a></div>
+    <div class="body">(I&#039;m just pointing out what I saw, the comments below might not fully fix the code)<br /><br />You are making a destructive test at _calculate1 ruining your exp variable (which you hold in ECX)<br />Replace:<pre><code>_calculate1:<br />	and ecx, 1				<br />	cmp ecx, 0			; check if (exp &amp; 1) &gt; 0<br />	jg _calculate2			; yes, then process the rest of if block<br />	jmp _calculate3			; no, calculate the rest</code></pre>With:<pre><code>_calculate1:<br />&nbsp; &nbsp; &nbsp; &nbsp; test ecx, 1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; check if (exp &amp; 1) &gt; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; jz&nbsp; _calculate3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; no, calculate the rest<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; yes, then process the rest of if block</code></pre><br /><br />Also, _calculate3 might not have EAX initialized with base at all times, it seems to require _calculate2 to be executed first (which not always happen).</div>
+    <div class="meta">Posted on 2012-09-07 18:21:01 by LocoDelAssembly</div>
+   </div>
+   <div class="post" id="post-216228">
+    <div class="subject"><a href="#post-216228">Re: Calculating modpow problem</a></div>
+    <div class="body">Don&#039;t look at me, I was confused before I got to the assembly... and even more confused after visiting SO! (not sure how much I trust a place that calls themselves &quot;Stack Overflow&quot;). So I converted it to Nasm syntax (can&#039;t help it, I&#039;m a Nasm bigot) and to Linux (likewise). I got rid of the signed stuff ( Shouldn&#039;t ever be negative, no?) And...<br /><br /><pre><code><br />; nasm -f elf modpow.asm<br />; ld -o modpow modpow.o -I/lib/ld-linux.so.2 -lc (-m elf_i386 for 64-bit systems)<br /><br />global _start<br />extern printf<br /><br />;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<br />;	Calculate (123 ^ 17) mod 3233		<br />;	Result should be 855<br />;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;<br /><br />section .data<br />&nbsp; &nbsp; base dd 123<br />&nbsp; &nbsp; exp dd 17<br />&nbsp; &nbsp; modulus dd 3233<br />&nbsp; &nbsp; result dd 1<br />&nbsp; &nbsp; fmt db &quot;%d&quot;, 13, 10, 0<br /><br />section .text<br />_start:<br />&nbsp; &nbsp; mov ecx, <br />&nbsp; &nbsp; mov ebx, <br />&nbsp; &nbsp; mov edi, <br /><br />&nbsp; &nbsp; mov eax, <br />&nbsp; &nbsp; xor edx, edx<br />&nbsp; &nbsp; div edi<br />&nbsp; &nbsp; mov esi, edx ; base<br /><br />&nbsp; &nbsp; xor edx, edx<br /><br />_while:<br />&nbsp; &nbsp; test ecx, ecx<br />&nbsp; &nbsp; jz _done<br />_calculate1:<br />&nbsp; &nbsp; test ecx, 1<br />&nbsp; &nbsp; jz _calculate3<br />_calculate2:<br />&nbsp; &nbsp; mov eax, ebx			; copy the result to eax<br />&nbsp; &nbsp; mul esi<br />&nbsp; &nbsp; div edi<br />&nbsp; &nbsp; mov ebx, edx			; copy edx to result<br />_calculate3:<br />&nbsp; &nbsp; mov eax, esi<br />&nbsp; &nbsp; mul esi<br />&nbsp; &nbsp; div edi ; modulus<br />&nbsp; &nbsp; mov esi, edx ; base<br />&nbsp; &nbsp; shr ecx, 1<br />&nbsp; &nbsp; jmp _while<br /><br />_done:<br />&nbsp; &nbsp; push ebx<br />&nbsp; &nbsp; push fmt<br />&nbsp; &nbsp; call printf<br />exit:<br />&nbsp; &nbsp; mov eax, 1<br />&nbsp; &nbsp; int 80h<br /></code></pre><br /><br />It gives the result you claim is correct. I claim nothing further!<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2012-09-07 19:55:21 by fbkotler</div>
+   </div>
+   <div class="post" id="post-216230">
+    <div class="subject"><a href="#post-216230">Re: Calculating modpow problem</a></div>
+    <div class="body">Thanks Frank, you&#039;re right.<br />Ah, I forgot that you could use ESI &amp; EDI too...<br /><br />BTW, why did you do the modulo first, before the while loop?<br />I still don&#039;t get it </div>
+    <div class="meta">Posted on 2012-09-08 10:47:30 by anta40</div>
+   </div>
+   <div class="post" id="post-216231">
+    <div class="subject"><a href="#post-216231">Re: Calculating modpow problem</a></div>
+    <div class="body">Well... that&#039;s how I read the &quot;template&quot; you showed, although you didn&#039;t do it in your code. I don&#039;t think it makes any difference in this case, but maybe with different numbers(?). I&#039;m just flailing around - stopped when I got the &quot;right&quot; answer.<br /><br />I used esi and edi to try to reduce the &quot;register swapping&quot;. I guess it helped. If I understand what this is about, what we need is a few 4k-bit registers!<br /><br />An interesting philosophical question, does a &quot;fast factoring&quot; algorithm exist? Can &quot;they&quot; decrypt this stuff? I&#039;m inclined to think not, but... who knows?<br /><br />We sometimes speak of crypto &quot;good enough to fool your little sister&quot;. Happens that my little sister is a mathematician and not so easy to fool. I don&#039;t think I&#039;ve ever discussed crypto with her - I don&#039;t think she&#039;s interested, and I wouldn&#039;t understand her anyway...<br /><br />I think LocoDelAssembly picked up the main problem... &quot;if (exp &amp; 1)&quot;...<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2012-09-08 18:56:50 by fbkotler</div>
+   </div>
+   <div class="post" id="post-216232">
+    <div class="subject"><a href="#post-216232">Re: Calculating modpow problem</a></div>
+    <div class="body">I just found a snippet in my computer I thought I could share:<pre><code>; ecx = exponent<br />; eax = base<br />&nbsp; mov&nbsp; ebx, 1<br />.loop:<br />&nbsp; shr&nbsp; ecx, 1<br />&nbsp; jnc&nbsp; .skip<br />&nbsp; imul ebx, eax<br />.skip:<br />&nbsp; imul eax, eax<br />&nbsp; or&nbsp;  ecx, ecx<br />&nbsp; jnz&nbsp; .loop<br />; eax = base^exponent (mod 2^32)</code></pre>I leave as an exercise modifying the code to have variable modulus.<br /><br />PS: For some unknown reason the snippet doesn&#039;t use EDX which would been better to use than EBX since if this was a function, EBX would have to be preserved while EDX wouldn&#039;t (for most calling conventions at least). For the modifications required it is good to have EDX already free to use.</div>
+    <div class="meta">Posted on 2012-09-08 19:36:03 by LocoDelAssembly</div>
+   </div>
+   <div class="post" id="post-216233">
+    <div class="subject"><a href="#post-216233">Re: Calculating modpow problem</a></div>
+    <div class="body">@Frank<br />C++&#039;s templates allows classes/methods to work with different types/classes without the need to rewrite for each of them. I don&#039;t need that at the moment. Integer is enough. <br /><br />@Loco<br />Thanks. I&#039;ll take a look at that.</div>
+    <div class="meta">Posted on 2012-09-09 11:21:24 by anta40</div>
+   </div>
+   <div class="post" id="post-216234">
+    <div class="subject"><a href="#post-216234">Re: Calculating modpow problem</a></div>
+    <div class="body">Templates are like macros - they express code and data based on the input args.<br />They get &#039;expanded&#039; into something that is then directly embedded in your executable.<br />So it&#039;s just like you wrote the entire code for each datatype you implement with a template.<br />Except that you didn&#039;t.<br /><br /></div>
+    <div class="meta">Posted on 2012-09-10 23:19:29 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

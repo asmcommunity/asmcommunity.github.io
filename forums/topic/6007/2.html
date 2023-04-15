@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Include file additions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6007" />
+  <link rel="prev" href="../?id=6007&amp;page=1" />  <link rel="next" href="../?id=6007&amp;page=3" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=6007">Include file additions</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=6007&amp;page=1" style="">&laquo;</a><a href="../?id=6007&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="6007" /><input type="number" name="page" min="1" max="3" step="1" value="2" onchange="this.form.submit();" /><a href="../?id=6007&amp;page=3">&gt;</a><a href="../?id=6007&amp;page=3">&raquo;</a></form>   <div class="post" id="post-53742">
+    <div class="subject"><a href="#post-53742">Include file additions</a></div>
+    <div class="body"><div class="quote"><em>One of the benifits of using USES ESI EDI EBX is that this will not happen :)</em></div><br /><br />Much better, IMHO, always have one and only one return.<br />At least in that simple proc.</div>
+    <div class="meta">Posted on 2002-08-17 06:29:47 by Four-F</div>
+   </div>
+   <div class="post" id="post-53845">
+    <div class="subject"><a href="#post-53845">Include file additions</a></div>
+    <div class="body">There is some incomprehensible differences between names of some structures's members.<br />For ex CREATESTRUCT:<br /><br />windows.inc:<pre><code>CREATESTRUCTA STRUCT<br />   . . . . . .<br />  &#91;B&#93;hWndParent&#91;/B&#93;        DWORD      ?<br />   . . . . . .<br />  ly                DWORD      ?<br />  lx                DWORD      ?<br />   . . . . . . <br />  &#91;B&#93;ExStyle&#91;/B&#93;           DWORD      ?<br />CREATESTRUCTA ENDS</code></pre><br />Microsoft's winuser.h:<pre><code>typedef struct tagCREATESTRUCT &#123; // cs  <br />   . . . . . .<br />   HWND             &#91;B&#93;hwndParent&#91;/B&#93;; <br />   . . . . . . <br />   int              cy;<br />   int              cx;<br />   . . . . . . <br />   DWORD            &#91;B&#93;dwExStyle&#91;/B&#93;; <br />&#125; CREATESTRUCT;</code></pre><br />It's clear in case of reserverd words such as mask, cx, size etc. <br />But i can't see any reason why hwndParent converted to hWndParent and dwExStyle to ExStyle.<br /><br />I'm not shure it's good idea to change it as it should be because of backward compatibility,<br />but how annoying to get assembler errors only bacause of field's names disparity.</div>
+    <div class="meta">Posted on 2002-08-18 01:30:51 by Four-F</div>
+   </div>
+   <div class="post" id="post-53858">
+    <div class="subject"><a href="#post-53858">Include file additions</a></div>
+    <div class="body">Imo it would be better to follow the microsoft naming convention... old masm32-style source can be easily fixed up, most stuff could probably be fixed with global search+replace.</div>
+    <div class="meta">Posted on 2002-08-18 03:20:09 by f0dder</div>
+   </div>
+   <div class="post" id="post-53906">
+    <div class="subject"><a href="#post-53906">Include file additions</a></div>
+    <div class="body">MASM cannot follow the standard naming conventions in many cases due to register names and keywords name conflicts. When I converted data for the original version of windows.inc, some of the names were not in the case that they were at the time in WIN32.HLP but the problem is that hundreds of thousands of programs have been written using windows.inc and to modify it when its a name difference and not an error would break a lot of code for no purpose.<br /><br />What will work is a number of equates like,<br /><br />hWnd equ &lt;hwnd&gt;<br /><br />I have been tempted to do this with windows.inc but I have not done a service pack for some time now because of bandwidth limitations.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-08-18 10:09:59 by hutch--</div>
+   </div>
+   <div class="post" id="post-53907">
+    <div class="subject"><a href="#post-53907">Include file additions</a></div>
+    <div class="body">Four-F,<br /><br />Thanks for finding this bug but it has been found some time ago. I have not done a service pack since but the best way to handle the problem is to jump to the end before the register is restored so it balances the stack properly.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a><br /><br />Here is the fix below.<br /><pre><code><br />; #########################################################################<br /><br />  ; ---------------------------------------------------------------<br />  ;      This procedure was originally written by Tim Roberts <br />  ;<br />  ; Part of this code has been optimised by Alexander Yackubtchik<br />  ; ---------------------------------------------------------------<br /><br />    .386<br />    .model flat, stdcall  ; 32 bit memory model<br />    option casemap &#58;none  ; case sensitive<br /><br />    .code<br /><br />; #########################################################################<br /><br />dwtoa proc dwValue&#58;DWORD, lpBuffer&#58;DWORD<br />        <br />    ; -------------------------------------------------------------<br />    ; convert DWORD to ascii string<br />    ; dwValue is value to be converted<br />    ; lpBuffer is the address of the receiving buffer<br />    ; EXAMPLE&#58;<br />    ; invoke dwtoa,edx,ADDR buffer<br />    ;<br />    ; Uses&#58; eax, ecx, edx.<br />    ; -------------------------------------------------------------<br /><br />    push ebx<br />    push esi<br />    push edi<br /><br />    mov eax, dwValue<br />    mov edi, &#91;lpBuffer&#93;<br /><br />    or eax,eax<br />    jnz sign<br />    <br />  zero&#58;<br />    mov word ptr &#91;edi&#93;,30h<br />    jmp dw2asc<br />    <br />  sign&#58;<br />    jns pos<br />    mov byte ptr &#91;edi&#93;,'-'<br />    neg eax<br />    inc edi<br /><br />  pos&#58;      <br />    mov ecx,429496730<br />    mov esi, edi<br /><br />    .while &#40;eax &gt; 0&#41;<br />      mov ebx,eax<br />      mul ecx<br />      mov eax,edx<br />      lea edx,&#91;edx*4+edx&#93;<br />      add edx,edx<br />      sub ebx,edx<br />      add bl,'0'<br />      mov &#91;edi&#93;,bl<br />      inc edi<br />    .endw<br /><br />    mov byte ptr &#91;edi&#93;, 0       ; terminate the string<br /><br />    ; We now have all the digits, but in reverse order.<br /><br />    .while &#40;esi &lt; edi&#41;<br />      dec edi<br />      mov al, &#91;esi&#93;<br />      mov ah, &#91;edi&#93;<br />      mov &#91;edi&#93;, al<br />      mov &#91;esi&#93;, ah<br />      inc esi<br />    .endw<br /><br />    dw2asc&#58;<br /><br />    pop edi<br />    pop esi<br />    pop ebx<br /><br />    ret<br /><br />dwtoa endp<br /><br />; #########################################################################<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2002-08-18 10:16:42 by hutch--</div>
+   </div>
+   <div class="post" id="post-56833">
+    <div class="subject"><a href="#post-56833">Include file additions</a></div>
+    <div class="body">LV_COLUMN structure looks a bit different in API reference.<br />SDK :<br />typedef struct _LV_COLUMN {  <br />    UINT mask; <br />    int fmt; <br />    int cx; <br />    LPTSTR pszText; <br />    int cchTextMax; <br />    int iSubItem; <br />} LV_COLUMN; <br /><br />windows.inc:<br />LV_COLUMN STRUCT<br />  imask         DWORD      ?<br />  fmt           DWORD      ?<br />  lx            DWORD      ?<br />  pszText       DWORD      ?<br />  cchTextMax    DWORD      ?<br />  iSubItem      DWORD      ?<br />  iImage        DWORD ?<br />  iOrder        DWORD ?<br />LV_COLUMN ENDS<br />There are a couple of new members and cx is lx instead. I guess you can't use cx, because it's a register name. What about the 2 new members? I'm on win98se.</div>
+    <div class="meta">Posted on 2002-09-09 15:20:52 by Vaxon</div>
+   </div>
+   <div class="post" id="post-56886">
+    <div class="subject"><a href="#post-56886">Include file additions</a></div>
+    <div class="body">The API reference cannot be confused with the SDK as the API reference seems to date back to the days of windows 95. The actual declaration of the LVCOLUMN (Note: Not LV_COLUMN) stuct:<br /><pre><code><br />typedef struct _LVCOLUMN &#123; <br />    UINT mask; <br />    int fmt; <br />    int cx; <br />    LPTSTR pszText; <br />    int cchTextMax; <br />    int iSubItem; <br />#if &#40;_WIN32_IE &gt;= 0x0300&#41;<br />    int iImage;<br />    int iOrder;<br />#endif<br />&#125; LVCOLUMN, *LPLVCOLUMN; <br /></code></pre></div>
+    <div class="meta">Posted on 2002-09-09 23:27:34 by huh</div>
+   </div>
+   <div class="post" id="post-56966">
+    <div class="subject"><a href="#post-56966">Include file additions</a></div>
+    <div class="body"><pre><code>typedef struct tagTCITEM &#123;  <br />    UINT mask;<br />#if &#40;_WIN32_IE &gt;= 0x0300&#41;<br />    DWORD dwState;<br />    DWORD dwStateMask;<br />#else<br />    UINT lpReserved1;<br />    UINT lpReserved2;<br />#endif<br />    LPTSTR pszText;<br />    int cchTextMax;<br />    int iImage;<br />    LPARAM lParam;<br />&#125; TCITEM, FAR *LPTCITEM; </code></pre><br /><br />Above structure definition is from CommCtrl.h.<br />I guess we all code for windows with IE &gt;= 3.0.<br /><br /><pre><code>TC_ITEM STRUCT<br />  imask             DWORD      ?<br /><br />  &#91;B&#93;dwState           DWORD      ?&#91;/B&#93;  ; not defined in windows.inc<br />  &#91;B&#93;dwStateMask       DWORD      ?&#91;/B&#93;  ; not defined in windows.inc<br /><br />  lpReserved1       DWORD      ?<br />  lpReserved2       DWORD      ?<br />  pszText           DWORD      ?<br />  cchTextMax        DWORD      ?<br />  iImage            DWORD      ?<br />  lParam            DWORD      ?<br />TC_ITEM ENDS</code></pre></div>
+    <div class="meta">Posted on 2002-09-10 06:46:27 by Four-F</div>
+   </div>
+   <div class="post" id="post-57159">
+    <div class="subject"><a href="#post-57159">Include file additions</a></div>
+    <div class="body">Oops! Sorry.  Sad mistake.<br />Actually TC_ITEM should be:<br /><br /><pre><code>TC_ITEM STRUCT<br />  imask             DWORD      ?<br />  &#91;B&#93;dwState           DWORD      ?&#91;/B&#93;  ; lpReserved1<br />  &#91;B&#93;dwStateMask       DWORD      ?&#91;/B&#93;  ; lpReserved2<br />  pszText           DWORD      ?<br />  cchTextMax        DWORD      ?<br />  iImage            DWORD      ?<br />  lParam            DWORD      ?<br />TC_ITEM ENDS</code></pre><br /><br />No new members, simply:<br /><strong>lpReserved1</strong> -&gt; <strong>dwState</strong><br /><strong>lpReserved2</strong> -&gt; <strong>dwStateMask</strong></div>
+    <div class="meta">Posted on 2002-09-11 11:03:53 by Four-F</div>
+   </div>
+   <div class="post" id="post-58541">
+    <div class="subject"><a href="#post-58541">Include file additions</a></div>
+    <div class="body">hi,<br /><br />looking for these<br /><br />SBT_TOOLTIPS where are these?<br />PBS_SMOOTH<br />PBS_VERTICAL <br />UDS_HOTTRACK <br />HDS_HOTTRACK<br />HDS_DRAGDROP<br />HDS_FULLDRAG<br />TCS_HOTTRACK<br />TCS_MULTISELECT<br />TCS_VERTICAL<br />TCS_SCROLLOPPOSITE<br />TCS_FLATBUTTONS<br />TVS_INFOTIP<br />TVS_FULLROWSELECT<br />TVS_NOHSCROLL<br />TVS_NOSCROLL<br />TVS_NONEVENHEIGHT<br />TVS_SINGLEEXPAND<br />TVS_TRACKSELECT<br />TVS_CHECKBOXES<br />TVS_RTLREADING <br />MCS_  Month Calendar Control Styles<br /><br />also<br />BS_ICON listed twice<br /><br />thanks</div>
+    <div class="meta">Posted on 2002-09-18 15:17:00 by X05</div>
+   </div>
+   <div class="post" id="post-58844">
+    <div class="subject"><a href="#post-58844">Include file additions</a></div>
+    <div class="body"><strong>X05</strong>, take a look at this.<br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=8047<br /><br />">Common Control Macro Library</a> <br />Most of the symbols you are requested are defined there.</div>
+    <div class="meta">Posted on 2002-09-20 06:22:12 by Four-F</div>
+   </div>
+   <div class="post" id="post-58863">
+    <div class="subject"><a href="#post-58863">Include file additions</a></div>
+    <div class="body">thanks..<br /><br />macros.. demos.. (nice!) and windows .hlp file! <br /><br />now to get the ACM audio structs... <br /><br />X05</div>
+    <div class="meta">Posted on 2002-09-20 08:41:56 by X05</div>
+   </div>
+   <div class="post" id="post-58990">
+    <div class="subject"><a href="#post-58990">dwtoa bug. Second one!</a></div>
+    <div class="body">Excuse me for importunity, Steve.<br />This bug can already be known too.<br />Or vkim already has informed you about it via email,<br />as it was found out by me during testing vkdebug.<br /><br /><pre><code>.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />include \masm32\include\masm32.inc<br /><br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\masm32.lib<br /><br />.data?<br />acBuffer1 CHAR 16 dup&#40;?&#41;<br />acBuffer2 CHAR 16 dup&#40;?&#41;<br /><br />.code<br />start&#58;<br />	mov ecx, 80000000h<br />	invoke dwtoa, ecx, addr acBuffer1<br />	mov ecx, 0AABBCCDDh<br />	invoke dwtoa, ecx, addr acBuffer2<br />	invoke MessageBox, NULL, addr acBuffer1, addr acBuffer2, MB_OK<br />	ret<br />end start</code></pre><br /><br /> 80000000h -&gt; &quot;-214748365<strong>.</strong>&quot;<br />0AABBCCDDh -&gt; &quot;-143053290<strong>/</strong>&quot;<br /><br />I begin to be afraid to use m32lib.</div>
+    <div class="meta">Posted on 2002-09-21 03:45:09 by Four-F</div>
+   </div>
+   <div class="post" id="post-58996">
+    <div class="subject"><a href="#post-58996">Include file additions</a></div>
+    <div class="body">Four-F,<br /><br />You will have to forgive me but I did not write it. Tim Roberts wrote it and Alex did some optimisation on it and it seems both missed the problem that was pointed out with a RET that did not rebalance the stack. Below is the current version I have that fixed that problem.<br /><br />I don't class my maths as good enough these days so if anyone has a very reliable, thoroughly tested algo to replace it, I will use it in the next service pack but I don't want to be stuck with testing stuff that is not documented or commented properly.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a><br /><br /><pre><code><br />; #########################################################################<br /><br />  ; ---------------------------------------------------------------<br />  ;      This procedure was originally written by Tim Roberts <br />  ;<br />  ; Part of this code has been optimised by Alexander Yackubtchik<br />  ; ---------------------------------------------------------------<br /><br />    .386<br />    .model flat, stdcall  ; 32 bit memory model<br />    option casemap &#58;none  ; case sensitive<br /><br />    .code<br /><br />; #########################################################################<br /><br />dwtoa proc dwValue&#58;DWORD, lpBuffer&#58;DWORD<br />        <br />    ; -------------------------------------------------------------<br />    ; convert DWORD to ascii string<br />    ; dwValue is value to be converted<br />    ; lpBuffer is the address of the receiving buffer<br />    ; EXAMPLE&#58;<br />    ; invoke dwtoa,edx,ADDR buffer<br />    ;<br />    ; Uses&#58; eax, ecx, edx.<br />    ; -------------------------------------------------------------<br /><br />    push ebx<br />    push esi<br />    push edi<br /><br />    mov eax, dwValue<br />    mov edi, &#91;lpBuffer&#93;<br /><br />    or eax,eax<br />    jnz sign<br />    <br />  zero&#58;<br />    mov word ptr &#91;edi&#93;,30h<br />    jmp dw2asc<br />    <br />  sign&#58;<br />    jns pos<br />    mov byte ptr &#91;edi&#93;,'-'<br />    neg eax<br />    inc edi<br /><br />  pos&#58;      <br />    mov ecx,429496730<br />    mov esi, edi<br /><br />    .while &#40;eax &gt; 0&#41;<br />      mov ebx,eax<br />      mul ecx<br />      mov eax,edx<br />      lea edx,&#91;edx*4+edx&#93;<br />      add edx,edx<br />      sub ebx,edx<br />      add bl,'0'<br />      mov &#91;edi&#93;,bl<br />      inc edi<br />    .endw<br /><br />    mov byte ptr &#91;edi&#93;, 0       ; terminate the string<br /><br />    ; We now have all the digits, but in reverse order.<br /><br />    .while &#40;esi &lt; edi&#41;<br />      dec edi<br />      mov al, &#91;esi&#93;<br />      mov ah, &#91;edi&#93;<br />      mov &#91;edi&#93;, al<br />      mov &#91;esi&#93;, ah<br />      inc esi<br />    .endw<br /><br />    dw2asc&#58;<br /><br />    pop edi<br />    pop esi<br />    pop ebx<br /><br />    ret<br /><br />dwtoa endp<br /><br />; #########################################################################<br /><br />end<br /></code></pre></div>
+    <div class="meta">Posted on 2002-09-21 08:00:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-59006">
+    <div class="subject"><a href="#post-59006">Include file additions</a></div>
+    <div class="body">No claims to you, Steve.<br />We know who wrote it and who &quot;optimized&quot;.<br />Now nobody understand who is guilty.</div>
+    <div class="meta">Posted on 2002-09-21 09:09:04 by Four-F</div>
+   </div>
+   <div class="post" id="post-59532">
+    <div class="subject"><a href="#post-59532">Include file additions</a></div>
+    <div class="body"><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?postid=59531.msg59531">RASENTRYNAMEA</a></div>
+    <div class="meta">Posted on 2002-09-25 05:21:49 by Four-F</div>
+   </div>
+   <div class="post" id="post-63517">
+    <div class="subject"><a href="#post-63517">Include file additions</a></div>
+    <div class="body">Here's one that should be in there. I can't imagine why it's not, maybe I have an older include file<br /><br />TBBUTTONINFO STRUCT<br />	cbSize			DWORD	?<br />	dwMask			DWORD	?<br />	idCommand		DWORD	?<br />	iImage			DWORD	?<br />	fsState			BYTE	?<br />	fsStyle			BYTE	?<br />	lx			WORD	?<br />	lParam			DWORD	?<br />	pszText			DWORD	?<br />	cchText			DWORD	?<br />TBBUTTONINFO ends<br /><br />Donkey</div>
+    <div class="meta">Posted on 2002-10-26 02:15:48 by donkey</div>
+   </div>
+   <div class="post" id="post-63693">
+    <div class="subject"><a href="#post-63693">Include file additions</a></div>
+    <div class="body">donkey,<br /><br />Thanks for this one, its checked with MSDN and added to the reference version.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-10-27 08:33:24 by hutch--</div>
+   </div>
+   <div class="post" id="post-69952">
+    <div class="subject"><a href="#post-69952">Include file additions</a></div>
+    <div class="body">Hi Hutch ... dunno if this thread is still valid but here goes anyway.<br /><br />Over the weekend I did some work on my WinSock server using IO Completion Ports. I found at least 2 functions that weren't included and had to link them at runtime (obviously painful :() ... I know a few of them should have existed since NT 3.51 but some are for Win2k and above. If you have a separate INC that you have constructed for Win2K please let me know, I'd be greatful as a few new useful features of Completion Ports were added! I have done a search in the Masm32 directory and in the community for mention of these API's and found none ... you will however find them on MSDN.<br /><br /><strong>BindIoCompletionCallback</strong><br /><br />Couldn't get the MSDN link for this one ... will try again later ... the Threading section seems to be down!<br /><br />BOOL BindIoCompletionCallback(<br />  HANDLE FileHandle,<br />  LPOVERLAPPED_COMPLETION_ROUTINE Function,<br />  ULONG Flags<br />);<br /><br />Requirements<br />Windows NT/2000/XP: Included in Windows 2000 and later.<br />Windows 95/98/Me: Unsupported.<br />Header: Declared in Winbase.h; include Windows.h.<br />Library: Use Kernel32.lib.<br /><br /><strong>CreateIoCompletionPort</strong><br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/fileio/base/createiocompletionport.asp">MSDN Link</a> <br /><br />HANDLE CreateIoCompletionPort(<br />  HANDLE FileHandle,<br />  HANDLE ExistingCompletionPort,<br />  ULONG_PTR CompletionKey,<br />  DWORD NumberOfConcurrentThreads<br />);<br /><br />Requirements<br />Windows NT/2000/XP: Included in Windows NT 3.5 and later.<br />Windows 95/98/Me: Unsupported.<br />Header: Declared in Winbase.h; include Windows.h.<br />Library: Use Kernel32.lib.<br /><br /><br />The first one is not so important to me because I'm not gonna use it, but the second one is very important, it is used in conjuction with API's such as GetQueuedCompletionStatus and PostQueuedCompletionStatus which you have already included in MASM32. In fact, this is the API that creates IO Completion Ports! If at all I've missed this API somewhere, or you've already added it a newer copy of MASM32 than what I have, my appologies!<br />Could you possibly give me an ETA on adding these 2 if you plan to as well, would be much appreciated!<br /><br />Best Regards</div>
+    <div class="meta">Posted on 2002-12-09 00:10:43 by SubEvil</div>
+   </div>
+   <div class="post" id="post-70376">
+    <div class="subject"><a href="#post-70376">Include file additions</a></div>
+    <div class="body">Hi,<br /><br />I'm currently implementing ISAPI interface in my little httpd. For this I missed most definitions in windows.inc.<br />They are not at all specific to Win2k or WinXP, but in my opinion it is not a good idea to put them in windows.inc, a separate header should be better. They're attached.<br /><br />japheth<br /><br />B.T.W: Why is it invalid to attach a .INC file? I had to rename it to httpext.asm :mad:</div>
+    <div class="meta">Posted on 2002-12-11 02:17:24 by japheth</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=6007&amp;page=1" style="">&laquo;</a><a href="../?id=6007&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="6007" /><input type="number" name="page" min="1" max="3" step="1" value="2" onchange="this.form.submit();" /><a href="../?id=6007&amp;page=3">&gt;</a><a href="../?id=6007&amp;page=3">&raquo;</a></form>  </div>
+ </body>
+</html>

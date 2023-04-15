@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>File Compressor Using MASM(WORKING) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29675" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29675">File Compressor Using MASM(WORKING)</a></p>
+   <div class="post" id="post-209520">
+    <div class="subject"><a href="#post-209520">File Compressor Using MASM(WORKING)</a></div>
+    <div class="body">FINAL UPDATE:This file compressor/decompressor is now a working program. Feel free to use or change it as need. Just be sure to tell me so I can see what you did.<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2935" target="_blank">workingCompressor.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-11-06 23:08:28 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209554">
+    <div class="subject"><a href="#post-209554">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">I updated this in the original post. In case you were wondering... anyone...</div>
+    <div class="meta">Posted on 2009-11-10 05:24:48 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209555">
+    <div class="subject"><a href="#post-209555">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">You got it right, almost.<br />1) In <strong>compressFile</strong> you can jump right to <strong>mov ecx, currentPrefix</strong> (no need to update <strong>nextCodeWord</strong> because it wasn&#039;t changed).<br />2) In <strong>decompressFile</strong> you need to check for dictionary overflow <u>before</u> any access do it (<strong>mov prefix, ebx</strong> is an example).<br /><br />The program is quite flexible regarding dictionary/codeword sizes, at least while you keep them in sync:<br /> a) <strong>compressFile</strong>/<strong>decompressFile</strong> <u>should not</u> add codewords past dictionary end (<strong>nextCodeWord</strong> &lt;= <strong>LENGTHOF prefix</strong>, which is 8192 now but can be any value &gt;=256), and<br /> b) codeword should be long enough to hold all possible values (13 for 0...8191, you are right; 16 was used to simplify debugging: compressed stream is much more readable that way).<br /><br />Will you try to modify it for variable-length codewords?<br /><br />By the way, it still lacks meaningful comments (will you be able to explain how it works, say, week later? ;-). Reduce the clutter by removing unnecessary code/data too.</div>
+    <div class="meta">Posted on 2009-11-10 05:58:30 by baldr</div>
+   </div>
+   <div class="post" id="post-209561">
+    <div class="subject"><a href="#post-209561">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">yea, i figured that is where i needed to compare in decompressFile.. my only problem is knowing where to jump to if its equal.<br /><br /><pre><code>deCompressFile Proc<br />	push	edi<br />	push	ebx<br />	push	esi<br />	mov esi,0<br />	call initModel<br />	mov nBits, 16<br />	call readBits<br />	mov oldFileSize, eax<br />	mov eax, codeWordLength<br />	mov nBits, eax<br /><br />RepeatMe:<br />	call	readBits				;calls the readBits proc<br />	cmp		edx,0					;checks to see if anything was read<br />	jz		done					;if not: jump to done label<br />	mov		esi, nextCodeWord<br />	cmp		currentPrefix,-1<br />	je		here<br />	mov		ebx, currentPrefix<br />cmp&nbsp; &nbsp; &nbsp; nextCodeWord,8192<br />&nbsp; &nbsp; &nbsp; &nbsp; je&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  to where? <br />	mov		prefix, ebx<br />	mov		currentPrefix,eax<br />	cmp		eax, esi<br />	jne		here2<br />	mov		dl,suffix<br />	mov		suffix,dl<br />here2:	<br />	inc		nextCodeWord<br />here:<br />	mov		ecx,eax<br />	mov		currentPrefix,eax<br />	call	outputString<br />	mov		suffix,dl<br />	sub		oldFileSize,eax<br />	jne		RepeatMe<br />Done:<br />	pop edi<br />	pop ebx<br />	pop esi<br />	call flushBits<br />	ret	<br /><br />deCompressFile ENDP</code></pre></div>
+    <div class="meta">Posted on 2009-11-10 17:21:28 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209565">
+    <div class="subject"><a href="#post-209565">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">That&#039;s easy part: <strong>cmp currentPrefix, -1</strong> checks whether we about to add already existing codeword (for literal byte, it&#039;s (-1, byte) prefix/suffix). Check for overflow should occur before that, for example right after <strong>mov esi, nextCodeWord</strong>. Conditional jump should proceed to label <strong>here:</strong> because codeword is not added if any one of these checks (nextCodeWord &lt; 8192 &amp;&amp; currentPrefix != -1) fail.</div>
+    <div class="meta">Posted on 2009-11-10 18:36:09 by baldr</div>
+   </div>
+   <div class="post" id="post-209570">
+    <div class="subject"><a href="#post-209570">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">That is exactly what I thought. But it does not work sadly. It only outputs part of the original document. a 609KB document is only 33KB now. here is the decompressMe proc as i have it. and i have attached the source.<br /><br /><pre><code>deCompressFile Proc<br />	push	edi						;preserve edi<br />	push	ebx						;preserve ebx<br />	push	esi						;preserve esi<br />	mov		esi,0					;make esi 0<br />	call	initModel				;initialize the model<br />	mov		nBits, 16				;move into nBits 16<br />	call	readBits				;read 16 bits<br />	mov		oldFileSize, eax		;put eax into oldFileSize<br />	mov		eax, codeWordLength		;put codeWordLength into eax<br />	mov		nBits, eax				;put codeWordLength into nBits<br /><br />RepeatMe:<br />	call	readBits				;calls the readBits proc<br />	cmp		edx,0					;checks to see if anything was read<br />	jz		done					;if not: jump to done label<br />	mov		esi, nextCodeWord		;put the value of the nextCodeWord into esi<br />	cmp		nextCodeWord, 8192		;compare nextCodeWord to 8192<br />	je		here					;if above: skip adding new codeWord<br />	cmp		currentPrefix,-1		;compare the currentPrefix to -1<br />	je		here					;if equal: jump the the here label<br />	mov		ebx, currentPrefix		;else: add currentPrefix to ebx<br />	mov		prefix, ebx		;put ebx into the prefix at esi*4<br />	mov		currentPrefix,eax		;move eax into currentPrefix<br />	cmp		eax, esi				;compare esi with eax<br />	jne		here2					;if not equal: jump to here2<br />	mov		dl,suffix		;else: put the suffix at esi-1 into dl<br />	mov		suffix,dl			;and put dl into the suffix at esi<br />here2:	<br />	inc		nextCodeWord			;increment the nextCodeWord<br />here:<br />	mov		ecx,eax					;put eax into ecx<br />	mov		currentPrefix,eax		;put eax into currentPrefix<br />	call	outputString			;call outputString<br />	mov		suffix,dl			;move dl into suffix at esi<br />	sub		oldFileSize,eax			;sub eax from the oldFileSize<br />	jne		RepeatMe				;jump to repeatMe if oldFileSize isnt complete<br />Done:								;done label<br />	pop		edi						;preserve edi<br />	pop		ebx						;preserve ebx<br />	pop		esi						;preserve esi<br />	call	flushBits				;call flushBits to print any stragglers<br />	ret								;return to user<br /><br />deCompressFile ENDP</code></pre></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2932" target="_blank">compress.asm</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-11-10 23:52:13 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209571">
+    <div class="subject"><a href="#post-209571">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">From <strong>initModel</strong>: <strong>mov codeWordLength, 13</strong><br />From <strong>decompressFile</strong>: <strong>mov nBits, 16</strong><br /><br />Do you see discrepancy here? <strong>compressFile</strong> writes 13-bit codewords, and <strong>decompressFile</strong> expects them to be 16-bit.<br /><br />Probably <strong>readBits</strong> should be rewritten to take one parameter: bit count to read. Passing parameters through global variables is not a good practice. Then <strong>readBits</strong> could be called this way:<br /><pre><code><br />	mov	ecx, 8<br />	call	readBits; read one byte from (uncompressed) input stream<br />...<br />	mov	ecx, codeWordLength<br />	call	readBits; read one codeword from (compressed) input stream<br /></code></pre></div>
+    <div class="meta">Posted on 2009-11-11 03:52:39 by baldr</div>
+   </div>
+   <div class="post" id="post-209576">
+    <div class="subject"><a href="#post-209576">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">no, it makes nBits 16 only for the beginning of decompressFile in order to read the file size from the first 16bits that compressFile writes to the first 16bits. Then it puts codeWordLength into eax, and eax into nBits. So no discrepancy on that as far as I can tell. </div>
+    <div class="meta">Posted on 2009-11-11 12:44:56 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209578">
+    <div class="subject"><a href="#post-209578">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">Agreed, I was too quick to answer. The problem was similar: you store uncompressed file size as 16-bit value, hence 65535 limit (and size is written as <strong>size%65536</strong>). Exit condition for decompressing loop will fail almost for every file (unless output string for codeword ends exactly at output file offset <strong>size%65536</strong>).</div>
+    <div class="meta">Posted on 2009-11-11 14:02:07 by baldr</div>
+   </div>
+   <div class="post" id="post-209582">
+    <div class="subject"><a href="#post-209582">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">Im not really sure what you mean. Would you mind trying to explain it in another way?</div>
+    <div class="meta">Posted on 2009-11-11 15:08:28 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209583">
+    <div class="subject"><a href="#post-209583">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">Okay, so I went on a hunch of what I assumed you meant and changed:<br /> <strong>sub		oldFileSize,eax			;sub eax from the oldFileSize<br />	jne		RepeatMe				;jump to repeatMe if oldFileSize isnt complete</strong><br /><br />to:<br /><strong>	cmp		eax,oldFileSize			;sub eax from the oldFileSize<br />	jb		RepeatMe				;jump to repeatMe if oldFileSize isnt complete</strong><br /><br />and i get the full file back when decompressed, but it still crashes. Getting closer though!</div>
+    <div class="meta">Posted on 2009-11-11 15:35:21 by leftovas17</div>
+   </div>
+   <div class="post" id="post-209584">
+    <div class="subject"><a href="#post-209584">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">I&#039;ve changed <strong>mov edx, 16</strong> to <strong>mov edx, 32</strong> in <strong>compressFile</strong> and <strong>mov nBits, 16</strong> to <strong>mov nBits, 32</strong> in <strong>decompressFile</strong>. This variant successfully compressed 800 kB file and decompressed it.<br /><br />Another way to detect end of compressed stream is to designate it with reserved codeword (256, for example).</div>
+    <div class="meta">Posted on 2009-11-11 16:28:00 by baldr</div>
+   </div>
+   <div class="post" id="post-209588">
+    <div class="subject"><a href="#post-209588">Re: Can you Help? Making a (text)file compressor with MASM</a></div>
+    <div class="body">You read my mind. I was sitting in class today looking over a printout of the program and I saw that too. I couldn&#039;t figure out why size mattered, and then i thought maybe it was not eax that was wrong, but the oldFileSize... Changing it to 32 worked perfectly. Thank you for all of you help so far.&nbsp;  <br /><br />As for variable-length codewords. I think that is too far out of my reach at this point. I have submitted this as my project, so anyone who wants to use this or add on to this can now. It will not be used as homework! If you do use/change it, just let me know so I can see what/how you did to it.<br /><br />Thank You,<br />leftovas</div>
+    <div class="meta">Posted on 2009-11-11 21:13:16 by leftovas17</div>
+   </div>
+  </div>
+ </body>
+</html>

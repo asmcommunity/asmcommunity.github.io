@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Merging two processes... bugs - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10102" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=10102">Merging two processes... bugs</a></p>
+   <div class="post" id="post-75642">
+    <div class="subject"><a href="#post-75642">Merging two processes... bugs</a></div>
+    <div class="body">As a test app for exploring the PE format, and just because I think it's funny that this is possible under windows XP, I wrote a small program that can move itself completely into another process. Relocations and imports are then fixed up appropriately, so it's really a kind of PE loader. Eventually I want to use it as a easy to use API hooking platform.<br />It really works great most of the time, even when moving the program around every process on my PC, but it always seems to crash when I try to move into EXPLORER.EXE for the <em>second</em> time. First time works fine. Any theories on why this would happen? It's kinda got me stumped.<br /><br />The program is on my site (click the www button) btw.</div>
+    <div class="meta">Posted on 2003-01-11 07:03:54 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-75681">
+    <div class="subject"><a href="#post-75681">Merging two processes... bugs</a></div>
+    <div class="body">I haven't found yet why your program crashes but you are doing some dangerous stuff in your code. You're copying the whole image from memory to the newly allocated memory. This also means you're copying the unitialized data section which is not uninitialized anymore but filled with values. It shouldn't really matter in your program but if you would use it on some other program it should be able to assume uninitialized data is set to zero on startup. A real loader would load each section seperately, and set the access (readonly, readwrite, execute, etc) per section. You would also get in trouble when values in the .data section have changed before you copy it.<br />But still, since your program is quite simple (well not the code, but the structure of the (data) sections, imports, etc. that is) it should work. I'll look into it later when I have some more time.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-01-11 13:34:45 by Thomas</div>
+   </div>
+   <div class="post" id="post-75696">
+    <div class="subject"><a href="#post-75696">Merging two processes... bugs</a></div>
+    <div class="body">Hi Queerdy,<br /><br />examining  with ntsd its easy to see that your code crashes being called from user32. Looks like a windows proc having vanished.<br /><br />When I took a closer look at the source, I see you avoid finishing the message loop with PostQuitMessage. Why? Since your code executes in its own thread, it should be save (and should done) to leave the loop. In any case, doing a VirtualFree in WM_DESTROY is hazardous (WM_DESTROY is surely not the last message your wndproc receives).<br /><br />I changed your source accordingly and inserted a &quot;uses esi edi ebx&quot; in your wndproc (because CopyProcess seems to change esi at least). After that it seemed to run with explorer.<br /><br /><pre><code><br />WndProc proc uses esi edi ebx hWnd&#58;HWND, uMsg&#58;UINT, wParam&#58;WPARAM, lParam&#58;LPARAM<br /><br />	.IF uMsg==WM_DESTROY<br />		invoke PostQuitMessage,NULL<br />	.ELSEIF uMsg==WM_CREATE<br /></code></pre><br /><br />and <br /><pre><code><br />	.elseif eax==102<br />		invoke SendMessage,hList,LB_GETCURSEL,0,0<br />		.if eax!=LB_ERR<br />			invoke SendMessage,hList,LB_GETITEMDATA,eax,0<br />			invoke CopyProcess,eax,0 ;addr DoSomething<br />;;			invoke RemoteExitProcess,0<br />			invoke DestroyWindow, hWnd<br />		.endif<br /></code></pre><br /><br />and <br /><br /><pre><code><br />	.WHILE TRUE<br />		invoke GetMessage, ADDR msg,NULL,0,0<br />		.BREAK .IF &#40;!eax&#41;<br />		invoke TranslateMessage, ADDR msg<br />		invoke DispatchMessage, ADDR msg<br />	.ENDW<br />	invoke RemoteExitProcess,0<br /></code></pre><br /><br />japheth</div>
+    <div class="meta">Posted on 2003-01-11 16:07:11 by japheth</div>
+   </div>
+   <div class="post" id="post-75788">
+    <div class="subject"><a href="#post-75788">Merging two processes... bugs</a></div>
+    <div class="body">Thomas:<br /><div class="quote"><br />It shouldn't really matter in your program but if you would use it on some other program it should be able to assume uninitialized data is set to zero on startup.<br /></div><br />I don't really see the use in merging random processes, the current code does impose some restrictions on the program being copied. In fact it actually depends on the values of some (uninitialized) globals being the same in source and destination process. <br /><br />japheth:<br /><br />Thanks!!! Now I understand why it didn't work at first. Strange that it only happened in explorer.exe during my tests! <br />The aditional RemoteExitProcess after the message loop is not needed though, since I already call RemoteExitProcess after the WinProc returns.</div>
+    <div class="meta">Posted on 2003-01-12 05:45:41 by Qweerdy</div>
+   </div>
+  </div>
+ </body>
+</html>

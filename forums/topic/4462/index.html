@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>No Memory Access ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4462" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4462">No Memory Access ?</a></p>
+   <div class="post" id="post-31136">
+    <div class="subject"><a href="#post-31136">No Memory Access ?</a></div>
+    <div class="body">As you can see this is my first post. Just to be clear I don't see me as a newbie, but when can you say you aren't one anymore? Anyways, here's my prob:<br /><br />I feel it is rather strange, what I'm doing is querying the virtual address space of my app (using VirtualQueryEx) to see which memory ranges are committed etc.<br /><br />For some time this didnot work and I always gat the error: &quot;invalid access to memory location&quot;. I can't seem to find anything describing what could be wrong here. And I wonder why I get it while I'm querying the region @address 0 (should work as far as I know??)<br /><br />Yesterday all of a sudden I got it working, it did list all regions insize the address space. Wow, I thought, so developing more and adjusting the string used to display info (&quot;Queried %08X byte, RegionSize: %08X bytes&quot;) in a listbox using wsprintf (Yeah, I know. But it is easier to use and trivial to what I want).<br />After adjusting the string to something like &quot;BaseAddr %08X, AllocBase %08X, etc..&quot; and recompiling -&gt; Invalid access to memory location popped up. Why? If I return the string to what it was -&gt; all works again.<br />Is it me (I hope it is, I can change that easily) or what? Has this occured before? Is it something I need to do/set/keep in mind before it will work?<br /><br />All help is welcome!<br /><br />BTW1: I'm on a Win2000 OS.<br />BTW2: It is just a try-out and nothing to do with trojans / warez / etc. as stated in the rulez. If one wonders if it is. I just want to make it work. Can't stand it if it doesn't...</div>
+    <div class="meta">Posted on 2002-03-27 06:46:27 by the_anomaly</div>
+   </div>
+   <div class="post" id="post-31138">
+    <div class="subject"><a href="#post-31138">Re: No Memory Access ?</a></div>
+    <div class="body">Welcome to our Board!<br /><br />Could you please post some of your source code? Without knowing, *how* you did the memory access, it's quite hard to give you some hints. So please post at least your VirtualQueryEx call.<br /><br />Another easy methode is, that you place some<br /><br /><pre><code><br />invoke MessageBox, 0, 0, 0, 0<br /></code></pre><br /><br />lines in your code, or use a debugger to see, where the error exactley occurs.<br /><br />regards,<br />bAZiK</div>
+    <div class="meta">Posted on 2002-03-27 07:04:28 by bazik</div>
+   </div>
+   <div class="post" id="post-31144">
+    <div class="subject"><a href="#post-31144">Ok, here's some code</a></div>
+    <div class="body"><pre><code><br />	invoke	SendMessage, hLb, LB_ADDSTRING, 0, addr strQuery ;Shows &quot;Start querying address space&quot; in listbox<br /> ;hLb - handle to listbox<br />	xor	edi, edi ;start with address 0<br />	mov	CommitSize, edi ;clear total committed size<br />	.while edi &lt; sysinfo.lpMaximumApplicationAddress ;continue untill applicaion address is reached<br />		invoke	VirtualQueryEx, hProc, edi, addr mbi, sizeof mbi ;query space<br />;hProc - handle to opened process<br />;mbi - MEMORY_BASIC_INFORMATION structure<br />		or	eax, eax ;if nothing returned<br />		jnz	@GotRegion ;exit, else region found<br />		invoke	GetLastError<br />		invoke	FormatMessage, FORMAT_MESSAGE_FROM_SYSTEM, NULL, eax, 0, addr errbuffer, 1024, NULL<br />		invoke	SendMessage, hLb, LB_ADDSTRING, 0, addr errbuffer ;display system error<br />		jmp	@CloseIt ;leave loop<br />@GotRegion&#58;<br />		cmp	mbi.State, MEM_COMMIT ;is it a committed region?<br />		jne	@NoCommit ;if not continue<br />		mov	eax, CommitSize<br />		add	eax, mbi.RegionSize<br />		mov	CommitSize, eax<br />@NoCommit&#58;<br />		add	edi, mbi.RegionSize<br />	.endw<br /><br />	invoke	SendMessage, hLb, LB_ADDSTRING, 0, addr strDone<br />@CloseIt&#58;<br />	invoke	wsprintf, addr errbuffer, addr fmtTotalSize, CommitSize<br />	invoke	SendMessage, hLb, LB_ADDSTRING, 0, addr errbuffer ;Show &quot;Total size=&quot; in listbox<br /><br />	invoke	SendMessage, hLb, LB_ADDSTRING, 0, addr strClose<br />	invoke	CloseHandle, hProc<br />	<br />	ret<br /></code></pre><br /><br />If I, for instance, add a LB_ADDSTRING message when a committed region is found to display status/info in the listbox. The error &quot;invalid access to memory location&quot; occures. If I leave it like this, it works.<br /><br />Has it something to with: It takes to much time? (unlikely, I guess) Or does wsprintf / SendMessage change edi? Hope this helps</div>
+    <div class="meta">Posted on 2002-03-27 07:51:52 by the_anomaly</div>
+   </div>
+   <div class="post" id="post-31215">
+    <div class="subject"><a href="#post-31215">No Memory Access ?</a></div>
+    <div class="body">Afternoon,  the_anomaly.<br /><br />*Always* save/restore edi/esi/ebx (whichever ones you use) in your procs. This is especially important on NT boxes.<br /><br />Some functions don't put edi/esi/ebx back to what they were originally, so one of them *may* be causing the problem, also. To check: test edi (the one you're using) before and after the function call (VirtualQueryEx) and see if it's been changed (you can get rid of the test code once you know if edi gets changed or not). If it's been changed, just push/pop around it.<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2002-03-27 15:38:34 by Scronty</div>
+   </div>
+   <div class="post" id="post-31287">
+    <div class="subject"><a href="#post-31287">Thanks, but...</a></div>
+    <div class="body">Tried it, but it doesn't work either. (push pop around the &quot;insert string in listbox&quot; function)<br /><br />In fact I find it really strange, because when I leave it as the code above it all works, but when I (for instance) add a new global string variable (e.g. strTest db &quot;test&quot;,0) then for some reason all regions can't be queried. If then I delete the variable declaration all works fine...:mad:</div>
+    <div class="meta">Posted on 2002-03-28 03:34:59 by the_anomaly</div>
+   </div>
+   <div class="post" id="post-31306">
+    <div class="subject"><a href="#post-31306">No Memory Access ?</a></div>
+    <div class="body">Anomaly, the only place you need to preserve registers is in <strong>callbacks.</strong><br />WndProc and DlgProc are probably the two most wellknown callbacks :),<br />another is WNDENUMPROC used with EnumWindows.<br /><br />The registers of course only has to be preserved if you use them,<br />and they are: ebx, esi, edi, ebp. You're free to trash eax, ecx, edx.<br />This also goes for any API call: you can depend on ebx,esi,edi,ebp<br />being preserved, while eax, ecx, edx can be trashed at will - so<br />you should save eax,ecx,edx before an API call if they're used in<br />your code, or you should rework your code to use the non-trashed<br />registers.<br /><br />Also, some structures and other parameters for some API calls<br />have to be aligned in memory, and the platformsdk doesn't always<br />tell you about this :/. Might be an idea to put a &quot;align 4&quot; before any<br />structures :).<br /><br />Zip up your .asm and post it here and we'll have a look at &quot;the big picture&quot;.</div>
+    <div class="meta">Posted on 2002-03-28 06:38:50 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

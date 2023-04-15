@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Multisocket Coding - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3524" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=3524">Multisocket Coding</a></p>
+   <div class="post" id="post-23353">
+    <div class="subject"><a href="#post-23353">Multisocket Coding</a></div>
+    <div class="body">I have been trying to code a multisocket client similar to MIRC...<br /><br />I have been opening a bunch of sockets in a loop, and stowing the handles in an array, and calling WSAAsynchSelect for each socket, but with a unique WM_SOCKET value for each socket,<br />then I have been determining the socket# of a socket event by looking for uMsg&gt;=WM_SOCKET and then subtracting WM_SOCKET from uMsg, and then retrieving the unique data for this socket from the array.<br />The array contains structures I defined , and includes the sockethandle, sin struct, and other unique data.<br /><br />When I open a dozen or so sockets and start using them its fine but if I ask for 30 or more it becomes unstable.<br />Am I generating too many windowmessages?<br />Should I switch to BLOCKING and use Select and a FD_SET?<br />If so, how can I serve my application socketarray asynchronously<br /> or rather how may I multiplex the socketarray in such a way as I am not having sockets idling while one is busy?</div>
+    <div class="meta">Posted on 2002-02-08 07:52:20 by Homer</div>
+   </div>
+   <div class="post" id="post-23379">
+    <div class="subject"><a href="#post-23379">Multisocket Coding</a></div>
+    <div class="body">It sounds like multithreading may be beneficial.  You could just rely on FD_ACCEPT wParam for the socket connections and then fire up a new thread for each connection with your handler routines therein.  Like a web server.</div>
+    <div class="meta">Posted on 2002-02-08 10:20:44 by rdaneel</div>
+   </div>
+   <div class="post" id="post-23423">
+    <div class="subject"><a href="#post-23423">Multisocket Coding</a></div>
+    <div class="body">Using many sockets that use many window messages can cause an instable program. Like already suggested by rdaneel, create a seperate thread for every connection. Have a look at WSAEventSelect, it can set an event object when a winsock event happens. You can use these to synchronize your threads.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-02-08 13:20:20 by Thomas</div>
+   </div>
+   <div class="post" id="post-23653">
+    <div class="subject"><a href="#post-23653">Multisocket Coding</a></div>
+    <div class="body">Thanks for the input guys, <br /><br />I tried that once in the past,  but I had the thread create a window//socket and so I had the same problem.<br />I'll look into that api function and see whats shaking :)</div>
+    <div class="meta">Posted on 2002-02-10 09:10:00 by Homer</div>
+   </div>
+   <div class="post" id="post-23654">
+    <div class="subject"><a href="#post-23654">Multisocket Coding</a></div>
+    <div class="body">Don't forget you have to use winsock 2 or higher to use the event functions (IIRC). Make sure you do the right WSAInit, this is one of those bugs that are pretty hard to find :)</div>
+    <div class="meta">Posted on 2002-02-10 09:25:59 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-23981">
+    <div class="subject"><a href="#post-23981">Multisocket Coding</a></div>
+    <div class="body">I am using WSACreateEvent and WSAEventSelect for socketevent notification now, and I am calling WaitForSingleObject from my thread, thus it waits to connect... ok but how do I detect for all the other socketevents? Should I create separate event-objects fonr Connect,Read,Write and Close? Should I attempt to re-use my event-object for all four? If so should I use WSAWaitForMultipleEvents with my lone event-object? (cuz you can't use it to detect multiple socketevents on the same socket) and speaking of which I notice that WSANETWORKEVENTS is undefined in my masm includes.<br />Any thoughts or suggestions would be greatly appreciated.</div>
+    <div class="meta">Posted on 2002-02-12 06:31:16 by Homer</div>
+   </div>
+   <div class="post" id="post-23983">
+    <div class="subject"><a href="#post-23983">Multisocket Coding</a></div>
+    <div class="body">You can create 1 event object and select more than 1 FD_XXXX events you want notification for on that socket. if you want notification for another socket you need to create a seperate event object for it.<br /><br />after the WSAWaitForMultipleEvents or WaitForSingleObject, call WSAEnumNetworkEvents on the socket to see what event actually occurred.<br /><br />take a look at my (thread) code, the code was originally using 2 sockets but i modified it to 1 to suit your needs.<br /><br /><pre><code><br />invoke	WSACreateEvent<br />mov hEventRemote, eax<br />mov dword ptr &#91;pEvents&#93;, eax<br /><br />invoke	WSAEventSelect, hRemoteSock, hEventRemote, FD_CLOSE+FD_READ ;we want notification for FD_CLOSE and FD_READ on hRemoteSock<br /><br />@waitfornextevent&#58;<br />invoke	WSAWaitForMultipleEvents, 1, addr pEvents, FALSE, INFINITE, FALSE ;wait forever until one of the events &#40;FD_CLOSE and FD_READ&#41; occured on the event obj<br />;eax is now the index of the event object that got signaled, using only 1 event object here tho<br /><br />invoke WSAEnumNetworkEvents, hRemoteSock, hEventRemote, addr wsaRemoteEvents	;check which events occured on the socket<br />test wsaRemoteEvents.lNetworkEvents, FD_READ	;was there a FD_READ event on the socket?<br />jz @f<br />	;handle recv here<br />@@&#58;<br />test wsaRemoteEvents.lNetworkEvents, FD_CLOSE	;was there a FD_CLOSE event on the socket?<br />jz @f<br />	;handle close here<br />@@&#58;<br />jmp @waitfornextevent&#58;<br /></code></pre><br /><br />hope it can help.<br />(ps: i'm not using any errorchecking here)<br /><br />about the includes, get the new Masm package, it has the new includes by Thomas in windows.inc which are:<br /><pre><code>; ----------------------------------------<br />; aditional winsock equates and structure<br />; contributed by Thomas Bleeker.<br />; ----------------------------------------<br />FD_READ_BIT                     equ 0<br />FD_WRITE_BIT                    equ 1<br />FD_OOB_BIT                      equ 2<br />FD_ACCEPT_BIT                   equ 3<br />FD_CONNECT_BIT                  equ 4<br />FD_CLOSE_BIT                    equ 5<br />FD_QOS_BIT                      equ 6<br />FD_GROUP_QOS_BIT                equ 7<br />FD_ROUTING_INTERFACE_CHANGE_BIT equ 8<br />FD_ADDRESS_LIST_CHANGE_BIT      equ 9<br /><br />FD_MAX_EVENTS                   equ 10<br />FD_ALL_EVENTS                   equ &#40;1 SHL FD_MAX_EVENTS&#41; - 1<br /><br />WSANETWORKEVENTS STRUCT<br />    lNetworkEvents              dd  ?<br />    iErrorCode                  dd  FD_MAX_EVENTS dup &#40;?&#41;<br />WSANETWORKEVENTS ENDS</code></pre></div>
+    <div class="meta">Posted on 2002-02-12 08:09:18 by savage</div>
+   </div>
+   <div class="post" id="post-24322">
+    <div class="subject"><a href="#post-24322">Multisocket Coding</a></div>
+    <div class="body">Ok back again, I have now updated my MASM includes, and still I found WSA_WAIT_FAILED and WSA_WAIT_TIMEOUT were undefined ...<br />for anyone who cares, I found the winsock2.h include with all these nice winsock2 definitions at <a target="_blank" href="http://doc.ddart.net/msdn/header/include/winsock2.h.html">http://doc.ddart.net/msdn/header/include/winsock2.h.html</a><br /><br />WSA_WAIT_FAILED equ -1<br />WSA_WAIT_TIMEOUT equ WAIT_TIMEOUT<br /><br /><br />Now I have the following question:<br />I am invoking WSAWaitForMultipleEvents, on a single Event Object, which has FD_CONNECT, FD_READ and FD_CLOSE selected. I check the returnvalue from this function.<br />Next I am invoking WSAEnumNetworkEvents, then I am fetching the event from the array @ wse.lNetworkEvents (where wse is a WSANETWORKEVENTS structure)<br />Ok I now check the value to be FD_CONNECT,FD_READ,FD_CLOSE or &quot;something else&quot; <br />and I find that occasionally this function returns the value 33.<br />WHY?<br /><br />Also, often it returns 0, and rarely a couple of other values.<br />What the Hell?<br /><br />Bemused....but not amused :confused:</div>
+    <div class="meta">Posted on 2002-02-14 23:12:39 by Homer</div>
+   </div>
+   <div class="post" id="post-24362">
+    <div class="subject"><a href="#post-24362">Multisocket Coding</a></div>
+    <div class="body">it probably has FD_READ+FD_CLOSE set which together is 33.<br /><br />maybe you can post a small piece of your code, so we might be able to see what's happening</div>
+    <div class="meta">Posted on 2002-02-15 07:48:16 by savage</div>
+   </div>
+   <div class="post" id="post-24520">
+    <div class="subject"><a href="#post-24520">Multisocket Coding</a></div>
+    <div class="body">By George !! I do believe he's got it !!<br /><br />Wonderful, I had used If/Else/Endif logic to check the Network State(s) , and a conventional thread loop (jumping back to an Event Wait function) and so my code had been detecting an inital READ (first data packet) but then I was getting a READ+CLOSE which I had not even been detecting for.<br />I will have some fun recoding the thread again heh.<br /><br />As for posting my code, I believe if I posted it in its present form I would find this very topic closed by a moderator on account of the end to which I have devised this means, if you know what I means... anyone seriously interested in seeing some working and 100% MASM code for a multithreaded and multisocketed ClientSide application can yell out and I will post the source directly to them.<br />    Personally I think it's irrelevant what KIND of network application I am coding, but it doesn't take much to wake the dogs around here, and they sleep so peacefully... :tongue:</div>
+    <div class="meta">Posted on 2002-02-16 08:00:22 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

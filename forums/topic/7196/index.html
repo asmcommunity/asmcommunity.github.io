@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Theory: Subsequent calls to CreateWindowEx - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7196" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=7196">Theory: Subsequent calls to CreateWindowEx</a></p>
+   <div class="post" id="post-52094">
+    <div class="subject"><a href="#post-52094">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Hola,<br /><br />When we have multiple calls to CreateWindowEx most of us probably choose to wrap it into an proc by itself and call it only with the needed params to keep the code easy readable.<br /><br />Like following:<br /><br />invoke Window, hwnd, x , y , lenght, width, styles, etc..<br /><br />Window proc hwnd:DWORD, xpos:DWORD, yPos:DWORD, etc<br /><br />But this gets translated into quite a lot of pushes, right ? Like:<br /><br />push etc<br />push styles<br />push width<br />push lenght<br />push y<br />push x<br />push hwnd<br />call OwnProc<br /><br />:OwnProc<br />push ..<br />push ..<br />push ..<br />push etc<br />push more pushes<br />call CreateWindowEx<br /><br />What if now - we would use a struct which we would fill in and just pass the struct pointer when calling our own OwnProc ?<br /><br />Like:<br /><br />CWStruct struct<br />x DWORD ?<br />y DWORD ?<br />hwnd DWORD ?<br />styles DWORD ?<br />hInstance DWORD ?<br />ClassName DWORD ?<br />etc DWORD ?<br />CWStruct ends<br /><br />and just fill it in once and then just update the needed members of that struct ? Which most of the times will be only the x or y Position.<br /><br />Wouldn't that dramatically decrease the size of the executable if there are like 20 CheckBoxes needed ?<br /><br />We could even create some extra space in our struct for the case the window would be ownerdrawn. And look out for that style in our OwnProc and react approprietely (Like giving it an own WindowProc and similar)<br /><br />Are there possibilities? What do you guys think ?</div>
+    <div class="meta">Posted on 2002-08-07 10:24:39 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-52102">
+    <div class="subject"><a href="#post-52102">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">yes!<br /><br />nice idea.</div>
+    <div class="meta">Posted on 2002-08-07 11:37:54 by stryker</div>
+   </div>
+   <div class="post" id="post-52117">
+    <div class="subject"><a href="#post-52117">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">The CreateWindowEx parameters still need to be PUSHed onto the stack. I save a couple of bytes by using a CREATESTRUCT, e.g.:<br /><br /><pre><code><br />cwe CREATESTRUCT \<br /> &lt; 0,\              ; lpCreateParams<br />   0,\              ; hInstance<br />   0,\              ; hMenu<br />   0,\              ; hwndParent<br />   CW_USEDEFAULT,\  ; cy<br />   CW_USEDEFAULT,\  ; cx<br />   CW_USEDEFAULT,\  ; y <br />   CW_USEDEFAULT,\  ; x<br />   myStyle,\        ; style<br />   myWindowName,\   ; lpszName<br />   myClassName,\    ; lpszClass<br />   myExStyle &gt;      ; dwExStyle<br /></code></pre><br /><br />in combination with the following CreateWindowEx wrapper:<br /><br /><pre><code><br />option prologue&#58;none<br />option epilogue&#58;none<br /><br />CWE proc lpCreateStruct&#58;DWORD<br /><br />    mov     eax,    &#91;esp+1*4&#93;                       ; EAX = lpCreateStruct<br />    mov     ecx,    &#40;SIZEOF CREATESTRUCT&#41; shr 2     ; ECX = no. of DWORDs to push<br />    lea     eax,    &#91;eax + ecx*4&#93;                   ; EAX = pointer past end of struct<br />    neg     ecx                                     ; ECX = -ECX<br /><br />@@&#58; push    &#91;eax + ecx*4&#93;<br />    inc     ecx<br />    jne     @B<br /><br />    call    CreateWindowEx<br />    ret     1*4<br /><br />CWE endp<br /><br /></code></pre><br /><br />So there is only one PUSH command (executed in a loop). Further, the CREATESTRUCT can be re-used for many windows, changing only the required parameters.<br /><br />Is that what you are after?</div>
+    <div class="meta">Posted on 2002-08-07 14:18:33 by Frank</div>
+   </div>
+   <div class="post" id="post-52120">
+    <div class="subject"><a href="#post-52120">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Yes, I was wondering if I just invented a whole new perspective about saving bytes ;) Appearantly I did not :grin:<br /><br />And I thought to use this maybe at the end:<br /><br /><pre><code><br />mov edx,lpCreateStruct<br />mov eax,&#91;edx&#93;.CWE.myStyle<br />and eax,BS_OWNERDRAWN  ;for buttons<br />cmp eax,&#91;edx&#93;.CWE.myStyle<br />jz @is_ownerdrawn<br />;Here another compare to see if it's a Static Window etc...<br />ret<br /></code></pre><br />Any better way to see if any of the many ownerdrawn styles is set ?<br /><br /><br />This is basically creating a whole wrapper around CreateWindowEx ;) <br /><br />...and .. nice approach you have there :)</div>
+    <div class="meta">Posted on 2002-08-07 14:29:25 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-52147">
+    <div class="subject"><a href="#post-52147">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">I think this should work alright:<br /><br /><pre><code><br />mov edx,lpCreateStruct<br />test &#91;edx&#93;.CWE.myStyle,BS_OWNERDRAWN or CBS_OWNERDRAWFIXED or ...<br />jnz @is_ownerdrawn<br /></code></pre><br /><br />I'm not sure if some of the xx_OWNDERDRAWN flags overlap with other styles though...<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-07 19:26:53 by chorus</div>
+   </div>
+   <div class="post" id="post-52206">
+    <div class="subject"><a href="#post-52206">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Just for the fun of it, and because this thread's title starts with the word &quot;Theory&quot; -- we can simplify things further by defining a new structure:<br /><pre><code><br />CWESTRUCT STRUCT<br /><br />    dwExStyle       dd  ?<br />    lpClassName     dd  ?<br />    lpWindowName    dd  ?<br />    dwStyle         dd  ?<br />    x               dd  ?<br />    y               dd  ?<br />    nWidth          dd  ?<br />    nHeight         dd  ?<br />    hWndParent      dd  ?<br />    hMenu           dd  ?<br />    hInstance       dd  ?<br />    lpParam         dd  ?<br /><br />CWESTRUCT ends<br /></code></pre><br />and using it in combination with this CreateWindowEx wrapper:<br /><pre><code><br />option prologue&#58;none<br />option epilogue&#58;none<br /><br />CWE proc lpCWESTRUCT&#58;DWORD<br /><br />    mov     eax,    &#91;esp + 1*4&#93;                     ; EAX = lpCWESTRUCT<br />    mov     ecx,    &#40;SIZEOF CWESTRUCT&#41; shr 2        ; ECX = no. of DWORDs to push<br /><br />@@&#58; dec     ecx                                     ; push CWESTRUCT onto stack &#40;by value&#41;<br />    push    &#91;eax + ecx*4&#93;<br />    jne     @B<br /><br />    call    CreateWindowEx<br />    ret     1*4<br /><br />CWE endp<br /></code></pre><br />I don't think that repeated window creation can be done in fewer bytes.<br /><br />For the OWNERDRAWN styles, I assume that chorus' solution would be the best.</div>
+    <div class="meta">Posted on 2002-08-08 09:37:17 by Frank</div>
+   </div>
+   <div class="post" id="post-52211">
+    <div class="subject"><a href="#post-52211">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Frank, may be a bit faster?<pre><code><br /><br />option prologue&#58;none<br />option epilogue&#58;none<br /><br />CWE proc lpCreateStruct&#58;DWORD<br /><br />    mov   edx, &#91;esp&#93;                           ; return address	<br />    mov   ecx, &#40;SIZEOF CREATESTRUCT&#41; shr 2     ; ECX = no. of DWORDs to push<br />    mov  eax, &#91;esp+1*4&#93;                       ; EAX = lpCreateStruct<br />    add   esp, 2*4                             ; balancing the stack<br /><br />@@&#58; push  &#91;eax + ecx*4-4&#93;<br />    dec    ecx <br />    jne   @B<br />    push  edx<br />    jmp   CreateWindowEx<br />CWE endp</code></pre><br /><br />To avoid the loop you can use MMX.</div>
+    <div class="meta">Posted on 2002-08-08 10:20:32 by lingo12</div>
+   </div>
+   <div class="post" id="post-52218">
+    <div class="subject"><a href="#post-52218">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">How about something like this?<br /><br /><pre><code><br />CreateWindowIndirect PROC uses ecx edi esi lpCWESTRUCT&#58;DWORD<br />    mov ecx,sizeof CWESTRUCT shr 2<br />    lea edi,esp-sizeof CWESTRUCT<br />    mov esi,lpCWESTRUCT<br /><br />    rep movsd<br />    sub esp,sizeof CWESTRUCT<br />    call CreateWindowEx<br />    ret<br />CreateWindowIndirect ENDP<br /></code></pre><br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-08-08 12:09:34 by chorus</div>
+   </div>
+   <div class="post" id="post-52219">
+    <div class="subject"><a href="#post-52219">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Lingo12, your proc is great but does crash. The reason is that you have the return address <strong>above</strong> the 12 CreateWindowEx parameters where it should be <strong>below</strong> them. Look at this proc to see the difference:<br /><pre><code><br />option prologue&#58;none<br />option epilogue&#58;none<br /><br />CWE proc lpCWESTRUCT&#58;DWORD<br /><br />    pop   edx                                  ; EDX = return address	<br />    pop   eax                                  ; EAX = lpCWESTRUCT<br />    mov   ecx, &#40;SIZEOF CWESTRUCT&#41; shr 2     ; ECX = no. of DWORDs to push<br /><br />@@&#58; dec   ecx<br />    push  &#91;eax + ecx*4&#93;<br />    jne   @B<br /><br />    push  edx                                  ; last thing to push is the return address  &#58;-&#41;<br />    jmp   CreateWindowEx<br /><br />CWE endp<br /></code></pre><br />Nevertheless, thank you for the the idea of JMPing to CreateWindowEx instead of CALLing it.  :alright:<br /><br /><span style="font-size:9px>EDIT: Minor changes to have an unambiguous name for the STRUCT</span></div>
+    <div class="meta">Posted on 2002-08-08 12:16:10 by Frank</div>
+   </div>
+   <div class="post" id="post-52225">
+    <div class="subject"><a href="#post-52225">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Chorus, I think your procedure should work.<br /><br />However, with the USES ECX ESI EDI declaration, your proc adds three register PUSHes as well as three register POPs. They are not visible in the source code, but will be visible in a disassembly. That is six additional bytes over other solutions.<br /><br />For the REP MOVSD, Agner Fog's Pentium optimization manual discusses a couple of conditions that need to be met to make it fast. One of them is that the count (ECX) should be &gt;= 64, which is not the case here (the count here is 12). Therefore I guess that a loop is faster than REP MOVSD in the present case. Of course that's theory, I have not timed the various procedures that were proposed here.<br /><br />IMHO, your solution is good, but may be better suited to tasks where larger amounts of data need to be stored on the stack.</div>
+    <div class="meta">Posted on 2002-08-08 12:45:50 by Frank</div>
+   </div>
+   <div class="post" id="post-52230">
+    <div class="subject"><a href="#post-52230">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Frank, thanks for correction.<br /> <br />chorus, OK with rep movsd:<pre><code><br />option prologue&#58;none<br />option epilogue&#58;none<br /><br />CreateWindowIndirect PROC lpCWESTRUCT&#58;DWORD<br />             mov  ecx, &#91;esp&#93;              ; ecx-&gt;return address<br />             mov  edx, esi                ; save register esi<br />             mov  esi, &#91;esp+1*4&#93;          ; esi-&gt; source buffer <br />             mov  eax, edi                ; save register edi<br />             cld		          ; clear direction flag<br />             sub  esp, sizeof CWESTRUCT-4 ; prepare the stack<br />             lea  edi, &#91;esp+4&#93;	          ; edi-&gt;destination address   	<br />             mov  &#91;edi-4&#93;, ecx	          ; ecx-&gt;return address	<br />             mov  ecx, sizeof CWESTRUCT   ; ecx-&gt;counter<br />             rep  movsd		          ; copy	<br />             mov  edi, eax	          ; restore edi and esi<br />             mov  esi, edx 	          ;     registers	<br />             jmp  CreateWindowEx          ; call API<br />CreateWindowIndirect ENDP</code></pre><br />It is better to use the stack safety and skip the slow CALL and RET 4.</div>
+    <div class="meta">Posted on 2002-08-08 13:34:14 by lingo12</div>
+   </div>
+   <div class="post" id="post-52231">
+    <div class="subject"><a href="#post-52231">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">This is what I was thinking instead of my original movsd version:<br /><br /><pre><code><br />CWE PROC lpCWESTRUCT&#58;DWORD<br />    pop edx<br />    pop eax<br />    push edi<br />    mov ecx,sizeof CREATESTRUCT shr2<br />    sub esp,sizeof CREATESTRUCT<br />    mov edi,esp<br />    xchg esi,eax<br />    rep movsd<br />    xchg esi,eax<br />    pop edi<br />    push edx<br />    jmp CreateWindowEx<br />CWE ENDP<br /></code></pre><br /><br />Still bigger than the other one's posted. Besides I think there's a couple changes we can make to the last routine Frank posted that'll make it slightly faster and smaller:<br /><br /><pre><code><br />option prologue&#58;none<br />option epilogue&#58;none<br /><br />CWE proc lpCWESTRUCT&#58;DWORD<br /><br />    pop   edx                                  ; EDX = return address	<br />    pop   eax                                  ; EAX = lpCWESTRUCT<br />    xor ecx,ecx<br />    mov cl,&#40;sizeof CWESTRUCT-4&#41; shr 2<br />    mov   ecx, &#40;SIZEOF CWESTRUCT&#41; shr 2     ; ECX = no. of DWORDs to push<br /><br />@@&#58; push  &#91;eax + ecx*4&#93;<br />    dec ecx<br />    jns @B<br /><br />    push  edx                                  ; last thing to push is the return address  &#58;-&#41;<br />    jmp   CreateWindowEx<br /><br />CWE endp<br /></code></pre><br /><br />Basically, change up the loop so we (hopefully) won't suffer an AGI stall from the dec ecx/push . Also , replaced mov ecx with xor ecx,ecx,mov cl,value cause it's one byte smaller ;)<br /><br />--Chorus<br /><br />&lt;EDIT&gt;<br />removed extra line. Thanks for spotting that Frank ;) I overlooked it<br />&lt;/EDIT&gt;</div>
+    <div class="meta">Posted on 2002-08-08 13:39:33 by chorus</div>
+   </div>
+   <div class="post" id="post-52240">
+    <div class="subject"><a href="#post-52240">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Excellent, guys! :grin: <br /><br />Chorus, in the procedure with the loop that you optimized, there is one line  left over (&quot;mov ecx, ...&quot;) that you may wish to delete.</div>
+    <div class="meta">Posted on 2002-08-08 14:46:57 by Frank</div>
+   </div>
+   <div class="post" id="post-52243">
+    <div class="subject"><a href="#post-52243">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Frank I don't think so!<br />We forget about structure initialization.<br />So, first we must initialize the structure and next<br />to call another procedure to copy data into stack<br />and call API. But it is slow and will be better to put directly<br />data  in the stack when we initialize it and jmp directly<br />to first API. IMHO If we have more APIs in the stack they<br />will be run automatically.</div>
+    <div class="meta">Posted on 2002-08-08 15:10:27 by lingo12</div>
+   </div>
+   <div class="post" id="post-52247">
+    <div class="subject"><a href="#post-52247">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Just be careful - this stuff isn't threadsafe.</div>
+    <div class="meta">Posted on 2002-08-08 16:05:19 by f0dder</div>
+   </div>
+   <div class="post" id="post-52253">
+    <div class="subject"><a href="#post-52253">Theory: Subsequent calls to CreateWindowEx</a></div>
+    <div class="body">Lingo12, I guess it's a trade-off between speed and size. <br /><br />The loop method initializes the stack with <em>&quot;push /dec ecx/jns @B&quot;</em>. That is 6 bytes altogether in the .CODE section.<br /><br />The manual methods <em>&quot;invoke CreateWindowEx, params 1 to 12&quot;</em> and <em>&quot;push param1/push param2/.../call CreateWindowEx&quot;</em> involve 12 PUSHes to initialize the stack, each single one of them at the cost of 1 to 5 bytes in the .CODE section (depending on what exactly is being pushed). That is much more than 6 bytes altogether.<br /><br />More importantly, each time you use one of the manual methods, you have to do all of the twelve PUSHes. So your costs in terms of bytes in the .CODE section increase each time you use the manual methods. Not so with the loop method: here you just change one or two parameters, then call the same old loop procedure once more. <em>(NOTE: this is of course slighly simplified, for illustrative purposes)</em><br /><br />Conclusion: If program size doesn't matter or if the program does not have many windows/controls, then the manual methods may be preferable. But if the goal is to deliver a tiny program that has a lot of controls, then the loop method has its place.</div>
+    <div class="meta">Posted on 2002-08-08 17:57:55 by Frank</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>VirtualAlloc Question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15299" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15299">VirtualAlloc Question</a></p>
+   <div class="post" id="post-118829">
+    <div class="subject"><a href="#post-118829">VirtualAlloc Question</a></div>
+    <div class="body">Okay I am in the process of creating my own custom Edit control. I was using VirtualAlloc (There is a need for huge storage) to store the data that my control is going to print onto the screen. However I ran into some errors (If not why am I posting here).<br /><br />First in my custom control, I Allocated about 4MB of memory using VirtualAlloc in the WM_CREATE message of my customcontrolproc. Then I have this message called EM_ADDTEXT, whereby at somepoint of time my program will send text to the control. I have added an error control ensuring that the the input text + the alright data in the dynamic data I created is not more than the allocated memory. If that happens, I would attempt to allocate more memory.<br /><br />Now comes my question. I want to ensure that the allocated memory are all together. Is it possible?<br /><br />I was using <br /><pre><code><br />wmcreate&#58;<br />...<br />invoke	VirtualAlloc, 0, 400000h, MEM_COMMIT, PAGE_READWRITE<br />xchg esi, eax<br />....<br />error_control&#58;<br />lea eax, &#91;esi+400000h&#93;<br />invoke VirtualAlloc, eax, 400000h, MEM_COMIT, PAGE_READWRITE<br /></code></pre><br /><br />But of course the second VirtualAlloc fails with the error ERROR_INVALID_ADDRESS (000001E7). So my question is how am i supposed to go about allocating more memory?<br /><br />Regards,<br />Victor</div>
+    <div class="meta">Posted on 2003-09-20 22:54:28 by roticv</div>
+   </div>
+   <div class="post" id="post-118832">
+    <div class="subject"><a href="#post-118832">Try VirtualQuery</a></div>
+    <div class="body">returns info you seek</div>
+    <div class="meta">Posted on 2003-09-21 00:49:08 by mrgone</div>
+   </div>
+   <div class="post" id="post-118844">
+    <div class="subject"><a href="#post-118844">VirtualAlloc Question</a></div>
+    <div class="body">If you must use VirtualAlloc for this, you should RESERVE the maximum range you'll ever need, and only COMMIT what you are currently using - there's no other way you can guarantee that your memory block can be &quot;expanded&quot;. Another method would be just VirtualAlloc'ing a new block, copying data over, and releasing the old block... which could be slow and give you a fragmented virtual address space. Or, you could allocate &quot;whatever blocks&quot; and &quot;chain them together&quot; - but this would require more complicated logic in the rest of your program.<br /><br />Is there any particular reason you can't use, say, HeapAlloc + HeapReAlloc?<br /><br />And how are you storing the edit control text - as one big lump of memory, or line-based?</div>
+    <div class="meta">Posted on 2003-09-21 05:33:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-118857">
+    <div class="subject"><a href="#post-118857">VirtualAlloc Question</a></div>
+    <div class="body">Hey f0dder,<br /><br />I am using VirtualAlloc for speed reasons. I do not keep wanting to call HeapAlloc or HeapRealloc since when I am trying to add text to my edit control (The number time I send the message could go all the way up to a few thousands a second). The data is stored I am storing in my edit control text is one whole chunk and it can go over 4mb. <br /><br /><div class="quote">Or, you could allocate &quot;whatever blocks&quot; and &quot;chain them together&quot; - but this would require more complicated logic in the rest of your program.</div> <br />I was trying to avoid that. I have seen Thomasz's ASMEDIT source code and in it he was using VirtualAlloc and some sort of linked list. I was trying to keep my program and simple as possible, but if that is impossible, I think I would have to end up using that method. But I think that method would make searching for text much more difficult or at least more complex. Possible, but stilll... Hoping for a easy solution, but seems like it is not possible, oh well..</div>
+    <div class="meta">Posted on 2003-09-21 06:38:04 by roticv</div>
+   </div>
+   <div class="post" id="post-118866">
+    <div class="subject"><a href="#post-118866">VirtualAlloc Question</a></div>
+    <div class="body">hrm, keeping the text in one big block. _why_? Inserting/deleting is easier if you keep some structure of lines - a linked list isn't too bad a choice. Combine this with some dynamically growing strings (preferably growing in n*2 or some fixed block size) + pooled allocation, and you should have a pretty decent system that avoids too much fragmentation.<br /><br />Okay, so a boyermoore string search with this scheme would require quite a rewrite of the algorithm, but for a text editor BM is not too useful anyway - you'd want something capable of regular expression (or at least wildcard matching).</div>
+    <div class="meta">Posted on 2003-09-21 08:30:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-118868">
+    <div class="subject"><a href="#post-118868">VirtualAlloc Question</a></div>
+    <div class="body">Hey f0dder,<br /><br />Are you saying that I should do be using linked list? I will look into it. Thanks for your help anyway. <br /><br />Actually I do not think my edit control will need much features, except perhaps a very good finding algorithm which I was thinking of using BM and perhaps a good CountLines routine (Just wrote one that uses mmx).</div>
+    <div class="meta">Posted on 2003-09-21 08:43:43 by roticv</div>
+   </div>
+   <div class="post" id="post-118870">
+    <div class="subject"><a href="#post-118870">VirtualAlloc Question</a></div>
+    <div class="body">how do you plan on handling case-insensitive searches with BM? And what about wildcard searching?<br /><br />Why do a CountLines if you can keep a &quot;dword numberOfLines&quot;?<br /><br />With a link-based approach, you also wouldn't have to do CRLF scanning all the time (displaying the control), just when loading a file. And it's easier+faster to deleting/inserting a couple of links than shuffling a whole lot of memory around.<br /><br />I don't really see any advantage to the block approach except for BM scanning (which isn't all that useful for text imnsho), and the fact that you can save the buffer with a single WriteFile (which isn't all that important anyway - this process should be I/O bound, iterating a linked list and writing shouldn't incur much of an overhead).<br /><br />A &quot;na?ve&quot; linked list approach might perform a bit sloppy though, and lead to heap fragmentation. I would suggest analyzing a fair amount of files of the type you will be editing, to see what the average/max line length is, count of lines in file, etc. Whenever you allocate memory for a line, allocate some minimum (the &quot;expected average&quot; size), and whenever that buffer becomes too small, don't grow it by one byte/character, allocate some &quot;delta&quot; amount. Some people would even say resizing to 2*currentsize is optimal, but I think that's overkill for a texteditor.<br /><br />I would suggest building a couple of separate allocation layers, above whatever primitive you use (HeapAlloc is good for small blocks etc). This would allow you to easily implement eg a pooled allocation without having to change a zillion source lines.</div>
+    <div class="meta">Posted on 2003-09-21 08:55:01 by f0dder</div>
+   </div>
+   <div class="post" id="post-118875">
+    <div class="subject"><a href="#post-118875">VirtualAlloc Question</a></div>
+    <div class="body">Hey f0dder,<br /><br />You can actually read my mind :) I did have a dword called numberOfLines. Perhap I sent the wrong message across, but there I need to routine to give me the offset of xxxth CRLF. One more thing I do not plan to add functionalities for people to open files with my edit and also there would be no ways to input text. So basically it is to display data. What data you may ask, well it is just the disassembly of programs. I know you know that disassembly takes up alot of space, for example a 2mb exe will produce about 40mb of source code. So what about those exe files that take up 6mb? :grin: <br /><br />Anyway are you suggesting that I give up on VirtualAlloc and make use of HeapAlloc and HeapRealloc? Should I use linked list? Don't worry about changing my source code since it is pretty short, less than 500 lines for the gui I suppose.  I just want to hear your opinion on what is the best. I have faith in your &quot;researches&quot;. :)<br /><br />Regards,<br />Victor</div>
+    <div class="meta">Posted on 2003-09-21 10:14:23 by roticv</div>
+   </div>
+   <div class="post" id="post-118891">
+    <div class="subject"><a href="#post-118891">VirtualAlloc Question</a></div>
+    <div class="body">ah, so you're not really building an edit control - this changes things a lot :).<br /><br />I'm not really sure what is an optimal way of storing disassembly data. Storing the raw text seems a bit wasteful to me - and also makes it impossible (or at least hard(er)) to write an interactive disassembler.<br /><br />If you're really just storing static text, you could do with a couple of large memory blocks + line index arrays, instead of the linked list approach. Probably using a separate heap for the &quot;text block(s)&quot;. You would then have a (dynamically growing) array of &quot;line information&quot; - which would probably (at least) a pointer to the line text, and a dword length - perhaps more information too.<br /><br />Put some further details of your disassembler implementation and requirements, so we can work out a more optimal scheme.</div>
+    <div class="meta">Posted on 2003-09-21 14:58:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-118929">
+    <div class="subject"><a href="#post-118929">VirtualAlloc Question</a></div>
+    <div class="body">Hey f0dder,<br /><br /><div class="quote">I'm not really sure what is an optimal way of storing disassembly data. Storing the raw text seems a bit wasteful to me - and also makes it impossible (or at least hard(er)) to write an interactive disassembler.<br /><br /></div><br /><br />So what do you recommend me to do? How else to store disassembly? <br /><br />Actually in my bid to create an interactive disassembler, I was thinking of coding the decoder in such a way that the decoder checks for jmps+conditional jmps+calls and jmp to decode as according to the label stated in the jmp/calls. However this would give alot of logistic problems as storing of data would be much much harder (Need to think of a good algoritm for it). Also it does not remove dummy codes that look like the following:<br /><pre><code><br />        or      eax, -1<br />        js     _out<br />        db 0F0h, 0Fh, 0AEh, 77h, 0Fh<br />@@&#58;                             <br /></code></pre> <br /><br />Okay the features that I want to implement for the custom control would be the following:<br />1. Syntax highlight - Requires a good parsing algorithm in the wmpaint label. <br />2. Addition of text - Very important - After decoding each opcode, A message will be sent to the control and requesting it to be stored in the dynamic buffer of the control<br />3. Ability to add comments - Not that difficult to implement I think<br />4. Ability to copy and store into clipboard - ie can copy out the disassembly<br />5. Ability to output everything that is stored into dynamic buffer onto the screen<br />6. Perhaps the ability to save the files<br />7. Not too sure... Still thinking :grin: <br /><br />Is there anymore details you need to know? I will be moer than willing to share them.<br /><br />PS: If I do not call it an custom edit control, what should I call it? hmm</div>
+    <div class="meta">Posted on 2003-09-22 02:28:33 by roticv</div>
+   </div>
+   <div class="post" id="post-118962">
+    <div class="subject"><a href="#post-118962">VirtualAlloc Question</a></div>
+    <div class="body">Hm. I took the easy way and purchased IDA Pro - it's cheaper than investing an ungodly amount of manhours, too ;)<br /><br />I think storing the disassembly text is a bad idea - as you said yourself, you will be creating a very huge amount of text. I think it's better to &quot;parse&quot; the binary (ie, flow analysis and such) into some form of structure - iirc, IDA uses a balanced binary tree. It's not like disassembly a couple hundred of instructions (for a _large_ window size) is going to be a big speed hit on WM_PAINT or whatever.<br /><br />How to add comments and &quot;auto-text&quot; into this scheme is another challenge. Heh. So many things to consider.</div>
+    <div class="meta">Posted on 2003-09-22 08:47:12 by f0dder</div>
+   </div>
+   <div class="post" id="post-118966">
+    <div class="subject"><a href="#post-118966">VirtualAlloc Question</a></div>
+    <div class="body">Hey f0dder<br /><br /><div class="quote">How to add comments and &quot;auto-text&quot; into this scheme is another challenge. Heh. So many things to consider.</div> <br /><br />That's why I want to work on this project. Need to consider alot of things and coding of alot of algorithm. My kind of challenge. ;) Now I think coding of the decoding routine is easy, just abit tedious. But I think the fun part would be coding of an *interactive* disassembler. Sure a normal disassembler can be easily coded, but one that is interactive is difficult. Also I was wondering how am I supposed to implement IDA's &quot;to code&quot; and &quot;to data&quot;. A good question to ponder. With so many features that I want to add, I wonder if my disassembler can be as good as IDA. Comforting thoughts.<br /><br />Anyway care to explain balanced binary tree? Never heard of the term before.</div>
+    <div class="meta">Posted on 2003-09-22 09:18:20 by roticv</div>
+   </div>
+   <div class="post" id="post-118967">
+    <div class="subject"><a href="#post-118967">VirtualAlloc Question</a></div>
+    <div class="body">For an interactive disassembler, you definitely wont want to store text deadlisting - it will be hell to change stuff around.<br /><br />As for the disassembler core - MAKE IT TABLE BASED! It will be tedious to set up the tables, and it will take some planning to set them up decently, but the decoding logic will be simpler. I think the disassembler from the MACH kernel debugger thingamajig whatever has a sort of reasonable approach to this.<br /><br />Hm, balanced binary tree. I'm not even fully sure why (if?) they do this - perhaps it's to do with handling branches and such - I'm basically talking out of my ass here ;). As for binary trees themselves, you have a whole bunch of nodes with left and right branches. Let's say we store integer data in the tree. If you take the left branch, that node will have a smaller value than the current node. If you take the right branch, the value will be greater. Imagine an unbalanced tree... if you give it the numbers 1-2-3-4-5-6-7-8-9, only right-nodes will be added (since each new number will be greater than the previous). A balanced tree implementation has some overhead (not necessarily a lot, if a decent algorithm is used) on add, to make sure the tree remains balanced - ie, has a more even distribution of right and left leaves.<br /><br />Binary trees are often used for searching - if you think about it, it should be obvious that for each node you traverse, you cut the max # of remaining nodes to traverse in half. This is quite effective when you have a lot of data to search through... O(log n) speed. At the expense of using some time to build the tree. It's also fairly easy to add and delete items. Search for &quot;red-black binary tree&quot; for a popular algorithm, or get somebody clever like Jibz or Scali to explain it. And don't ask me why/if this data structure is used in IDA, I just sorta imagine hearing it somewhere, and I'm severely brainfried at the time being :)</div>
+    <div class="meta">Posted on 2003-09-22 09:45:37 by f0dder</div>
+   </div>
+   <div class="post" id="post-118968">
+    <div class="subject"><a href="#post-118968">VirtualAlloc Question</a></div>
+    <div class="body">Hey f0dder,<br /><br />When you speak of using table based, do you mean the following:<br /><br />1. Have a dynamic string to store entries. The first dword to store number of entries<br />2. It is then followed by a struct in the following format:<br />tableentry struct<br />RVA dd ?<br />lstring dd ?<br />tableentry ends<br />3. For every opcode, the data is stored using HeapAlloc and a table entry is added to the main dynamic data.<br /><br />Actually I see some benefits for this. First it makes it easier to sort them according to RVA. Secondly it would be possible to add comments. Also I see that the it would be much easier to decode according to some smart algorithm. The painting of the stuffs onto the screen would also be much easier. However I think the only problem would be searching for a particular string.</div>
+    <div class="meta">Posted on 2003-09-22 10:11:13 by roticv</div>
+   </div>
+   <div class="post" id="post-118969">
+    <div class="subject"><a href="#post-118969">VirtualAlloc Question</a></div>
+    <div class="body">The &quot;table based&quot; was referring to the disassembly core - the thing that breaks opcodes into text. This is an example of what i mean: <a target="_blank" href="http://minnie.tuhs.org/VSTa/srctree/newsrc/os/mach/disasm.c.html">http://minnie.tuhs.org/VSTa/srctree/newsrc/os/mach/disasm.c.html</a> .<br /><br />As for storing the &quot;output&quot; -  I still think storing the actual text strings is a bad idea. Better to store the RVA+VA (and whatever other info you can think of), and do all disassembly on the fly - well, things like instruction immediate data etc could be stored in &quot;easier to use&quot; forms perhaps, so full opcode analysis wouldn't have to be applied all the time.<br /><br />To avoid duplicate code in the &quot;machine code to text&quot; and &quot;opcode analysis&quot; phases, the opcode tables could have some extra fields indicating whether the instruction is a branch (analyze from immediate, but not necessarily after the branch instruction - for call, only if there's a matching ret) or a conditional branch (analyze both from immediate, but also the next opcode).<br /><br />Searching for a particular string would be a bit slow with this &quot;constant disassembly&quot; approach - ie, searching for something like &quot;mov eax, 10&quot;, since rather than a direct text search a lot of disassembly would be required (hmm... you could assemble the search string and do a binary search).</div>
+    <div class="meta">Posted on 2003-09-22 10:20:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-118970">
+    <div class="subject"><a href="#post-118970">VirtualAlloc Question</a></div>
+    <div class="body">Thanks for your help. At least I think your solution is elegant (Looks better than my original idea). I will go and implement it.</div>
+    <div class="meta">Posted on 2003-09-22 10:27:26 by roticv</div>
+   </div>
+   <div class="post" id="post-119605">
+    <div class="subject"><a href="#post-119605">VirtualAlloc Question</a></div>
+    <div class="body">rotivc,<br /><br />if you go and do a linear disassembling, it will be kinda slow, but may be also time problem to implement.<br />if u have the intel books, u can see how intel's logic is on decodinng opcodes using maps (tables) for 1/2 byte opcodes.<br />each opcode has its own set of rules and some of the rules are broken or overwritten in some occasions.<br /><br />as far as the control it self, i my self use a virtual listview and the disasm data stored in a STL (linked lists/multimaps..etc). object, i didn't use array since i store classes.<br />you also need to note what happens if u dissassemble 5mb file for example, if u look at w32dasm u will see it does take time for it to disasm 5mb file, thus the control handles data pretty fast , but infact none of the data is stored on the control (virtual list view) or memory, but on a temp file (see temp dir).<br />developing custom controls are cool indeed and thats not the only problem u will face as controls only shows the data.<br />i think that when u have a solid base on disasm's data, u can do with it whatever you want , and has nothing to do with the control.</div>
+    <div class="meta">Posted on 2003-09-26 08:00:08 by wizzra</div>
+   </div>
+   <div class="post" id="post-119623">
+    <div class="subject"><a href="#post-119623">VirtualAlloc Question</a></div>
+    <div class="body">Hey Wizzra,<br /><br />The bottleneck is not the decoding but actually the storing of the decoded opcodes. There is one reason why I did not use any controls by microsoft, and that is because they are slow. That's why I went on to code my own. Something that is much faster. You can see the speed increase if you remove the part whereby the data is sent to the gui. And what makes you think that I do not have my own engine? For me I think it is sufficient, able to decode a 6mb file in 1~2 seconds on my PIII 600mhz using my own decoder routine.</div>
+    <div class="meta">Posted on 2003-09-26 12:35:09 by roticv</div>
+   </div>
+   <div class="post" id="post-119624">
+    <div class="subject"><a href="#post-119624">VirtualAlloc Question</a></div>
+    <div class="body">rotivc,<br /><br />i didn't said u dont have ur own disasm engine :D<br />i was saing that the problem is to store the decoded information in mem.<br />standard windows controls are slow, but i find virtual suits fine.</div>
+    <div class="meta">Posted on 2003-09-26 12:43:28 by wizzra</div>
+   </div>
+   <div class="post" id="post-119663">
+    <div class="subject"><a href="#post-119663">VirtualAlloc Question</a></div>
+    <div class="body">If you can decode 6MB in 1-2 seconds, the heuristics are probably pretty simple... and if the speed of windows controls limit you, you're probably using them the wrong way =)</div>
+    <div class="meta">Posted on 2003-09-26 19:31:48 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

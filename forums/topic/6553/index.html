@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ioctlsocket problems - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6553" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=6553">ioctlsocket problems</a></p>
+   <div class="post" id="post-47293">
+    <div class="subject"><a href="#post-47293">ioctlsocket problems</a></div>
+    <div class="body">Hi!<br /><br />I try to use a dynamic buffer for recv data from a socket.<br />Here is what I use:<br /><br /><pre><code><br />    .data<br />        szIP        db &quot;123.123.123.123&quot;, 0<br />        nPort       dd 2222<br /><br />        szStatus    db &quot;1122331122&quot;, 0<br /><br />    .data?<br />        wsa     WSADATA &lt;&gt;<br />        sin     SOCKADDR_IN &lt;&gt;<br /><br />        nSocket     dd ?<br />        hMem        dd ?<br />        pMem        dd ?<br />        nSize       dd ?<br /><br />    .code<br /><br />start&#58;<br /><br />    invoke WSAStartup, 101h, addr wsa<br /><br />    invoke socket, AF_INET, SOCK_DGRAM, 0<br />    mov nSocket, eax<br /><br />    mov sin.sin_family, AF_INET<br />    invoke htons, nPort<br />    mov sin.sin_port, ax<br />    invoke inet_addr, addr szIP<br />    mov sin.sin_addr, eax<br />    invoke connect, nSocket, addr sin, sizeof sin<br /><br />    invoke send, nSocket, addr szStatus, 11, 0<br /><br />    invoke ioctlsocket, nSocket, FIONREAD, addr nSize<br /><br />    invoke GlobalAlloc, GHND, nSize<br />    mov hMem, eax<br />    invoke GlobalLock, eax<br />    mov pMem, eax<br /><br />    invoke recv, nSocket, pMem, nSize, 0<br /><br />    invoke MessageBox, 0, pMem, 0, 0<br /><br />    invoke GlobalUnlock, pMem<br />    invoke GlobalFree, hMem<br /><br />    invoke closesocket, nSocket<br />    call WSACleanup<br /><br />    invoke ExitProcess, 0<br /><br />end start<br /></code></pre><br /><br />But this code always fails :(<br /><br />If I use a static buffer, it works fine:<br /><br /><pre><code><br />    .data<br />        szIP        db &quot;123.123.123.123&quot;, 0<br />        nPort       dd 2222<br /><br />        szStatus    db &quot;1122331122&quot;, 0<br /><br />    .data?<br />        wsa     WSADATA &lt;&gt;<br />        sin     SOCKADDR_IN &lt;&gt;<br /><br />        nSocket     dd ?<br />         <br />        buffer      db 2048 dup &#40;?&#41;<br /><br /><br />    .code<br /><br />start&#58;<br /><br />    invoke WSAStartup, 101h, addr wsa<br /><br />    invoke socket, AF_INET, SOCK_DGRAM, 0<br />    mov nSocket, eax<br /><br />    mov sin.sin_family, AF_INET<br />    invoke htons, nPort<br />    mov sin.sin_port, ax<br />    invoke inet_addr, addr szIP<br />    mov sin.sin_addr, eax<br />    invoke connect, nSocket, addr sin, sizeof sin<br /><br />    invoke send, nSocket, addr szStatus, 11, 0<br /><br />    invoke recv, nSocket, addr buffer, 2048, 0<br /><br />    invoke MessageBox, 0, addr buffer, 0, 0<br /><br />    invoke closesocket, nSocket<br />    call WSACleanup<br /><br />    invoke ExitProcess, 0<br /><br />end start<br /></code></pre><br /><br />Anyone has a idea where the problem is?</div>
+    <div class="meta">Posted on 2002-07-12 16:26:31 by bazik</div>
+   </div>
+   <div class="post" id="post-47311">
+    <div class="subject"><a href="#post-47311">ioctlsocket problems</a></div>
+    <div class="body">No one? (Thomas where are you??) :(</div>
+    <div class="meta">Posted on 2002-07-12 20:15:10 by bazik</div>
+   </div>
+   <div class="post" id="post-47323">
+    <div class="subject"><a href="#post-47323">ioctlsocket problems</a></div>
+    <div class="body">Checking return values from functions would help. :)<br />Also, <strong>invoke MessageBox, 0, pMem, 0, 0</strong>. You set caption string to 0?</div>
+    <div class="meta">Posted on 2002-07-12 22:26:13 by comrade</div>
+   </div>
+   <div class="post" id="post-47326">
+    <div class="subject"><a href="#post-47326">ioctlsocket problems</a></div>
+    <div class="body">&gt;Checking return values from functions would help. :)<br /><br />Nah, REAL MEN don't need any error checking code :tongue:<br /><br /><span style="font-size:9px>(only ioctlsocket fails)</span><br /><br /><br />&gt;Also, <strong>invoke MessageBox, 0, pMem, 0, 0</strong>. You set caption string to 0? <br /><br />Sure, why not? You can also do<br /><br /><pre><code><br /><br />invoke MessageBox, 0, 0, 0, 0<br /><br /></code></pre> <br /><br /><div class="quote"><br /><em>lpCaption</em><br /> Pointer to a null-terminated string that contains the dialog box title. <strong>If this parameter is NULL, the default title Error is used. </strong><br /></div><br /><br />:grin:</div>
+    <div class="meta">Posted on 2002-07-12 22:49:08 by bazik</div>
+   </div>
+   <div class="post" id="post-47328">
+    <div class="subject"><a href="#post-47328">ioctlsocket problems</a></div>
+    <div class="body">Well then its obvious when you have a dynamic buffer and you IMMEDIATLY query the socket for incoming data right after <strong>send</strong> there is no data available. With a static buffer, <strong>read</strong> waits for 2KB of data or until the socket is closed. Solution is to wait some time for data to arrive (when you use <strong>ioctlsocket</strong>), so I guess even <strong>Sleep</strong> can do the job.</div>
+    <div class="meta">Posted on 2002-07-12 23:04:32 by comrade</div>
+   </div>
+   <div class="post" id="post-47392">
+    <div class="subject"><a href="#post-47392">ioctlsocket problems</a></div>
+    <div class="body">bAZiK, what does ioctlsocket return? SOCKET_ERROR?<br />Maybe there isnt just any data available yet (which is very likely)<br />I encountered this problem as well a few years ago.. i also fixed it with a Sleep as comrade suggested.. but thats very bad :)<br />infact peeking how much data there is avaible with ioctlsocket+FIONREAD is also considered bad.<br /><br />this should be more proper:<pre><code>mov bytesread, 1<br /><br /> .while bytesread  <br />   invoke recv,hsock,..,..<br />   mov bytesread, eax<br /><br />   ;realloc buffersize etc<br /><br /> .endw</code></pre></div>
+    <div class="meta">Posted on 2002-07-13 11:19:09 by savage</div>
+   </div>
+   <div class="post" id="post-134897">
+    <div class="subject"><a href="#post-134897">ioctlsocket problems</a></div>
+    <div class="body">Hi, sorry to hijack this thread, but is this correct?<br /><br /><pre><code><br />        invoke  WSACreateEvent<br />        mov     &#91;hEvent&#93;, eax<br />        invoke  WSAEventSelect, esi, eax, FD_READ or FD_CLOSE<br />  WaitNextEvent&#58;<br />        lea     eax, &#91;hEvent&#93;<br />        invoke  WSAWaitForMultipleEvents,1,eax,FALSE,-1,FALSE<br />        lea     eax, &#91;myevent&#93;<br />        invoke  WSAEnumNetworkEvents,esi,&#91;hEvent&#93;,eax<br />        test    &#91;myevent.lNetworkEvents&#93;, FD_READ<br />        jz      .notfdread<br />        invoke  ioctlsocket,esi,FIONREAD,cbdata<br />        inc     eax<br />        jz      WaitNextEvent<br />        call    &#91;GetProcessHeap&#93;<br />        invoke  HeapAlloc,eax,0,&#91;cbdata&#93;<br />        xchg    edi, eax<br />        invoke  ws_recv, esi, eax, &#91;cbdata&#93;,0<br />        inc     eax<br />        jz      @F<br />        mov     ah, &#91;edi+6&#93;<br />        mov     al, &#91;edi+7&#93;  ;family<br />        movzx   eax, ax<br />        mov     ch, &#91;edi+8&#93;<br />        mov     cl, &#91;edi+9&#93;  ;command<br />        movzx   ecx, cx<br />        stdcall  snac, edi,eax, ecx,&#91;lparam&#93;<br />   @@&#58;<br />        call    &#91;GetProcessHeap&#93;<br />        invoke  HeapFree, eax, 0, edi<br />   .notfdread&#58;<br />        test    &#91;myevent.lNetworkEvents&#93;, FD_CLOSE<br />        jz      WaitNextEvent<br />   EndEvent&#58;<br />        invoke  WSACloseEvent,&#91;hEvent&#93;      <br /></code></pre><br />This codes sometimes fail and cause a gpf</div>
+    <div class="meta">Posted on 2004-02-26 21:41:54 by roticv</div>
+   </div>
+   <div class="post" id="post-134958">
+    <div class="subject"><a href="#post-134958">ioctlsocket problems</a></div>
+    <div class="body">Stupid mistake on my part... Fixed it now..</div>
+    <div class="meta">Posted on 2004-02-28 01:05:34 by roticv</div>
+   </div>
+  </div>
+ </body>
+</html>

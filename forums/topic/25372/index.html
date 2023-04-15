@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DirectX 9 SDK - Even the startup does not work - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25372" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25372">DirectX 9 SDK - Even the startup does not work</a></p>
+   <div class="post" id="post-185525">
+    <div class="subject"><a href="#post-185525">DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Hello,<br /><br />I have a problem with DirectX 9 functions. I don&#39;t use includes made by homer because some functions are missing in my version and I did not get a newer one.<br />So I tried to use a method to call that functions that should work even if you have included nothing that has to do with DirectX.<br />I want to do it like ti_mo_n explained in his post from May 03, 2004:<br /><div class="quote">consider the function:<br /><br />IDirect3D9 *Direct3DCreate9 (UINT SDKVersion);<br /><br />Return Value: If successful, this function returns a pointer to an IDirect3D9 interface; otherwise, a NULL pointer is returned.<br /><br />&quot;pointer to an IDirect3D9 interface&quot; is actually a pointer to virtual table of all interface&#39;s methods.<br /><br />let&#39;s say that it returned 100h<br /><br />in my includes (attached above) u can find:<br /><br />IDirect3D9_QueryInterface&nbsp; &nbsp; &nbsp; &nbsp;  EQU&nbsp;  000000000h<br />IDirect3D9_AddRef&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EQU&nbsp;  000000004h<br />IDirect3D9_Release&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; EQU&nbsp;  000000008h<br />IDirect3D9_RegisterSoftwareDevice&nbsp; &nbsp; &nbsp; EQU&nbsp;  00000000Ch<br />IDirect3D9_GetAdapterCount&nbsp; &nbsp; &nbsp; &nbsp;  EQU&nbsp;  000000010h<br />IDirect3D9_GetAdapterIdentifier&nbsp; &nbsp; &nbsp; EQU&nbsp;  000000014h<br /><br />etc. etc.<br /><br />so:<br />at memory location &quot;100h&quot; there&#39;s a real addres to the method &quot;Query Interface&quot;<br />so u can do:<br /><pre><code><br />Code:<br /><br />mydirect3d dd ?&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;will be a pointer d3d9&#39;s virtual table<br />myqueryintaddress dd ?&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;will be a pointer to query interface<br />myGetAdapterIdentifier dd ?&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;will be a pointer to GetAdapterIdentifier<br />myadident D3DADAPTER_IDENTIFIER9 ?&nbsp; ;D3DADAPTER_IDENTIFIER9 structure<br /><br /><br />&nbsp; call Direct3DCreate9, 31&nbsp; ;create d3d9<br />&nbsp; xchg ecx, eax<br />&nbsp; jecxz failed&nbsp; ;stop if eax == 0<br />&nbsp; mov ecx, <br />&nbsp; mov edx, <br />&nbsp; mov , ecx<br />&nbsp; mov , edx<br /></code></pre><br />from now on u can easily use these methods like standard API functions:<br /><pre><code><br />Code:<br /><br />&nbsp; push offset myadident<br />&nbsp; push D3DENUM_WHQL_LEVEL <br />&nbsp; push D3DADAPTER_DEFAULT <br />&nbsp; push &nbsp; ; this is required by COM architecture - u MUST push the pointer of the object you&#39;re<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; reffering to _AS_FIRST_PARAMETER_<br />&nbsp; call <br />&nbsp; xchg ecx, eax<br />&nbsp; jecxz returned_S_OK<br /></code></pre><br />pointer to some interface is actually a pointer to Vtable.&nbsp; vtable is a table of pointers to actual methods.<br /><br />that&#39;s all </div><br /><br />But that does not work for me, maybe I have made a mistake, please have a look at my code:<br /><pre><code><br />dllname&nbsp; &nbsp; &nbsp; &nbsp;  db &#39;d3d9.dll&#39;,0<br />funcname&nbsp; &nbsp; &nbsp; &nbsp; db &#39;Direct3DCreate9&#39;,0<br />pD3D&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd 0<br />GetAdapterDisplayMode equ 20h<br />myGetAdapterDisplayMode dd 0<br /><br />.code<br />&nbsp; &nbsp; invoke LoadLibrary,addr dllname<br />&nbsp; &nbsp; invoke GetProcAddress,eax,addr funcname<br /><br />&nbsp; &nbsp; push D3D_SDK_VERSION<br />&nbsp; &nbsp; call eax<br />&nbsp; &nbsp; .if eax == 0<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke MessageBox,0,0,0,0<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke ExitProcess,0<br />&nbsp; &nbsp; .endif<br />&nbsp; &nbsp; mov pD3D,eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;till here everything seems fine<br /><br />&nbsp; &nbsp; mov ecx,<br />&nbsp; &nbsp; mov ,ecx<br />&nbsp; &nbsp; push offset d3d_displaymode<br />&nbsp; &nbsp; push D3DADAPTER_DEFAULT<br />&nbsp; &nbsp; push <br />&nbsp; &nbsp; call &nbsp; &nbsp;  ;when executed this code does not go <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;past this point, program shuts down before<br /></code></pre><br /><br />Can anyone see my mistake because I can&#39;t. Or tells ti_mo_n crap and this sort of using DirectX functions isn&#39;t possible. I personally think he isn&#39;t because I saw that kind of code already on another forum.</div>
+    <div class="meta">Posted on 2006-09-25 07:59:58 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185528">
+    <div class="subject"><a href="#post-185528">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">It should be:<br /><pre><code>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mov eax,  ; this one is not required in your example, because eax still holds the pointer to the VTable.<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mov ecx, <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mov ecx,  ; Make sure that &#39;GetAdapterDisplayMode&#39; == 20h (dec: 32)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mov , ecx<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; push offset d3d_displaymode<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; push D3DADAPTER_DEFAULT<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; push eax<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; call </code></pre><br />or anything equivalent.</div>
+    <div class="meta">Posted on 2006-09-25 10:36:03 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-185532">
+    <div class="subject"><a href="#post-185532">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Thanx man, seems to work.<br /><br />regards ChigpA</div>
+    <div class="meta">Posted on 2006-09-25 13:07:44 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185536">
+    <div class="subject"><a href="#post-185536">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Next Problem. I want to draw simple Text using D3DXCreateFont function. And then between BeginScene and EndScene the DrawText function from the returned interface.<br /><br />But when trying to resolve the ProcAddress of D3DXCreateFont it returns 0. Here is my code:<br /><pre><code>funcname2&nbsp; &nbsp; &nbsp;  db &#39;D3DXCreateFontA&#39;,0<br />convstr2&nbsp; &nbsp; &nbsp; &nbsp; db &#39;%X&#39;,0<br />buffer1&nbsp; &nbsp; &nbsp; &nbsp;  db 128 dup(0)<br /><br />&nbsp; &nbsp; invoke LoadLibrary,addr dllname<br />&nbsp; &nbsp; invoke GetProcAddress,eax,addr funcname2<br />&nbsp; &nbsp; mov ecx,eax<br />&nbsp; &nbsp; invoke wsprintf,addr buffer1,addr convstr2,ecx&nbsp; &nbsp; &nbsp; ;this stuff is just for showing me<br />&nbsp; &nbsp; invoke MessageBox,0,addr buffer1,0,0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;the result of GetProcAddress<br />&nbsp; &nbsp; invoke ExitProcess,0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;and then exit</code></pre><br /><br />I already tried other names for the CreateFont function like &quot;D3DXCreateFont&quot; and &quot;D3DXCreateFontW&quot; but nothing happened ... always 0 (NULL) was returned</div>
+    <div class="meta">Posted on 2006-09-25 13:55:16 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185537">
+    <div class="subject"><a href="#post-185537">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">This problem has been answered many times here (a.k.a. &quot;where is my d3dx.dll?&quot;). D3DX is a helper library that &#39;does stuff for you&#39;. When debugging, people link with D3DXD.dll (note the letter &#39;D&#39; after the &quot;d3dx&quot;). When not debugging, people link statically with d3dx.lib. There was no d3dx.dll up till a year ago (or something around that date). About a year ago MS released DX9.0c which came with d3dx.dll (they&#39;re named &quot;d3dx9_24.dll&quot;, &quot;d3dx9_25.dll&quot;, &quot;d3dx9_26.dll&quot; and so on. The newest one is &quot;d3dx9_30.dll&quot; which came with the August 2006 release). Just make sure you have this DLL and that you load it properly with LoadLibrary. Make sure that you&#39;re not loading the debug version (the one with &#39;d&#39;) which is slower and bigger.</div>
+    <div class="meta">Posted on 2006-09-25 14:07:06 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-185538">
+    <div class="subject"><a href="#post-185538">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Thank you again.</div>
+    <div class="meta">Posted on 2006-09-25 14:27:51 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185539">
+    <div class="subject"><a href="#post-185539">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Aaaaaaaaaaaaaaand next Question&nbsp; ;)<br /><br />I created my DirectX App but it won&#39;t draw my text.<br /><br />I created my font this way:<br /><pre><code>&nbsp; &nbsp; invoke LoadLibrary,addr dllname2<br />&nbsp; &nbsp; invoke GetProcAddress,eax,addr funcname2<br />&nbsp; &nbsp; mov ecx,eax<br />&nbsp; &nbsp; push offset pfont<br />&nbsp; &nbsp; push offset FontName<br />&nbsp; &nbsp; push (DEFAULT_PITCH+FF_DONTCARE)<br />&nbsp; &nbsp; push 4<br />&nbsp; &nbsp; push OUT_DEFAULT_PRECIS<br />&nbsp; &nbsp; push DEFAULT_CHARSET<br />&nbsp; &nbsp; push FALSE<br />&nbsp; &nbsp; push 1<br />&nbsp; &nbsp; push FW_NORMAL<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; push 22<br />&nbsp; &nbsp; push pd3d_device<br />&nbsp; &nbsp; call ecx</code></pre><br /><br />and I render that stuff this way<br /><pre><code>&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; push fp1pt0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;that is a float I specified: 1.0f<br />&nbsp; &nbsp; push 00000000h<br />&nbsp; &nbsp; push D3DCLEAR_TARGET<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; mov eax,pd3d_device<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; mov ecx,<br />&nbsp; &nbsp; call dword ptr <br /><br />&nbsp; &nbsp; mov eax,pd3d_device<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; mov ecx,<br />&nbsp; &nbsp; call dword ptr <br /><br />&nbsp; &nbsp; invoke GetClientRect,hwndDlg,addr rct<br />&nbsp; &nbsp; push 00FFFFFFh<br />&nbsp; &nbsp; push (DT_LEFT+DT_WORDBREAK)<br />&nbsp; &nbsp; push offset rct<br />&nbsp; &nbsp; push -1<br />&nbsp; &nbsp; push offset TextToDisplay<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; mov eax,pfont<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; mov ecx,<br />&nbsp; &nbsp; call dword ptr <br /><br />&nbsp; &nbsp; mov eax,pd3d_device<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; mov ecx,<br />&nbsp; &nbsp; call dword ptr <br /><br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; push 0<br />&nbsp; &nbsp; mov eax,pd3d_device<br />&nbsp; &nbsp; push eax<br />&nbsp; &nbsp; mov ecx,<br />&nbsp; &nbsp; call dword ptr </code></pre><br /><br />This should at least draw a simple text with white color on a black background. But on my PC it doesn&#39;t. The text is simply not there or invisible I don&#39;t know. The rest of the code works, only the stuff that has to do with creating the font and drawing the text seems not to be right.<br />Help needed again ... please</div>
+    <div class="meta">Posted on 2006-09-25 15:20:39 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185540">
+    <div class="subject"><a href="#post-185540">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">It&#39;s hard to debug with only this code. It may have something to do with the cameras and/or face culling. Try turning the face culling and the lighting off completely. Try playing with the camera to &#39;find&#39; the text you&#39;re (supposedly) rendering.</div>
+    <div class="meta">Posted on 2006-09-25 15:44:16 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-185557">
+    <div class="subject"><a href="#post-185557">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">By default, Lighting is Disabled and the Camera is pointing in the Z+ direction (0,0,1), so you don&#39;t need to worry about Lighting, but you DO need to worry about where your geometry is placed in 3D space.<br /><br />Need more help?</div>
+    <div class="meta">Posted on 2006-09-27 02:53:45 by Homer</div>
+   </div>
+   <div class="post" id="post-185568">
+    <div class="subject"><a href="#post-185568">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Oh yes, any help is appreciated. Especially with that DirectX stuff which comes (of course because it is from Mickeysoft) only with C++ support.&nbsp; :mad:<br /><br />So what is up with this geometry in 3D space. I just followed a C++ Tutorial from www.drunkenhyena.com as good as I can.<br />...<br />You mentioned something about Z directive. I know that I can deal with X and Y directive by using the RECT structure, this should push my text (if I want) all over the screen.<br />But a Z directive is nowhere mentioned nor can I specify one.<br /><br />P.S.: I attached my source to this post, simply compile it with:<br /><span class="mono">ml /c /Cp /coff directx9test.asm<br />link /subsystem:windows directx9test.obj directx9test.res</span><br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2107" target="_blank">dx9test.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-09-27 11:11:21 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185593">
+    <div class="subject"><a href="#post-185593">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">The first and most important piece of advice I&#39;m going to give you is this: ALWAYS check the values returned from function calls.<br /><br />Now about that Z component.. Direct3D is a 3D environment, you have to imagine that the screen has Depth as well as Width and Height.<br />When you draw stuff in 3D, you draw it at a location in 3D space, not 2D space.. <br /><br />I can tell you exactly why your code is failing though, and I will.<br />You&#39;re calling IDirect3DDevice9.DrawText, and it doesn&#39;t exist !!<br />DrawText is a method of the ID3DXFont class ;)<br />Don&#39;t use pD3DDevice for that call, use the interfacepointer you obtained when you created your font instead :P</div>
+    <div class="meta">Posted on 2006-09-28 11:06:20 by Homer</div>
+   </div>
+   <div class="post" id="post-185613">
+    <div class="subject"><a href="#post-185613">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body"><div class="quote">You&#39;re calling IDirect3DDevice9.DrawText, and it doesn&#39;t exist !!<br />DrawText is a method of the ID3DXFont class ;)</div><br />So ChigpA, you were calling IDirect3DDevice9.GetSwapChain, as it has the same offset in the vtable of the IDirect3DDevice9, as the DrawText has in the vtable of ID3DXFont ^^</div>
+    <div class="meta">Posted on 2006-09-29 13:36:12 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-185615">
+    <div class="subject"><a href="#post-185615">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">You&#39;re calling IDirect3DDevice9.DrawText, and it doesn&#39;t exist !!<br />DrawText is a method of the ID3DXFont class ;)</div><br />So ChigpA, you were calling IDirect3DDevice9.GetSwapChain, as it has the same offset in the vtable of the IDirect3DDevice9, as the DrawText has in the vtable of ID3DXFont ^^<br /></div><br /><br />No I don&#39;t use DrawText out of the vtable of IDirect3DDevice9, I use the right vtable, have a closer look to my code, I do it this way:<br /><pre><code>mov eax,pfont&nbsp;  ;here is my pointer to D3DXFont and not IDirect3DDevice9<br />push eax<br />mov ecx,<br />call dword ptr &nbsp; &nbsp; &nbsp; ;DrawText=38h</code></pre><br /><br /></div>
+    <div class="meta">Posted on 2006-09-29 13:50:31 by ChigpA</div>
+   </div>
+   <div class="post" id="post-185616">
+    <div class="subject"><a href="#post-185616">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">I was just guessing from Homer&#39;s post :mrgreen: Check out the return values. If everything returns S_OK or equivalent, then consider linking with the debug library (the one with &#39;d&#39;) and then using MS&#39;s D3Dspy (which comes with the DX SDK). The D3Dspy lets you see the return values as well ^^</div>
+    <div class="meta">Posted on 2006-09-29 14:08:27 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-185618">
+    <div class="subject"><a href="#post-185618">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">Yeah my mistake, sorry.<br />The problem is a really simple one.<br />I checked your binary executable with ollydebug.<br />First I checked that the Font is being created by checking the return value, its S_OK, so that wasn&#39;t a problem.<br />Then I looked at the params to the DrawText call, and I noticed that the color you chose is 0BGR , ie no alpha.<br />I edited the binary code , changing the color to -1 (white with full alpha) and your text appears - yay !!<br />It seems that Alpha Blending is enabled by default in D3D9, and that your text was being rendered with a 100% transparent color :P<br /><br />I really don&#39;t recommend this style of programming for interfacing with COM objects.. it makes your life more painful than it has to be.. if you need a link to download a more recent SDK, just let me know.<br /><br /></div>
+    <div class="meta">Posted on 2006-09-30 00:04:08 by Homer</div>
+   </div>
+   <div class="post" id="post-185620">
+    <div class="subject"><a href="#post-185620">Re: DirectX 9 SDK - Even the startup does not work</a></div>
+    <div class="body">simple but heavy mistake, but now it works, thank you guys</div>
+    <div class="meta">Posted on 2006-09-30 08:20:42 by ChigpA</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How does the &amp;-operator in MASM really work? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10195" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=10195">How does the &amp;-operator in MASM really work?</a></p>
+   <div class="post" id="post-76449">
+    <div class="subject"><a href="#post-76449">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">I have a simple question about the &quot;&amp;&quot; operator, and a macro programming example to explain it:<br /><br /><br />I have a macro declared like this:<br /><br /><pre><code><br />glob_var_1 TEXTEQU &lt;&gt;<br />glob_var_2 TEXTEQU &lt;&gt;<br /><br />SET_GLOBAL_VARIABLE MACRO var_index, var_value<br />    glob_var_&amp;var_index&amp; TEXTEQU &lt;var_value&gt;<br />ENDM<br /></code></pre><br />And I'm calling it like this:<br /><br /><pre><code><br />    SET_GLOBAL_VARIABLE 1, &lt;value_1&gt;<br /></code></pre><br />This all works fine, and it sets the global macro variable <em>glob_var_1</em> to the value &lt;value_1&gt;.<br /><br /><br />But now I want to take the global variable index from a local variable in the macro instead, like this:<br /><br /><pre><code><br />SET_GLOBAL_VARIABLE MACRO var_index, var_value<br />    local_counter = 1<br />    glob_var_&amp;local_counter&amp; TEXTEQU &lt;var_value&gt;<br />ENDM<br /></code></pre><br />And then I immediately get compiler errors?!?<br /><br />Neither does it work to use a string value in the local variable, like this:<br /><br /><pre><code><br />SET_GLOBAL_VARIABLE MACRO var_index, var_value<br />    local_counter = &lt;1&gt;<br />    glob_var_&amp;local_counter&amp; TEXTEQU &lt;var_value&gt;<br />ENDM<br /></code></pre><br /><br />Why is this? I really need to use a local variable in a situation like this, but it seems to be completely impossible? Is there really no way to do it?<br /><br />I never seem to understand when I can use the &quot;&amp;&quot; operator or not. :( Are there any clearly defined rules for this somewhere to read? It never seems to work as I want anyway. :(<br /><br /><br />Any clue or explanation whatsoever would be <strong>greatly</strong> appreciated.<br /><br />Thanks!</div>
+    <div class="meta">Posted on 2003-01-15 09:25:59 by dELTA</div>
+   </div>
+   <div class="post" id="post-76507">
+    <div class="subject"><a href="#post-76507">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">dELTA, it works but I cannot explain the rules.<br /><br />In such cases its always good to use (or try :grin: ) the &quot;%&quot; op.<br /><br /><pre><code><br />SET_GLOBAL_VARIABLE MACRO var_index, var_value<br />local_counter textequ &lt;1&gt;<br />%glob_var_&amp;local_counter TEXTEQU &lt;var_value&gt;<br />ENDM<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-15 16:15:32 by japheth</div>
+   </div>
+   <div class="post" id="post-76509">
+    <div class="subject"><a href="#post-76509">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body"><strong>japheth</strong> is correct - very hard to figure out exactly how it works sometimes.  If you can work through the BNF grammar in the manual you can figure it out exactly, but that is a waste of time.</div>
+    <div class="meta">Posted on 2003-01-15 16:59:13 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-76530">
+    <div class="subject"><a href="#post-76530">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">Thanks for the info!<br /><br />Believe me japheth, I tried to stick that &quot;%&quot; operator at every possible place I could think of in that line. :) But that was not the only problem I just noticed. After trying your solution I still got the error message, so I then noticed that if I removed the global &quot;declaration&quot; of the macro variables it worked.<br /><br />This is apparently because when the global variables are initialized to empty strings, and the % operator dereferences first the concatenated strings to the variable name, but then it also further dereferences the newly created variable name to its current contents, i.e. an empty string. This left the compiler with a line containing only &quot;TEXTEQU &lt;var_value&gt;&quot;, which caused the syntax error.<br /><br />I have ran into problems on many occasions with this &quot;all or nothing&quot; dereferencing of macro variables, and it has caused me quite a lot trouble. :(<br /><br />Isn't there <strong>any</strong> possible way whatsoever to only dereference a macro variable &quot;one level&quot; (or at least not all the levels)? You can think of it as a C pointer, and I only want to get the expression <em>*macro_variable</em>, and not <em>**macro_variable</em>.<br /><br />Would this be possible in <strong>any</strong> way, however complicated?</div>
+    <div class="meta">Posted on 2003-01-15 18:18:56 by dELTA</div>
+   </div>
+   <div class="post" id="post-76623">
+    <div class="subject"><a href="#post-76623">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">dELTA,<br /><br />I understand the problem and it may be impossible to solve with text equates.<br /><br />Possible it may work with macro functions as in the following example:<br /><br /><pre><code><br />MakeName macro string1, string2<br />    exitm @CatStr&#40;string1, string2&#41;<br />    endm<br /><br />SET_GLOBAL_VARIABLE MACRO var_value<br />xxx textequ MakeName&#40;&lt;glob_var_&gt;,%?index&#41;<br />%xxx macro<br />    exitm &lt;var_value&gt;<br />    endm        <br />ENDM<br /><br />SET_INDEX macro index<br />?index = index<br />    endm<br /><br />        .CODE<br /><br />main    proc c<br /><br />        xor eax, eax<br /><br />        SET_INDEX 1<br />        SET_GLOBAL_VARIABLE &lt;123&gt;<br />        SET_INDEX 2<br />        SET_GLOBAL_VARIABLE &lt;234&gt;<br />        SET_INDEX 3<br />        SET_GLOBAL_VARIABLE &lt;345&gt;<br /><br />        add eax, glob_var_1&#40;&#41;<br />        add eax, glob_var_2&#40;&#41;<br />        add eax, glob_var_3&#40;&#41;<br /><br /><br />        .if &#40;eax == &#40;123 + 234 + 345&#41;&#41;<br />            invoke printf, CStr&#40;&lt;&quot;worked&quot;,13,10&gt;&#41;<br />        .endif  <br /><br /><br />        SET_INDEX 2<br />        SET_GLOBAL_VARIABLE &lt;1&gt;<br />        SET_INDEX 1<br />        SET_GLOBAL_VARIABLE &lt;2&gt;<br /><br />        xor eax, eax<br />        add eax, glob_var_1&#40;&#41;<br />        add eax, glob_var_2&#40;&#41;<br />        .if &#40;eax == &#40;1 + 2&#41;&#41;<br />            invoke printf, CStr&#40;&lt;&quot;worked&quot;,13,10&gt;&#41;<br />        .endif  <br /><br />        ret<br /><br />main    endp<br /></code></pre><br /><br /><br />Ok, you have to add a &quot;()&quot; to your variables, but besides that it may work better<br /><br />japheth</div>
+    <div class="meta">Posted on 2003-01-16 06:58:20 by japheth</div>
+   </div>
+   <div class="post" id="post-76683">
+    <div class="subject"><a href="#post-76683">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">Cool idea japheth, thanks! :)<br /><br />I might still be out of luck though, since in my real problem I need to change the values of these global variables at several points, and even worse, the new values are based on the old values (like: glob_var_x CATSTR glob_var_x, &lt;new_value&gt;).<br /><br />Does anybody have any cool idea about how to solve this too?<br />In that case, my current problems would be completely solved!</div>
+    <div class="meta">Posted on 2003-01-16 10:38:36 by dELTA</div>
+   </div>
+   <div class="post" id="post-76708">
+    <div class="subject"><a href="#post-76708">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">Hm, is that such an aggravation?<br /><br /><pre><code><br />MakeName macro string1, string2<br />    exitm @CatStr&#40;string1, string2&#41;<br />    endm<br /><br />SET_GLOBAL_VARIABLE MACRO var_value<br />xxx textequ MakeName&#40;&lt;glob_var_&gt;,%?index&#41;<br />%xxx macro<br />    exitm &lt;var_value&gt;<br />    endm        <br />ENDM<br /><br />CAT_GLOBAL_VARIABLE MACRO var_value<br />xxx textequ MakeName&#40;&lt;glob_var_&gt;,%?index&#41;<br />tmpVal equ xxx&#40;&#41;<br />tmpVal2 textequ @CatStr&#40;%tmpVal,var_value&#41;<br />%xxx macro<br />    exitm &lt;tmpVal2&gt;<br />    endm        <br />ENDM<br /><br />SET_INDEX macro index<br />?index = index<br />    endm<br /><br />        .CODE<br /><br />main    proc c<br /><br />        xor eax, eax<br /><br />        SET_INDEX 1<br />        SET_GLOBAL_VARIABLE &lt;123&gt;<br />        add eax, glob_var_1&#40;&#41;<br /><br />        CAT_GLOBAL_VARIABLE &lt;456&gt;<br />        add eax, glob_var_1&#40;&#41;<br /><br />        CAT_GLOBAL_VARIABLE &lt;789&gt;<br />        add eax, glob_var_1&#40;&#41;<br /><br /><br />        .if &#40;eax == &#40;123 + 123456 + 123456789&#41;&#41;<br />            invoke printf, CStr&#40;&lt;&quot;worked&quot;,13,10&gt;&#41;<br />        .endif  <br /></code></pre><br /><br />works!<br /><br />No awaiting your next problem :) Or just tell us your problem in more detail.<br /><br />Japheth</div>
+    <div class="meta">Posted on 2003-01-16 14:02:27 by japheth</div>
+   </div>
+   <div class="post" id="post-76726">
+    <div class="subject"><a href="#post-76726">How does the &amp;-operator in MASM really work?</a></div>
+    <div class="body">I really didn't think that it was possible to redefine macros like that (with the same name as before), and that's why I thought it would be hard. Thanks for giving me another revelation anyway. ;)<br /><br />And don't you worry, I'll be back with even more screwed-up problems for you to solve japheth. ;)<br /><br />Thanks!</div>
+    <div class="meta">Posted on 2003-01-16 16:08:06 by dELTA</div>
+   </div>
+  </div>
+ </body>
+</html>

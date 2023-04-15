@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Clearing a buffer - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=842" />
+    <link rel="next" href="../?id=842&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=842">Clearing a buffer</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=842&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=842&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="842" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=842&amp;page=2">&gt;</a><a href="../?id=842&amp;page=2">&raquo;</a></form>   <div class="post" id="post-5322">
+    <div class="subject"><a href="#post-5322">Clearing a buffer</a></div>
+    <div class="body">Suppose I had a buffer defined in the .data section as:<br /><br />Buffer          db 60 dup (?)<br /><br />... my question is, what is the correct way to go about clearing the buffer once it has been used?<br /><br />Sorry if this is an over simplistic question :(<br /><br />thanks for your time,<br /> - Fourfty</div>
+    <div class="meta">Posted on 2001-08-29 15:50:42 by Fourfty</div>
+   </div>
+   <div class="post" id="post-5324">
+    <div class="subject"><a href="#post-5324">Clearing a buffer</a></div>
+    <div class="body">If its a buffer used for null terminated strings then mov buffer,0  should do.</div>
+    <div class="meta">Posted on 2001-08-29 16:01:54 by Eóin</div>
+   </div>
+   <div class="post" id="post-5326">
+    <div class="subject"><a href="#post-5326">Clearing a buffer</a></div>
+    <div class="body">thanks... that seems to work.  But just out of interest, is there any way of completely clearing the buffer?</div>
+    <div class="meta">Posted on 2001-08-29 16:07:49 by Fourfty</div>
+   </div>
+   <div class="post" id="post-5328">
+    <div class="subject"><a href="#post-5328">Clearing a buffer</a></div>
+    <div class="body">... I think I got it.  I filled the entire buffer full of 0's:<br /><br /><br />L1:<br />            mov eax,0<br />            mov ,0<br />            inc eax<br />            .if eax!=60<br />                jmp L1<br />            .endif<br /><br /><br /><br /><br />... is this the best way of doing it?</div>
+    <div class="meta">Posted on 2001-08-29 16:12:55 by Fourfty</div>
+   </div>
+   <div class="post" id="post-5331">
+    <div class="subject"><a href="#post-5331">Clearing a buffer</a></div>
+    <div class="body">There's some sort of rep instruct but I've heard its not that fast so I never used it.<br /><br />If I were going to clear the buffer then I'd move backwards to avoid the final comparasion. Also I'd clear four bytes at a times, you just should make sure that the size of the buffer is a multiple of four.<br /><br />eg:<br /><br />mov eax,(60/4)<br />@@: and [-4],0<br />dec eax<br />jnz @B ; Jump if eax != 0<br /><br />And one thing about your code; the mov eax,0 should be outside the loop. As it stands it will loop forever.</div>
+    <div class="meta">Posted on 2001-08-29 16:30:47 by Eóin</div>
+   </div>
+   <div class="post" id="post-5334">
+    <div class="subject"><a href="#post-5334">Clearing a buffer</a></div>
+    <div class="body">On the pentium iii's up and athlon the 'rep movs' and 'rep stos' are optimized for moving and setting memory.  There is a faster way on MMX processors.  So this works quite well:<br /><br />mov edi,OFFSET Buffer<br />mov ecx,(SIZEOF Buffer) / 4<br />xor eax,eax<br />rep stosd<br /><br />...and here is an oportunity for a macro:<br /><br />ClearBuffer MACRO buf:REQ<br />mov edi,OFFSET buf<br />mov ecx,(SIZEOF buf) / 4<br />xor eax,eax<br />rep stosd<br />ENDM<br /><br />Then you just do:<br /><br />ClearBuffer Buffer<br /><br />...but that isn't very good programming - trashing the registers like that behind our backs in some macro. ;)  Also, it isn't very good for 'ClearBuffer edi'.</div>
+    <div class="meta">Posted on 2001-08-29 17:39:35 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5344">
+    <div class="subject"><a href="#post-5344">Clearing a buffer</a></div>
+    <div class="body">or you could always use:<br /><br />invoke RtlZeroMemory,OFFSET buffer,60<br /><br />this fills buffer with null char.<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2001-08-29 19:34:29 by czDrillard</div>
+   </div>
+   <div class="post" id="post-5355">
+    <div class="subject"><a href="#post-5355">Clearing a buffer</a></div>
+    <div class="body">Zadkiel and bitRAKE,<br />your code is slow due you don't care about buffer alignment and about if the buffer size isn't a multiple of four...<br /><br />czDrillard,<br />I'm sorry but your reply is for the biggest code size and it is also the slowest:<br /><br />1. 1st -&gt;  stupid invoke and  push 60 and push offset buffer -&gt; 2 push  and next 2 pop?    <br />2. next -&gt; call RtlZeroMemory -&gt;1 call+return here<br />3. Here is the code of  RtlZeroMemory from Kernel32.dll + 2nd call+return here-&gt;call BFF61131 : <pre><code>  <br /><br />;Exported fn&#40;&#41;&#58; RtlZeroMemory - Ord&#58;02A1h<br />&#58;BFF67E7F 53                   push ebx<br />&#58;BFF67E80 56                   push esi<br />&#58;BFF67E81 57                   push edi<br />&#58;BFF67E82 55                   push ebp<br />&#58;BFF67E83 68F2000000           push 000000F2<br />&#58;BFF67E88 68B323F9BF           push BFF923B3<br />&#58;BFF67E8D 64FF3500000000       push dword ptr fs&#58;&#91;00000000&#93;<br />&#58;BFF67E94 64892500000000       mov dword ptr fs&#58;&#91;00000000&#93;, esp<br />&#58;BFF67E9B 8BC4                 mov eax, esp<br />&#58;BFF67E9D 6A00                 push 00000000<br />&#58;BFF67E9F FF7024               push &#91;eax+24&#93;<br />&#58;BFF67EA2 FF7020               push &#91;eax+20&#93;<br />&#58;BFF67EA5 E88792FFFF           call BFF61131       ; call Stosd&amp;stosb proc<br />&#58;BFF67EAA 648F0500000000       pop dword ptr fs&#58;&#91;00000000&#93;<br />&#58;BFF67EB1 83C408               add esp, 00000008<br />&#58;BFF67EB4 5D                   pop ebp<br />&#58;BFF67EB5 5F                   pop edi<br />&#58;BFF67EB6 5E                   pop esi<br />&#58;BFF67EB7 5B                   pop ebx<br />&#58;BFF67EB8 C20800               ret 0008<br /><br /><br />;Stosd&amp;stosb proc<br />&#58;BFF61131 55                    push ebp<br />&#58;BFF61132 8BEC                  mov  ebp, esp<br />&#58;BFF61134 51                    push ecx<br />&#58;BFF61135 57                    push edi<br />&#58;BFF61136 8B7D08                mov  edi, dword ptr &#91;ebp+08&#93;<br />&#58;BFF61139 8A4D10                mov  cl, byte ptr &#91;ebp+10&#93;<br />&#58;BFF6113C 8AE9                  mov  ch, cl<br />&#58;BFF6113E 0FACC810              shrd eax, ecx, 10<br />&#58;BFF61142 668BC1                mov  ax, cx<br />&#58;BFF61145 FC                    cld<br />&#58;BFF61146 8B4D0C                mov  ecx, dword ptr &#91;ebp+0C&#93;<br />&#58;BFF61149 C1E902                shr  ecx, 02<br />&#58;BFF6114C F3                    repz<br />&#58;BFF6114D AB                    stosd<br />&#58;BFF6114E 8A4D0C                mov  cl, byte ptr &#91;ebp+0C&#93;<br />&#58;BFF61151 80E103                and  cl, 03<br />&#58;BFF61154 F3                    repz<br />&#58;BFF61155 AA                    stosb<br />&#58;BFF61156 5F                    pop  edi<br />&#58;BFF61157 59                    pop  ecx<br />&#58;BFF61158 C9                    leave<br />&#58;BFF61159 C20C00                ret  000C </code></pre><br /><br /> Fourfty,<br /> here is my code: <pre><code><br />	      lea     eax, Buffer<br />	      mov     ecx, LenBuffer    ; May be 63 !? <br />  	      xor     edx, edx          ; edx =0<br />              test    eax, 3<br />              jz      Start_1	<br />Unalign&#58;  <br />              mov     &#91;eax&#93;, dl  <br />              inc     eax<br />              dec     ecx <br />              jz      End<br />	      test    eax, 3  <br />              jnz     Unalign<br />Start_1&#58;<br />              sub     ecx, 4<br />              jl      Rest<br />Align&#58;   <br />              mov     &#91;eax&#93;, edx  <br />              add     eax, 4<br />              sub     ecx, 4<br />              jge     Align<br />Rest&#58;<br />              add     ecx, 4 <br /> 	      jz      End<br />Last_stosb&#58;<br />              mov     &#91;eax&#93;, dl  <br />              inc     eax<br />              dec     ecx <br />              jnz     Last_stosb    <br />End&#58;<br /> 	      ret</code></pre></div>
+    <div class="meta">Posted on 2001-08-30 00:02:34 by buliaNaza</div>
+   </div>
+   <div class="post" id="post-5356">
+    <div class="subject"><a href="#post-5356">Clearing a buffer</a></div>
+    <div class="body">welll i'll stick to the simpler method as I am still learned-ing...<br /><br />they never said it was the best method but it works great in my test, my buffer was 19 and I just counted byte-by-byte rather than 4-bytes<br /><br />how do the clok cycles compare between bulia's and the ol' <br /><br /><br />mov eax,0<br />L1:<br />mov ,0 <br />inc eax <br />.if eax!=60 <br />jmp L1 <br />.endif</div>
+    <div class="meta">Posted on 2001-08-30 01:21:07 by drarem</div>
+   </div>
+   <div class="post" id="post-5359">
+    <div class="subject"><a href="#post-5359">Clearing a buffer</a></div>
+    <div class="body">With a buffer under a couple of K in size, speed is not your problem, just keep the code small and easy to read. Simplist code would be a LODSB loop with thew fill character you need in the AL register.<br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-08-30 02:50:16 by hutch--</div>
+   </div>
+   <div class="post" id="post-5364">
+    <div class="subject"><a href="#post-5364">Clearing a buffer</a></div>
+    <div class="body">Err, hutch, don't you mean a STOSB loop... :)</div>
+    <div class="meta">Posted on 2001-08-30 04:01:56 by S/390</div>
+   </div>
+   <div class="post" id="post-5377">
+    <div class="subject"><a href="#post-5377">Clearing a buffer</a></div>
+    <div class="body">Yep,<br /><br />Senile decay showing again. :grin: <br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-08-30 07:59:58 by hutch--</div>
+   </div>
+   <div class="post" id="post-5380">
+    <div class="subject"><a href="#post-5380">Clearing a buffer</a></div>
+    <div class="body"><strong>buliaNaza</strong>, I respect your obvious coding skills, but I handle those factors at the definition of my buffers, in order that I can inline initialization code where I please.  I'll use your algorithm, or an MMX algorithm when that is not the case. :)</div>
+    <div class="meta">Posted on 2001-08-30 08:06:43 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5390">
+    <div class="subject"><a href="#post-5390">Clearing a buffer</a></div>
+    <div class="body">bitRAKE, I respect you too, but the  Fourfty's question was:<br />&quot;... is this the best way of doing it?&quot;</div>
+    <div class="meta">Posted on 2001-08-30 11:46:55 by buliaNaza</div>
+   </div>
+   <div class="post" id="post-5394">
+    <div class="subject"><a href="#post-5394">I stole buliaNaza's code!</a></div>
+    <div class="body">An alternative to buliaNaza's code (based heavily upon it)!<br /><br /><pre><code><br />    lea eax, Buffer<br />    mov ecx, LenBuffer<br />    xor edx, edx<br />    cmp eax, 3<br />    jle Last_stosb<br /><br />    mov &#91;eax&#93;, edx<br />    and eax, 3<br />    sub ecx, eax<br />    lea eax, Buffer<br />    and eax, 0FFFFFFFCh<br />Align&#58;   <br />    mov &#91;eax&#93;, edx  <br />    add eax, 4<br />    sub ecx, 4<br />    jge Align<br />Rest&#58;<br />    add ecx, 4 <br />    jz End<br />Last_stosb&#58;<br />    mov &#91;eax&#93;, dl  <br />    inc eax<br />    dec ecx <br />    jnz Last_stosb    <br />End&#58;<br />    ret<br /></code></pre><br />This code can lead to some bytes being written with zeros twice, but this avoids the loop in the initial aligning code (it also does no harm, at most it will write 4 bytes twice, but will be done as a full dword write)!<br /><br />Its also slightly shorter in terms of instruction count (not sure about code length, or speed).<br /><br />Its overall speed should be about the same, as it only differs in terms of the alignment routine. The main difference (speed wise)should be seen zeroing buffers between 1 &amp; 7 bytes long, after that any differences fade into the background as the main loop is identical.<br /><br />As for whether or not it is the &quot;best&quot; way of doing it depends entirely on the definition of best! Arguing over which way is &quot;best&quot; is a dangerous pass time, and also one of the &quot;best&quot; ways to start wars.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-30 12:31:52 by Mirno</div>
+   </div>
+   <div class="post" id="post-5410">
+    <div class="subject"><a href="#post-5410">Clearing a buffer</a></div>
+    <div class="body"><strong>buliaNaza</strong>, the best way is a very subjective thing.  Mine is best under the conditions in which I use it. :)</div>
+    <div class="meta">Posted on 2001-08-30 14:21:49 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5444">
+    <div class="subject"><a href="#post-5444">Clearing a buffer</a></div>
+    <div class="body">Mirno, I know how to align the Buffer with &quot;and eax, -4&quot;  but...<pre><code><br />&quot;How to optimize for the Pentium family of microprocessors<br />  Copyright ? 1996, 2000 by Agner Fog. Last modified 2000-03-31. <br /><br />6. Alignment<br />On PPlain and PMMX, misaligned data will take at least 3 clock cycles extra to access<br />if a 4 byte boundary is crossed.<br />The penalty is higher when a cache line boundary is crossed.<br />On PPro, PII and PIII, misaligned data will cost you 6-12 clocks<br />extra when a cache line boundary is crossed.&quot;<br /><br /><br />    lea eax, Buffer<br />    mov ecx, LenBuffer<br />    xor edx, edx<br />    cmp eax, 3	    ; may  be  cmp ecx, 3<br />    jle Last_stosb<br /><br />    mov  &#91;eax&#93;, edx ; this1 is good IF the Buffer is aligned, ELSE it is slower,<br />    and  eax, 3     ; and this is the reason I use 1st stosb loop...	 <br />    sub  ecx, eax<br />    lea  eax, Buffer<br />    and  eax, 0FFFFFFFCh<br />    .........<br />    .........</code></pre><br />bitRAKE, I don't want to insult you because I respect you and I hate the wars for the stupid things,<br />but I don't agree with you:<br /> &quot;the best way is a very subjective thing. Mine is best under the conditions in which I use it.&quot;<br />It is your human point of view rather your processor &quot;point of view&quot;...<br /><br />Now I have a question for you:<br />I hate the HLL and I don't understand why I need to use a macro and spend a time to learn it!?<br />I just use copy&amp;paste code with the same or different registers/variables<br />and this1 works for me fine because I have a full high&amp;low level control of my code!?</div>
+    <div class="meta">Posted on 2001-08-30 18:34:53 by buliaNaza</div>
+   </div>
+   <div class="post" id="post-5452">
+    <div class="subject"><a href="#post-5452">Clearing a buffer</a></div>
+    <div class="body"><strong>buliaNaza</strong>, so your saying that aligning your buffer and keeping it rounded to DWORD alignment isn't faster than your code?  Do you care that much about 0-3 bytes plus the size overhead of the inline code (14 bytes per use) in windows programming?  In the method that I presented, I can change the size of the buffer and I don't have to change the code.<br /><br />I don't loose any control using macros unless I choose to.  It's like an advanced cut&amp;paste.  And I can do things with macros that would be very hard for anyone to do with code alone. :)  I suppose you want examples. :)  Look at the macro <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=816.msg5117">HERE</a>.  Can you do that in code with that kind of ease and flexiblity?<div class="quote">I don't understand why I need to use a macro and spend a time to learn it!?</div>I don't think you <u>need</u> to use macros, but I <u>know</u> that you are missing out on a great tool to help you code as you have never coded before.  You can write macros to be as flexible as you want.  You can write code that is more self-documenting.  An example would be renaming all the registers to something more indicative of their function.<br /><br />I will end in saying that macros can only add to your existing skills - they don't take anything away.  Have you really taken a look at some of the more advanced macros that exist?  If used within the proper context they add function where before there was none.  Please, give them a try. ;)<pre><code>BUFFER MACRO thename&#58;REQ, thesize&#58;REQ<br />	_BSS segment DWORD public 'BSS'<br />			ALIGN 4<br />		thename dd &#40;thesize + 3&#41; / 4 dup &#40;?&#41;<br />	_BSS ends<br /><br />	thename&amp;Clear MACRO<br />		mov edi,OFFSET thename<br />		mov ecx,&#40;SIZEOF thename&#41; / 4<br />		xor eax,eax<br />		rep stosd<br />	ENDM<br />ENDM<br /><br />;Like this&#58;<br /><br />	BUFFER MyBuffer, 75	;Any size works<br /><br />	MyBufferClear	;No need to document this line</code></pre>Like I said before it is not a good idea to trash registers in a macro behind the programmers back.  I would only use this example in a small file - it would certainly not be a global macro to use without some changes.</div>
+    <div class="meta">Posted on 2001-08-30 19:09:50 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5462">
+    <div class="subject"><a href="#post-5462">Clearing a buffer</a></div>
+    <div class="body">Guys,<br /><br />This discussion sounds like it is turning into a &quot;storm in a tea cup&quot;. BEST is a very selective criterion, size of buffer, which registers need to be preserved and what the buffer is used for all determine what is &quot;best&quot; in the circumstances.<br /><br />Perform the operation on a small text buffer by writing zero to the first byte, if it must be filled, a very simple REP STOSB loop will do it very efficiently, if the data size is large enough, use DWORD size writes and if that is not fast enough, Ricky's MMX version may help if the processor has MMX support.<br /><br />When the task at hand is a small buffer for text, elaborate solutions are not only a waste of time but are slower as well.<br /><br />Why use a bulldozer when you can do the job with a garden spade ?<br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-08-30 19:56:21 by hutch--</div>
+   </div>
+   <div class="post" id="post-5471">
+    <div class="subject"><a href="#post-5471">Clearing a buffer</a></div>
+    <div class="body">Dear Macro Warrior, thanks for answer, but:<br />1. I'm so stupid and just haven't so time to learn it, but what type in language you use, C/C++,  Basic, UML, Java or...?!<br />&quot;but I know that you are missing out on a great tool to help you code as you have never coded before&quot;<br />2. Which1 from the great tools are easy to learn from the asm newbie like me: <br />    this1, R.Hyde HLA, Betov's assembly, ....... ?<br />3. Which1 is faster: to use a registers or a memory general&amp;local variables? <br />4. Do you saw this1 at the low level and have you a disassembly listing... May be you have:<br />     &quot;I don't loose any control using macros unless I choose to.&quot;<br />5. If you have, plz post it for me to understand what happened..<br />6. May be this macro is heavy speed optimized and I can copy it multiple times in my programs?<br />7. Is it the best programming practice in MASM or &quot;Mine is best under the conditions in which I use it.&quot;<br />8. Is this1 is  the best &quot;food&quot; for your processor?<br />9. &quot;You can write macros to be as flexible as you want.&quot; -&gt; I prefer to spend my time to write  programs in assembly rather to write a macros! <br />10 ..........<br />11 ..........<pre><code><br />.BEGIN MACRO<br />	LOCAL myStart, myEnd, num, flag  -&gt;what is this&#58; byte, dword or word <br /><br />	num=0              ; what is this &#58; xor eax,eax /mov num,eax /mov flag,eax<br />	flag=0	        ; or mov num,0  / mov flag, 0	<br />	WHILE flag EQ 0     ; this is a loop may be?<br />%		IFDEF @CatStr&#40;&lt;RealEnd&gt;,&lt;%num&gt; &#41;<br />			num = num + 1          ;  what is this &#58; inc num or add num, 1<br />		ELSE			;  or mov eax, 1/ add num,eax.......<br />			flag = 1		;  or this1&#58; mov eax, 1/ mov num,eax or mov flag,1.......<br />		ENDIF<br />	ENDM<br /><br />	db offset myEnd - offset myStart	; this1 I understood<br /><br />	myStart LABEL BYTE		; this1 too<br /><br />	.END MACRO<br />		@CatStr&#40;&lt;RealEnd&gt;,&lt;%num&gt; &#41; %num ; I want to see this1 in assembly<br />	ENDM<br /><br />	@CatStr&#40;&lt;RealEnd&gt;,&lt;%num&gt; &#41; MACRO depth&#58;REQ<br />		IF &#40;OPATTR &#40;myEnd&#41;&#41; AND 0100000y        ; this1 too<br />			RealEnd&amp;depth %&#40;depth-1&#41;<br />		ELSE<br />			myEnd LABEL BYTE<br />		ENDIF<br />	ENDM<br />ENDM</code></pre><br />bitRAKE, I appresiate your efforts to made this1 but from my point of view it is so old...Sorry!<br /><br /><br />Hutch, which1 is better for asm newbies to teach them:  to drive a bulldozer or to use a garden spade?</div>
+    <div class="meta">Posted on 2001-08-30 21:07:16 by buliaNaza</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=842&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=842&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="842" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=842&amp;page=2">&gt;</a><a href="../?id=842&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

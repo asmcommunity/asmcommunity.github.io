@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30351" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30351">HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></p>
+   <div class="post" id="post-213583">
+    <div class="subject"><a href="#post-213583">HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Utilizing memory is a sticky issue and as you can see by my subject line I am a little confused. MS says to drop GlobalAlloc in favor of HeapAlloc and then they start saying that it can become fragmented and several other issues. There seems to be a limit to how much memory that can be reserved using Heap, but I cannot find any solid documentation - according to this forum it is 65535. <br /><br />Below is a piece of simple code that I would like to convert over and don&#039;t know what to expect. Will someone put me on the right path? Thanks....<pre><code>		invoke CreateFile,ADDR buffer,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  GENERIC_READ or GENERIC_WRITE ,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  FILE_SHARE_READ or FILE_SHARE_WRITE,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  NULL,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  NULL<br />		mov hFile,eax<br />		invoke GlobalAlloc,GMEM_MOVEABLE or GMEM_ZEROINIT,MEMSIZE<br />		mov&nbsp; hMemory,eax<br />		invoke GlobalLock,hMemory<br />		mov&nbsp; pMemory,eax<br /></code></pre></div>
+    <div class="meta">Posted on 2010-12-05 08:07:38 by nothere</div>
+   </div>
+   <div class="post" id="post-213585">
+    <div class="subject"><a href="#post-213585">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Most memory allocation schemes eventually suffer from fragmentation.&nbsp; Unless your program is working in a very constrained environment I personally wouldn&#039;t worry about it.&nbsp; Replacing GlobalAlloc with HeapAlloc is rather straightforward.&nbsp; One of the main differences is that you can now specify a specific heap or use the default when allocating memory.&nbsp; Although both GlobalAlloc and HeapAlloc both allocate memory for your program they are not very different from malloc in terms of application functionality.&nbsp; All provide a pointer to a section of memory that your program may read/write.&nbsp; The GlobalAlloc / LocalAlloc routines are a carry-over from 16-bit land so you can avoid an extra layer of indirection by replacing the calls with the newer Heap* routines.&nbsp; You will find quite a few C examples on MSDN showing examples that you can easily convert to assembly.&nbsp; Hope that helps.</div>
+    <div class="meta">Posted on 2010-12-05 09:18:20 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213588">
+    <div class="subject"><a href="#post-213588">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Thanks p1ranha, but it doesn&#039;t. I tried the following and it does not read the file in. <pre><code>	invoke GetOpenFileName, ADDR ofn<br /><br />	.if eax==TRUE<br />		invoke CreateFile,ADDR buffer,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  GENERIC_READ or GENERIC_WRITE ,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  FILE_SHARE_READ or FILE_SHARE_WRITE,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  NULL,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  NULL<br />		mov hFile,eax<br />		<br />		invoke HeapCreate,0,0,50000<br />		mov hHeapC, eax<br />		<br />		invoke HeapAlloc,hHeapC,HEAP_ZERO_MEMORY,10000<br />		mov pHeapA, eax<br />		<br />		invoke ReadFile,hFile,pHeapA,MEMSIZE-1,ADDR SizeReadWrite,NULL<br />		invoke SendMessage,hwndEdit,WM_SETTEXT,NULL,pHeapA<br /></code></pre></div>
+    <div class="meta">Posted on 2010-12-05 09:36:52 by nothere</div>
+   </div>
+   <div class="post" id="post-213589">
+    <div class="subject"><a href="#post-213589">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">What you can do, at the beginning of your program after say, GetModuleHande call<br /> &nbsp; &nbsp;invoke &nbsp;GetProcessHeap<br /> &nbsp; &nbsp;mov &nbsp; &nbsp; hMainHeap, eax<br /><br />Then you can:<br /> &nbsp; &nbsp;invoke	HeapAlloc, hMainHeap, HEAP_ZERO_MEMORY, 1000<br /> &nbsp; &nbsp;mov		hTempMem, eax<br /><br />When you are done with the pointer to memory, you have to free it:<br /> invoke HeapFree, hMainHeap, 0, hTempMem<br /><br />But if you are opening an existing file, you should get the file size + 1 and do a HeapAlloc with that.<br /><br />Also, if you are worried about fragmentaion, there are low frag mem functions take a look at HeapSetInformation <br /><br />Forgot, the MASM library has file functions that make life easier for you...<br /><br /><pre><code><br /><br />exist<br />filesize <br />read_disk_file <br />write_disk_file <br />LoadList <br /> Test if file exists Get the disk file size<br />Read disk file into buffer<br />Write disk file from buffer<br />Load files into a list box<br /> <br /></code></pre><br /><br />You could use<br />invoke read_disk_file, addr PathAndFileName, addr lpMem, addr lpLen</div>
+    <div class="meta">Posted on 2010-12-05 09:43:41 by Gunner</div>
+   </div>
+   <div class="post" id="post-213590">
+    <div class="subject"><a href="#post-213590">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Appreciate the help, but can&#039;t get it to work. Back to GlobalAlloc until information is available.</div>
+    <div class="meta">Posted on 2010-12-05 10:10:15 by nothere</div>
+   </div>
+   <div class="post" id="post-213591">
+    <div class="subject"><a href="#post-213591">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Finally found the problem - fSize was set to the wrong size:<pre><code>invoke ReadFile,hFile,pHeapA,fSize,ADDR SizeReadWrite,NULL</code></pre>This thing can be a pain.</div>
+    <div class="meta">Posted on 2010-12-05 11:19:21 by nothere</div>
+   </div>
+   <div class="post" id="post-213592">
+    <div class="subject"><a href="#post-213592">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">This work and returns all good values. Looking for comments:<pre><code>Open_File proc<br />LOCAL hi:DWORD<br /><br />	mov&nbsp; ofn.Flags, OFN_FILEMUSTEXIST or \<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; OFN_PATHMUSTEXIST or OFN_LONGNAMES or\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; OFN_EXPLORER or OFN_HIDEREADONLY<br />	invoke GetOpenFileName, ADDR ofn<br /><br />	.if eax==TRUE<br />		invoke CreateFile,ADDR buffer,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  GENERIC_READ or GENERIC_WRITE ,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  FILE_SHARE_READ or FILE_SHARE_WRITE,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  NULL,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  NULL<br />		mov hFile,eax<br />		<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke GetFileSize,hFile,0<br />&nbsp; &nbsp; &nbsp; &nbsp; inc eax<br />&nbsp; &nbsp; &nbsp; &nbsp; mov fSize, eax	; File size + 1<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke GetProcessHeap<br />		mov hHeapC, eax<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; invoke&nbsp;  HeapAlloc, hHeapC, HEAP_ZERO_MEMORY, MEMSIZE	;If the function succeeds, the return value is a pointer to the allocated memory block.<br />		mov pHeapA, eax<br />&nbsp; &nbsp; &nbsp; &nbsp; lea edi, hi<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke HeapSetInformation,hHeapC,0,edi,MEMSIZE<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke HeapSize,hHeapC,0,pHeapA<br />&nbsp; &nbsp; &nbsp; &nbsp; <br />		invoke ReadFile,hFile,pHeapA,fSize,ADDR SizeReadWrite,NULL<br />		invoke SendMessage,hwndEdit,WM_SETTEXT,NULL,pHeapA<br /><br />; Close file and free memory.<br />		invoke CloseHandle,hFile<br />		invoke HeapFree,hHeapC,0,pHeapA<br />	.endif<br />	invoke SetFocus,hwndEdit<br />	ret<br />Open_File endp</code></pre></div>
+    <div class="meta">Posted on 2010-12-05 11:50:39 by nothere</div>
+   </div>
+   <div class="post" id="post-213593">
+    <div class="subject"><a href="#post-213593">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Don&#039;t call GetProcessHeap every time you are opening a file... Get a handle to the processes heap at program startup and save that handle, since you will be using it often.<br /><br />What is MEMSIZE?&nbsp; a const?&nbsp; Just do HeapAlloc hHeapC,&nbsp; HEAP_ZERO_MEMORY, fSize<br /><br />Your calling HeapSize but not using the returned value!?&nbsp; why call it?<br /><br />Your setting the HeapCompatibilityInformation to 0 which is using the standard heap, if that is the case, then you don&#039;t need to call it...&nbsp; or do you mean to set it to 2 to use the LFH?</div>
+    <div class="meta">Posted on 2010-12-05 12:36:40 by Gunner</div>
+   </div>
+   <div class="post" id="post-213594">
+    <div class="subject"><a href="#post-213594">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Gunner, MEMSIZE was a static , HeapSize was a test and I am using LFH. This is the first time I have tried to use Heap and I have got an education. I noticed that if I set dwMaximumSize of HeapCreate to anything other that 0, it crashes??? Thanks for the info, it is very helpful.</div>
+    <div class="meta">Posted on 2010-12-05 13:04:39 by nothere</div>
+   </div>
+   <div class="post" id="post-213595">
+    <div class="subject"><a href="#post-213595">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">You don&#039;t have to call HeapCreate.&nbsp; Just call GetProcessHeap, save the handle, then call HeapAlloc with that handle and the size you need, and the return value is a pointer to the memory you can use to store the file contents.&nbsp; Then when you are done, call HeapFree&nbsp; <br /><br />Give me a few and I will come up with a sample...</div>
+    <div class="meta">Posted on 2010-12-05 13:11:14 by Gunner</div>
+   </div>
+   <div class="post" id="post-213596">
+    <div class="subject"><a href="#post-213596">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Sorry this is a mess... it was a copy and paste of stuff but works</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3277" target="_blank">1.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-12-05 13:40:51 by Gunner</div>
+   </div>
+   <div class="post" id="post-213597">
+    <div class="subject"><a href="#post-213597">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">Thanks Gunner...</div>
+    <div class="meta">Posted on 2010-12-05 13:55:47 by nothere</div>
+   </div>
+   <div class="post" id="post-213600">
+    <div class="subject"><a href="#post-213600">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body"><strong>nothere</strong>,<br /><br />Global/local allocating functions are based on <strong>Heap<em>Xxx</em>()</strong>, but they&#039;re different: global functions can give you <em>handle</em> that is somewhat persistent between processes. Had you interact with clipboard yet?</div>
+    <div class="meta">Posted on 2010-12-05 15:06:06 by baldr</div>
+   </div>
+   <div class="post" id="post-213601">
+    <div class="subject"><a href="#post-213601">Re: HeapCreae HeapAlloc HeapFree HeapUnlock HeapDestroy HeapCompact HeapValidate</a></div>
+    <div class="body">baldr - no I haven&#039;t taken that into consideration (looks like I need too). I was going by MSDN SDK and overhead:<div class="quote">The heap functions can also be used to manage memory in the process&#039;s default heap, using the handle returned by the GetProcessHeap function. New applications should use the heap functions instead of the global and local functions for this purpose.</div>and<div class="quote">Although the GlobalAlloc, LocalAlloc, and HeapAlloc functions ultimately allocate memory from the same heap, each provides a slightly different set of functionality. For example, HeapAlloc can be instructed to raise an exception if memory could not be allocated, a capability not available with LocalAlloc. LocalAlloc supports allocation of handles which permit the underlying memory to be moved by a reallocation without changing the handle value, a capability not available with HeapAlloc. <br /><br />Starting with 32-bit Windows, GlobalAlloc and LocalAlloc are implemented as wrapper functions that call HeapAlloc using a handle to the process&#039;s default heap. Therefore, GlobalAlloc and LocalAlloc have greater overhead than HeapAlloc. <br /><br />Because the different heap allocators provide distinctive functionality by using different mechanisms, you must free memory with the correct function. For example, memory allocated with HeapAlloc must be freed with HeapFree and not LocalFree or GlobalFree. Memory allocated with GlobalAlloc or LocalAlloc must be queried, validated, and released with the corresponding global or local function.<br /><br />The VirtualAlloc function allows you to specify additional options for memory allocation. However, its allocations use a page granularity, so using VirtualAlloc can result in higher memory usage.<br /><br />The malloc function has the disadvantage of being run-time dependent. The new operator has the disadvantage of being compiler dependent and language dependent.<br /><br />The CoTaskMemAlloc function has the advantage of working well in either C, C++, or Visual Basic. It is also the only way to share memory in a COM-based application, since MIDL uses CoTaskMemAlloc and CoTaskMemFree to marshal memory.<br /><br /></div></div>
+    <div class="meta">Posted on 2010-12-05 15:26:18 by nothere</div>
+   </div>
+  </div>
+ </body>
+</html>

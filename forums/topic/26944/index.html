@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>erasing bitmaps on windows - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26944" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26944">erasing bitmaps on windows</a></p>
+   <div class="post" id="post-193732">
+    <div class="subject"><a href="#post-193732">erasing bitmaps on windows</a></div>
+    <div class="body">Hi, ive been trying to animate a man walking across a window, I have suceeded in doing so but I have a problem in erasing previous bitmaps that have been displayed as the series of bitmaps flash in the screen, how do you erase them to leave the current frame?</div>
+    <div class="meta">Posted on 2001-02-18 22:05:00 by elf+boi</div>
+   </div>
+   <div class="post" id="post-193733">
+    <div class="subject"><a href="#post-193733">erasing bitmaps on windows</a></div>
+    <div class="body">Elf,
+
+  I don't quite know exactly what you're doing, but that never stoped me from giving advice  :-)
+
+  Say you're using the bottom of a window to have your guy walk across. I'm gonna guess this is a region 20 pixels high, and 300 pixels wide (real size doesn't matter, just gives me numbers to talk about). I'm also guessing you have a timer set to send you WM_TIMER messages that set which man.bmp and where to place it.
+
+  Any self-respecting artist holes up in his studio until his "creation" is complete, the better to awe his audiance. You should do the same.
+
+  So, being the clever chap I know you are, you put the man drawing code inside WM_PAINT. This message handler takes the info set from the last WM_TIMER message and paints that little man there. 
+
+  But... it flashes, and the "old" men don't fade away. No problem.
+
+  The trick to flicker-free graphic drawing is something called "double buffering." It got this name in the dark ages of DOS where one would create an entirely new screen buffer, set the bits to the next screen there, then tell the video driver to use the "new" screen buffer. A pair of buffers were thus used and alternately swapped in and out. New images were never drawn directly on the screen, so there is no flicker.
+
+  You can accomplish the same in Windows by using a "memory device contect."  Currently, you are drawing directly on the DC of the window. That's gonna flash. Got to.
+
+  Instead, inside WM_PAINT, use CreateCompatibleDC to give yourself a memory DC. One small trick: CreateCompatibleDC gives you a place to draw exactly 1x1 pixel.
+
+  So next call to CreateCompatibleBitmap, make a 20 by 100 pixel bitmap (sized to cover where you draw on the window... see where I'm going?). Select this bitmap to the dc, FloodFill or such to make it the same background color as the main window, then finally draw the moving man where he be (BitBlt him there, yes?).
+
+  When the new memory screen is complete, BitBlt the whole thing to the screen dc. That's it, except for cleaning up your GDI resources, which you do by:
+
+1)  re-selecting the orgional brush (if you changed it to paint the background)
+2)  re-selecting the orgional 1x1 bitmap
+3)  DeleteObject for the brush (IF...) and the bitmap.
+4)  DeleteDC for your private DC
+
+  Since you drew on the DC from scratch, there are no old men to get rid of, just a blank background to draw on as if it was the first man.
+
+Yep, it's a little round-about and involved, but it works nice.</div>
+    <div class="meta">Posted on 2001-02-19 02:04:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193734">
+    <div class="subject"><a href="#post-193734">erasing bitmaps on windows</a></div>
+    <div class="body">i have tried to make a splash screen like in Iczelion tutorial but i used three picture(bmp files) so when the first picture came up to the screen and when the time we set elapsed the next picture came up to the screen alternately but the problem there were still flicker ( i don't know how to handle this :-<)
+
+i have used CreateCompatibleDc as doublebuffering technique iguess but didn't use CreateCompatibleBitmap(I didn't familiar with this funtion) so  does anybody help ?</div>
+    <div class="meta">Posted on 2001-02-19 03:36:00 by newbies</div>
+   </div>
+   <div class="post" id="post-193735">
+    <div class="subject"><a href="#post-193735">erasing bitmaps on windows</a></div>
+    <div class="body">maybe I'll send you the source later if that's ok with you ernie... 
+
+I've done the first part by simply displaying images of a man by using bitblt and increasing the Y coordinate every time it displays an image and the images consist of: first image -> man standing up, 2nd image -> man has left leg in front, third image -> man has right leg in front, and it's a recursive process using WM_TIMER that makes an illusion of a man walking horizantilly to the window.... well you've guessed right that's what I'm trying to do... I do not understand fully "double buffering", an example if you have one is greately appreciated..
+Ive already tried your suggestion before in the last part where you just cover up a blank background the previous image and I feel that it's not the proper programmer thing to do :) or it's the proper thing to do?
+
+ thanks for your reply !</div>
+    <div class="meta">Posted on 2001-02-19 20:47:00 by elf+boi</div>
+   </div>
+   <div class="post" id="post-193736">
+    <div class="subject"><a href="#post-193736">erasing bitmaps on windows</a></div>
+    <div class="body">correction: X coordinate rather</div>
+    <div class="meta">Posted on 2001-02-20 00:38:00 by elf+boi</div>
+   </div>
+   <div class="post" id="post-193737">
+    <div class="subject"><a href="#post-193737">erasing bitmaps on windows</a></div>
+    <div class="body">elf,
+
+  Sorry, I don't have a good example to show you. I used this technique inside my little "Timer" program where the entire display (every button and display number) are not seperate control windows, but simply painted onto the main app window with double buffered blits. However, it's an app, not a tut, not something to learn from. 
+
+(plus the source is so ugly I'd never release it)  :-)
+
+  The whole idea of double buffering is you create a COPY of what you want your newly painted window to look like (or section therof), and once it's complete, paint the whole thing in a single blit in one pass. That keeps the flash monster away.
+
+CreateCompatibleBitmap is very simple to use. Just give it the dc you want it for, the width and height of the bitmap, and it returns you a bitmap handle.
+
+<pre><code>
+HBITMAP CreateCompatibleBitmap(
+  HDC hdc,        // handle to device context
+  int nWidth,     // width of bitmap, in pixels
+  int nHeight     // height of bitmap, in pixels
+)
+</code></pre>
+
+In masm, this might look like:
+
+invoke CreateCompatibleBitmap, hdc, 300, 20
+
+(For our 20 high and 300 wide bitmap).</div>
+    <div class="meta">Posted on 2001-02-20 01:29:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193738">
+    <div class="subject"><a href="#post-193738">erasing bitmaps on windows</a></div>
+    <div class="body">I got device context in WM_PAINT in BeginPaint-EndPaint block and than create the copy of dc with CreateCompatibleDc
+isn't that a double buffering technique ? 
+what is the advantage of CreateCompatibleBitmap ?</div>
+    <div class="meta">Posted on 2001-02-20 02:24:00 by newbies</div>
+   </div>
+   <div class="post" id="post-193739">
+    <div class="subject"><a href="#post-193739">erasing bitmaps on windows</a></div>
+    <div class="body">newbie, 
+
+If you use your new dc to do all drawing, then at the end blit the whole thing to the display dc, yes, that's double buffering.
+
+CreateCompatibleDc returns a surface (bitmap) that's exactly 1 by 1 pixel in size... if that's all you need, fine. 
+
+Usually the rest of us need something bigger, hence the call to CreateCompatibleBitmap. 
+
+Seriously, the 1x1 bitmap is just fine if you then select other bitmaps into this dc.</div>
+    <div class="meta">Posted on 2001-02-20 13:23:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193740">
+    <div class="subject"><a href="#post-193740">erasing bitmaps on windows</a></div>
+    <div class="body">ernie,
+
+Ok I'll try that, thanks, although my main initial problem of deleting the previous bitmap properly is still at hand, maybe I'll just cover the previous bitmap with a background bitmap then :-)</div>
+    <div class="meta">Posted on 2001-02-21 02:57:00 by elf+boi</div>
+   </div>
+  </div>
+ </body>
+</html>

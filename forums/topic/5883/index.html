@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>resource leak..dunno where - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5883" />
+    <link rel="next" href="../?id=5883&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5883">resource leak..dunno where</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=5883&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=5883&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="5883" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=5883&amp;page=2">&gt;</a><a href="../?id=5883&amp;page=2">&raquo;</a></form>   <div class="post" id="post-42104">
+    <div class="subject"><a href="#post-42104">resource leak..dunno where</a></div>
+    <div class="body">hi,<br /><br />seems that i've a resource leak somewhere..could someone just quickly check my code please?<br /><br />on WM_CREATE:<br /><pre><code><br />invoke CreateCompatibleDC,myDC<br />mov mapbitdc,eax<br /></code></pre><br /><br />on WM_COMMAND (pressing a button):<br /><pre><code><br />invoke RtlZeroMemory,addr mappath,255<br />mov ofn.lStructSize,SIZEOF ofn<br />push hWin<br />pop  ofn.hWndOwner<br />push hInstance<br />pop  ofn.hInstance<br />mov  ofn.lpstrFilter, OFFSET FilterString<br />mov  ofn.lpstrFile, OFFSET mappath<br />mov  ofn.nMaxFile,255<br />mov ofn.Flags,OFN_LONGNAMES or\<br />	OFN_EXPLORER or OFN_HIDEREADONLY or\<br />                OFN_PATHMUSTEXIST Or OFN_OVERWRITEPROMPT <br />invoke GetOpenFileName, ADDR ofn<br />.if eax!=0<br />        invoke DeleteObject,mapbit<br />        invoke BitmapFromFile, ADDR mappath<br />         .if eax==0<br />              invoke GetLastError<br />              invoke FormatMessage,FORMAT_MESSAGE_FROM_SYSTEM,0,eax,0,addr errormessage,50,0<br />              invoke MessageBox,hWin,addr errormessage,addr szDisplayName,0<br />          .endif<br />           mov mapbit,eax<br />           invoke SelectObject,mapbitdc,mapbit<br />           INVOKE FillRect, backbuffer, ADDR screenrect, whitebrush<br />           invoke BitBlt,backbuffer,0,0,screenrect.right,screenrect.bottom,mapbitdc,0,0,SRCCOPY<br />            invoke paintgirder<br />            invoke newgame<br />.endif<br /></code></pre><br /><br />I think there must be a resource leak, because: when i try to select a map (a picture) the first time, nothing is BitBlted on the screen. if i try a second and a third time with the same file, it works. but after 4 or 5 times of selecting a map, the map isn't BitBlted on my window anymore, but directly on the desktop... seems that there's something wrong... <br /><br />thanks in advance..<br /><br /> NOP</div>
+    <div class="meta">Posted on 2002-06-09 04:42:38 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42114">
+    <div class="subject"><a href="#post-42114">resource leak..dunno where</a></div>
+    <div class="body">ReleaseDC ?</div>
+    <div class="meta">Posted on 2002-06-09 06:34:42 by bazik</div>
+   </div>
+   <div class="post" id="post-42117">
+    <div class="subject"><a href="#post-42117">erm..no(?)</a></div>
+    <div class="body">ReleaseDC is obviously only used to release the main window's dc. to release some other dc that is created by CreateDC i should use DeleteDC. but in my WM_DESTROY message handler, i delete all the stuff..but there's something that is not released or freed during runtime, everytime i load another picture in the dc..(?)<br /><br />thanks..</div>
+    <div class="meta">Posted on 2002-06-09 06:46:09 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42126">
+    <div class="subject"><a href="#post-42126">resource leak..dunno where</a></div>
+    <div class="body">I am not very experienced with the GDI stuff. But I had a problem with my GDI routine 2h ago, because I forgot ReleaseDC :)</div>
+    <div class="meta">Posted on 2002-06-09 08:41:37 by bazik</div>
+   </div>
+   <div class="post" id="post-42161">
+    <div class="subject"><a href="#post-42161">resource leak..dunno where</a></div>
+    <div class="body">Reading your code I don't see any leaks.<br /><br />But from your description of the problem it doesn't sound like a leak, at least not one associated with bitmap.<br /><br />If you want you could e-mail me the source and I'll have a look through it tonight when I get home from work. The problem sounds strange. :confused:</div>
+    <div class="meta">Posted on 2002-06-09 13:06:50 by Eóin</div>
+   </div>
+   <div class="post" id="post-42174">
+    <div class="subject"><a href="#post-42174">resource leak..dunno where</a></div>
+    <div class="body"><pre><code>invoke BitmapFromFile, ADDR mappath<br />&#91;color=#3366FF&#93;<br />.if eax==0<br />    invoke GetLastError<br />    invoke FormatMessage, FORMAT_MESSAGE_FROM_SYSTEM, 0, eax, 0, addr errormessage, 50, 0<br />    invoke MessageBox, hWin, addr errormessage, addr szDisplayName, 0<br />.endif&#91;/color&#93;&#91;color=red&#93;<br />           mov mapbit,eax<br />           invoke SelectObject,mapbitdc,mapbit<br />           INVOKE FillRect, backbuffer, ADDR screenrect, whitebrush<br />           invoke BitBlt,backbuffer,0,0,screenrect.right,screenrect.bottom,mapbitdc,0,0,SRCCOPY<br />           invoke paintgirder<br />           invoke newgame&#91;/color&#93;<br /></code></pre>My question is: Do continue to allow to execute the red part even if the returned value of BitmapFromFile produces an error? Just my guess??? if not then try adding an .else statement for the red part.</div>
+    <div class="meta">Posted on 2002-06-09 13:43:03 by stryker</div>
+   </div>
+   <div class="post" id="post-42176">
+    <div class="subject"><a href="#post-42176">resource leak..dunno where</a></div>
+    <div class="body">stryker: there is no error because BitmapFromFile returns zero if there is any error, so i would see a messagebox, of course.. there is no error with BitmapFromFile<br /><br />E?in: ok, thank you very much! I'll send it to you...<br />..just noticed that i don't have your e-mail address..</div>
+    <div class="meta">Posted on 2002-06-09 13:48:13 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42179">
+    <div class="subject"><a href="#post-42179">resource leak..dunno where</a></div>
+    <div class="body">Oh! there's probably something wrong on the paintgirder or newgame procedures. Try adding more error checking on other API calls.</div>
+    <div class="meta">Posted on 2002-06-09 13:50:19 by stryker</div>
+   </div>
+   <div class="post" id="post-42180">
+    <div class="subject"><a href="#post-42180">the file</a></div>
+    <div class="body">here is the source in a zip file..</div>
+    <div class="meta">Posted on 2002-06-09 13:52:54 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42189">
+    <div class="subject"><a href="#post-42189">resource leak..dunno where</a></div>
+    <div class="body">I don't have the Image.lib and Image.inc you specified on your program but try adding this after BitBlt <strong>invoke ShowWindow,hwnd,SW_SHOW</strong> - just my guess.</div>
+    <div class="meta">Posted on 2002-06-09 14:10:39 by stryker</div>
+   </div>
+   <div class="post" id="post-42190">
+    <div class="subject"><a href="#post-42190">hmmm...no</a></div>
+    <div class="body">no, that doesn't change anything..</div>
+    <div class="meta">Posted on 2002-06-09 14:12:30 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42201">
+    <div class="subject"><a href="#post-42201">resource leak..dunno where</a></div>
+    <div class="body">invoke SelectObject,mapbitdc,mapbit<br />mov oldobject,eax<br /><br />when you finish your job<br />invoke SelectObject,mapbitdc,oldobject<br /><br />That is the only thing I can think of.<br /><br />:stupid:</div>
+    <div class="meta">Posted on 2002-06-09 15:39:19 by LaptoniC</div>
+   </div>
+   <div class="post" id="post-42210">
+    <div class="subject"><a href="#post-42210">resource leak..dunno where</a></div>
+    <div class="body">This is very interesting. <br /><br />The first problem, regarding nothing happenig when you first load a map I'm pretty sure is simply that the app recieves no WM_PAINT message, so you either have to click LOS (go?) which does a BitBlt to myDC, or cause a WM_PAINT message to be sent by covering the window with another.<br /><br />Easily solved by sticking an InvalidateRect at the end of code execute by the MAP button.<br /><br />But after this is gets very strange. When you say <em>&quot;if i try a second and a third time with the same file, it works.&quot;</em> I take it you mean quiting the program and restarting, as after I ran the program a couple of times it did indeed start to display the map after I loaded it. :confused: I don't know really but perhaps there is some reason behind the scenes in windows and  it starts sending WM_PAINT message after an OpenFile dialog box closes or something. I don't think thats much of a problem.<br /><br />But the image being displayed on the desktop could be a serious problem. Unfortunatly I can't seem to repeat it, but its almost definitly a DC problem (thats no help I know). Things to try are<br /><br />1) Include CS_OWNDC as a class style along with CS_HREDRAW, CS_VREDRAW &amp; CS_BYTEALIGNWINDOW.<br />2) Put error checking everywhere a DC handle is stored. Ie don't assume GetDC or CreateCompatibleDC work every time. <br /><br />And finally what exactly is being displayed on the desktop, just the image or the image and grid.</div>
+    <div class="meta">Posted on 2002-06-09 17:17:05 by Eóin</div>
+   </div>
+   <div class="post" id="post-42292">
+    <div class="subject"><a href="#post-42292">resource leak..dunno where</a></div>
+    <div class="body">Oh yeah, just remembered. If you call GetDC with 0 as the window handle then anything you draw to the DC returned ends up on the Desktop. <br /><br />I don't know if 0 is simply the handle of the desktop or its something else happening but that could be related to your second problem.</div>
+    <div class="meta">Posted on 2002-06-10 03:46:59 by Eóin</div>
+   </div>
+   <div class="post" id="post-42295">
+    <div class="subject"><a href="#post-42295">resource leak..dunno where</a></div>
+    <div class="body">Creating the dc must be deleted after it does not use any more.<br />The API is DeleteDC()</div>
+    <div class="meta">Posted on 2002-06-10 03:57:17 by yoursguideline</div>
+   </div>
+   <div class="post" id="post-42419">
+    <div class="subject"><a href="#post-42419">resource leak..dunno where</a></div>
+    <div class="body">yoursguideline: i delete all the bitmaps and dc on WM_DESTROY<br />E?in: ok, that the map isn't displayed the first time was actually a WM_PAINT message thing..this works now, thanks.<br /><br />to repeat the other serious problem (painting directly on the desktop) you don't need to restart the program, but loading a map 3 to 4 times, one after the other WITHOUT restarting the program. that means: chose a map, chose one again, and again, and again... <br /><br />this should work then.. (hehe, or not work :tongue: )<br /><br />thanks for helping..hope we (better: you) can solve the last problem, too... <br /><br />NOP</div>
+    <div class="meta">Posted on 2002-06-10 13:22:15 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42475">
+    <div class="subject"><a href="#post-42475">resource leak..dunno where</a></div>
+    <div class="body">NOP-erator<br />to find memory leaks <br />check this prog <a target="_blank" href="http://www.automatedqa.com/">http://www.automatedqa.com/</a> <br />called &quot;memproof&quot;</div>
+    <div class="meta">Posted on 2002-06-10 17:03:36 by eko</div>
+   </div>
+   <div class="post" id="post-42642">
+    <div class="subject"><a href="#post-42642">resource leak..dunno where</a></div>
+    <div class="body">thank you for the link, but i couldn't solve my problem with the tool..sorry...</div>
+    <div class="meta">Posted on 2002-06-11 11:34:00 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42648">
+    <div class="subject"><a href="#post-42648">resource leak..dunno where</a></div>
+    <div class="body">NOP, I've finally witinessed the problem. It wouldn't manifest itself on my XP box, but when I managed to get the program onto my 98 one then sure enough it happened as you described.<br /><br />Itsv ery hard for me to solve it as I can't compile on the WIn98 box, beside I dont have the image lib &amp; inc file. <br /><br />However, it doesn't mean I've given up, attached are three file each with a slight modification to your program. Compile and run them, hopefully one of the first two will fix it. :cool: <br /><br />If not then compile and run the third. The change I made to it are merely to provide feedback on what's happening, could you tell me which of the test messages display and where they display when A) the map shows properly, B) the map is drawn on the desktop.</div>
+    <div class="meta">Posted on 2002-06-11 12:08:50 by Eóin</div>
+   </div>
+   <div class="post" id="post-42656">
+    <div class="subject"><a href="#post-42656">hi</a></div>
+    <div class="body">THANKS E?IN!!!<br /><br />ok, here is the report: formelv1.asm works, formelv2.asm works as well, and formelv3.asm seemed to work sometimes :)<br /><br />explanation:<br />formelv1: works without any problems<br />formelv2: works without any problems<br />formelv3: this version did sometimes work, sometimes there was only one message &quot;testing&quot; and sometimes two times. when it was there two times and the map was displayed properly, both messages were in the left upper corner of the window. when the map was displayed wrongly, one was painted with the map on the desktop and the other seemed to be placed correctly on the window. <br /><br />but, would you please explain, why version 1 and 2 work now? i don't get where the problem is....<br /><br />THANK YOU!!! *hug* ;)  :tongue: <br /><br />NOP</div>
+    <div class="meta">Posted on 2002-06-11 12:31:00 by NOP-erator</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=5883&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=5883&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="5883" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=5883&amp;page=2">&gt;</a><a href="../?id=5883&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

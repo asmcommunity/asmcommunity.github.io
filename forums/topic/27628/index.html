@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How & when does Windows get the physical memory size? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27628" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27628">How & when does Windows get the physical memory size?</a></p>
+   <div class="post" id="post-197219">
+    <div class="subject"><a href="#post-197219">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">Sometimes the BIOS (even a new one, if it is for an old motherboard) does not correctly size the DRAM, and determine the memory size of, for example 64 MB if 128 MB is installed. The OS  (at least Win 95) uses the DRAM size determined by BIOS. Would it be possible to give the correct DRAM size to Windows ”manually”?
+
+The INT 15 function E820 is used to get a system memory map. This is the memory map inside my BIOS (Award 4.51 PG)
+
+F000:E59C BEGIN_MEMMAP    dq 0                    ; DATA XREF: INT15_handler+A7 o
+F000:E59C                                         ; base address 1
+F000:E5A4                 dq 9FC00h               ; 639 kB
+F000:E5AC                 dd 1                    ; available to OS
+F000:E5B0                 dq 9FC00h               ; base address 2
+F000:E5B8                 dq 400h                 ; 1 kB
+F000:E5C0                 dd 1                    ; available to OS
+F000:E5C4                 dq 0F0000h              ; base address 3
+F000:E5CC                 dq 10000h               ; 64 kB
+F000:E5D4                 dd 2                    ; reserved (system BIOS)
+F000:E5D8                 dq 0FFFF0000h           ; base address 4
+F000:E5E0                 dq 10000h               ; 64 kB
+F000:E5E8                 dd 2                    ; reserved
+F000:E5EC                 dq 100000h              ; base address 5 (1MB), EXTENDED MEMORY
+F000:E5F4 EXT_MEM_SIZE    dq 0E00000h             ; DATA XREF: INT15_handler+D3 r
+F000:E5F4                                         ; THIS IS THE EXTENDED MEMORY SIZE 
+F000:E5F4                                         ; ACCORDING TO BIOS, E00000=14MB
+F000:E5F4                                         ; =DEFAULT SIZE IN ORIGINAL.TMP,
+F000:E5F4                                         ; WILL BE SET IN SHADOW RAM ACCORDING 
+F000:E5F4                                         ; TO THE DETECTED MEMORY SIZE, IN MY 
+F000:E5F4                                         ; MACHINE IT IS CURRENTLY SET TO
+F000:E5F4                                         ; 3F00000=63 MB AND SHOULD BE SET TO
+F000:E5F4                                         ; 7F00000=127 MB.
+F000:E5F4                                         ; the INT 15 function E801 also gets a dword from here
+F000:E5FC                 dd 1                    ; available to OS
+F000:E600                 dq 0F00000h             ; base address 6, 15 M
+F000:E608                 dq 100000h              ; 1 MB
+F000:E610                 dd 2                    ; reserved
+F000:E614                 dq 1000000h             ; base address 7, 16 M
+F000:E61C                 dq 0                    ; size=0?
+F000:E624                 dd 1                    ; available to OS
+F000:E628                 db 0FFh                 ; FF marks the end of the map   
+
+I added the following code sequence to Master Boot Record, so that it is surely executed before Windows gets to do anything.
+
+mov       eax,080000060 
+mov       dx,00CF8 
+out       dx,eax
+mov       dx,00CFF;reg 63=shadow RAM control
+in        al,dx
+mov       bl,al
+or        al,010:set the write enable bit fot F-seg 
+out       dx,al
+mov       ax,0F000 
+mov       ds,ax
+mov       ax,007F0 ;127 MB
+mov       [0E5F6],ax ;patch the memory map
+mov       al,bl
+out       dx,al
+
+When I tried this, I got an error message ”Not enough memory for initialializing Windows” or something like that, the error string is in VMM.VXD. The same error message would be displayed also in a system that actually does have too little memory for Windows, like 2 MB.
+
+However, when I booted with this patched MBR to DOS prompt, and used a diagnostic program (Hwinfo) it reported the memory size of 128 MB. Previously, before the MBR patch, it reported 64 MB, just like BIOS and Windows.
+
+Seems that the memory size is stored also in another location of BIOS, in a ”PNP BIOS device node”. I don’t fully understand the structure and function of these device nodes, but I found the location that holds the extended memory size, and tried patching that too in addition to the memory map.</div>
+    <div class="meta">Posted on 2001-04-13 02:00:00 by janne</div>
+   </div>
+   <div class="post" id="post-197220">
+    <div class="subject"><a href="#post-197220">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">My guess is that windows would probably use the same method to get memory size as the BIOS rather than a BIOS call (correct me if im wrong), all this would be done somewhere early in intialization stages of windows.
+
+If you are trying to simulate a low memory condition, you can easily just allocate memory and lock it from paging (even from ring3, check "VirtualProtect" API)</div>
+    <div class="meta">Posted on 2001-04-13 03:45:00 by George</div>
+   </div>
+   <div class="post" id="post-197221">
+    <div class="subject"><a href="#post-197221">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">This (http://lrs.fmi.uni-passau.de/support/doc/interrupt-57/INT.HTM) excellent INT reference states like this about INT 15, function E820:
+
+”…this function is now supported by most newer BIOSes, since various versions of Windows call it to find out about the system memory”
+
+This is why I suspect Win95 uses it. Also, if Windows got the memory information on its own, totally independent from BIOS, my patch should’nt have had any effect.
+
+This is just guessing, but I think that the code Windows uses to determine memory size is in IO.SYS. I think so, because I first tried running the patch code from autoexec.bat, and then it had no effect whatsoever to Windows. Not much is executed before autoexec.bat, besides IO.SYS, right?
+
+IO.SYS has this string very close to it’s end:
+
+”Packed file is corrupt”
+
+Does this mean that IO.SYS itself is partly packed? If so, how to unpack it?</div>
+    <div class="meta">Posted on 2001-04-13 05:34:00 by Janne</div>
+   </div>
+   <div class="post" id="post-197222">
+    <div class="subject"><a href="#post-197222">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">It seems Microsoft doesn't have much info available on the various system files, so if anybody knows of a site with more info, please post here.
+
+Anyway, I believe at least some part of windows has to be loaded before io.sys, since logo.sys (The bootup screen) is loaded first. I know this is just a bmp file with the extension changed, but some file has to load logo.sys, right? And it would seem stupid to program a logo loader if GDI.dll has all the needed functionality. I'm not sure, this just seems logical. Anybody feel like checking this on SoftIce?</div>
+    <div class="meta">Posted on 2001-04-13 08:58:00 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-197223">
+    <div class="subject"><a href="#post-197223">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">Uh-oh... seems I was wrong. IO.SYS is the FIRST file loaded, and it's loaded directly from the bootsector (at least the first 2k is). I guess logo.sys isn't loaded for some time after that. Anyway, I found a disassembly of the Win95B boot sector somewhere, so you might want to check if Win95 gets its memory info here... otherwise you'll likely have to disasm IO.SYS or some other file. It's pretty messy & long code tho (anyone ever heard of a boot sector occupying 3 sectors!?).
+
+The URL is:
+http://www.nondot.org/sabre/os/S1Booting/win95.asm</div>
+    <div class="meta">Posted on 2001-04-14 05:59:00 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-197224">
+    <div class="subject"><a href="#post-197224">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">Previously I was making assumptions, that IO.SYS is perhaps the only thing executed before processing autoexec.bat. I totally forgot, that config.sys is processed before autoexec.bat, so HIMEM.SYS, EMM386.EXE etc. defined in config.sys are executed before autoexec.bat. In what order are files executed during boot can be easily seen in BOOTLOG.TXT. IO.SYS is naturally not in bootlog.txt, since io.sys is propably responsible of creating bootlog.txt.
+
+Just for testing, I modified the above patch so, that it sets the memory size to 32 MB (the BIOS is still recognizing 64 MB). Now there was no trouble in booting. I was assuming, that now, when I check it with Control Panel, I see memory size about 32 MB. But no, it was about 64! Again when I used Hwinfo, I got the patched size, 32 MB. This issue is getting more and more confusing. 
+
+In addition to the above mentioned, as far as I know there are a few more locations where BIOS writes the memory size. In CMOS, bytes 17h and 18h hold the extended memory size. The same information seems to be in bytes 30h and 31h, too. But storing the memory size to CMOS is an obsolete method, since 2 bytes can hold a maximum value of 64 MB, the size is in 1 kB units. The memory size is also stored in ESCD (Extended System Configuration Data), which resides in the flash chip and is copied to F000:0000 RAM during POST. Seems to me, that ESCD also has the 64 MB limit. 
+
+I have not even tried patching the CMOS / ESCD locations, because of the above mentioned limit. Besides, both CMOS and ESCD have a checksum which would need to patched too, and the free space for code in MBR is really limited. And what should the value with >64 be, if the limit is 64? Anyone with >64 MB RAM care to check the CMOS location 18h and 17h? The quickest way (for a Softice user) would be 
+
+O 70 17
+I 71
+ 
+O 70 18
+I 71
+
+Himem.sys does call the int 15 function E820, but I don’t know if that is the place to start examining. The physical memory information is so vital, that it would be reasoneble, if the memory map is read in the very beginning (IO.SYS). I have tried several file analyzers on it, with confusing results, some say not packed, some say szip archive, some say exepack. IDA says ”Possibly a packed file, continue?” Is IO.SYS packed?</div>
+    <div class="meta">Posted on 2001-04-15 10:11:00 by Janne</div>
+   </div>
+   <div class="post" id="post-197225">
+    <div class="subject"><a href="#post-197225">How & when does Windows get the physical memory size?</a></div>
+    <div class="body">The immediate crash in early boot was because I forgot the most important thing, changing the DRAM size to chipset registers. Here’s the whole patch:
+
+_7C0:0000                 jmp     ROWPATCH
+
+_7C0:0115 ROWPATCH:                               
+_7C0:0115                 mov     eax, 8000005Ch  ; DRAM Row Ending Address
+_7C0:011B                 mov     dx, 0CF8h
+_7C0:011E                 out     dx, eax
+_7C0:0120                 mov     eax, 20202020h  ; empty banks 2-5 must be set too
+_7C0:0126                 mov     dx, 0CFCh
+_7C0:0129                 out     dx, eax
+_7C0:012B                 mov     eax, 80000058h
+_7C0:0131                 mov     dx, 0CF8h
+_7C0:0134                 out     dx, eax
+_7C0:0136                 mov     dx, 0CFCh
+_7C0:0139                 in      eax, dx
+_7C0:013B                 and     eax, 0FFFFh     ; leave regs 58,59 alone
+_7C0:0141                 or      eax, 20100000h  ; bank 0 top=64 MB, bank 1 top=128 MB
+_7C0:0147                 out     dx, eax
+_7C0:0149                 jmp     short FSEG_PATCH
+
+_7C0:018A FSEG_PATCH:                             
+_7C0:018A                 mov     eax, 80000060h
+_7C0:0190                 mov     dx, 0CF8h
+_7C0:0193                 out     dx, eax
+_7C0:0195                 mov     dx, 0CFFh       ; reg 63=shadow RAM control
+_7C0:0198                 in      al, dx
+_7C0:0199                 mov     bl, al
+_7C0:019B                 or      al, 10h         ; set the write enable bit
+_7C0:019D                 out     dx, al
+_7C0:019E                 mov     ax, 0F000h
+_7C0:01A1                 mov     ds, ax
+_7C0:01A3                 mov     ax, 7F0h
+_7C0:01A6                 mov     ds:0E5F6h, ax   ; patch the memory map
+_7C0:01A9                 mov     ds:0C68Dh, ax   ; patch the device node
+_7C0:01AC                 mov     al, bl
+_7C0:01AE                 out     dx, al
+_7C0:01AF                 xor     eax, eax
+_7C0:01B2                 mov     ss, ax          ; the jmp in start erased this instruction
+_7C0:01B4                 jmp     RESUME
+
+First I booted to DOS prompt (OS=Win95) and used a diagnostic program (Hwinfo). It reported 128 MB for total RAM size and 64 MB for both bank 0 and 1 size. This was just what the patch is supposed to do. Then I booted to Windows, everything seemed OK, until just before the icons appearing to the desktop I got a Blue Screen Of Death, and thats it. Same thing on every boot. 
+
+What could cause the crash? Something stupid in the above code? CMOS / ESCD needs to be patched too?</div>
+    <div class="meta">Posted on 2001-04-16 02:47:00 by janne</div>
+   </div>
+  </div>
+ </body>
+</html>

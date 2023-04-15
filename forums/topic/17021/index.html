@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>I need help finding my memory (allocation) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17021" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17021">I need help finding my memory (allocation)</a></p>
+   <div class="post" id="post-132110">
+    <div class="subject"><a href="#post-132110">I need help finding my memory (allocation)</a></div>
+    <div class="body">Is there any problem with how I have this set up?  When I go to access an 'element' of the array, I get some strange values..<br /><br /><br /><pre><code><br /><br />.data<br /> FVX struct<br />	x REAL4 0.0<br />	y REAL4 0.0<br />	z REAL4 0.0<br /> FVX ends<br /> SIZEOFFVX EQU sizeof FVX<br /><br /> FFC struct<br />	glF1   dd 0<br />	glF2   dd 0<br />	glF3   dd 0<br />	glF4   dd 0<br /> FFC ends<br /> SIZEOFFFC EQU sizeof FFC<br /><br />.data?<br /> QWT 	REAL8 ?<br /> FO	 DWORD ?			;pointer for file object<br /> SizeRead DWORD ?<br /> vObj DWORD ?            ;pointer for FVX vertex structure<br /> fObj DWORD ?<br /><br /><br /></code></pre><br /><br />NOTE:  when I move fObj to a different physical location - like two above vObj definition, I get different messed-up value when accessing an element of the struct array<br /><br /><pre><code><br /><br />heapallocate proc<br /><br />	invoke GetProcessHeap<br />	invoke HeapAlloc,eax,HEAP_ZERO_MEMORY,360000*sizeof DWORD<br />	mov &#91;FO&#93;,eax	;the actual file object &#40;3d object data to load into for drawing&#41;<br /><br />	invoke GetProcessHeap<br />	invoke  HeapAlloc,eax,HEAP_ZERO_MEMORY,4096*sizeof FVX   ;up to 4096 of vertices<br />	mov &#91;vObj&#93;, eax   ;move address into vObj variable<br /><br />	invoke GetProcessHeap<br />	invoke HeapAlloc, eax, HEAP_ZERO_MEMORY,4096*sizeof FFC<br />	mov &#91;fObj&#93;, eax	;face pointer object  &#40;glF1,glF2,glF3&#123;...,glF4&#125;&#41;<br /><br />	ret<br />heapallocate endp<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2004-01-30 11:48:50 by drarem</div>
+   </div>
+   <div class="post" id="post-132116">
+    <div class="subject"><a href="#post-132116">Re: I need help finding my memory (allocation)</a></div>
+    <div class="body"><div class="quote"><br /><pre><code><br /> FFC struct<br />	glF1   dd 0<br />	glF2   dd 0<br />	glF3   dd 0<br />	glF4   dd 0<br /> FFC ends<br /> SIZEOFFFC EQU sizeof FFC<br /><br />	.data?<br /><br />  ; pointer to an array of objects<br />  fObj DWORD ?<br /><br /><br />	.code<br /><br />	invoke GetProcessHeap<br />	invoke HeapAlloc, eax, HEAP_ZERO_MEMORY,4096*sizeof FFC<br />	mov &#91;fObj&#93;, eax	;face pointer object  &#40;glF1,glF2,glF3&#123;...,glF4&#125;&#41;<br /><br /></code></pre> </div>In that case, the following is wrong:<pre><code>	mov eax,EL<br />	fstp &#91;fObj.FFC.glF1+eax&#93;<br /></code></pre>The x86 processors cannot use data pointers directly from memory. You need to load the pointer in fObj into a register, and you also need to <strong>scale</strong> the index to get the proper address:<pre><code><br />	mov  ecx,fObj             ; copy the object address into a register<br />	mov  eax,EL               ; get index<br />	imul eax,SIZEOFFFC        ; &#91;b&#93;scale&#91;/b&#93; the index by object size, can optimize with SHL<br />	fstp &#91;ecx + eax&#93;.FFC.glF1 ; store data<br /></code></pre></div>
+    <div class="meta">Posted on 2004-01-30 13:53:09 by tenkey</div>
+   </div>
+   <div class="post" id="post-132128">
+    <div class="subject"><a href="#post-132128">I need help finding my memory (allocation)</a></div>
+    <div class="body">here's some tips. <a target="_blank" href="http://www.angelfire.com/scifi/win32asm/Disc_5.html">http://www.angelfire.com/scifi/win32asm/Disc_5.html</a></div>
+    <div class="meta">Posted on 2004-01-30 16:51:47 by arkane</div>
+   </div>
+   <div class="post" id="post-132160">
+    <div class="subject"><a href="#post-132160">I need help finding my memory (allocation)</a></div>
+    <div class="body">Its time for you to look at OOP.</div>
+    <div class="meta">Posted on 2004-01-31 01:56:55 by Homer</div>
+   </div>
+   <div class="post" id="post-132210">
+    <div class="subject"><a href="#post-132210">I need help finding my memory (allocation)</a></div>
+    <div class="body">drarem,<br /><br />What tenkey means to say is that unlike the M68000 CPUs, the INTEL CPUs cannot do a memory to memory transfer.  So you have to put the contents into a register first, and then put the register contents into a memory location.  By the way, did I not show you in previous posts that it is unnecessary to use SIZEOF FFC?  Just use FFC as a size variable.  And sizeof DWORD can be shortened to just DWORD.  Ratch<br /><br /> <br /><br /><br /><pre><code><br />.DATA<br /> FFC struct<br />	glF1   dd 0<br />	glF2   dd 0<br />	glF3   dd 0<br />	glF4   dd 0<br /> FFC ends<br />.DATA?<br />fObj      DWORD ?             ;pointer to an array of FFC structures<br />SOMEWHERE DWORD ?<br /><br />.CODE<br />MAIN&#58;<br /> MOV EAX,&#91;fObj&#93;               ;fObj = pointer to HeapAlloc memory, EAX is your memory location<br /> MOV ECX,&#91;EAX.FFC.glF3+9*FFC&#93; ;ECX = DWORD glF3 of the 10th FFC structure within allocated memory<br /> MOV &#91;SOMEWHERE&#93;,ECX<br /><br /> INVOKE ExitProcess,0<br /></code></pre></div>
+    <div class="meta">Posted on 2004-01-31 18:15:23 by Ratch</div>
+   </div>
+   <div class="post" id="post-132247">
+    <div class="subject"><a href="#post-132247">I need help finding my memory (allocation)</a></div>
+    <div class="body">thank you all!!!  I should have known, it was a memory to memory transfer. Thanks for the link arkane,<br />and the info, Ratch =)<br /><br />The object I draw is more recognizable, not much to report on and probably a problem so simple I am overlooking it, will post updates when available.<br /><br />OOP in assembly?  there's more to it than what I am doing?</div>
+    <div class="meta">Posted on 2004-02-01 06:25:08 by drarem</div>
+   </div>
+  </div>
+ </body>
+</html>

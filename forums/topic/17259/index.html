@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>variable's changing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17259" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17259">variable's changing</a></p>
+   <div class="post" id="post-133767">
+    <div class="subject"><a href="#post-133767">variable's changing</a></div>
+    <div class="body">hey<br />i got a problem, with some memory allocation stuff, and variable manipulation<br />the problem is when i do certain things, it clears (or changes) the variables,<br />for example when i use the CreateFile api, i got the filename in a global variable, which is fine<br />until after i call the api, it creates the file alright, but it clears out the filename variable (or changes the address, not sure)<br />it also does it with other stuff too, like when using the stack with certain variables.<br />i dunno what i'm doin wrong, do i have to know anything about addresses changing when calling certain functions ?<br />i'm using HeapAlloc with a local variable (everytime data arrives on the socket), i don't know whether that would affect anything, cause of it changing all the time ?<br />the main problem though is that the file handle clears, and so everytime i recieve data it clears the file handle, anyone know what i'm doin wrong ?<br />i could post some code if it'd help understand ?<br />thanks</div>
+    <div class="meta">Posted on 2004-02-17 01:15:47 by someone</div>
+   </div>
+   <div class="post" id="post-133773">
+    <div class="subject"><a href="#post-133773">variable's changing</a></div>
+    <div class="body">when a function exits, all variables(local-&gt;Volatile) allocated at the stack dissipates. In your case, it relates to the stack.<br /><br />Make it global.<br /><br /><br /><br /><br />p.s. I might have mix and matched some terms here, so bare with me. :grin:</div>
+    <div class="meta">Posted on 2004-02-17 03:46:29 by arkane</div>
+   </div>
+   <div class="post" id="post-133774">
+    <div class="subject"><a href="#post-133774">variable's changing</a></div>
+    <div class="body">Hi someone,<br /><br />What you are doing sounds very problematic. From your post I gather you are using HeapAlloc to allocate a buffer then using a local variable to hold the pointer. The problem with this approach is that you must free the heap before you leave the procedure. Failure to do so will result in the loss of the pointer, local varaibles are stored on the stack and that stack is demolished (sort of) when you leave the proc. When that happens you no longer have a pointer because the variable no longer exists and you cannot reliably deallocate the heap. If you are allocating it each time you enter the procedure you are just biting off a new chunk of memory with each call and never freeing it. You will run out of memory eventually and be forced to shut down your application.<br /><br />The rule is that anything that is defined as LOCAL does not exist once you ret from the procedure. Anything that is dependant on that variable (such as heaps, bitmaps etc..) should be destroyed before you return as well other wise you will not be able to retrieve the information necessary to do it later (bitmaps selected into a DC being the exception here). If you wish to use the buffer outside of the procedure assign it a global handle.</div>
+    <div class="meta">Posted on 2004-02-17 03:56:53 by donkey</div>
+   </div>
+   <div class="post" id="post-133787">
+    <div class="subject"><a href="#post-133787">variable's changing</a></div>
+    <div class="body">hi<br />i am using local variables as the heap pointers, but i do free the heap each time at the end of the proc, unless it's more than the one call;<br />invoke HeapFree, hHeap, HEAP_NO_SERIALIZE, 0<br /><br />the problem isn't with the local variables getting cleared, they are all fine, but it's with the global variables, i have the filename, the file handle, and 1 other variable as global, and everytime i call certain functions, it clears the variable, not at the end of the proc, but directly after calling the api</div>
+    <div class="meta">Posted on 2004-02-17 04:27:04 by someone</div>
+   </div>
+   <div class="post" id="post-133789">
+    <div class="subject"><a href="#post-133789">variable's changing</a></div>
+    <div class="body">could you specify/post the offending code(especially the function/s your talking about)?</div>
+    <div class="meta">Posted on 2004-02-17 04:30:35 by arkane</div>
+   </div>
+   <div class="post" id="post-133792">
+    <div class="subject"><a href="#post-133792">variable's changing</a></div>
+    <div class="body">Hi someone, you will have to post an example of what you mean becasue it is not clear. The API does not overwrite memory unless it explicitly says it will (which CreateFileA does not). So the most likely scenario is that you are calling a function that writes to memory and the buffer you have assigned to it is not big enough and it is overflowing into other parts of your program. For example:<br /><br />buffer db 256 DUP (0)<br />handle DD 0<br />cbRead DD 0<br /><br />invoke ReadFile,,offset buffer,MAX_PATH,offset cbRead,NULL<br /><br />Will overwrite the handle as MAX_PATH is 260 bytes and it will continue to write past the end of buffer.</div>
+    <div class="meta">Posted on 2004-02-17 04:33:16 by donkey</div>
+   </div>
+   <div class="post" id="post-133794">
+    <div class="subject"><a href="#post-133794">variable's changing</a></div>
+    <div class="body">try checking your code flow(trace the code from the order of execution) and check each functions description/actions, you might have missed something there.<br /><br />Try rechecking your use of variables too, you might have mistyped it and used the other one.<br /><br />like:<br /><br />buffer1...<br />buffer2...<br /><br />it's easy to interchanged both.<br /><br /><br /><br /><br />IIRC, there is a function that is commonly used together with CreateFile that modifies memory - GetOpenFileName ... press cancel... pointed buffer becomes null. buffer[0] = 0</div>
+    <div class="meta">Posted on 2004-02-17 04:41:39 by arkane</div>
+   </div>
+   <div class="post" id="post-133815">
+    <div class="subject"><a href="#post-133815">variable's changing</a></div>
+    <div class="body">ok, i went through it again, and got it working sort of, <br />there was some problem with copying from memory into the filename buffer, i'm using szMid function from the masm32 macros, is there a better way to copy from a memory allocation into a null-terminated string ?<br />also there was another problem, i was calling: mov szFileName, 0 to clear the buffer on a new connection, whats the best way to clear a byte buffer ?, and i have the same problem with dword, whats the best way to set the value of a dword as 0 setting it's value to 0, not the address, (probably stupid questions, but i'm confused)</div>
+    <div class="meta">Posted on 2004-02-17 05:09:57 by someone</div>
+   </div>
+   <div class="post" id="post-133816">
+    <div class="subject"><a href="#post-133816">variable's changing</a></div>
+    <div class="body">Hi someone,<br /><br />There are a few functions in the masm32 library and also lstrcpy. If you want to empty a string you can normally just mov zero into the first byte, mov String,BYTE PTR 0 in MASM. If you want to zero the whole buffer I use this:<br /><br /><pre><code>ZeroMem FRAME pDest,nBytes<br />	<br />	mov edx,&#91;nBytes&#93;<br />	mov ecx,edx<br />	and edx,3<br /><br />	shr ecx,2<br />	xor eax,eax<br />	mov edi,&#91;pDest&#93;<br />	rep stosd<br />	<br />	mov ecx,edx<br />	rep stosb<br /><br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-02-17 05:12:30 by donkey</div>
+   </div>
+   <div class="post" id="post-133822">
+    <div class="subject"><a href="#post-133822">variable's changing</a></div>
+    <div class="body">thanks donkey, and arkane<br />i got it workin now, i never knew of the ptr thing, but it works now, thanks<br />:)</div>
+    <div class="meta">Posted on 2004-02-17 05:32:36 by someone</div>
+   </div>
+  </div>
+ </body>
+</html>

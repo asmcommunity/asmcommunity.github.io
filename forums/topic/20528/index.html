@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>4 cmps -&gt; 1 jump - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20528" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=20528">4 cmps -&gt; 1 jump</a></p>
+   <div class="post" id="post-156815">
+    <div class="subject"><a href="#post-156815">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">Hey everyone.<br /><br />So I came up with this little technique while optimizing some special effects here at work.  In this particular example, I'm checking to ensure that the X and Y values are within a certain range.<br /><br />ECX - X value<br />EDX - Y value<br /><br /><pre><code><br />// clear eax<br />xor eax, eax<br /><br />// is x &gt; X_MIN?<br />cmp ecx, X_MIN<br />seta al<br />rol eax, 8<br /><br />// is x &lt; X_MAX?<br />cmp ecx, X_MAX<br />setb al<br />rol eax, 8<br /><br />// is y &gt; Y_MIN?<br />cmp ecx, Y_MIN<br />seta al<br />rol eax, 8<br /><br />// is y &lt; Y_MAX?<br />cmp ecx, X_MAX<br />setb al<br /><br />// so now if EAX is equal to 0x01010101 then all 4 conditions were true<br />cmp eax, 0x01010101<br />jne Skip<br /><br />....<br /><br />Skip&#58;<br /><br /></code></pre><br /><br />Each time a condition passes, a 1 is stored in AL.  So I just ROL that value to the left and check the next condition.  I avoid the prefix penalty by first clearing EAX.<br /><br />Have fun.<br /><br />Comments welcome!<br /><br />Phred</div>
+    <div class="meta">Posted on 2005-02-08 15:23:09 by Phred</div>
+   </div>
+   <div class="post" id="post-156819">
+    <div class="subject"><a href="#post-156819">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">How about this? It should be faster, since it's fewer instructions and requires fewer memory reads.<br />sub ecx,X_MIN<br />sub edx,Y_MIN<br />cmp ecx,X_MAX-X_MIN<br />sbb eax,eax<br />cmp edx,Y_MAX-Y_MIN<br />rcl eax,1<br />inc eax<br />jne Skip</div>
+    <div class="meta">Posted on 2005-02-08 16:55:54 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-156831">
+    <div class="subject"><a href="#post-156831">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">Hey that's a pretty interesting way to approach the problem but wouldn't there be just as many memory reads if the vars are not defines?<br /><br />Like to do the X_MAX-X_MIN would still require some inbetween instructions to do the subtraction but I'm curious now, I'll put that code in my code tommorow and do some profiling!<br /><br />Nice soloution!</div>
+    <div class="meta">Posted on 2005-02-08 21:01:04 by Phred</div>
+   </div>
+   <div class="post" id="post-156851">
+    <div class="subject"><a href="#post-156851">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">Phred, your method will result in nasty partial register stalls for Athlons, or PII or above processors (although VIA C3 processors wouldn't see this).<br /><br />Try replacing the set* with ADC eax, eax.<br />You can't adjust the polarity of the test, so the final cmp should be &quot;cmp eax, 5&quot;, (or possibly &quot;0Ah&quot;). This will avoid the partial register stalls, so should be faster.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2005-02-09 04:53:51 by Mirno</div>
+   </div>
+   <div class="post" id="post-156852">
+    <div class="subject"><a href="#post-156852">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">Mirno, doesn't the XOR EAX,EAX at the very beginning of the code eliminate the partial register stall?<br /><br />Phred</div>
+    <div class="meta">Posted on 2005-02-09 06:41:48 by Phred</div>
+   </div>
+   <div class="post" id="post-156854">
+    <div class="subject"><a href="#post-156854">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">The xor eax, eax will eliminate any previous stalls, but you're mixing al &amp; eax in close proximity. The processor won't have had enough time to fully retire the al instruction and re-unify eax &amp; al.<br /><br />So every set* al / rol eax, 8 will cause a stall, apart from the first.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2005-02-09 07:07:04 by Mirno</div>
+   </div>
+   <div class="post" id="post-156859">
+    <div class="subject"><a href="#post-156859">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">Ah crap, I was hoping that wasn't an issue.<br /><br />Thanks for the info!<br /><br />Phred</div>
+    <div class="meta">Posted on 2005-02-09 08:33:34 by Phred</div>
+   </div>
+   <div class="post" id="post-156913">
+    <div class="subject"><a href="#post-156913">4 cmps -&gt; 1 jump</a></div>
+    <div class="body"><div class="quote"><br />sub ecx,X_MIN<br />sub edx,Y_MIN<br />cmp ecx,X_MAX-X_MIN<br />sbb eax,eax<br />cmp edx,Y_MAX-Y_MIN<br />rcl eax,1<br />inc eax<br />jne Skip</div><br /><br />Just to mention that you can change the 3 last instructions as follows:<br /><pre><code><br />adc eax,1<br />jne Skip</code></pre></div>
+    <div class="meta">Posted on 2005-02-10 10:06:10 by MCoder</div>
+   </div>
+   <div class="post" id="post-156916">
+    <div class="subject"><a href="#post-156916">4 cmps -&gt; 1 jump</a></div>
+    <div class="body">That won't do, but this would work:<br /><br />sub ecx,X_MIN <br />sub edx,Y_MIN <br />cmp ecx,X_MAX-X_MIN <br />sbb al,al<br />cmp edx,Y_MAX-Y_MIN <br />adc al,0<br />jae Skip</div>
+    <div class="meta">Posted on 2005-02-10 11:46:03 by Sephiroth3</div>
+   </div>
+  </div>
+ </body>
+</html>

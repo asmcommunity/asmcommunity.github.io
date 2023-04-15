@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Task Manager - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17981" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=17981">Task Manager</a></p>
+   <div class="post" id="post-138795">
+    <div class="subject"><a href="#post-138795">Task Manager</a></div>
+    <div class="body">code is in vb sorry and works on NT machines <br /><br /><br />code under command1 works fine<br />but  when i click on command2 then it generates an error<br />and close the Task Manager<br /><br /><br />'-- -----------------------------------------------------------<br />'code starts here<br /><br />Dim hTask, hInner, hTab, hList As Long<br /><br />Private Sub Timer1_Timer()<br /><br />hTask = FindWindow(&quot;#32770&quot;, &quot;Windows task Manager&quot;)<br />hInner = FindWindowEx(hTask, 0, &quot;#32770&quot;, vbNullString)<br />hTab = FindWindowEx(hTask, 0, &quot;SysTabControl32&quot;, &quot;Tab1&quot;)<br />hList = FindWindowEx(hInner, 0, &quot;SysListView32&quot;, &quot;Tasks&quot;)<br /><br />End Sub<br /><br />Private Sub Command1_Click()<br /><br />  bret = ListView_DeleteAllItems(hList)<br /><br />End Sub<br /><br /><br />Private Sub Command2_Click()<br /><br />Dim plvfi As LVFINDINFO<br />Dim bret As Long<br /> <br /> bret = ListView_FindItem(hList, -1, plvfi)<br /><br />End Sub<br /><br /><br />Private Function ListView_DeleteAllItems(hWnd As Long) As Boolean<br />  ListView_DeleteAllItems = SendMessage(hWnd, LVM_DELETEALLITEMS, 0, 0)<br />End Function<br /><br />Private Function ListView_FindItem(hWnd As Long, iStart, plvfi As LVFINDINFO) As Long<br />  ListView_FindItem = SendMessage(hWnd, LVM_FINDITEM, ByVal iStart, plvfi)<br />End Function</div>
+    <div class="meta">Posted on 2004-04-13 05:27:48 by sihotaamarpal</div>
+   </div>
+   <div class="post" id="post-138796">
+    <div class="subject"><a href="#post-138796">Task Manager</a></div>
+    <div class="body">If you look at the other thread you started on exactly the same subject you will find that I already answered the question:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=17967">http://www.asmcommunity.net/board/index.php?topic=17967</a></div>
+    <div class="meta">Posted on 2004-04-13 05:34:25 by donkey</div>
+   </div>
+   <div class="post" id="post-138839">
+    <div class="subject"><a href="#post-138839">Task Manager</a></div>
+    <div class="body">Here you go, I had some free time to play with it...<br /><br /><pre><code>FindTaskMan FRAME<br />	uses ebx<br />	LOCAL hTaskMan &#58;D<br />	<br />	; Not sure if TaskMan is localized but this will<br />	; only find the handle for an English Task Manager<br /><br />	invoke FindWindow,NULL,&quot;Windows Task Manager&quot;<br />	or eax,eax<br />	jnz &gt;<br />		xor eax,eax<br />		dec eax<br />		RET<br />	&#58;<br />	mov &#91;hTaskMan&#93;,eax<br /><br />	; Scan each of the tab dialogs in turn until<br />	; we find the one with the processes listview<br /><br />	xor ebx,ebx<br />	F1&#58;<br />	invoke FindWindowEx,&#91;hTaskMan&#93;,ebx,&quot;#32770&quot;,NULL<br />	or eax,eax<br />	jnz &gt;<br />		xor eax,eax<br />		dec eax<br />		RET<br />	&#58;<br />	; Save the dialog handle for the next search<br />	mov ebx,eax<br />	; See if our listview is here<br />	invoke FindWindowEx,eax,NULL,&quot;Syslistview32&quot;,&quot;Processes&quot;<br />	or eax,eax<br />	jz &lt;F1<br /><br />	RET<br /><br />ENDF<br /><br />TaskFindItem FRAME hlv,iStart,pLVFINDINFO<br />	uses ebx,edi<br />	LOCAL pMem		&#58;D<br />	LOCAL PID		&#58;D<br />	LOCAL hProcess		&#58;D<br />	LOCAL cbWritten		&#58;D<br /><br />	mov D&#91;PID&#93;,-1<br />	; Get the PID of the TaskMan from the listview handle<br />	invoke GetWindowThreadProcessId,&#91;hlv&#93;,OFFSET PID<br />	<br />	; Open the TaskMan process<br />	invoke OpenProcess,PROCESS_VM_OPERATION\<br />		+PROCESS_VM_READ + PROCESS_VM_WRITE,NULL,&#91;PID&#93;<br />	mov &#91;hProcess&#93;,eax<br />	or eax,eax<br />	jnz &gt;<br />		xor eax,eax<br />		dec eax<br />		ret<br />	&#58;<br /><br />	; Allocate a 4K buffer in the TaskMan's space &#40;4K is the minimum size&#41;<br />	invoke VirtualAllocEx, eax, NULL, 4096, MEM_COMMIT, PAGE_READWRITE<br />	mov &#91;pMem&#93;,eax<br />	or eax,eax<br />	jnz &gt;<br />		invoke CloseHandle, &#91;hProcess&#93;<br />		xor eax,eax<br />		dec eax<br />		ret<br />	&#58;<br /><br />	mov edi,&#91;pLVFINDINFO&#93;<br />	mov ebx,&#91;edi+LV_FINDINFO.psz&#93;<br />	; Is this a string search<br />	mov eax,&#91;edi+LV_FINDINFO.flags&#93;<br />	test eax,LVFI_STRING<br />	jz &gt; ; no? then skip the string copy<br />		; Need the string information<br />		invoke lstrlen,&#91;edi+LV_FINDINFO.psz&#93;<br />		inc eax<br /><br />		mov ecx,&#91;pMem&#93;<br />		add ecx,256<br />		mov &#91;edi+LV_FINDINFO.psz&#93;,ecx<br /><br />		; Write the string<br />		invoke WriteProcessMemory, &#91;hProcess&#93;, ecx,\<br />			 ebx, eax, OFFSET cbWritten<br />	&#58;<br /><br />	; Write the structure<br />	invoke WriteProcessMemory, &#91;hProcess&#93;, &#91;pMem&#93;,\<br />		 &#91;pLVFINDINFO&#93;, SIZEOF LV_FINDINFO, OFFSET cbWritten<br /><br />	; Finally we send our message<br />	invoke SendMessage,&#91;hlv&#93;,LVM_FINDITEM,&#91;iStart&#93;,&#91;pMem&#93;<br />	<br />	; push the result<br />	push eax<br /><br />	; Reset the string pointer just in case it is needed elsewhere<br />	mov &#91;edi+LV_FINDINFO.psz&#93;,ebx<br /><br />	; Clean up the memory and close the process handle<br />	invoke VirtualFreeEx, &#91;hProcess&#93;, &#91;pMem&#93;, NULL, MEM_RELEASE<br />	invoke CloseHandle, &#91;hProcess&#93;<br />	<br />	; pop the result<br />	pop eax<br />	RET<br />ENDF</code></pre><br /><br />Tried it with this and it works fine :<br /><br /><pre><code>.data<br />pSMSS	DB &quot;SMSS.EXE&quot;,0<br />.code<br />invoke FindTaskMan<br />mov D&#91;lvfi.flags&#93;,LVFI_STRING+LVFI_WRAP<br />mov D&#91;lvfi.psz&#93;,offset pSMSS<br />mov D&#91;lvfi.vkDirection&#93;,VK_DOWN<br />invoke TaskFindItem,eax,0,offset lvfi<br />PrintDec&#40;eax&#41;</code></pre></div>
+    <div class="meta">Posted on 2004-04-13 11:40:54 by donkey</div>
+   </div>
+   <div class="post" id="post-139055">
+    <div class="subject"><a href="#post-139055">Task Manager</a></div>
+    <div class="body">thanks for code,but i find  from codeproject.com from a program(stealing programs from a listview)and process realted but in VC++.<br /><br />but another problem arise<br /><br />problem:<br />   <br />   i find the index of my program and then i delete the program from task manager<br />   and i insert that code in a infinite loop,but it creates flickers in task manger<br />   and uses memory lots lockpdatewindow(handleoflist).it totally stops updtaing<br />   please suggests any solution</div>
+    <div class="meta">Posted on 2004-04-15 06:24:11 by sihotaamarpal</div>
+   </div>
+   <div class="post" id="post-139290">
+    <div class="subject"><a href="#post-139290">Task Manager</a></div>
+    <div class="body">thx</div>
+    <div class="meta">Posted on 2004-04-18 03:20:35 by netluck</div>
+   </div>
+   <div class="post" id="post-139309">
+    <div class="subject"><a href="#post-139309">Task Manager</a></div>
+    <div class="body">Afternoon, sihotaamarpal.<br /><br />Why do you want to delete your program from the task manager?<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2004-04-18 08:30:42 by Scronty</div>
+   </div>
+   <div class="post" id="post-139322">
+    <div class="subject"><a href="#post-139322">Task Manager</a></div>
+    <div class="body">Sounds pretty fishy to me too. Doing nasty code, sihotaa?</div>
+    <div class="meta">Posted on 2004-04-18 09:58:56 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

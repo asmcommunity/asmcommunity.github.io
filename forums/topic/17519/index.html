@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>My new GetPixel() - 20x faster! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17519" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=17519">My new GetPixel() - 20x faster!</a></p>
+   <div class="post" id="post-135550">
+    <div class="subject"><a href="#post-135550">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">A few weeks ago, I started a small project to reshape a form to the shape of a (mask) bitmap, usually black and white. Mainly using GetPixel, to return the color value of each pixel on the form, compare it to a &quot;transparency&quot; color and then create a form region. My first experiment, was VERY slow. Going through each pixel on the form, and creating a 1x1 pixel size region for every valid pixel. Then, looking at some other code, I found one could make an extended region, eg. 5x1 size region. This improved my load speed tremendously. This is the common method of redoing a forms shape. I didn't know it at the time, but MOB has a version of the same algorithm written in Assembler on the forum.<br /><br />Well, on my P4 2.8GHz, an application load delay of 3 seconds to do a 565x565 bitmap was unacceptable, imagine load time on a P1! So I measured speeds of most of the Windows API system calls I was making, and although GetPixel was not the slowest, (CombineRgn() was slowest), GetPixel(), with the shear amount of times it was called, accounted for MOST of the slow speed, because it was being used on each and every pixel.<br /><br />So, I tried to find a GetPixel() replacement in C++ or Assembler code, bessides this forum I tried SourceForge, CodeGuru and PlanetSourceCode, with no luck. I did however read a lot of comments on the theory behind GetPixel(), what it does and how it works and why it's so slow. So, I endeavoured to optimize GetPixel(). I believed the main reason it's so slow (my opinion), is because it extracts and loads the bitmap from the DC into memory, return the color value, and then destroy the memory resident bitmap it created and extract. This is only my speculation which comes from my experience with creating my replacement because that's what I would have had to do to create an EXACT duplicate. In my opinion, this initial setup was very time consuming.<br /><br />So, what I decided to do was, write a &quot;setup&quot; function, called EnterGetPixel(), allow you to pass it the DC of your Bitmap as you would GetPixel(), it will extract the bitmap, copy the color bits to memory with a header (with the height and width etc. of the bitmap and a pointer to the memory location of the color bits), and it returns a pointer to the header. Then, every call to my new GetPixel() function, takes that pointer (returned from EnterGetPixel), instead of the DC, finds the RGB color value and returns it. With each new GetPixel call, there is no setup overhead! Once you're done with the new GetPixel function, you just call ExitGetPixel(), pass it the Headers memory location and it frees the memory after destroying the Bitmap object. The main restriction to my code, is that it only works on Bottom-to-top Bitmaps, which is the only kind I've ever seen! That's a bitmap with a positive Height, eg. 565, not -565! Note: Paint stores Bitmaps in Bottom-to-top format!<br /><br />In my example code, I've left the original algorithm (similar to MOB's code!), which uses the Windows GetPixel() function, and the same algorithm that demonstrates the use of my NewGetPixel() function(check the DocRet.inc file). Over the course of 5 executions of each algorithm (on the same machine simply by changing functions from old to new), my code was 19.985 times faster than the original which uses the Microsoft version of GetPixel(). Please note, the Algorithm remains the same, the only difference is which function is called, old or new! To change between the functions, comment/uncomment the section in the WndProc.inc file!<br /><br />Please feel free to comment, ask questions or make suggestions!<br /><br />Included is the full RadASM project, coded in MASM syntax!</div>
+    <div class="meta">Posted on 2004-03-10 02:20:40 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135555">
+    <div class="subject"><a href="#post-135555">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">That's quite an improvement in speed - around 16 times here at least. The method is a fine way of doing it and preserving the original algorithm (I didn't look closely at your source, so I'm just commenting on the idea and not the code itself).<br /><br />However, the algorithm itself is sortof bad :) - most everything revolving around calls to putpixel is 'suboptimal thinking'. For instance consider a sprite blitter - you can spend very much time optimizing putpixel to have the fastest width*y+x calculation and clipping, but instead do a little pointer setup and you will have an amazingly simple (and fast!) innerloop without any putpixel calls.<br /><br />The same goes for this code - you ought to work directly on the pixel data, it would save a getpixel call and some calculations for each and every pixel.</div>
+    <div class="meta">Posted on 2004-03-10 05:47:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-135556">
+    <div class="subject"><a href="#post-135556">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Also, instead of constantly creating temp regions and using COmbineRgn, what about constructing the region list yourself and finally using ExtCreateRegion? You basically need to create a header and an array of RECT structures - the code to setup a rect and add it to a linked list or dynamically growing array should take a lot less clocks than creating+combining regions, so it might give substantial time savings if ExtCreateRegion isn't too slow. At the expense of some temp memory overhead, of course.</div>
+    <div class="meta">Posted on 2004-03-10 06:16:08 by f0dder</div>
+   </div>
+   <div class="post" id="post-135561">
+    <div class="subject"><a href="#post-135561">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">2.53ghz P4, win2k servicepack 3.<br /><br />Old function took: 562ms<br />New function took: 31ms<br />Smart function took: 515ms<br /><br />All computed region size data require 9440 bytes, while<br />the temporary &quot;Smart&quot; function uses 13552 bytes temporarily<br />for it's RECT list + RGNDATAHEADER. I'd say this indicates<br />that both ExtCreateRegion and the CombineRgn methods optimize<br />the created regions.<br /><br />The &quot;Smart&quot; function is written in plain C++ code, based<br />directly on the assembly &quot;old&quot; function. The original translation<br />was a bit faster than the assembly routine already :).<br />The current version uses ExtCreateRegion, and includes<br />HeapAlloc+HeapFree overhead for the temp RECT list,<br />the overhead of storing the rect coords in the list,<br />and setting up the RGNDATAHEADER fields.<br /><br />Note: you should use GetDC+ReleaseDC instead of Begin+EndPaint,<br />as the latter should only be used inside a WM_PAINT handler.<br /><br />The next step would be integrating the ExtCreateRegion code<br />with the &quot;smarter GetPixel&quot;, or even better, work directly<br />on the bitmap data without call overhead.<br /><br />Other optimizations could include working on the mask as a<br />8bit grayscale image (if that bitmap format is supported<br />under windows - would be too much bother settings up a palette :)).<br />Oh, and when moving to &quot;work directly on bitmap data&quot;,<br />a smarter strip-finding algorithm could probably be used.</div>
+    <div class="meta">Posted on 2004-03-10 08:39:24 by f0dder</div>
+   </div>
+   <div class="post" id="post-135563">
+    <div class="subject"><a href="#post-135563">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Hi fOdder,<br /><br />Thanks for the comments and suggestions! I've looked into the ExtCreateRegion() functionality a few days ago, but by profiling my code, I found the slowest function was the GetPixel() calls. So I decided to optimize them first. My next step is to create my own regions, as you suggest!<br /><br />By the way, I don't use PutPixel() or SetPixel() at all in my code, and I do work directly on the pixel data (within my GetPixel() function). I could, as you suggest, use it to get the pixel data directly in my code, but I wanted people who currently use GetPixel() to be able to almost directly replace their GetPixel() calls with mine. It literally took me about 30 seconds to change the code to use my new GetPixel() function, and I'm very happy with the results.<br /><br />All that's needed in order to use it is an initial call to EnterGetPixel(), giving it the DC with your Bitmap (As you would give the original GetPixel()). It will return a pointer which needs to be given to the new GetPixel() function, instead of the DC given to the original, along with your X and Y co-ords. Then a call to ExitGetPixel() (with the pointer) when you're done!<br /><br />Thanks again!</div>
+    <div class="meta">Posted on 2004-03-10 09:05:22 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135565">
+    <div class="subject"><a href="#post-135565">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Yeah, your code is an okay step in the right direction :)<br /><br />But if you work directly on a top-down bitmap, you save a lot of instructions - push+call for the NewGetPixel, and basically all the code inside... basically getpixel could become &quot;lodsd&quot; (of course implemented with manual mov + add). I think the speedup would be noticable.<br /><br />Not to degrade your code though, it's quite a performance boost already :alright:.<br /><br />Of course the fastest of all would be to store the region data alongside the bitmap - around 9k for this semi-complex shape isn't too bad I guess? Might also be worth looking at the final region data visually, to see if it's optimized as much as possible.</div>
+    <div class="meta">Posted on 2004-03-10 09:22:57 by f0dder</div>
+   </div>
+   <div class="post" id="post-135649">
+    <div class="subject"><a href="#post-135649">Now 5 times faster than previous code!</a></div>
+    <div class="body">It took me about 3 hours to write the ExtCreateRegion() functionality, but I'm very happy with the result. Should be stable and without leaks or bugs!<br /><br />What I did was create an initial linked list of RECT structures, go through the Mask bitmap and populate them, creating a new blank one each time. Once I have all my RECT's, I consolidate all of them into the final RGNDATA structure needed by ExtCreateRegion().<br /><br />The result: It's 4.444 times faster than my previous code, each tested consecutively over 5 runs.<br /><br />My next step is to write a DLL for general use!<br /><br />PS: I've replaced the initial code with the new version, which includes all previous function versions!</div>
+    <div class="meta">Posted on 2004-03-11 12:35:40 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135652">
+    <div class="subject"><a href="#post-135652">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">I've now finished the DLL. Took me about 1 hour to make several modifications.<br /><br />It has 1 function: TakeShape PROC hWnd :DWORD, hbmMask :DWORD, TransColor :DWORD<br /><br />TakeShape requires a Window Handle (your form), an HBITMAP, usually returned by a call to LoadBitmap, and a &quot;Transparent&quot; color. If 0FFFFFFFFh is selected for the Transparent color, the function will take the color of the top left pixel (the first pixel, at co-ords 0,0) and use that.<br /><br />I've included it in the above file. The file has all versions of the code, the instructions to them are just uncommented. Only the DLL version is now enabled by default. If you wanna test the others, uncomment the relevant code in the wndproc.inc file<br /><br />Enjoy!<br />It is done!</div>
+    <div class="meta">Posted on 2004-03-11 13:35:01 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135662">
+    <div class="subject"><a href="#post-135662">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Improvement over linked list approach: one single heap memory block, initially of sizeof(RGNDATAHEADER) + n*sizeof(RECT) bytes. Rather than adding list nodes, you store directly, and re-allocate the block (with room for n new items, instead of single one). More conservative on memory, probably a bit faster, and saves you from building the block at the end of stuff since you're creating it in-place.<br /><br />This would only be a minor optimization though, and is probably more of a &quot;conceptual&quot; optimization than a &quot;real&quot; one (probably won't make too much of a difference speedwise, and memory-wise it shouldn't matter too much - region data can be counted in the tens of kilobytes).<br /><br />:stupid:</div>
+    <div class="meta">Posted on 2004-03-11 15:35:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-135681">
+    <div class="subject"><a href="#post-135681">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">I would have used this approach, of course, but I don't don't know how many RECT structures I'll need! I'd have to go through the bitmap once, calculate the number of RECT's, allocate the memory, then go through the bitmap again and fill the RECT's. My method uses only one pass through the Bitmap, as it finds a valid RECT, it allocates the memory and assignes the values then continues.</div>
+    <div class="meta">Posted on 2004-03-11 22:11:42 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135684">
+    <div class="subject"><a href="#post-135684">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">You still only need one pass - you do need to keep a couple of counters, like currentItems and maxItems. When currentItems equal maxItems, you add &quot;deltaSize&quot; to maxItems and call HeapReAlloc.<br /><br />I think the standard rule of thumb in comp.sci. for dynamically growing arrays is to double the size when the array is full, but for a lot of things I like &quot;bumping by a delta-value&quot; better. Ie, start with room for 256 RECTs, and allocate space for 256 new RECTs every time you run out of space.<br /><br />Btw, did you re-upload the zip to include the ExtCreateRegion stuff?</div>
+    <div class="meta">Posted on 2004-03-12 00:51:30 by f0dder</div>
+   </div>
+   <div class="post" id="post-135689">
+    <div class="subject"><a href="#post-135689">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">I did ulpload my latest version!<br />Thanks for the suggestion!</div>
+    <div class="meta">Posted on 2004-03-12 01:45:03 by SubEvil</div>
+   </div>
+   <div class="post" id="post-135699">
+    <div class="subject"><a href="#post-135699">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Hm, you uploaded the new version? Probably my proxy that has the old version cached, then.<br /><br />Nice to have helped you gain even an extra bit of performance :)</div>
+    <div class="meta">Posted on 2004-03-12 05:46:07 by f0dder</div>
+   </div>
+   <div class="post" id="post-136432">
+    <div class="subject"><a href="#post-136432">My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Have a look at this, I finished up my version (C/C++ though) - I think it works pretty well :), around 20ms to create the region data on an athlon700. There's full source + a readme with some explanations in the archive.</div>
+    <div class="meta">Posted on 2004-03-19 16:05:01 by f0dder</div>
+   </div>
+   <div class="post" id="post-158314">
+    <div class="subject"><a href="#post-158314">Re: My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Sorry to bump such an old topic (although a very good one) does anyone have f0dder&#39;s final C++ code. I already have SubEvil&#39;s.<br /><br />Of course, now that I need the files, they aren&#39;t here anymore. Lesson learned, Always grab files that seem usefull today, tomorrow they may not be there.<br />BTW, Are old zip files and attachment functionality planned on being restored?<br /><br />If can help me, please e-mail me the file(s) at goggles8@hotmail.com<br /><br />Thanks a lot,? :)<br /></div>
+    <div class="meta">Posted on 2005-03-23 19:17:52 by goggles99</div>
+   </div>
+   <div class="post" id="post-158362">
+    <div class="subject"><a href="#post-158362">Re: My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Have a look at <span class="strike">hxxp://flork.dk/junk/customshape_20040319.rar</span> the bottom of this thread :)<br /></div>
+    <div class="meta">Posted on 2005-03-24 09:43:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-158378">
+    <div class="subject"><a href="#post-158378">Re: My new GetPixel() - 20x faster!</a></div>
+    <div class="body">Wow, Thanks F0dder...<br />much appreciated.... :D</div>
+    <div class="meta">Posted on 2005-03-24 14:15:39 by goggles99</div>
+   </div>
+   <div class="post" id="post-158406">
+    <div class="subject"><a href="#post-158406">Re: My new GetPixel() - 20x faster!</a></div>
+    <div class="body">No problem - hope it&#39;s of use to you.<br /></div>
+    <div class="meta">Posted on 2005-03-25 07:26:47 by f0dder</div>
+   </div>
+   <div class="post" id="post-182086">
+    <div class="subject"><a href="#post-182086">Re: My new GetPixel() - 20x faster!</a></div>
+    <div class="body">http://f0dder.reteam.org/misc/customshape_20040319.rar<br /></div>
+    <div class="meta">Posted on 2006-06-19 07:10:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-213426">
+    <div class="subject"><a href="#post-213426">Re: My new GetPixel() - 20x faster!</a></div>
+    <div class="body">I realize this is an insanely old topic, but bumped into it and decided to add the sources just for the sake of completeness - the reteam site might not always be available :)</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3270" target="_blank">customshape_20040319.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-11-04 14:25:26 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

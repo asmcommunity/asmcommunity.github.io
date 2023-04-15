@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>OpenGL Application Framework (MASM/OA32) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30092" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=30092">OpenGL Application Framework (MASM/OA32)</a></p>
+   <div class="post" id="post-212286">
+    <div class="subject"><a href="#post-212286">OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">Heya :)<br /><br />I&#039;ve taken much of the sourcecode used in my OpenGL Tutorials and wrapped it into an ObjAsm32 class.<br />Attached is a beta of my OpenGL window class... This is what I&#039;m using to power my zombie game.<br />New features include smoothed framerate capping... this file will be updated periodically.<br /><br />Hope you find this useful :)</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3222" target="_blank">GLWindow.inc</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-07-16 02:11:49 by Homer</div>
+   </div>
+   <div class="post" id="post-212287">
+    <div class="subject"><a href="#post-212287">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body"><div class="quote">New features include smoothed framerate capping...</div><br />Hi :) I have a question, if I may. Why capping the framerate instead of simply V-synch-ing? Is there any particular use for framerate cap without vsync?</div>
+    <div class="meta">Posted on 2010-07-16 14:03:24 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-212290">
+    <div class="subject"><a href="#post-212290">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">Yes - the way VSync works, when you call SwapBuffers, the thread that called it will Block until its time to display the next frame.<br />This would normally force us to use other thread(s) for driving our physics, audio and other cpu-intensive stuff ... and in turn this forces us to introduce Mutexes to protect the renderable lists from being accessed by the render thread while being manipulated (we can&#039;t delete stuff safely unless we&#039;re certain that we&#039;re not rendering at the time - and that means interthread communications are now required). So VSync caps the rate of execution of the calling thread to whatever the device sync rate is set to by internally &#039;Sleeping&#039; (waiting on a timed interrupt-driven event) to force our max. rate of updates (we can still drop BELOW the Sync fps rate by taking too long between frame renderings !!!)<br /><br />We&#039;re telling it no - never block - we can control the framerate ourselves and put that thread&#039;s idle time to good work (similar to the PeekMessage technique in WinMain), if we use it to ALSO manage the lists of objects touched during rendering, we have eliminated the need for mutexes here, and also eliminated many unnecessary context switches and other side-effects caused by using an api in a blocking mode.<br /><br />We get to eliminate all the problems, and yet retain all the benefits.<br /><br />Anyone who wants to actually build the GLWindow object will need the attached high performance timer class.. think thats the only dependancy.<br />The GLWindow class has an embedded Timer which it uses to keep track of A) the total running time of the app (App Time) and B) the time elapsed between iterations of the Main Loop (Elapsed Time). These are made available via GLWindow variables for any purpose, but are internally used to implement the smoothed fps capping scheme. It&#039;s possible to disable the FPS capping by simply requesting a capping rate that&#039;s too high to physically achieve, the overhead of the fps calculation code is quite negligable, just a couple of fpu opcodes and otherwise its all code that we&#039;d still want to run.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3223" target="_blank">Timer.inc</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-07-16 21:59:27 by Homer</div>
+   </div>
+   <div class="post" id="post-212324">
+    <div class="subject"><a href="#post-212324">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">You&#039;ll notice that the GLWindow class implements its own &quot;WndProc&quot; (handler for WM&#039;s).<br />If your application creates dialogs with their own WndProc handlers, or extends the handler in GLWindow, you WILL need to be careful about manipulating your lists of renderable entities in response to WM&#039;s, since the Render method is being called by another thread (the &quot;Worker&quot;) and if you&#039;re not careful you will crash that worker thread (big fat GPF on illegal list access)<br /><br />You&#039;ll need to somehow disable rendering some or all entities while you&#039;re messing around with their collections / lists, or find another way to synchronize the rendering thread with the WM handling thread.<br /><br />Perhaps I&#039;ll publish an update which addresses this issue, my SoundSystem class solves this exact same problem by introducing a CriticalSection around the class&#039;s &#039;render&#039; call, so that any attempt to manipulate the list while it&#039;s being accessed will block for the remainder of the current frame being rendered... It&#039;s far from elegant, but in that class I needed to give as much priority to the &#039;render&#039; thread as possible - and isn&#039;t that what I&#039;m trying to do again here, by disabling vsync etc?<br /><br />The beauty of this solution, if there is any at all, is that it protects ALL lists of renderable entities, even ones I have not invented yet, in a very centralized and authoritarian way - shall we call this &quot;the big stick approach&quot; ? :D<br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2010-07-18 08:14:49 by Homer</div>
+   </div>
+   <div class="post" id="post-212346">
+    <div class="subject"><a href="#post-212346">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">Perhaps a non-blocking list implementation (or at least less blocking) would be more efficient than wrapping a time sensitive call in a critical section.<br />Assuming the list is a linked list of render-able entities, adding an entity to the end of the list can be done without blocking and removing an entity can be done by simply setting a flag on that entity. Then the render proc can check this flag and cull the list accordingly.<br /><br />You could at least make the critical section smaller by putting it inside a branch for list culling. If no entities need to be removed from the list then the critical section won&#039;t be started during that Render iteration.<br /><br /><pre><code><br />Node = List_Head_Node;<br />while( Node.Next != NULL )<br />{<br /> TempNode = Node.Next;<br /> TempObj = TempNode.Value;<br /> if( TempObj.GarbageCollect == false )<br /> {<br />&nbsp; TempObj.Render();<br />&nbsp; Node = Node.Next;<br /> }<br /> else<br /> {<br />&nbsp; CriticalSectionStart();<br />&nbsp; IsLocked = true;<br />&nbsp; Node.Next = TempNode.Next;<br />&nbsp; TempObj.Dispose();<br /> }<br />}<br />if( IsLocked == true )<br />{<br /> CriticalSectionEnd();<br />}<br /></code></pre><br /><br />*Note* I haven&#039;t delved into your implementation, so the above may be completely irrelevant.</div>
+    <div class="meta">Posted on 2010-07-20 09:44:09 by r22</div>
+   </div>
+   <div class="post" id="post-212347">
+    <div class="subject"><a href="#post-212347">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body"><div class="quote"><br />Perhaps a non-blocking list implementation (or at least less blocking) would be more efficient than wrapping a time sensitive call in a critical section.<br />Assuming the list is a linked list of render-able entities, adding an entity to the end of the list can be done without blocking and removing an entity can be done by simply setting a flag on that entity. Then the render proc can check this flag and cull the list accordingly.</div><br /><br />Yes, I think it&#039;s a safe assumption in this situation that the render thread will only remove items from the list, and the other threads will only add items to the list. You can use that to your advantage.<br />Instead of a simple list, you could create a list of nodes where each node contains an array of renderables. Inside the array you can just advance the pointer with an InterlockedAdd() operation, much cheaper than a critsect.<br /><br />Another approach is to have a thread generate a display list, and pass it to the rendering thread when the list is complete.<br />That way there is no concurrency, and locking is not required at all.<br />DirectX 11 actually supports a model like this directly through its interface.</div>
+    <div class="meta">Posted on 2010-07-20 09:55:27 by Scali</div>
+   </div>
+   <div class="post" id="post-212350">
+    <div class="subject"><a href="#post-212350">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">Of course, CriticalSections are not my preferred mutex, and especially since we (OA users) already have our own lockfree mutex (thanks Biterider!) which can be applied per Class Method invocation, thus only access to a particular method, object, class or classes is mutexed, allowing other threads to continue doing what they were doing.... much better than halting execution of all concurrent threads during the critical code section, and not subject to race-conditions that can occur with Flag approach (unless we are careful and use the Lock prefix and etc).<br />The OpenAL audio engine worker thread is a special case that required as much cpu time as possible under high loads - and that example does indeed avoid the ciritcalsection and instead it waits on a single event whenever there is NO workload - but scales poorly inbetween.<br />Problems caused by OpenAL requiring us to use a POLLING method to refill streaming buffers.<br /><br />Just how expensive is it to generate and destroy a big display list per frame? (OpenGL)<br />In my D3D/BSP engine, I used a deferred rendering technique where I collected renderables per frame into a list underneath each referenced texture... this way I could absolutely eliminate texture thrashing, and in that engine I was already forced to enumerate almost to the triangle level, so it was no biggy to do that. <br /><br /></div>
+    <div class="meta">Posted on 2010-07-21 02:00:58 by Homer</div>
+   </div>
+   <div class="post" id="post-212351">
+    <div class="subject"><a href="#post-212351">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">I didn&#039;t literally mean OpenGL&#039;s own display lists, because afaik most modern operations such as using vertex buffers and shaders etc are not stored in a display list. So those display lists have become pretty useless for modern applications.<br />But making your own list of drawing commands (make some kind of object that stores all the info required to draw a renderable item, so it can be fired off in one call). That can be pretty cheap, depending on how much you information you can prepare at application startup time and re-use. In most cases, a renderable mainly needs its transform matrix (or matrices in case of skinning) updated every frame. Geometry is usually static, or at least kept in the same VBO, so the reference to the VBO is static. Same for shaders, textures etc.<br />So effectively you&#039;d mainly be building a list of references to static renderable objects. Which can be done pretty cheaply with a good concurrent container datastructure.<br /><br />As for critical sections... you don&#039;t halt execution of all threads, only the ones that are also trying to lock the critsect at that time (first come, first served).<br />The main problem is that trying to lock a critsect can be pretty expensive (although less expensive than a mutex... main difference is that a cs is process-wide, and a mutex is system-wide. Basically don&#039;t use a mutex unless you need to sync multiple processes). It is a kernel object after all. So if you can avoid it, you should.</div>
+    <div class="meta">Posted on 2010-07-21 02:32:18 by Scali</div>
+   </div>
+   <div class="post" id="post-212353">
+    <div class="subject"><a href="#post-212353">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">Yeah, when I say &#039;mutex&#039;, I refer to mutual exclusion mechanisms in general - not the windows kernel one.. ours is based on the &quot;lock cmpxchgb&quot; opcode iirc. ;) And yeah I realize that one criticalsection won&#039;t cause other threads to stall - but try to use cs to solve general interthread exclusion and you quickly end up with thread interlocking caused by poorly timed accesses to mutexed resources - I&#039;ve made such mistakes and learned from them.<br />You&#039;re dead right about the Render thread being in charge of removing dead wood, and other threads being responsible for list insertions.<br />Yeah ok - not real display lists, but custom lists of polytope indices (which we can then rattle off into an indexbuffer , generally)... yeah that&#039;s exactly how that old BSP engine I mentioned worked - I was able to quickly locate visible &quot;buckets of triangle indices&quot;, referencing into static VB&#039;s, and batch off IB&#039;s for the current frame.<br /><br /><br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2010-07-21 03:42:06 by Homer</div>
+   </div>
+   <div class="post" id="post-212354">
+    <div class="subject"><a href="#post-212354">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body">I don&#039;t really feel like having this discussion again... but locking an indexbuffer, (re)writing it and then rendering it is also a huge concurrency problem. This time between the CPU and GPU.<br />In most cases it&#039;s cheaper to just render the full indexbuffer than it is to try to be smart and render only the visible triangles. A GPU is THAT much faster than a CPU.<br />Which is why leafy BSPs were invented... That way you don&#039;t have to rewrite your indexbuffers, you do things per-indexbuffer rather than per-triangle. Which means that the CPU doesn&#039;t have to touch the GPU&#039;s memory, and there&#039;s no concurrency problem.<br />But even that is becoming increasingly inefficient as you need larger and larger indexbuffers to keep the GPU happy (it eats through them at alarming rates, millions of triangles per second).<br />In fact, these days we even use the GPU to render an entire bounding box, and count the pixels, because it&#039;s faster to do that than to let the CPU determine visibility using a geometry-based solution rather than bruteforce. Rendering millions of pixels is faster than testing a dozen geometric shapes.<br /><br />In short: keep your geometry static, unless you really REALLY have to rewrite data. It can literally mean orders of magnitude faster rendering.<br />Use coarse visibility determination, with bounding volumes around movables of pre-built static rendering data.<br /><br />By the way, obviously MS has also optimized their synchronization objects... They use a spinlock on the first try, and put the thread into sleep only after that (if you don&#039;t, you&#039;re just eating up a core, preventing it from running other threads in the meantime, another concurrency problem)... But even so, there&#039;s overhead involved in sleeping threads, and signaling them to wake again. I doubt that you can do better by rewriting it manually, really.</div>
+    <div class="meta">Posted on 2010-07-21 04:21:11 by Scali</div>
+   </div>
+   <div class="post" id="post-212356">
+    <div class="subject"><a href="#post-212356">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body"><div class="quote"><br />I didn&#039;t literally mean OpenGL&#039;s own display lists, because afaik most modern operations such as using vertex buffers and shaders etc are not stored in a display list. So those display lists have become pretty useless for modern applications.</div><br />AFAIK, they are very efficient for quick state transitions (something like D3D&#039;s state blocks). I remember at least 1 doc where Nvidia recommends to use them for this purpose.</div>
+    <div class="meta">Posted on 2010-07-21 09:42:09 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-212357">
+    <div class="subject"><a href="#post-212357">Re: OpenGL Application Framework (MASM/OA32)</a></div>
+    <div class="body"><div class="quote"><br />AFAIK, they are very efficient for quick state transitions (something like D3D&#039;s state blocks). I remember at least 1 doc where Nvidia recommends to use them for this purpose.<br /></div><br /><br />True, they&#039;re still a good solution for situations where you can use them.</div>
+    <div class="meta">Posted on 2010-07-21 13:33:33 by Scali</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>INVOKE can overwrite EAX if you use ADDR - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26620" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26620">INVOKE can overwrite EAX if you use ADDR</a></p>
+   <div class="post" id="post-192362">
+    <div class="subject"><a href="#post-192362">INVOKE can overwrite EAX if you use ADDR</a></div>
+    <div class="body">Hi all,
+
+Anyone noticed how if you do something like this line, it will generate code that will overwrite EAX but will warn you.
+
+INVOKE SomeAPI, eax, ADDR 
+
+However.  If you use EAX as a pointer, MASM doesn't warn you.
+
+tSomeAPI TYPEDEF PROTO SomeAPI :DWORD
+INVOKE tSomeAPI PTR , ADDR 
+
+I wish they'd fix that.  I've fallen into the buggy generated code trap a couple times.</div>
+    <div class="meta">Posted on 2001-01-18 04:31:00 by DrOwlFS</div>
+   </div>
+   <div class="post" id="post-192363">
+    <div class="subject"><a href="#post-192363">INVOKE can overwrite EAX if you use ADDR</a></div>
+    <div class="body">It's not a bug. It's how the processor works.
+
+You need to understand that INVOKE is not an instruction, it's a macro. It generates the code needed to set the parameters onto the stack for you, like this:
+
+INVOKE tSomeAPI , ADDR SomeVar
+
+will typically generate this code:
+
+push OFFSET SomeVar
+call dword ptr 
+
+Your 'problem' comes about when SomeVar is say a local variable inside another procedure. Then MASM will generate this code:
+
+lea  eax, SomeVar ptr ss:+0FFFFFFxxh
+push eax
+call dword ptr 
+
+MASM needs eax to hold the address when it resolves it, because stack variables (locals) can be anywhere, and have to be found at runtime.
+
+MASM works very hard NOT to use eax, but sometimes it is necessary.
+
+You could generate your own warnings by defining tSomeAPI through a macro, one that takes the register as a parameter. The macro would generate the TYPEDEF and check the register used, and throw a compile error if you use eax. My coinvoke macro does just this (since dec of '00 it does, because I had several similar problems with it)</div>
+    <div class="meta">Posted on 2001-01-18 12:31:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192364">
+    <div class="subject"><a href="#post-192364">INVOKE can overwrite EAX if you use ADDR</a></div>
+    <div class="body">DrOwlFS,
+
+Using a register, in this case EAX can be problematic with INVOKE depending on what follows the register as a parameter, ML usually warns you if the register is overwritten but its worth keeping this problem in mind, it follows from a limited number of registers.
+
+When you have the return value from a procedure call in EAX and the following invoke call is a simple single parameter, it usually works OK but if the following parameters have an ADDR operator, it often will not work.
+
+You are generally better off to use a memory address for invoke parameters and only apply a register as a parameter if your code is simple. When this impinges on a performance issue, you always have the option of pushing the parameters manually and using CALL to run the procedure.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-18 18:19:00 by Steve Hutchesson </div>
+   </div>
+   <div class="post" id="post-192365">
+    <div class="subject"><a href="#post-192365">INVOKE can overwrite EAX if you use ADDR</a></div>
+    <div class="body">Using EAX in the INVOKE macro will work, so long as you keep the PASCAL parameter order in mind.  The last parameter comes first, then the next to last, and so on.  I often use EAX in wsprintf because all of the ADDR macros come first, ie:
+
+invoke wsprintf,addr szBuffer,addr szFormat,eax
+
+This works because EAX is pushed before either offset of szBuffer or szFormat must be utilized in EAX.  So don't be afraid to use EAX in invokes.  Just keep in mind how the parameters are pushed to the stack, and you'll be fine. :)</div>
+    <div class="meta">Posted on 2001-01-18 20:51:00 by Racso </div>
+   </div>
+   <div class="post" id="post-192366">
+    <div class="subject"><a href="#post-192366">INVOKE can overwrite EAX if you use ADDR</a></div>
+    <div class="body">Hi Gang,
+
+Ernie, Steve, Rasco, yes I understood how EAX in the Invoke is being overwritten <em>.  
+
+But it's still a bug.  If you read the documentation, MASM is supposed to warn you when it overwrites a register.
+
+Knowing why it does what it does does not make it not a bug.  But thanks for your input anyway.
+
+DrOwlFS</div>
+    <div class="meta">Posted on 2001-01-21 03:20:00 by DrOwlFS </div>
+   </div>
+  </div>
+ </body>
+</html>

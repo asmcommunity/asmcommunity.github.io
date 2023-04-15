@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>dup and globalalloc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28769" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28769">dup and globalalloc</a></p>
+   <div class="post" id="post-203244">
+    <div class="subject"><a href="#post-203244">dup and globalalloc</a></div>
+    <div class="body">hi, newbie here,<br /><br />Q1: yesterday I finished my small project which included loading certain amout of bytes from file into a memory with help of GlobalAlloc and it worked fine but later I found code snippet where space in memory for exact same purpose is defined with &quot;db 1024 dup(?)&quot;<br /><br />What is the difference ? Is there any advantage using it one way instead of another?<br /><br />Q2: In the same code snippet is MessageBox defined but first paramater is set to 0 ie. there is no owner window. Is it better or more efficient? Is there any good reason why the owner handle should be set ?&nbsp; What&#039;s the difference?<br /><br /></div>
+    <div class="meta">Posted on 2007-10-21 04:05:08 by Aeon</div>
+   </div>
+   <div class="post" id="post-203246">
+    <div class="subject"><a href="#post-203246">Re: dup and globalalloc</a></div>
+    <div class="body">db means &quot;define bytes&quot;.<br />You are including a block of 1024 bytes in your exe.<br />If you allocate it at runtime, you save 1kb in your exe.<br />This might not seem important now, but just take note.<br />Wouldn&#039;t you rather define a 4-byte pointer in your exe?<br />hmmz, 4 bytes plus some code, versus 1024 bytes and no code.<br />Decisions, decisions :)<br />I am pro-choice.. can you tell?<br /><br />Actually, 1kb is a funny size to choose for a program running on windows.<br />It makes a lot more sense to choose 4kb, which is the memory paging granularity.<br />Furthermore, I am going to suggest you find out about HeapAlloc.<br />It&#039;s cooler than GlobalAlloc, except for HUGE allocations.<br /><br />Did that sound complicated?<br />It doesn&#039;t have to.<br />Ask pointed questions, get golden answers.<br /><br />Windows defines a special meaning for a window handle of NULL = DESKTOP HANDLE.<br />Its defined as HWND_DESKTOP equ 0<br />It means the window is literally &quot;a child of the Desktop window&quot;.<br /><br /></div>
+    <div class="meta">Posted on 2007-10-21 08:38:29 by Homer</div>
+   </div>
+   <div class="post" id="post-203247">
+    <div class="subject"><a href="#post-203247">Re: dup and globalalloc</a></div>
+    <div class="body">but 1024 bytes block is defined in .data? section therefore does not increase exe size<br /><br />ok, desktop is the owner of messagebox ,when I use it like that, with zero handle, may it cause some problems or it&#039;s perfectly ok ? </div>
+    <div class="meta">Posted on 2007-10-21 09:58:24 by Aeon</div>
+   </div>
+   <div class="post" id="post-203248">
+    <div class="subject"><a href="#post-203248">Re: dup and globalalloc</a></div>
+    <div class="body"><div class="quote"><br />but 1024 bytes block is defined in .data? section therefore does not increase exe size<br /></div><br /><br />MASM has a funny way of calling uninitialized data as .data? instead of .bss, in which .bss is actually defined in the PE specification itself... go figure :P<br /><br />At any rate, declaring extra uninitialized data in your program does not bloat the exe in the least since it is allocated at runtime by Windows in the same manner as you would GlobalAlloc it.<br /><br /><div class="quote"><br />ok, desktop is the owner of messagebox ,when I use it like that, with zero handle, may it cause some problems or it&#039;s perfectly ok ? <br /></div><br /><br />If it wasn&#039;t, many of our MessageBox-only examples would be in trouble ;)</div>
+    <div class="meta">Posted on 2007-10-21 10:54:42 by SpooK</div>
+   </div>
+   <div class="post" id="post-203249">
+    <div class="subject"><a href="#post-203249">Re: dup and globalalloc</a></div>
+    <div class="body">The big difference is the way you address the data in the block.<br /><br />-----<br /><br />Let&#039;s assume your .data? declaration names the block as MemBlock.<br /><br />You can then access each byte as MemBlock, where register ECX contains the byte position.<br /><br />-----<br /><br />If you use GlobalAlloc, the block is unnamed. You store the start (also known as base) address in a DWORD -- let&#039;s call it pMemBlock (for pointer to MemBlock).<br /><br />You now need a preparation step to access a byte in the block. In the following code, assume that ECX already contains the byte position you want.<br /><br />mov edx,pMemBlock ; get base address<br />mov al,byte ptr  ; get byte<br />inc al<br />mov byte ptr,al ; store byte<br /><br />You can still create a &quot;walking&quot; pointer...<br /><br />mov eax,pMemBlock ; get base address<br />lea edx, ; get start position<br />mov ecx,100 ; set up number of bytes to clear<br /><br />clear_loop:<br />mov byte ptr ,0 ; clear MemBlock byte<br />inc edx ; next MemBlock byte<br />dec ecx ; count down<br />jnz clear_loop<br /></div>
+    <div class="meta">Posted on 2007-10-21 10:58:13 by tenkey</div>
+   </div>
+   <div class="post" id="post-203250">
+    <div class="subject"><a href="#post-203250">Re: dup and globalalloc</a></div>
+    <div class="body"><div class="quote"><br />but 1024 bytes block is defined in .data? section therefore does not increase exe size<br /></div>that is correct. memory is allocated in virtual memory of &quot;.data&quot; section (hence the name &quot;.data?&quot;)<br /></div>
+    <div class="meta">Posted on 2007-10-21 12:03:08 by drizz</div>
+   </div>
+   <div class="post" id="post-203251">
+    <div class="subject"><a href="#post-203251">Re: dup and globalalloc</a></div>
+    <div class="body"><div class="quote">What is the difference ? Is there any advantage using it one way instead of another?</div>The difference is run-time decisions verses assemble-time decisions. Some software will not know until run-time how much memory is needed. Therefor, there is no way to know how much data to reserve in the BSS segment. For example, if your program sits dormant and only needs the space when active there is no reason to reserve memory at assemble time.<br /><br />Of course, we have paging and memory mapped files to ease the situation where either technique would work and when working with small programs with little data it really doesn&#039;t matter. But if you wanted to make a multi-threaded app that checked for duplicate files on the harddrive then lots of data would need to be in memory, and the .data? section wouldn&#039;t help much because we have little idea of the quantity.<br /><br />It&#039;s good to know all these levels of space are availible and how to use them.</div>
+    <div class="meta">Posted on 2007-10-21 13:21:56 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-203278">
+    <div class="subject"><a href="#post-203278">Re: dup and globalalloc</a></div>
+    <div class="body">SpooK, it&#039;s a bit misleading to say that .bss/.data? is &quot;allocated at runtime by Windows in the same manner as you would GlobalAlloc it&quot;, since it&#039;s simply (in the case of non-retarded linkers ;)) added to peheader.SizeOfImage (ie, stored pas past the last section).<br /><br />Local/GlobalAlloc are deprecated, and on NT end up calling HeapAlloc anyway - so use HeapAlloc. If you need huge buffers (in the megabyte range), check out VirtualAlloc.<br /><br />For small buffers in the kilobyte range, use stack memory and avoid dynamic memory allocation as well as static .bss allocation - helps with thread safety, too.<br /></div>
+    <div class="meta">Posted on 2007-10-23 03:46:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-203281">
+    <div class="subject"><a href="#post-203281">Re: dup and globalalloc</a></div>
+    <div class="body">I would caution against allocating large buffers on the stack (yes, 1k is large for a stack allocation)<br /><br />How much stack does your program need? Do you know? Whats the worst case? <br /><br />Allocating large buffers on the stack makes these questions even harder to answer. Yes, some compilers do this but they do not fail gracefully when the stack is fully consumed (leaving it up to the programmer to catch that exception and try to handle it, which in general isnt possible) You might think the answer is simply to allocate an even larger stack.. but that goes back to the question.. whats the worst case for your program? With some programs this question is trivial to answer .. with others it is extremely non-trivial.<br /><br />If you only need a single copy of the buffer, it is probably best to throw it in the uninitialized data which allows windows to verify that it can indeed allocate the buffer, and to do so before even a single line of your code ever gets executed. That is failing gracefully.<br /><br />Other advantages include: <br /><br />&quot;free&quot; load-time alignment of the static uninitialized buffer <br />the simplified addressing that has already been mentioned in this thread <br />as well as much better cache usage<br /></div>
+    <div class="meta">Posted on 2007-10-23 04:26:46 by Rockoon</div>
+   </div>
+   <div class="post" id="post-203282">
+    <div class="subject"><a href="#post-203282">Re: dup and globalalloc</a></div>
+    <div class="body">1kb is a small stack allocation, unless you&#039;re deeply nesting / recursing. Allocating on the stack has the advantage that the memory is only &quot;allocated&quot; while needed, as opposed to a static buffer, and stack allocation frames &quot;overlap&quot; so the memory is &quot;re-used&quot;. Also, since the stack is used all the time, it has excellent caching properties.<br /><br />Simplified adressing doesn&#039;t matter that much imho. But on the other hand, you usually address stack through EBP+xx , if you can keep those offsets short, you have a smaller encoding (3 bytes) rather than the 5 bytes required for direct addressing. Hardly matters unless you&#039;re doing 4k intros, though :)<br /><br />But sure, you need to handle alignment manually, and I do agree that if you go beyond a few kilobytes, it&#039;s better to do dynamic allocation. And if you don&#039;t care about multithreading, sure, you can go for static allocation.</div>
+    <div class="meta">Posted on 2007-10-23 04:38:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-203283">
+    <div class="subject"><a href="#post-203283">Re: dup and globalalloc</a></div>
+    <div class="body"><div class="quote"><br />1kb is a small stack allocation, unless you&#039;re deeply nesting / recursing. <br /></div><br /><br />What non-trivial programs do not deeply nest? :)<br /><br /><div class="quote"><br />Also, since the stack is used all the time, it has excellent caching properties.<br /></div><br /><br />..untill you allocate a big buffer on it.. at which point the top of stack hasnt been used in a long time.. <br /><br /><div class="quote"><br />Simplified adressing doesn&#039;t matter that much imho. But on the other hand, you usually address stack through EBP+xx , if you can keep those offsets short, you have a smaller encoding (3 bytes) rather than the 5 bytes required for direct addressing. <br /></div><br /><br />The key point being that your loop counter can double as a pointer, but only with a static buffer .. <br /><br />ie, <br /><br />mov ecx, 1023<br />@@do:<br />mov al, <br />; ..process al..<br />dec ecx<br />jns @@do<br /><br />a single register used to manage the looping through the buffer as well as the addressing of it<br /><br />with stack or heap allocation, you&#039;ve gotta use two registers .. there is really no way around it (pointer + loop counter)<br /><br />With the static uninitialized buffer, you can use the single register methodology or the double register methodology .. there is no downside in regards to addressing<br /></div>
+    <div class="meta">Posted on 2007-10-23 05:15:31 by Rockoon</div>
+   </div>
+  </div>
+ </body>
+</html>

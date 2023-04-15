@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>File mapping - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27298" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27298">File mapping</a></p>
+   <div class="post" id="post-195544">
+    <div class="subject"><a href="#post-195544">File mapping</a></div>
+    <div class="body">Hi!
+
+I have some questions about file mapping. I'm playing with
+Icztute #13 and have the following code:
+
+<pre><code>
+invoke CreateFileMapping, hSourceFile, NULL, PAGE_READONLY, 0, 0, NULL
+mov hMapSourceFile, eax
+
+invoke MapViewOfFile, hMapSourceFile, FILE_MAP_READ, 0, 0, 0
+mov pMemory, eax
+</code></pre>
+
+1. How can I access every single byte of pMemory? For example: byte #200.
+2. pMemory contains the complete data of hSourceFile, right?
+
+Thanx
+
+stem</div>
+    <div class="meta">Posted on 2001-03-19 12:10:00 by stem</div>
+   </div>
+   <div class="post" id="post-195545">
+    <div class="subject"><a href="#post-195545">File mapping</a></div>
+    <div class="body">pMemory does not contain the complete data as it it a dword so a whole file wouldn't fit unless it's 4 or less bytes :). pMemory is actually a memory pointer to the actual data. To access the data, use this pointer:
+<pre><code>
+mov ecx, pMemory ;get pointer in ecx
+mov al, ;get byte #200 (0 based, so + 199)
+</code></pre>
+
+Thomas</div>
+    <div class="meta">Posted on 2001-03-19 12:18:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-195546">
+    <div class="subject"><a href="#post-195546">File mapping</a></div>
+    <div class="body"><pre><code>
+mov eax, pMemory
+add eax, 200
+mov dl, BYTE PTR 
+</code></pre>
+Remember you've mapped the file for reading (FILE_MAP_READ),
+so don't try to write to it (NT throws a wobbly not sure about
+9x).
+
+Mirno</div>
+    <div class="meta">Posted on 2001-03-19 12:29:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-195547">
+    <div class="subject"><a href="#post-195547">File mapping</a></div>
+    <div class="body">Hi!
+
+Thanx for your answers. I guess writing to memory goes like that:
+<pre><code>
+mov BYTE PTR , dl
+</code></pre>
+I'm mapping a file READONLY, that is I don't what to change it. How can I play with the content of the data pMemory points to and save everything to another file? As Mirno said, I can't write to the memory because of the option READONLY.</div>
+    <div class="meta">Posted on 2001-03-19 14:31:00 by stem</div>
+   </div>
+   <div class="post" id="post-195548">
+    <div class="subject"><a href="#post-195548">File mapping</a></div>
+    <div class="body">Firstly you will need to create a buffer big enough to hold your as yet to be created file. Look at the functions GlobalAlloc, and HeapAlloc, they allow you to "create" memory on the fly.
+This memory will be read & writeable, so copy the relevent data from your read-only file mapping, then use WriteFile in the same way as in Icz's tut 13.
+
+Remember that you don't need to do the GetFileSize, instead pass the size of the file you want to create!
+I think you could even be lazy, and just pass the size of the buffer you created with GlobalAlloc, as it only writes until it reaches a NULL terminator!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-03-20 05:35:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-195549">
+    <div class="subject"><a href="#post-195549">File mapping</a></div>
+    <div class="body">Hi!
+
+I've adapted the tutorial to my purposes and got this:
+<pre><code>
+   invoke filesize, ADDR szSourceFile
+   mov    SourceLength, eax
+
+   ; =============================
+   ; ===== Open source file. =====
+   ; =============================
+
+   invoke CreateFile, ADDR szSourceFile,\
+                      GENERIC_READ,\
+                      0,\
+                      NULL,\
+                      OPEN_EXISTING,\
+                      FILE_ATTRIBUTE_ARCHIVE,\
+                      NULL
+   mov hSourceFile, eax
+
+   invoke GlobalAlloc, GMEM_MOVEABLE or GMEM_ZEROINIT, SourceLength
+   mov hSourceMemory, eax
+
+   invoke GlobalLock, hSourceMemory
+   mov pSourceMemory, eax
+
+   invoke ReadFile, hSourceFile, pSourceMemory, SourceLength-1, ADDR SizeReadWrite, NULL
+
+   invoke CloseHandle, hSourceFile
+   invoke GlobalUnlock, pSourceMemory
+   invoke GlobalFree, hSourceMemory
+
+   ; ===============================
+   ; ===== Create target file. =====
+   ; ===============================
+
+   invoke CreateFile, ADDR szTargetFile,\
+                      GENERIC_READ or GENERIC_WRITE,\
+                      FILE_SHARE_READ or FILE_SHARE_WRITE,\
+                      NULL,\
+                      CREATE_NEW,\
+                      FILE_ATTRIBUTE_ARCHIVE,\
+                      NULL
+   mov hTargetFile, eax
+
+   invoke GlobalAlloc, GMEM_MOVEABLE or GMEM_ZEROINIT, SourceLength
+   mov hSourceMemory, eax
+
+   invoke GlobalLock, hSourceMemory
+   mov pSourceMemory, eax
+
+   invoke WriteFile, hTargetFile, pSourceMemory, SourceLength-1, ADDR SizeReadWrite, NULL
+
+   invoke CloseHandle, hTargetFile
+   invoke GlobalUnlock, pSourceMemory
+   invoke GlobalFree, hSourceMemory
+</code></pre>
+Is it possible that GlobalAlloc fails if the memory block is too big? With that routine I just want to copy the content of one file to another. I don't use filemapping because I want to change the file loaded into memory.
+
+Does anyone have an idea why this routine fails? My target file gets created but just with a size of 0 bytes.
+
+Thanx
+
+stem</div>
+    <div class="meta">Posted on 2001-03-20 05:45:00 by stem</div>
+   </div>
+   <div class="post" id="post-195550">
+    <div class="subject"><a href="#post-195550">File mapping</a></div>
+    <div class="body">A couple of things:
+1) Wouldn't it be easier getting the file size AFTER you've done
+   CreateFile
+<pre><code>
+   invoke CreateFile, ADDR szSourceFile,\
+                      GENERIC_READ,\
+                      0,\
+                      NULL,\
+                      OPEN_EXISTING,\
+                      FILE_ATTRIBUTE_ARCHIVE,\
+                      NULL
+   mov hSourceFile, eax
+
+   invoke GetFileSize, eax, NULL
+   mov SourceLength, eax
+</code></pre>
+
+2) Your GlobalUnlock will fail, you are passing the pointer to
+   the memory, not the handle to the memory!
+   Change:
+<pre><code>
+   invoke GlobalUnlock, pSourceMemory
+</code></pre>
+To:
+<pre><code>
+   invoke GlobalUnlock, hSourceMemory
+</code></pre>
+
+Mirno</div>
+    <div class="meta">Posted on 2001-03-20 06:19:00 by Mirno</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Can you help me to find a mistake? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20372" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=20372">Can you help me to find a mistake?</a></p>
+   <div class="post" id="post-155880">
+    <div class="subject"><a href="#post-155880">Can you help me to find a mistake?</a></div>
+    <div class="body">I try to connect to connection point<br /><br /><pre><code><br />invoke  CoInitialize, 0<br />invoke  CoCreateInstance, addr CLSID_InternetExplorer, NULL,<br />  CLSCTX_SERVER,<br />  addr IID_IWebBrowser2, addr ppv<br /><br />coinvoke ppv, IWebBrowser2, Visible_put, VARIANT_TRUE<br />coinvoke ppv, IWebBrowser2, Offline_put, VARIANT_FALSE<br />coinvoke ppv, IWebBrowser2, Navigate2, addr v1, addr v2, addr v2, addr v2, addr v2<br />coinvoke ppv, IWebBrowser2, StatusText_get, addr statstr<br />coinvoke ppv, IWebBrowser2, Document_get, addr pDisp<br /><br />&#91;b&#93;; QueryInterface return FAILED <br />coinvoke pDisp, IDispatch, QueryInterface, addr IID_IHTMLDocument2, addr pHtmlDoc<br />&#91;/b&#93;<br />coinvoke ppv, IWebBrowser2, Quit<br />invoke  SysFreeString, urlstr<br />coinvoke ppv, IWebBrowser2, Release<br />invoke  CoUninitialize</code></pre><br /><br />Source code <a target="_blank" href="http://fedorcz.fromru.com/aHTTP.zip">here</a><br />Sorry for my English :)</div>
+    <div class="meta">Posted on 2005-01-16 22:46:40 by fvk</div>
+   </div>
+   <div class="post" id="post-155985">
+    <div class="subject"><a href="#post-155985">Can you help me to find a mistake?</a></div>
+    <div class="body">this looks fine, and works for me. I'm not familar with that coinvoke macro, you can get the IHTMLDocument2 interface directly from the IDispatch object returned by get_Document:<br /><br /><pre><code>	lea	eax, hcomDoc2<br />	push	eax<br />	push	offset idIHTMLDocument2<br />	push	hcomIDispDoc<br />	mov	eax, hcomIDispDoc<br />	call	&#91;eax + idisp_QueryInterface&#93;<br /></code></pre><br />if this does fail, your document may be not ok, or some special document, like XML or file protocol or something...</div>
+    <div class="meta">Posted on 2005-01-19 06:31:22 by beaster</div>
+   </div>
+   <div class="post" id="post-155996">
+    <div class="subject"><a href="#post-155996">Can you help me to find a mistake?</a></div>
+    <div class="body">Are you tryint to start IExplorer. Try the ComTool. This will start IExplorer.<br /><pre><code>.386<br />.model flat, stdcall  ;32 bit memory model<br />option casemap &#58;none  ;case sensitive<br /><br />include windows.inc<br />include kernel32.inc<br />include user32.inc<br />include Comctl32.inc<br />include shell32.inc<br />include ole32.inc<br />include oleaut32.inc<br /><br />includelib kernel32.lib<br />includelib user32.lib<br />includelib Comctl32.lib<br />includelib shell32.lib<br />includelib ole32.lib<br />includelib oleaut32.lib<br /><br />DlgProc			PROTO	&#58;HWND,&#58;UINT,&#58;WPARAM,&#58;LPARAM<br />IDispRelease			PROTO	&#58;DWORD<br /><br />.const<br />;IE-com.dlg<br />IDD_DIALOG1						equ 101<br />IDC_BTN1						equ 1001<br />IDC_BTN2						equ 1002<br /><br />.data<br />szIExplorer						db &quot;InternetExplorer.Application&quot;,0<br />IID_IWebBrowserApp	GUID &#123;00002DF05h,00000h,00000h,&#123;0C0h,000h,000h,000h,000h,000h,000h,046h&#125;&#125;<br /><br /><br />.data?<br />hInstance						dd ?<br />pIWebBrowserApp					dd ?<br /><br />.code<br />start&#58;<br /><br />	invoke GetModuleHandle,NULL<br />	mov hInstance,eax<br /><br />    invoke InitCommonControls<br />	invoke CoInitializeEx,0,0 ;COINIT_MULTITHREADED<br />	invoke DialogBoxParam,hInstance,IDD_DIALOG1,NULL,addr DlgProc,NULL<br />	invoke ExitProcess,0<br /><br />DlgProc proc hWin&#58;HWND,uMsg&#58;UINT,wParam&#58;WPARAM,lParam&#58;LPARAM<br />	LOCAL lpWideCharStr&#91;128&#93;&#58;byte<br />	LOCAL clsidApp&#58;GUID<br /><br />	mov		eax,uMsg<br />	.if eax==WM_INITDIALOG<br /><br />	.elseif eax==WM_COMMAND<br />		mov		edx,wParam<br />		movzx	eax,dx<br />		shr		edx,16<br />		.if edx==BN_CLICKED<br />			.if eax==IDC_BTN1<br />				invoke MultiByteToWideChar,CP_ACP,0,addr szIExplorer,-1,addr lpWideCharStr,sizeof lpWideCharStr<br />				invoke CLSIDFromProgID,addr lpWideCharStr,addr clsidApp<br />				invoke CoCreateInstance,addr clsidApp,0,CLSCTX_SERVER,addr IID_IWebBrowserApp,addr pIWebBrowserApp<br />				.if eax==S_OK<br />					mov eax,pIWebBrowserApp<br />					mov edx,&#91;eax&#93;<br />					push VARIANT_TRUE<br />					push pIWebBrowserApp<br />					;call IWebBrowserApp.put_Visible<br />					call dword ptr &#91;edx+41*4&#93;<br />					<br />				.endif<br />			.elseif eax==IDC_BTN2<br />				mov eax,pIWebBrowserApp<br />				mov edx,&#91;eax&#93;<br />				push pIWebBrowserApp<br />				;call IWebBrowserApp._Quit<br />				call dword ptr &#91;edx+32*4&#93;<br />				.if eax==S_OK<br />					invoke IDispRelease,addr pIWebBrowserApp<br />				.endif<br />				<br />				<br />			.endif<br />		.endif<br />	.elseif eax==WM_CLOSE<br />		invoke EndDialog,hWin,0<br />	.else<br />		mov		eax,FALSE<br />		ret<br />	.endif<br />	mov		eax,TRUE<br />	ret<br /><br />DlgProc endp<br /><br />IDispRelease proc uses edi esi edx pClass&#58;dword<br />	<br />	mov eax,pClass<br />	mov eax,dword ptr &#91;eax&#93;<br />	mov edx,dword ptr &#91;eax&#93;<br />	push eax ;pClass<br />	;call pClass._Release<br />	call dword ptr &#91;edx+2*4&#93;<br />	.if eax==0<br />		mov eax,pClass<br />		mov dword ptr&#91;eax&#93;,0<br />	.endif<br />	ret<br />IDispRelease endp<br /><br />end start</code></pre></div>
+    <div class="meta">Posted on 2005-01-19 09:58:32 by minor28</div>
+   </div>
+  </div>
+ </body>
+</html>

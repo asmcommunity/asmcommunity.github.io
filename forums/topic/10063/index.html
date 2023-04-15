@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Windows Sockets 2.2 event functions. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10063" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=10063">Windows Sockets 2.2 event functions.</a></p>
+   <div class="post" id="post-75305">
+    <div class="subject"><a href="#post-75305">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body">Hi, <br /><br />First of all, I wish to mention that this happens to be my first thread on the board. I wish to congratulate you all in it's success.<br /><br />Now down to business. To explain my question, I must explain my ideas first.<br /><br />To put it simply, I wanted to create a Win32 compatible, fast reliable server that accepts theoretically unlimited connections and relays data from 1 client to all others.<br /><br />My idea was to have an Async listening socket running on the main GUI thread. Once the FD_ACCEPT message appeared in the WndProc, I create a worker thread which accepts the connection and stays open, recieving and sending data, until the connection is closed. Those sockets are also Async.<br /><br />Well, I started to implement this server and then I hit a brick wall. I needed some way to communicate FD_READ, FD_WRITE and other messages to the correct worker threads. I also need to sync this. I had no idea how to do this. Anything I tried didn't work. I decided to hunt around a bit for a solution and a friend from IRC suggested the Winsock 2.2 event API functions which could be used to wait for certain messages and other useful things.<br /><br />Naturally I searched the web for quite a while looking for information on how to actually use these functions. I found hardly any information at all. The information I did find (msdn and such) were lacking in detail and quite poor documenation.<br /><br />I tried a few eperiments of my own which failed miserably.<br /><br />So this is where you guys come in. I want to know firstly, is my idea plausable, are there any better ways of doing it? Secondly, (if my idea is sound) is the idea of using the event API functions a good one or is there again, a better way? If these are the best functions to use, then how do I actually use them (Documentation is useless like I said)?<br /><br />Lastly, I would like to thank any replies in advance. And you guys own. ;)</div>
+    <div class="meta">Posted on 2003-01-09 14:57:16 by IRBMe</div>
+   </div>
+   <div class="post" id="post-75431">
+    <div class="subject"><a href="#post-75431">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body">I usually make the threadproc look like this. Note that hEvent is a .data section variable, containing a handle to a event you use to synchronize the procs. hMyEvent is created and destroyed within the thread and is signalled when data is ready to be received or sent on the thread's socket.<br /><br /><pre><code><br />MyProc proc hSock&#58;dword<br /><br />local hMyEvent&#58;dword<br />local hServEvent&#58;dword<br /><br />  m2m hServEvent,hEvent<br />  <br />  invoke CreateEvent<br />  mov hMyEvent,eax<br />  <br />  invoke WSAEventSelect,hSocket,hMyEvent,FD_READ+FD_WRITE+FD_CLOSE<br />  <br />MainLoop&#58;<br />  invoke WaitForMultipleObjects,2,addr hMyEvent,FALSE,INFINITE<br />  <br />  ; Handle the event. Note that it could be a socket event, or a sync message from the WndProc<br /><br />  jmp MainLoop<br /><br />  invoke DeleteObject,hMyEvent<br /><br />  ret<br /><br />MyProc endp<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-10 07:04:28 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-75441">
+    <div class="subject"><a href="#post-75441">Doh</a></div>
+    <div class="body">WSAEventSelect is what I was missing. Well, I'll have a try with it later and see what results it yields. Thanks for your reply.</div>
+    <div class="meta">Posted on 2003-01-10 07:54:20 by IRBMe</div>
+   </div>
+   <div class="post" id="post-75625">
+    <div class="subject"><a href="#post-75625">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by Qweerdy </em><br /><pre><code><br />MyProc proc hSock&#58;dword<br />local hMyEvent&#58;dword<br />local hServEvent&#58;dword<br />....<br />invoke WaitForMultipleObjects,2,addr hMyEvent,FALSE,INFINITE<br /></code></pre></div><br />Shouldn't that be <strong>addr hServEvent</strong>? Since they are local variables and masm seems to put these in reverse order in the stackframe, hServEvent actually comes before hMyEvent.<br />I don't know if it's document in which order masm puts its locals on the stack, if you want to be sure put the two values in a struct or create an array of events (local events[2]:dword).<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-01-11 04:32:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-75629">
+    <div class="subject"><a href="#post-75629">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body">Thomas,<br /><br />You're right. Strange, I thought it worked the other way around.<br /><br /><pre><code>MyProc proc <br /><br />LOCAL Temp1&#58;dword<br />LOCAL Temp2&#58;dword<br />	<br />	lea eax,Temp1<br />	lea eax,Temp2<br />	<br />	ret<br /><br />MyProc endp</code></pre>assembles to...<br /><pre><code>00401000    55              push ebp<br />00401001    8BEC            mov ebp,esp<br />00401003    83C4 F8         add esp,-8<br />00401006    8D45 FC         lea eax,&#91;ebp-4&#93;<br />00401009    8D45 F8         lea eax,&#91;ebp-8&#93;<br />0040100C    C9              leave<br />0040100D    C3              retn</code></pre></div>
+    <div class="meta">Posted on 2003-01-11 05:08:22 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-75651">
+    <div class="subject"><a href="#post-75651">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body">Does anybody know where to get a sample program showing this? I still don't think I understand and I'm still not sure how to implement certain things like sending messages to the correct thread and such. Also, I tried your code and it crashed my computer. I wasn't sure how to extract which event had been sent. After reading the documentation I kinda guessed how to do it. And well, it ust hung the computer. If any of you know where I can see this in action so I can study the code, that would be great. Thanks again.</div>
+    <div class="meta">Posted on 2003-01-11 09:19:51 by IRBMe</div>
+   </div>
+   <div class="post" id="post-75692">
+    <div class="subject"><a href="#post-75692">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body">No matter. After a few hours of debugging, tracking exception errors and other such things...I managed to get it working ;)<br /><br />Thanks for the help nonetheless.</div>
+    <div class="meta">Posted on 2003-01-11 15:29:00 by IRBMe</div>
+   </div>
+   <div class="post" id="post-75990">
+    <div class="subject"><a href="#post-75990">Windows Sockets 2.2 event functions.</a></div>
+    <div class="body">For the beneffit of anybody reading this thread who has the same problems, here is my ThreadProc for you to study:<br /><br /><pre><code><br />;-----------------------------------------------------------------------------;<br />; ThreadProc						                      ;<br />;-----------------------------------------------------------------------------;<br />ThreadProc Proc hSock&#58;DWord<br /><br />    Local hEvent&#58;	DWord<br />    Local pEvents&#58;	DWord<br />    Local WSAEvents&#58;	WSANETWORKEVENTS<br />    	<br />    	; --- Create a winsock event and store the handle and pointer.<br />	Invoke WSACreateEvent<br />	Mov hEvent, eax<br />	Mov DWord Ptr &#91;pEvents&#93;, eax<br />	<br />	; --- We want to wait for the close message or the read message.	<br />	Invoke WSAEventSelect, hSock, hEvent, FD_CLOSE + FD_READ<br /><br />    WaitNextEvent&#58;<br />	<br />	; --- Wait for one of the messages and extract it.<br />	Invoke WSAWaitForMultipleEvents, 1, Addr pEvents, FALSE, INFINITE, FALSE<br />	Invoke WSAEnumNetworkEvents, hSock, hEvent, Addr WSAEvents<br />	<br />	; --- Is it a read message.<br />	Test WSAEvents.lNetworkEvents, FD_READ<br />	Jz TestClose<br />	<br />	; --- Yes. Handle RECV message here<br /><br />    TestClose&#58;<br />    	; --- Is it a close message.<br />	Test WSAEvents.lNetworkEvents, FD_CLOSE<br />	Jz  WaitNextEvent<br />	<br />	; --- Yes. Close the socket, delete the event and close the thread.<br />	Invoke closesocket, hSock<br />	Invoke DeleteObject, hEvent<br />	<br />	Ret<br /><br />ThreadProc EndP<br /></code></pre><br /><br /><br />Hope this helps.</div>
+    <div class="meta">Posted on 2003-01-13 03:58:35 by IRBMe</div>
+   </div>
+  </div>
+ </body>
+</html>

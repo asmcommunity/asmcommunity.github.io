@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Passing Structures - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26669" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26669">Passing Structures</a></p>
+   <div class="post" id="post-192527">
+    <div class="subject"><a href="#post-192527">Passing Structures</a></div>
+    <div class="body">Hi all,
+
+The code snippet below passes the SYSTEMTIME stucture to a  compare routine.  (I really hacked the routine up to save space.)  I need help figuring out how to pass the address of a structure to, and then access the structure in, the called procedure. When this code is assembled, I get an "INVOKE argument type mismatch : argument 2" error.
+
+.386 
+.model flat,stdcall 
+option casemap:none 
+include \masm32\include\windows.inc 
+include \masm32\include\kernel32.inc 
+include \masm32\include\masm32.inc
+includelib \masm32\lib\kernel32.lib 
+include \masm32\include\user32.inc 
+includelib \masm32\lib\user32.lib 
+includelib \masm32\lib\masm32.lib
+
+CompareDate PROTO :DWORD,:SYSTEMTIME
+
+.data
+    AppName db "Date Compare Test",0
+    DateSTR db "20/04/01  08:05 AM",0
+    stDate SYSTEMTIME{}
+.data?
+    hInstance dd ?	; instance handle
+    hEnv dd ?		; environment handle
+    hConn dd ?	; connection handle
+.code 
+start:
+    invoke GetModuleHandle, NULL
+    mov hInstance,eax
+    invoke GetSystemTime,addr stDate
+    invoke CompareDate,addr DateSTR,addr stDate
+    invoke ExitProcess,eax
+
+CompareDate proc uses ebx Txt:DWORD,STStruct:SYSTEMTIME
+
+     mov STStruct.wYear, ax ;This line just to see if we can access the struct
+     ret
+CompareDate endp
+end start
+
+Thanks, 
+Onyx</div>
+    <div class="meta">Posted on 2001-01-23 12:54:00 by Onyx</div>
+   </div>
+   <div class="post" id="post-192528">
+    <div class="subject"><a href="#post-192528">Passing Structures</a></div>
+    <div class="body">SYSTEMTIME is not 32 bits wide, and so cannot be pushed!
+Also the ADDR of anything (on a 32bit system) is 32 bits wide (and so can be pushed), so your PROTO should be:
+
+CompareDate PROTO :DWORD,:DWORD
+
+In order to access the data in the struct then you can do it in one of two ways:
+
+1) Use assume, I can't remember the exact syntax (I'm at work, no docs) but it is in the help ("MASM32 help" from Quick Edit help menu), and this explains its use fully (and better than I can).
+The problem with the ASSUME directive is that from that point on that register is a pointer to the start of that stucture type. It can lead to some VERY messy bugs if you forget to ASSUME NOTHING afterwards.
+
+2) Use the following code on a case by case basis:
+
+CompareDate proc uses ebx Txt:DWORD,STStruct:SYSTEMTIME
+mov edx, STStruct ;Get structure pointer in edx
+
+mov (SYSTEMTIME PTR ).yr, ax
+;This line just to see if we can access the struct
+;Treat edx as a pointer to a SYSTEMTIME struct
+ret
+CompareDate endp
+
+I prefere the second method, its easier to read! If your assume is pages up, you might forget, and everything goes tits up!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-01-23 13:14:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-192529">
+    <div class="subject"><a href="#post-192529">Passing Structures</a></div>
+    <div class="body">I quite agree with Mirno that hiw way #2 is much better then number 1. Never forgo clarity to save a few characters.
+
+The only addition I'd make is to proto the function as:
+
+CompareDate proc uses ebx Txt:DWORD, pSystemTime:DWORD
+
+mov edx, pSystemTime ;Get structure pointer in edx
+mov (SYSTEMTIME PTR ).yr, ax
+{rest is the same}
+
+Pointers are always dwords in win32. To identify them, I prefer to preface the name with just a 'p'.  The days of 'lp' or 'wp' are over, all pointers are the same. Let's call em such.
+
+I very much agree that registers should be cast on a line-by-line basis. Even if you are using the same register as the same cast several times in a row, it's actually always LESS typing to do this then to ASSUME them 
+
+Why LESS typing? You can copy and paste the lines! And it's always explicitly clear what is happening.</div>
+    <div class="meta">Posted on 2001-01-23 22:52:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

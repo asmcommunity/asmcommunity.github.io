@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>invoke RasDial ,but how to ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28544" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28544">invoke RasDial ,but how to ?</a></p>
+   <div class="post" id="post-201921">
+    <div class="subject"><a href="#post-201921">invoke RasDial ,but how to ?</a></div>
+    <div class="body">Hi
+
+i have 3 Editfields ,1 for the Dial Up Number ,1 for the Account Name and 1 for the Password,what must i now do with this Settings to open the connection ?
+
+invoke RasDial,0,0,??, 0, 0,??
+
+Have a nice Day</div>
+    <div class="meta">Posted on 2001-06-27 08:47:00 by Crest</div>
+   </div>
+   <div class="post" id="post-201922">
+    <div class="subject"><a href="#post-201922">invoke RasDial ,but how to ?</a></div>
+    <div class="body">The last variable is a pointer to a DWORD.
+<pre><code>
+LOCAL hMyRasConnection:DWORD
+
+mov hMyRasConnection, 0 ;Must be zero before the call
+invoke RasDial,0,0,??, 0, 0, ADDR hMyRasConnection
+</code></pre>
+
+
+The other "??" is a pointer to a RASDIALPARAMS structure. But I don't know how to fill that in. Sorry
+
+Mirno
+
+This message was edited by Mirno, on 6/27/2001 9:39:39 AM</div>
+    <div class="meta">Posted on 2001-06-27 09:25:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201923">
+    <div class="subject"><a href="#post-201923">invoke RasDial ,but how to ?</a></div>
+    <div class="body">Creat,
+
+The third Parameter a pointer to the RASDIALPARAMS structure.
+
+You need to fill this structure out (the C version) :-
+<pre><code>
+typedef struct _RASDIALPARAMS { 
+   DWORD  dwSize; 
+   TCHAR  szEntryName; 
+   TCHAR  szPhoneNumber; 
+   TCHAR  szCallbackNumber; 
+   TCHAR  szUserName; 
+   TCHAR  szPassword; 
+   TCHAR  szDomain ; 
+#if (WINVER >= 0x401)
+   DWORD  dwSubEntry;
+   DWORD  dwCallbackId;
+#endif
+} RASDIALPARAMS; 
+</code></pre>
+
+
+dwSize = the size of the structure in bytes - 
+         this is so the API nows what version 
+         you are using, just use sizeof for this.
+
+szEntryName - the name of the entry to dial, if blank then
+              it will use the default connection.
+
+szPhoneNumber - the phone number to call, if szEntryName was
+                blank, then this can't be.
+
+szUserName - obvious
+szPassword - sooo obvious...
+
+szDomain - the domain you're logging on to, or blank.
+dwSubEntry - index of the sub-entry to dial. (zero probably)
+dwCallBackID - used defined value, which will be passed to RasDialFunc2
+
+easy huh?
+
+umbongo</div>
+    <div class="meta">Posted on 2001-06-27 09:52:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-201924">
+    <div class="subject"><a href="#post-201924">invoke RasDial ,but how to ?</a></div>
+    <div class="body">Hi
+
+-----------
+easy huh?
+-----------
+
+since English is not my Homelanguage and some other Problems ,its not Easy for me :-(
+But i try to understand what you like to tell me.
+
+Thanks</div>
+    <div class="meta">Posted on 2001-06-27 12:34:00 by Crest</div>
+   </div>
+   <div class="post" id="post-201925">
+    <div class="subject"><a href="#post-201925">invoke RasDial ,but how to ?</a></div>
+    <div class="body">Hi
+
+so i think i got it.
+i have first move my settings from the editfields to the RASDIALPARAMS ,then i have to call those settings with the rasdial function.
+
+like invoke rasdial ,0,0,here the rasdialparams,0,0,here the
+hMyRasConnection
+
+but what i not understand is how can i port the ras settings from the c sample u post to asm ?
+
+will u possible help me on this ?
+
+Thanks</div>
+    <div class="meta">Posted on 2001-06-29 04:47:00 by Crest</div>
+   </div>
+   <div class="post" id="post-201926">
+    <div class="subject"><a href="#post-201926">invoke RasDial ,but how to ?</a></div>
+    <div class="body">RASDIALPARAMS is already defined in WINDOWS.INC which is a standard part of the MASM32 package.
+<pre><code>
+include \masm32\include\windows.inc
+</code></pre>
+Will allow you to use it in your code.
+
+<pre><code>
+include \masm32\include\windows.inc
+
+.data
+MyRASParams      RASDIALPARAMS <>
+hMyRASConnection DWORD 0
+
+.code
+   mov edx, offset MyRASParams
+   mov (RASDIALPARAMS PTR ).dwSize, SIZEOF MyRASParams
+   mov (RASDIALPARAMS PTR ).szEntryName[0], 0
+   mov (RASDIALPARAMS PTR ).szDomain[0], 0
+   mov (RASDIALPARAMS PTR ).dwSubEntry, 0
+   mov (RASDIALPARAMS PTR ).dwCallBackID, 0 ;Not sure about this!
+   lea eax, (RASDIALPARAMS PTR ).szPassword
+   push eax
+   lea eax, (RASDIALPARAMS PTR ).szUserName
+   push eax
+   lea eax, (RASDIALPARAMS PTR ).szPhoneNumber
+
+   invoke SendMessage, hEditPhone, WM_GETTEXT, RAS_MaxPhoneNumber, eax
+
+   pop eax
+   invoke SendMessage, hEditUName, WM_GETTEXT, UNLEN, eax
+
+   pop eax
+   invoke SendMessage, hEditPW, WM_GETTEXT, PWLEN, eax
+
+   ;MyRASParams is now filled out with the correct info,
+   ;time to call RasDial!
+
+   invoke RasDial, 0, 0, ADDR MyRASParams, 0, 0, ADDR hMyRASConnection
+</code></pre>
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-29 06:00:00 by Mirno</div>
+   </div>
+  </div>
+ </body>
+</html>

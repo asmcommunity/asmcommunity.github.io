@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Casting? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4504" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4504">Casting?</a></p>
+   <div class="post" id="post-31442">
+    <div class="subject"><a href="#post-31442">Casting?</a></div>
+    <div class="body">Hey all, yeah I am a newbie to assembly... *sniff*<br />I can figure out how to do most of what I need to by browzing the example files and searching the web, however I am having fits trying to get this in a form that I think is optimized.<br /><br />Whats going on is that I need to capture a Windows message where lParam is a pointer to a structure.<br /><br />Specifically, I need to handle a WM_COMMAND message where lParam is a NMHDR (see below).<br /><br />NMHDR STRUCT<br />    hwndFrom    DWORD ?<br />    idFrom          DWORD ?<br />    code             DWORD ?<br />NMHDR ends<br /><br />Well I could of course use the API itself by using CopyMem and transfering it to a local variable defined as this kind of struct.  However I would like to know if it is possible (or even needed) to cast lParam to this kind of structure directly.  In C it would like something like this...<br /><br />#define lpnm ((NMHDR)lParam)<br /><br />switch(lpnm-&gt;code)  {<br />      case TBN_DROPDOWN:<br />... blah blah blah...<br /><br />Anything like that in assembly?<br />Thanks!<br />:stupid:</div>
+    <div class="meta">Posted on 2002-03-29 08:36:53 by Graebel</div>
+   </div>
+   <div class="post" id="post-31443">
+    <div class="subject"><a href="#post-31443">Casting?</a></div>
+    <div class="body">do (MyStruc PTR ).MyMember</div>
+    <div class="meta">Posted on 2002-03-29 08:42:08 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-31444">
+    <div class="subject"><a href="#post-31444">Casting?</a></div>
+    <div class="body">Casting is C is relatively like telling to the compiler &quot;I know it is not the good type, but let me do what I want to&quot;...<br />The C langage is typed, but assembly is different... you just define sizes of variables (byte, word, dword, qword... arrays of them, etc)<br />Basically, the typing in C is to let know what instructions to use (exemple divide unsigned or signed) or things like that... but since in assembly, you write your own assembly code directly, you don't need to cast anything because you choose what instructions to *execute*, when you want...</div>
+    <div class="meta">Posted on 2002-03-29 08:42:47 by JCP</div>
+   </div>
+   <div class="post" id="post-31449">
+    <div class="subject"><a href="#post-31449">Casting?</a></div>
+    <div class="body">Actually there *is* casting in masm.<br /><pre><code><br />lalahat dd 0<br />...<br />mov al, &#91;lalahat&#93;<br /></code></pre><br />that will not work without a &quot;byte ptr&quot; cast, whereas you can move<br />into eax without &quot;dword ptr&quot;. Also hiroshimator's method can be<br />though of as casting...</div>
+    <div class="meta">Posted on 2002-03-29 09:13:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-31451">
+    <div class="subject"><a href="#post-31451">Casting?</a></div>
+    <div class="body">i do it iczelions way. its a little more easier on my eyes this way:<br /><br /><pre><code>example 1&#58;<br />.elseif uMsg == WM_COMMAND<br />   mov edi, lParam<br />   assume edi&#58;ptr NMHDR<br />   mov eax, &#91;edi&#93;.hwndFrom<br />      .if eax = &#91;place the controls handle here&#93;<br />         ;do something<br />      .endif<br /><br />example 2&#58;<br />.elseif uMsg == WM_COMMAND<br />   mov edi, lParam<br />   assume edi&#58;ptr NMHDR<br />   mov eax, &#91;edi&#93;.idFrom<br />      .if eax = &#91;place the control id here&#93;<br />         ;do something<br />      .endif<br /><br />example 3&#58;<br />.elseif uMsg == WM_COMMAND<br />   mov edi, lParam<br />   assume edi&#58;ptr NMHDR<br />   mov eax, &#91;edi&#93;.code<br />      .if eax = &#91;place the noticifacation message here&#93;<br />         ;do something<br />      .endif</code></pre></div>
+    <div class="meta">Posted on 2002-03-29 09:18:38 by smurf</div>
+   </div>
+   <div class="post" id="post-31454">
+    <div class="subject"><a href="#post-31454">Mrr x2</a></div>
+    <div class="body">Well I still cannot seem to get this to work.  Maybe someone has already done what I am trying to do so I will just throw it out there and see if someone bites.<br /><br />I was messing around with the Qikpad example  and I have been attempting to add a functional dropdown button to the menu.<br /><br />In TBMacros.asm add in this macro:<br /><br />TBdrop MACRO bID, cID<br />mov tbb.iBitmap,   bID  ;; button  ID number<br />mov tbb.idCommand, cID  ;; command ID number<br />mov tbb.fsStyle,   TBSTYLE_BUTTON or 00008h<br />invoke SendMessage,hToolBar,TB_ADDBUTTONS,1,ADDR tbb<br />ENDM<br />;00008h = TBSTYLE_DROPDOWN or BTNS_DROPDOWN<br /><br />And after CreateWindowEx add this:<br /><br />invoke SendMessage,hToolBar,1108,0,00001h<br />;1108=TB_SETEXTENDEDSTYLE<br />;00001h=TBSTYLE_EX_DRAWDDARROWS<br /><br />Now in ToolBar.asm add a new button:<br />TBdrop 4, 57<br /><br /><br />If you compile this and run you will indeed get a button with a pull down arrow (the user is responsible for displaying the menu).  But I have yet been able to intercept any notification from the arrow when it is clicked.<br /><br />Help:<br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/commctls/ToolBar/ToolBar_Using.asp?frame=true">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/commctls/ToolBar/ToolBar_Using.asp?frame=true</a><br /><br />See  for a cruddy explanation... so far this thing has me whipped.<br />:grin:</div>
+    <div class="meta">Posted on 2002-03-29 09:30:01 by Graebel</div>
+   </div>
+   <div class="post" id="post-31461">
+    <div class="subject"><a href="#post-31461">Casting?</a></div>
+    <div class="body">welll i did some testing for you. it appears the msdn is wrong when it says it will post a WM_COMMAND message when the arrow is clicked. in fact im pretty sure they have them backwards as to what pressing the button and pressing the arrow will do. pressing the button will issue an WM_COMMAND and pressing the arrow will issue a TBN_DROPDOWN message which can be intercepted in the WM_NOTIFY message. the following code i post will work well if you only have one drop down arrow button but if you have more you will need to do additional checking:<br /><pre><code>.elseif uMsg == WM_NOTIFY<br />   mov edi,lParam<br />   assume edi&#58;ptr NMHDR<br />      mov eax,&#91;edi&#93;.code<br />      .if eax == TBN_DROPDOWN<br />         invoke MessageBox,0,0,0,0<br />      .endif</code></pre></div>
+    <div class="meta">Posted on 2002-03-29 11:01:35 by smurf</div>
+   </div>
+   <div class="post" id="post-31463">
+    <div class="subject"><a href="#post-31463">Hmm</a></div>
+    <div class="body">You know thats kinda funny.<br /><br />I was thinking some what along the same lines, (because I was still getting my WM_COMMAND message).  However I did plug your code in but nothing happens.  I had thought that might be the case earlier this morning, but I didnt get that to work either.  If you have a working version send it to me!  (Or post it plz).  Mine just sits there like a lump!<br /><br /><a href="mailto:DPhillips@KBSI.com">DPhillips@KBSI.com</a>:alright:</div>
+    <div class="meta">Posted on 2002-03-29 11:19:43 by Graebel</div>
+   </div>
+   <div class="post" id="post-31467">
+    <div class="subject"><a href="#post-31467">NM</a></div>
+    <div class="body">I am not sure why, but after some messing around with it I came up with this:<br /><br />--=-=-=<br />.elseif uMsg == WM_NOTIFY<br />     mov edi, lParam<br />     assume edi:ptr NMTOOLBAR<br />     mov eax, .iItem<br /><br />     .if eax == 57 ; Menu ID for font button<br />          mov eax, .hdr.code<br />          neg eax<br /><br />          .if eax == 710 ; TBN_DROPDOWN<br />               PrintDec eax<br />          .endif<br />     .endif<br /><br />     xor eax, eax<br />     ret<br /><br />--=-=-=<br /><br />Seems I am actually getting a NMTOOLBAR struct with the first member being a NMHDR.  Which solves why I was having trouble detecting it.  The second (very odd) thing was that I had to neg eax as all my return values from hdr.code were correct, but the wrong sign.  I am not sure whats up with that yet...<br /><br />But thanks for all the help!  Really appriciate it</div>
+    <div class="meta">Posted on 2002-03-29 12:02:57 by Graebel</div>
+   </div>
+   <div class="post" id="post-31475">
+    <div class="subject"><a href="#post-31475">Casting?</a></div>
+    <div class="body">ok here is what i got:</div>
+    <div class="meta">Posted on 2002-03-29 12:41:00 by smurf</div>
+   </div>
+   <div class="post" id="post-31484">
+    <div class="subject"><a href="#post-31484">Interesting</a></div>
+    <div class="body">Before, when I was casting lParam to a NMHDR I was generating errors when I pressed the arrow button down.  Your version does the same thing.  Mine works correctly on my machine casting NMTITLEBAR.<br /><br />I got my idea for the NMTITLEBAR from a different web site (sorry lost the page).  However there was a reference to:<br /><br />&quot;This applies to version 4.71 and above.&quot;<br /><br />I am assuming now that 4.71 is referencing the common controls version that is installed.  Now this begs the question of, at runtime, can it be determined which version is loaded?<br /><br />I know your version works on your machine and generates errors on mine, and mine works on mine but will probably error on yours.  So in essence, is there a way (at run-time) to determine which version of the common control library we have loaded?<br />:confused:</div>
+    <div class="meta">Posted on 2002-03-29 13:12:32 by Graebel</div>
+   </div>
+   <div class="post" id="post-31489">
+    <div class="subject"><a href="#post-31489">Casting?</a></div>
+    <div class="body">im using windows 2000 sp2 and you must be using something different.<br /><br /><div class="quote">I know your version works on your machine and generates errors on mine, and mine works on mine but will probably error on yours. So in essence, is there a way (at run-time) to determine which version of the common control library we have loaded?</div><br />yes you can take a look here:<br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/Shell/programmersguide/versions.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/Shell/programmersguide/versions.asp</a><br /><br />try this code this should work better for you.<br /><pre><code>.elseif uMsg == WM_NOTIFY<br />   mov edi,lParam<br />   assume edi&#58;ptr NMTOOLBAR<br />   mov eax,&#91;edi&#93;.hdr.idFrom<br />      .if eax == 57<br />         mov eax,&#91;edi&#93;.hdr.code<br />           .if eax == 710<br />              invoke MessageBox,0,0,0,0<br />           .endif</code></pre><br /><br />ps: by the way to make your code more readable on the forum use these tags:<br /><br /><pre><code><br />and then close it off with /code with the brackets around it</div>
+    <div class="meta">Posted on 2002-03-29 13:50:05 by smurf</div>
+   </div>
+   <div class="post" id="post-31493">
+    <div class="subject"><a href="#post-31493">Heh</a></div>
+    <div class="body">Yeah, thats just about the exact code I have right now.<br /><br />Testing:<br /><pre><code><br />TBN_DROPDOWN equ -710<br /><br />.elseif uMsg == WM_NOTIFY<br />     mov edi, lParam<br />     assume edi&#58;ptr NMTOOLBAR<br />     push &#91;edi&#93;.iItem<br />     pop ID<br />     .if ID == 57 ; Menu ID for font button<br />          mov eax, &#91;edi&#93;.hdr.code<br />          .if eax == TBN_DROPDOWN<br />              ; something<br />          .endif<br />     .endif<br />.endif<br /></code></pre><br /><br />Lets see if that looks better<br /><br />Dont ask me why *shrug* but I had to negate the value for TBN_DROPDOWN.<br /><br />Everything works like a charm now.  Need to re-test it on my 98 box at home.</div>
+    <div class="meta">Posted on 2002-03-29 14:07:30 by Graebel</div>
+   </div>
+   <div class="post" id="post-31498">
+    <div class="subject"><a href="#post-31498">Casting?</a></div>
+    <div class="body">its because this code:<br /><br /> push .iItem<br /><br />should be changed to:<br /><br />mov .hdr.iItem<br /><br />when testing your code there was 3 messages that where making it all the way to this line:<br /><br />.if eax == TBN_DROPDOWN<br /><br />they all where being posted immediately once you pressed the arrow. im not sure exactly why the 3 messages were making it through like that but thats whats happening. by changing that line of your code to what i suggest will filter out the unwaned messages and allow the correct one to be processed and then you wont need to neg the eax.</div>
+    <div class="meta">Posted on 2002-03-29 14:19:38 by smurf</div>
+   </div>
+   <div class="post" id="post-31589">
+    <div class="subject"><a href="#post-31589">DLL Version info</a></div>
+    <div class="body">Graebel,<br /><br />This can be used to determine the version of the<br />Common Controls, this code checks for at least <br />version 4.70<br /><br /><pre><code><br />.data<br />lib_name    db  &quot;\comctl32.dll&quot;, 0                          ;library for DateTimePicker<br />dgv         db  &quot;DllGetVersion&quot;, 0                              ;function to check version of DLL<br />lib_err     db  &quot;This Program Requires Version 4.70 of COMCTL32.DLL!&quot;, 0    ;warning message<br /><br />.data?<br />lib_handle      HWND    ?           ;Handle to check for dll version<br />proc_add    DWORD   ?               ;used to store address for DLL<br />dvi         DLLVERSIONINFO  &lt;&gt;      ;Structure for Dll Version Info<br />d_buffer    BYTE    MAX_PATH + 1 dup &#40;?&#41;     ;allows us to read MAX filename size and 0<br /><br />.code<br />    invoke  GetSystemDirectory, addr d_buffer, sizeof d_buffer<br />    invoke  lstrcat, addr d_buffer, addr lib_name<br />    invoke  LoadLibrary, addr d_buffer<br />                ;Load comctl32.dll to see if we have at least version 4.70<br />    mov lib_handle, eax                 ;save handle<br />    .if &#40;eax == NULL&#41;                   ;no valid handle returned<br />        invoke  MessageBox, NULL, addr lib_err, NULL, MB_OK<br />        invoke  ExitProcess, -1<br />        ret<br />    .endif<br />    invoke  GetProcAddress, lib_handle, addr dgv<br />                        ;get address of DllGetVersion within comctl32.dll<br />    mov proc_add, eax<br />    .if &#40;eax == NULL&#41;                   ;no valid address to Proc returned<br />        invoke  MessageBox, NULL, addr lib_err, NULL, MB_OK<br />        invoke  FreeLibrary, lib_handle<br />        invoke  ExitProcess, -1<br />        ret<br />    .endif<br />    invoke  RtlZeroMemory, addr dvi, sizeof DLLVERSIONINFO<br />        ;set DLLVERSIONINFO Stru to zeroes<br />    mov dvi.cbSize, sizeof DLLVERSIONINFO<br />    push    OFFSET dvi              ;push structure address for DLLGetVersion<br />    call    proc_add                ;call COMCTL32.DLL's DllGetVersion routine<br />    cmp dvi.dwMajorVersion, 4       ;major version should be at least 4<br />    jae @F<br />        invoke  MessageBox, NULL, addr lib_err, NULL, MB_OK<br />        invoke  FreeLibrary, lib_handle<br />        invoke  ExitProcess, -1<br />        ret<br />@@&#58; cmp dvi.dwMinorVersion, 70      ;minor version should be at least 70<br />    jae @F<br />        invoke  MessageBox, NULL, addr lib_err, NULL, MB_OK<br />        invoke  FreeLibrary, lib_handle<br />        invoke  ExitProcess, -1<br />        ret<br />@@&#58;<br /></code></pre><br /><br />hth,<br /><br />farrier</div>
+    <div class="meta">Posted on 2002-03-30 03:34:52 by farrier</div>
+   </div>
+   <div class="post" id="post-31606">
+    <div class="subject"><a href="#post-31606">Casting?</a></div>
+    <div class="body">To address the original question about casting, Readiosys is correct in that you don't perform TYPE casting in assembler. What you in fact do is SIZE casting when it is necessary so that the assembler know what size data to transfer.<br /><pre><code><br />    ; mov a BYTE from address in ESI to AL<br />    mov al, &#91;esi&#93;<br /><br />    ; specify size of immediate value<br />    mov WORD PTR &#91;edi&#93;, 0A0Dh<br /></code></pre><br />Generally the idea is to put the correct SIZE data in the destination and particularly when it involves data transfer to or from memory, the size often needs to be specified.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-03-30 05:25:53 by hutch--</div>
+   </div>
+   <div class="post" id="post-31616">
+    <div class="subject"><a href="#post-31616">Casting?</a></div>
+    <div class="body">call it what you want, it's still a typecast, and masm is a typed assembler.<br />This is also evident in the opcodes generated in .IF depending on<br />signed/unsigned source value...</div>
+    <div class="meta">Posted on 2002-03-30 07:02:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-31620">
+    <div class="subject"><a href="#post-31620">Casting?</a></div>
+    <div class="body">TYPE is a high level concept, SIZE is an assembler concept, knowing the difference means not making mistakes about data sizes.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-03-30 08:06:10 by hutch--</div>
+   </div>
+   <div class="post" id="post-31722">
+    <div class="subject"><a href="#post-31722">Casting?</a></div>
+    <div class="body">Dont forget you can write this code:<br /><pre><code><br />TBN_DROPDOWN equ -710<br /><br />.elseif uMsg == WM_NOTIFY<br />     mov edi, lParam<br />     assume edi&#58;ptr NMTOOLBAR<br />     push &#91;edi&#93;.iItem<br />     pop ID<br />     .if ID == 57 ; Menu ID for font button<br />          mov eax, &#91;edi&#93;.hdr.code<br />          .if eax == TBN_DROPDOWN<br />              ; something<br />          .endif<br />     .endif<br />.endif<br /></code></pre><br /><br />as this:<br /><br /><pre><code><br />TBN_DROPDOWN equ -710<br /><br />.elseif uMsg == WM_NOTIFY<br />     mov edi, lParam<br />     .if &#91;NMTOOLBAR ptr &#91;edi&#93;&#93;.iItem == 57 ; Menu ID for font button<br />          .if &#91;NMTOOLBAR ptr &#91;edi&#93;&#93;.hdr.code == TBN_DROPDOWN<br />              ; something<br />          .endif<br />     .endif<br />.endif<br /></code></pre><br /><br /><br />This way you dont have to ue <strong>ASSUME</strong> which in this case, my personal opinion says looks real messy<br /><br />Also you don't have to do a <strong> &quot;mov eax,.iItem &quot;</strong> ---- <strong>&quot; .IF eax==&quot; </strong> (espically for the constant).</div>
+    <div class="meta">Posted on 2002-03-31 02:01:17 by huh</div>
+   </div>
+  </div>
+ </body>
+</html>

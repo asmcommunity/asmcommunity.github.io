@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Faster Strncmpi... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21724" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21724">Faster Strncmpi...</a></p>
+   <div class="post" id="post-163912">
+    <div class="subject"><a href="#post-163912">Faster Strncmpi...</a></div>
+    <div class="body">well to start another topic about string comparing..<br />the strncmpi function compares with case insencitive of a specified length, theres no standard strncmpi, but theres a strcmpi and a strncmp in standard c++ libs... so i coded a strncmpi in c++, and inline asm.<br />as i figured, my asm one won out. but not by too much. im at an impass, and i cant think of any thing more to improve my functions speed.<br />the more chars that cases dont match increase the time it takes to complete.<br />take a look at the attachment. i also go by cncr04s if that matters at all ;)<br /><br /><pre><code><br />cncr04s ASM | 145 clocks | result 0   &lt;- all cases match    85 chars<br />cncr04s ASM | 761 clocks | result 0   &lt;- all cases dont match    85 chars<br />cncr04s C++ | 2645 clocks | result 0   &lt;- compiler on &#39;release&#39;    85 chars<br /></code></pre></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=886" target="_blank">cncstrncmpi.txt</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-08-28 20:50:07 by Qages</div>
+   </div>
+   <div class="post" id="post-163964">
+    <div class="subject"><a href="#post-163964">Re: Faster Strncmpi...</a></div>
+    <div class="body">1.what about national characters?<br />2.if only a..z used and length of string is known - why not to compare full dwords:<br />...<br />mov eax,<br />(or lodsd - i always use it, but someone say it slow - do not know)<br />mov edx,<br />or eax,20202020h<br />or edx,20202020h<br />cmp eax,edx<br />...<br />if the end do not fit in dword - shr or and with eg. 0FF000000h</div>
+    <div class="meta">Posted on 2005-08-30 09:15:19 by Shoo</div>
+   </div>
+   <div class="post" id="post-163979">
+    <div class="subject"><a href="#post-163979">Re: Faster Strncmpi...</a></div>
+    <div class="body">it does compare full dwords, and lodsd is hellisly slow.<br />it doesnt use only a-z. if it is a-z it makes it uppercase and makes the other uppercase if its a-z and compares, if they match its ok if not then its not same char.<br /><br />i know nothing of national chars case, </div>
+    <div class="meta">Posted on 2005-08-30 12:02:26 by Qages</div>
+   </div>
+   <div class="post" id="post-163984">
+    <div class="subject"><a href="#post-163984">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi<br />Here is the proc used in the new release of the ObjMem32 library of ObjAsm32.<br /><br /><pre><code>OPTION PROLOGUE:NONE<br />OPTION EPILOGUE:NONE<br /><br />align @WordSize<br />StrLIComp proc pString1:Pointer, pString2:Pointer, dMaxLen:dword<br />&nbsp; &nbsp; push ebx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Save ebx<br />&nbsp; &nbsp; mov ecx, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Load first pointer<br />&nbsp; &nbsp; xor eax, eax<br />&nbsp; &nbsp; mov edx, &nbsp; &nbsp; &nbsp; &nbsp;  ;Load second pointer<br />&nbsp; &nbsp; mov ebx, <br />&nbsp; &nbsp; inc ebx<br />align @WordSize<br />@@Char:<br />&nbsp; &nbsp; dec ebx<br />&nbsp; &nbsp; jnz @@Next<br />&nbsp; &nbsp; xor eax, eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;eax = 0 (same string)<br />&nbsp; &nbsp; pop ebx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Restore ebx<br />&nbsp; &nbsp; ret 12&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Return<br />align @WordSize<br />@@Next:<br />&nbsp; &nbsp; mov al, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Load char to compare<br />&nbsp; &nbsp; or al, al&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Test if end of string<br />&nbsp; &nbsp; jz @@Eq?&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Compute result<br />&nbsp; &nbsp; cmp al, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Compare with the char of the other string<br />&nbsp; &nbsp; jnz @@ICmp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Chars are not equal, check if for capitals<br />&nbsp; &nbsp; inc ecx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Goto for next char<br />&nbsp; &nbsp; inc edx<br />&nbsp; &nbsp; jmp @@Char<br />align @WordSize<br />@@ICmp:<br />&nbsp; &nbsp; cmp al, &#39;z&#39;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Check range &#39;A&#39;..&#39;Z&#39; or &#39;a&#39;..&#39;z&#39;<br />&nbsp; &nbsp; ja @@Eq?<br />&nbsp; &nbsp; cmp al, &#39;A&#39;<br />&nbsp; &nbsp; jb @@Eq?<br />&nbsp; &nbsp; cmp al, &#39;a&#39;<br />&nbsp; &nbsp; jae @@1<br />&nbsp; &nbsp; cmp al, &#39;Z&#39;<br />&nbsp; &nbsp; ja @@Eq?<br />@@1:<br />&nbsp; &nbsp; xor al, 20h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Swap lowercase - uppercase<br />&nbsp; &nbsp; cmp al, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Compare again<br />&nbsp; &nbsp; jne @@2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;If not equal, compute result<br />&nbsp; &nbsp; inc ecx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Goto for next char<br />&nbsp; &nbsp; inc edx<br />&nbsp; &nbsp; jmp @@Char<br />@@2:<br />&nbsp; &nbsp; and al, not 20h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Make uppercase<br />@@Eq?:<br />&nbsp; &nbsp; xor ecx, ecx<br />&nbsp; &nbsp; mov cl, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Get char<br />&nbsp; &nbsp; cmp cl, &#39;a&#39;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Check range &#39;a&#39;..&#39;z&#39;<br />&nbsp; &nbsp; jb @@Exit<br />&nbsp; &nbsp; cmp cl, &#39;z&#39;<br />&nbsp; &nbsp; ja @@Exit<br />&nbsp; &nbsp; and cl, not 20h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Make uppercase<br />@@Exit:<br />&nbsp; &nbsp; sub eax, ecx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Subtract to see which is smaller<br />&nbsp; &nbsp; pop ebx<br />&nbsp; &nbsp; ret 12<br />StrLIComp endp<br /><br />OPTION PROLOGUE:PrologueDef<br />OPTION EPILOGUE:EpilogueDef</code></pre><br /><br />Regards,<br /><br />Biterider</div>
+    <div class="meta">Posted on 2005-08-30 15:22:41 by Biterider</div>
+   </div>
+   <div class="post" id="post-163994">
+    <div class="subject"><a href="#post-163994">Re: Faster Strncmpi...</a></div>
+    <div class="body">2.i was wrong with dwords :) i understand this later - dword can contain also alphabet characters and non-alphabet: i forgot that i&#39;ve been using this method to search known words. with this a story:<br /><div class="quote">Praporshik (highest non-officer range in our army - hero of many stories) provides a lesson for young soldiers. He says strickly:<br />- Write down, comrades soldiers: &quot;Water starts boil when 90 degree&quot;<br />One soldier hesitately rise his hand.<br />- What do you want, comrade soldier?<br />Soldier says:<br />- Of course, I&#39;m not sure, but it seems to me, in the school we were study the water starts boil when another temperature...<br />Praporshik silently searches a while something in his old thik notebook, then says:<br />- Yes, comrades soldiers, correct: &quot;Water starts boil when 100 degree&quot;. I was just mixed it with rect angle.</div><br /><br />1.without national characters support this function can became unusable. characters with value over 127 can be compared using passed cross-table. why it is important: here is my work folder (other have same) - how you can search files there with it?<br /><br />regards!<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=903" target="_blank">work.gif</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-08-31 00:04:22 by Shoo</div>
+   </div>
+   <div class="post" id="post-164006">
+    <div class="subject"><a href="#post-164006">Re: Faster Strncmpi...</a></div>
+    <div class="body">first, it will compare all chars, but if there a-z it will make them uppercase, so if u speek russian, youll just have to remember the cases must match.<br />new results with code posed by bitrider..<br />as you can see my code still is faster!<br /><pre><code><br />cncr04s ASM | 145 clocks | result 0 &lt;-- all cases match<br />cncr04s C++ | 2762 clocks | result 0 &lt;-- all cases match<br />OBJASM ASM | 573 clocks | result 0 &lt;-- all cases match<br /><br />cncr04s ASM | 779 clocks | result 0 &lt;-- all cases dont match<br />cncr04s C++ | 2776 clocks | result 0 &lt;-- all cases dont match<br />OBJASM ASM | 1007 clocks | result 0 &lt;-- all cases dont match<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2005-08-31 11:48:02 by Qages</div>
+   </div>
+   <div class="post" id="post-164022">
+    <div class="subject"><a href="#post-164022">Re: Faster Strncmpi...</a></div>
+    <div class="body">1.<div class="quote">so if u ..., youll just have to remember </div> - absolutely inacceptable ;) - if you think so you should not compare it with lstrcmpi - they are not equivalent (lstrcmpi compares all alphabetical characters case insensitive depending on current code page - and we need exactly this) - such function can be usefull only in specific cases, where only standart latin letters are used (eg. compilers etc.)<br /><br />2.to Biterider:<br />how about this (did not tested - just thought and typed :)):<br /><br /><pre><code>@@ICmp:<br />    xor ecx, ecx<br />    mov cl,                ;Get char<br />    cmp al, &#39;z&#39;                 ;Check range &#39;A&#39;..&#39;Z&#39; or &#39;a&#39;..&#39;z&#39;<br />    ja @@Eq?<br />    cmp al, &#39;A&#39;<br />    jb @@Eq?<br />    cmp al, &#39;a&#39;<br />    jae @@1<br />    cmp al, &#39;Z&#39;<br />    ja @@Eq?<br />@@1:<br />    xor al, 20h                 ;Swap lowercase - uppercase<br />    cmp al,                ;Compare again<br />    jne @@2                     ;If not equal, compute result<br />    inc ecx                     ;Goto for next char<br />    inc edx<br />    jmp @@Char<br />@@2:<br />    and al, not 20h             ;Make uppercase<br />    and cl, not 20h             ;Make uppercase - if already - not affected<br />@@Eq?:</code></pre><br /><br />regards!<br />---<br />oh, i see i did not all changes, but have no time currently, but idea is this: get another character and &quot;and&quot; it depending on result of first comparison to avoid two extra comparisons/conditional jumps<br /><br />r!</div>
+    <div class="meta">Posted on 2005-09-01 00:07:29 by Shoo</div>
+   </div>
+   <div class="post" id="post-164024">
+    <div class="subject"><a href="#post-164024">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi Qages<br />I take a quick look into your code and found 3 week points:<br /><ul><br /><li>Your code is not capable to handle the case when the length parameter is bigger than the comparing string lengths.</li><br /><li>Since you are reading in words step without alignment, it possible that you read out of a page boundary causing a GPF.</li><br /><li>Since the reading is not limited to the real string lengths, it is possible that the reading can go beyond a page limit causing a GPF.</li><br /></ul><br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2005-09-01 02:19:18 by Biterider</div>
+   </div>
+   <div class="post" id="post-164025">
+    <div class="subject"><a href="#post-164025">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi Shoo<br />The problem is that you must check the char in cl to be in the range &quot;a&quot; .. &quot;z&quot; before you capitalize it. All other chars should not be changed!<br /><br />Regards<br /><br />Biterider</div>
+    <div class="meta">Posted on 2005-09-01 02:27:32 by Biterider</div>
+   </div>
+   <div class="post" id="post-164026">
+    <div class="subject"><a href="#post-164026">Re: Faster Strncmpi...</a></div>
+    <div class="body">i know. if the 1st char is in &#39;A..Z&#39; or &#39;a..z&#39; range and you will reset 20h bit and will reset same bit in cl they will be equal only if cl is also in that range. of course, this can bring wrong sorting when not-alphabetic chars are used in the words (between &#39;Z&#39; and &#39;a&#39;) - it need to see on it, but it will not affect comparison anyway, i think: needs to try, mby later :)<br /><br />regards!<br /><br />;++++++++++++++++++++++++<br />Hi Biterider <br /><br />he-he, i made a better look and understand that function&#39;s &#39;tale&#39; is to make proper comparison of symbols (first time it was seemed to me you get both characters each cycle), so, everything is right there. in other side i think, although such procedure is universal (you can use it just for compare and also for sorting depending on its result) i think there is a sence to have separate functions for this two tasks when speed more needed then size (programmer, when call it, always knows what he goes to do). also, i do not see the reason to compare non-alphabetic characters with alphabetic - it seems to me better in this case alphabetic should be always less (or always greater) then non-alphabetic. i&#39;d played yestarday with table-based comparison, but both two variants were refused even not finished :) i&#39;ll continue it later...</div>
+    <div class="meta">Posted on 2005-09-01 02:41:48 by Shoo</div>
+   </div>
+   <div class="post" id="post-164072">
+    <div class="subject"><a href="#post-164072">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi everybody!<br /><br />Yep, table lookup is not very fast. :sad:<br />I wrote this code a few month ago.<br />Comparsion of two strings, (85 chars each) takes about 1000 clock&#39;s on P4-2400 i845G.<br />Works fine with English/Russian/Ukrainian chars. :D</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=914" target="_blank">StrCmpi.inc</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-09-02 09:06:27 by Bohdan</div>
+   </div>
+   <div class="post" id="post-164073">
+    <div class="subject"><a href="#post-164073">Re: Faster Strncmpi...</a></div>
+    <div class="body">I also tried the table lookup algo to check if it is faster, but the result was negative. The above routine showed to be faster.<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2005-09-02 09:22:25 by Biterider</div>
+   </div>
+   <div class="post" id="post-164079">
+    <div class="subject"><a href="#post-164079">Re: Faster Strncmpi...</a></div>
+    <div class="body"><br />Some improvements to my code.&nbsp; :) :) :)<br /><br /><pre><code><br />All cases match...<br />Average execution time: 451 cycles.<br /><br />All cases dont match...<br />Average execution time: 720 cycles.<br /></code></pre><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=917" target="_blank">StrCmpi.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-09-02 10:49:55 by Bohdan</div>
+   </div>
+   <div class="post" id="post-164089">
+    <div class="subject"><a href="#post-164089">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi Bohdan<br />Have you noticed that you can out of a page boundary if you don&#39;t align the dword readings?<br /><br />Regards<br /><br />Biterider</div>
+    <div class="meta">Posted on 2005-09-02 15:18:39 by Biterider</div>
+   </div>
+   <div class="post" id="post-164101">
+    <div class="subject"><a href="#post-164101">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi Biterider !<br /><br />here is a part of improoved your procedure ;)<br /><pre><code>align @WordSize<br />@@ICmp:<br />&nbsp; &nbsp; cmp al, 0C0h<br />&nbsp; &nbsp; jb @@Eq?<br />@@1:<br />&nbsp; &nbsp; xor al, 20h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Swap lowercase - uppercase<br />&nbsp; &nbsp; cmp al, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Compare again<br />&nbsp; &nbsp; jne @@2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;If not equal, compute result<br />&nbsp; &nbsp; inc ecx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Goto for next char<br />&nbsp; &nbsp; inc edx<br />&nbsp; &nbsp; jmp @@Char<br />@@2:<br />&nbsp; &nbsp; and al, not 20h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Make uppercase<br />@@Eq?:<br />&nbsp; &nbsp; xor ecx, ecx<br />&nbsp; &nbsp; mov cl, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Get char<br />&nbsp; &nbsp; cmp cl, 0E0h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Check range &#39;?&#39;..&#39;??&#39;<br />&nbsp; &nbsp; jb @@Exit<br />&nbsp; &nbsp; sub cl, not 20h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;Make uppercase<br />@@Exit:<br /></code></pre><br /><br />although it compares only russian letters instead of latin it will work even faster!<br /><br />of course, it is a joke :) but characters, &quot;additional&quot; for some of you, are the &quot;main&quot; for us, and we need a real procedure, not just exersize.<br /><br />Hi Bohdan!<br /><br />just downloaded everything (from both topics) - will look later. did you used xlat? i&#39;ve been thinking about it, maybe it should faster and better and not too bloating table.<br /><br />regards!</div>
+    <div class="meta">Posted on 2005-09-02 22:40:02 by Shoo</div>
+   </div>
+   <div class="post" id="post-164109">
+    <div class="subject"><a href="#post-164109">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi Shoo!<br /><br /> Yes, i use xlatb. Lookup table is tricky a bit, uppercase ASCII codes are switched with lowercase and vice versa.<br /> With this table only one xlatb instruction is needed.<br /> All comparsion looks like this:<br /><pre><code><br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; cmp&nbsp; &nbsp; al, bl<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; je&nbsp; &nbsp; &nbsp;  SameChars<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; xlatb<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; je&nbsp; &nbsp; &nbsp;  SameChars<br />NoMatch:&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ...............<br /></code></pre></div>
+    <div class="meta">Posted on 2005-09-03 03:39:45 by Bohdan</div>
+   </div>
+   <div class="post" id="post-164114">
+    <div class="subject"><a href="#post-164114">Re: Faster Strncmpi...</a></div>
+    <div class="body">Hi Bohdan!<br />yes, i already made quick look and currently thinking about this. i think this discussion should be continued in &quot;table&quot; topic :) later - you know: weekend - a lot of work at home ;)<br /><br />i thought it is just need to show to those who never used national characters why calculation is not effective at all. on the picture you can see uppercased combined alphabet i&#39;ve using to uppercase/sort factor calculation. below you can see how some of those characters chaotically spreaded through 128 - 255.<br /><br />what about functions presented here they are also needed to fast comparation of urls, emails, programming languages where only standart latin can be used, in other words, just mark it as &quot;... function for standart latin alphabet only&quot;<br /><br />regards!</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=919" target="_blank">cyrsort.gif</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-09-03 06:06:55 by Shoo</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>to mmx... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15967" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=15967">to mmx...</a></p>
+   <div class="post" id="post-123751">
+    <div class="subject"><a href="#post-123751">to mmx...</a></div>
+    <div class="body">i have some code that tests for prime. its extreemly faster then *simple* modulo comparing, but extremmly slower then a seive. i came up with it my self actually. took 10.4 hours to do 256^4 primes on my athlon xp 1600. ive yet to test it again on my new athlon 3000+. im ready for the next step. 64bits. only compare and division operations are done. and a square root. it will divide by every number under its square root. and compare the remainder to 0, if its 0 it isnt prime.<br />heres the currrent code. its inline assembler in a c++ prog.<br />what i really need it a mmx square root algo. doesnt have to be in mmx code, but someting that i can put into a mmx reg.i also need to know how to compare.<br /><br /><pre><code><br />__asm &#123;<br />mov ecx,5//ecx is our number to be tested<br />xor edi,edi<br />add edi,2<br />xor esi,esi//esi is our memory address<br />mov esi,eax<br />looper&#58;<br />cmp ecx,1// had to add other wize it would wrap over from -1<br />je _endaa<br />xor ebx,ebx<br />push ecx<br />call fred_sqrt<br />mov ebp,eax//ebp is our sqroot<br />pop ecx<br />//prefetchtnta dword ptr &#91;esi+ebx*4&#93;<br />_mnl&#58;<br />cmp dword ptr &#91;esi+ebx*4&#93;,ebp<br />jnle nlcpr<br />xor edx,edx<br />mov eax,ecx<br />idiv dword ptr &#91;esi+ebx*4&#93;<br />or edx,edx//edx is our remainder/eax temp<br />je _nevn<br />inc ebx// index<br />jmp _mnl<br />nlcpr&#58;<br />mov dword ptr &#91;esi+edi*4&#93;,ecx<br />inc edi//our index to our prime<br />_nevn&#58;<br />inc ecx<br />inc ecx<br />jmp looper<br />&#125;<br />_endaa&#58;<br />__asm mov prma_a,edi<br />a=0;<br />aFile = fopen &#40;&quot;primes.txt&quot;,&quot;at&quot;&#41;;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-11-07 17:01:00 by Qages</div>
+   </div>
+   <div class="post" id="post-123876">
+    <div class="subject"><a href="#post-123876">to mmx...</a></div>
+    <div class="body">The x86-32 divide instruction is not sufficient for 64 bit numbers due to overflow - have to use a couple of them:<pre><code>	xor	edx, edx<br />	mov	eax, BIGINT + 4<br />	div	Small_Prime<br />	mov	eax, BIGINT<br />	div	Small_Prime<br />; edx is remainder</code></pre>This can be put into a loop to divide any large integer by a 32 bit prime.  <a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=122678.msg122678">This thead</a> might provide some enlightenment on the square root of large numbers.<br /><br />If you just want to know if a 64 bit number is prime then it might be better to use:<br /><br /><a target="_blank" href="http://mathworld.wolfram.com/StrongPseudoprime.html">http://mathworld.wolfram.com/StrongPseudoprime.html</a><br /><br />Have you read the <a target="_blank" href="http://primes.utm.edu/">Prime Pages</a>? Despite my lacking knowledge of mathematics I was able to understand the explanations given. <span style="font-size:9px>(<a target="_blank" href="">http://www.utm.edu/research/primes/prove/index.html</a>)</span><br /><br />Could adapt <strong>Hagen</strong>'s <a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=108912.msg108912">SPRP test</a> to 64 bits.<br /><br /><a target="_blank" href="http://mathforum.org/library/drmath/view/51512.html">Dr.Math</a> suggests using <a target="_blank" href="http://mathworld.wolfram.com/StrongLucasPseudoprime.html">Lucas tests</a> to find if a number is prime - I haven't tried it, but Dr.Math gives a very easy explanation.</div>
+    <div class="meta">Posted on 2003-11-09 12:18:20 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-123937">
+    <div class="subject"><a href="#post-123937">to mmx...</a></div>
+    <div class="body">The hints of bitRAKE are the essential way to go.<br /><br />For 64 Bit numbers it's sufficient to test the number with SPP tests to all small primes 2,3,5,7,11,13,17,19,23.<br />If the number pass all these SPP tests then the number is prime.<br /><br />This way is far faster and have far smaller complexity as your trial division approach. But it is recommended to test the number as first step to some small primes with trial division. I personaly use the first 32 primes for this trial division. This tests split out about 80% of all numbers. To make this test fast we don't need to do divisions. Instead we can use only multiplications if we use a &quot;division&quot; trough multiplication to SmallPrime^-1 mod 2^32.<br /><br />In SSE2 there exists no fast way to do a universal division because SSE2 have no division instruction. Thus using SSE2 need first to translate the SPP test with division into one without Divisions. That's possible if the modular exponentation in the SPP tests use the Montgomery Trick. The Montgomery trick exchange on modular division with 2.5 Multiplication and 1.5 additions. If this is ready then we can go to use SSE2 to make the native algo. faster.<br /><br />Currently a 32 Bit IsPrime() function using all above tricks implemented in IA32 assembler need with random numbers in range upto 2^31 - 2^32 about 800 clock cycles.<br />Using a sieve to get sequential all 205 Million primes upto 2^32 need only 13 seconds, about 0.1 clock cycles per number.<br /><br />Hagen</div>
+    <div class="meta">Posted on 2003-11-10 09:45:46 by Hagen</div>
+   </div>
+   <div class="post" id="post-123972">
+    <div class="subject"><a href="#post-123972">to mmx...</a></div>
+    <div class="body">if you could help me convert IsPrime() into 64 bits that would be great, since i made a complete list of all primes 2 to 2^32</div>
+    <div class="meta">Posted on 2003-11-10 16:09:34 by Qages</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GetFileSize...(?) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27810" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27810">GetFileSize...(?)</a></p>
+   <div class="post" id="post-198138">
+    <div class="subject"><a href="#post-198138">GetFileSize...(?)</a></div>
+    <div class="body">Is this even possible???
+
+<pre><code>
+.386
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\user32.inc
+include \masm32\include\masm32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\masm32.lib
+
+.data
+MsgCaption   db "File Size Info:",0
+MsgBoxText   db "The file size is: %s bytes",0
+TheFile	     db "C:\Windows\Winver.exe",0	;the file to be sized up.
+
+.data?
+Buffer       db 256 dup (?) ; for file size..
+
+.code
+start:
+invoke dwtoa, addr TheFile, addr Buffer
+invoke GetFileSize, addr TheFile, NULL	;I know this isn't right, but i don't know how to do it right.?
+invoke wsprintf, addr Buffer, addr MsgBoxText
+invoke MessageBox, NULL, addr Buffer, addr MsgCaption, MB_OK
+invoke ExitProcess,NULL
+end start
+</code></pre>
+
+Alright, i know this is a little *ahem*  messed up :).
+But i'm not sure how to get the file size for Winver.exe. Or any file for that matter. I'm kind of new to Asm and this api (GetFileSize) has me stumped. I'm sure it is something really simple, but the only examples i can find are really complex and just confuse me more. So if someone could be so kind as to point out my mistake(s). It would help me out greatly. If someone could show me how to get this code working i would be greatful.
+
+Nok.</div>
+    <div class="meta">Posted on 2001-04-26 15:26:00 by Nokturnal</div>
+   </div>
+   <div class="post" id="post-198139">
+    <div class="subject"><a href="#post-198139">GetFileSize...(?)</a></div>
+    <div class="body">The solution is pretty simple, GetFileSize requires a <strong>handle to a file</strong>, not a pointer to a filename. So you will first have to open the file and then use it's handle to retrieve information. You can open it with CreateFile:
+<pre><code>
+.data?
+hFile   dd   ?
+.code
+invoke CreateFile, ADDR TheFile, 0, 0, 0,\
+        OPEN_EXISTING, 0, 0
+mov    hFile, eax
+invoke GetFileSize, hFile, 0
+;filesize is in eax now
+;after you're done, delete handle to file:
+invoke CloseHandle, hFile
+</code></pre>
+
+Edit:
+sorry I overlooked some things in your code the first time I replied:
+<pre><code>
+invoke dwtoa, addr TheFile, addr Buffer
+</code></pre>
+This code copies the address of Buffer as string to TheFile. Thats probably not what you want. Just remove this line.
+<pre><code>
+invoke wsprintf, addr Buffer, addr MsgBoxText
+</code></pre>
+You should change the <strong>%s</strong> in MsgBoxText to <strong>%lu</strong> if you want to convert a number to a string. Then you should also pass the number to wsprintf:
+<pre><code>
+invoke wsprintf, addr Buffer, addr MsgBoxText, eax
+</code></pre>
+(If the filesize is in eax)
+
+Thomas
+
+This message was edited by Thomas, on 4/26/2001 5:06:58 PM</div>
+    <div class="meta">Posted on 2001-04-26 17:01:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-198140">
+    <div class="subject"><a href="#post-198140">GetFileSize...(?)</a></div>
+    <div class="body">Here's the right code:
+<pre><code>
+.386
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\user32.inc
+include \masm32\include\masm32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\masm32.lib
+
+.data
+MsgCaption     db "File Size Info:",0
+MsgBoxText     db "The file size is: %lu bytes",0
+TheFile        db "C:\Windows\Winver.exe",0   ;the file to be sized up.
+
+.data?
+Buffer   db   256 dup (?) ; for file size..
+hFile    dd   ?
+.code
+
+
+.code
+start:
+invoke CreateFile, ADDR TheFile, 0, 0, 0,\
+        OPEN_EXISTING, 0, 0
+mov    hFile, eax
+invoke GetFileSize, hFile, 0
+invoke wsprintf, addr Buffer, addr MsgBoxText, eax
+invoke MessageBox, NULL, addr Buffer, addr MsgCaption, MB_OK
+invoke CloseHandle, hFile
+invoke ExitProcess,NULL
+end start
+</code></pre>
+
+Thomas
+
+This message was edited by Thomas, on 4/26/2001 5:17:34 PM</div>
+    <div class="meta">Posted on 2001-04-26 17:10:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-198141">
+    <div class="subject"><a href="#post-198141">GetFileSize...(?)</a></div>
+    <div class="body">nokturnal,
+
+<pre><code>
+.386
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\user32.inc
+include \masm32\include\masm32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\masm32.lib
+
+.data
+MsgCaption   db "File Size Info:",0
+MsgBoxText   db "The file size is: %u bytes",0
+TheFile        db "C:\Windows\Winver.exe",0   ;the file to be sized up.
+
+.data?
+Buffer       db 256 dup (?) ;for displaying the sentence
+hFile        HANDLE ?
+
+.code
+start:
+invoke CreateFile,ADDR TheFile,GENERIC_READ,NULL,\
+     NULL,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,NULL
+mov hFile,eax
+
+invoke GetFileSize,hFile,NULL
+invoke CloseHandle, hFile
+invoke wsprintf,ADDR Buffer,OFFSET MsgBoxText, eax
+invoke MessageBox, NULL, addr Buffer, addr MsgCaption, MB_OK
+invoke ExitProcess,NULL
+end start
+</code></pre>
+
+First you have to open the file using CreateFile because  GetFileSize needs a handle, after invoking GetFileSize then you get the size as return value in eax.
+
+Before you used dwtoa to convert the hex value to dec. This is good but unneeded as your using wsprintf right after for the converted number. %u does the same and pastes the converted value right where it needs to be :)
+
+
+
+
+This message was edited by JimmyClif, on 4/27/2001 5:26:37 AM</div>
+    <div class="meta">Posted on 2001-04-26 17:18:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198142">
+    <div class="subject"><a href="#post-198142">GetFileSize...(?)</a></div>
+    <div class="body">D*mn D*mn D*mn
+
+I'm just a slow writer..
+
+I hate when this happens :(
+
+:D :D :D :D <- This got added
+After all.. it's the intention which counts isn't it?
+
+This message was edited by JimmyClif, on 4/26/2001 5:25:41 PM</div>
+    <div class="meta">Posted on 2001-04-26 17:19:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198143">
+    <div class="subject"><a href="#post-198143">GetFileSize...(?)</a></div>
+    <div class="body">I see :).
+
+Thanks Thomas! JimmyCliff too! Man i love this board. If you  guys ever need help with anything, let me know. I'll help in whatever way i can.
+
+Thanx agn!
+
+Nok.</div>
+    <div class="meta">Posted on 2001-04-26 21:22:00 by Nokturnal</div>
+   </div>
+   <div class="post" id="post-198144">
+    <div class="subject"><a href="#post-198144">GetFileSize...(?)</a></div>
+    <div class="body">........hey, how do you use a variable in a null-terminated string defined in .data???  I'm not sure I quite understand it.</div>
+    <div class="meta">Posted on 2001-04-26 23:10:00 by *unknown*</div>
+   </div>
+   <div class="post" id="post-198145">
+    <div class="subject"><a href="#post-198145">GetFileSize...(?)</a></div>
+    <div class="body">Unknown,
+
+It all comes down to a certain API called "wsprintf" ... This API copies your template which was here:
+
+<pre><code>MsgBoxText   db "The file size is: %u bytes",0
+invoke wsprintf,ADDR Buffer,OFFSET Template,12456h</code></pre>
+
+This API copies your template in a buffer you specify and places 
+the argument you give at the point where you tell him to! It's 
+just a neat & usefull API ;D</div>
+    <div class="meta">Posted on 2001-04-27 08:44:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198146">
+    <div class="subject"><a href="#post-198146">GetFileSize...(?)</a></div>
+    <div class="body">Huummmmmmm........that is pretty slick, I'll have to mess around with that API sometime.....BTW, what's that argument in the third parameter of WSPRINTF?  Just some garbage, or does it have to do with the placement in the string?</div>
+    <div class="meta">Posted on 2001-04-27 10:56:00 by *unknown*</div>
+   </div>
+   <div class="post" id="post-198147">
+    <div class="subject"><a href="#post-198147">GetFileSize...(?)</a></div>
+    <div class="body">The third argument I used... 12345h is the number which gets placed into the template... where the %u is... after that it gets converted to decimal.
+
+The sentence looks like this later:
+"The file size is: 74565 bytes"
+
+Sure, you have to play around with this API.. because only when knowing how to use it you start seeing solutions to your wildest problems :) Ok, I exagerated.. but it really is good to know that one!
+
+Another example I could give you is this one:
+.data
+Template db "User %s",13,10,0
+Buffer byte 50 dup(?),0
+UserNameBuffer byte 25 dup(?),0
+.code
+;here you get the name someone wrote in you editfield into a 
+;buffer called UserNameBuffer
+invoke GetDlgItemText,IDC_EDIT,ADDR UserNameBuffer,25
+
+;then using wsprintf you are getting it ready for sending 
+;over to the pop3 server
+invoke wsprintf,ADDR Buffer,OFFSET Template,OFFSET UserNameBuffer
+;it looks now like this "User TheNameFromTheEditField",13,10,0</div>
+    <div class="meta">Posted on 2001-04-27 11:31:00 by JimmyClif</div>
+   </div>
+  </div>
+ </body>
+</html>

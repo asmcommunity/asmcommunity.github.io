@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Intel document from 1998 on RDTSC - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16306" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16306">Intel document from 1998 on RDTSC</a></p>
+   <div class="post" id="post-126669">
+    <div class="subject"><a href="#post-126669">Intel document from 1998 on RDTSC</a></div>
+    <div class="body">Many will know the Intel document from 1998 on how to use the RDTSC instruction: <a target="_blank" href="http://cedar.intel.com/software/idap/media/pdf/rdtscpm1.pdf">rdtscpm1.pdf</a>. On p.5, they provide the following code :<br /> <br /><pre><code><br />unsigned time, time_low, time_high;<br />unsigned mhz = 150000000; // 150 MHz processor<br /><br />__asm rdtsc // Read time stamp to EAX<br />__asm mov time_low, eax<br />__asm mov time_high, edx<br /><br />Sleep &#40;35000&#41;; // Sleep for 2 seconds<br /><br />__asm rdtsc<br />__asm sub eax, time_low // Find the difference<br />__asm sub edx, time_high<br />__asm div mhz // Unsigned divide EDX&#58;EAX by mhz<br />__asm mov time, eax<br /><br />printf&#40;&quot;Seconds&#58; %u\n&quot;, time&#41;;<br /></code></pre><br /><br />The line &quot;sub edx, time_high&quot; looks wrong to me. In my view, they would need to use SBB instead of SUB. That is because &quot;sub eax, time_low&quot; may well subtract a bigger number from a smaller one, resulting in a &quot;borrow&quot;. If so, then the borrow needs to be taken care of (see the example below). Right? Wrong? &quot;Known bug&quot;?<br /><br />Regards, Frank<br /><br /><br />---------------------------------------------------------------<br /><strong>EXAMPLE</strong><br />Assume that our first measure returns the 64-bit timestamp EDX:EAX = 00000000:FFFFFFFFh, and our second measure returns the 64-bit timestamp EDX:EAX = 00000001:00000001h. Now let's follow Intel's algorithm.<br /><br /><strong>Step 1: Subtracting the low DWORDs (new minus old)</strong><br />New EAX = 000000001h, old EAX = 0FFFFFFFFh, new EAX - old EAX = 000000002h, &quot;borrow&quot; has taken place<br />After this step, EDX:EAX = 00000001:00000002h, CF = 1.<br /><br /><strong>Step 2: Subtracting the high DWORDs (new minus old)</strong><br />New EDX = 000000001h, old EDX = 000000000h, new EDX - old EDX = 000000001h<br />After this step, EDX:EAX = 00000001:00000002h.<br /><br /><strong>Alternative Step 2: Using SBB instead of SUB</strong><br />Recall that from Step 1, CF = 1<br />New EDX = 000000001h, old EDX = 000000000h, new EDX - old EDX - CF = 000000000h<br />After this step, EDX:EAX = 00000000:00000002h.</div>
+    <div class="meta">Posted on 2003-12-05 12:14:19 by Frank</div>
+   </div>
+   <div class="post" id="post-126676">
+    <div class="subject"><a href="#post-126676">Intel document from 1998 on RDTSC</a></div>
+    <div class="body">Yes, you're right, they goofed :)<br />Second sub should be sbb.<br /><br />By the way, if you want to use this for a timer, be careful... Some CPUs (especially laptops, but also P4 and Athlon64) can dynamically alter their clock frequency.<br />So while this is an excellent way to do relative clockcycle counts, it could malfunction when used as an absolute timer (common pitfall).<br />For such a timer, I would recommend using timeGetTime(), the high-resolution timer from winmm.dll.<br />You can control the granularity with timeBeginPeriod()/timeEndPeriod().</div>
+    <div class="meta">Posted on 2003-12-05 12:28:21 by Bruce-li</div>
+   </div>
+   <div class="post" id="post-126685">
+    <div class="subject"><a href="#post-126685">Intel document from 1998 on RDTSC</a></div>
+    <div class="body"><div class="quote"><br />Yes, you're right, they goofed :)<br />Second sub should be sbb.</div><br />Thought so ... someone should tell them about it.<br /><br /><div class="quote"><strong>By the way, if you want to use this for a timer, be careful... Some CPUs (especially laptops, but also P4 and Athlon64) can dynamically alter their clock frequency.</div><br />My (passive) timers rely on the QueryPerformanceCounter function. Would you recommend that function, or is it possibly based on RDTSC anyway?<br /><br />Regards, Frank</div>
+    <div class="meta">Posted on 2003-12-05 13:04:08 by Frank</div>
+   </div>
+   <div class="post" id="post-126706">
+    <div class="subject"><a href="#post-126706">Intel document from 1998 on RDTSC</a></div>
+    <div class="body">QueryPerformanceCounter() is usually a good alternative yes, although it is a chipset feature (so not rdtsc-based), which is not available on every PC (you can assume that pretty much every normal Pentium PC and later has it, but for very old PCs or embedded systems/PocketPC etc, it may not be available).<br />Note also that some chipsets support this feature, but have a buggy implementation, I believe a certain Intel chipset (was that the i815 or something?) reports 'random' values when the bus load is too high.<br /><br />I forgot to mention why I recommended timeGetTime(), because I forgot about these issues :)<br />Thanks for reminding me. Hope this information has been of help. And you may want to look up the exact chipset(s) with issues, as it's been a while since I've dealt with it.</div>
+    <div class="meta">Posted on 2003-12-05 15:58:19 by Bruce-li</div>
+   </div>
+   <div class="post" id="post-126802">
+    <div class="subject"><a href="#post-126802">Intel document from 1998 on RDTSC</a></div>
+    <div class="body">I prefer QPC myself.<br /><br />Heads up from MSDN -&gt; <a target="_blank" href="http://support.microsoft.com/default.aspx?scid=kb;en-us;Q274323">http://support.microsoft.com/default.aspx?scid=kb;en-us;Q274323</a></div>
+    <div class="meta">Posted on 2003-12-06 09:16:48 by alpha</div>
+   </div>
+   <div class="post" id="post-127061">
+    <div class="subject"><a href="#post-127061">Intel document from 1998 on RDTSC</a></div>
+    <div class="body">Chipset issues -- that might explain the weird data from one of the lab computers. Thank you for the pointers, Bruce and alpha!</div>
+    <div class="meta">Posted on 2003-12-08 13:56:45 by Frank</div>
+   </div>
+  </div>
+ </body>
+</html>

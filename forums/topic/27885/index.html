@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Structures - Please explain - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27885" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27885">Structures - Please explain</a></p>
+   <div class="post" id="post-198470">
+    <div class="subject"><a href="#post-198470">Structures - Please explain</a></div>
+    <div class="body">I have tried using structures in the past and have failed; so i just gave up. I understand that when the API is called it is filled in or the data is used in some way. Is the point of a structure just a quicker way of doing a whole load or parameters? I have got by in the past by just avoiding API's that use structures. This is getting annoying so i thought i might as well try and understand them.
+
+if anyone has any tutorials or examples of how to use a structure (that is explained) then that would be very useful to me.
+
+thanks in advance. skud.</div>
+    <div class="meta">Posted on 2001-05-02 14:04:00 by skud</div>
+   </div>
+   <div class="post" id="post-198471">
+    <div class="subject"><a href="#post-198471">Structures - Please explain</a></div>
+    <div class="body">Dont get hung up on structures.. they are not a hassle at all...
+
+The point of structures is yes, to localize alot of data under one premise (or tag name).  However, they are still a bit abstract from ASM programming, which is why i suspect you have been having problems in the past.  They are simply a template to help organize data, but they are NOT data in themselves.  I better go to examples at this point :)
+
+<strong>I could say.. </strong>
+<pre><code>
+Point1_x  dd 0
+Point1_y  dd 0
+Point2_x  dd 0
+Point2_y  dd 0 etc. etc.
+</code></pre>
+
+<strong>And in using them i would have to reference each member directly:</strong>
+<pre><code>
+mov eax, Point2_y
+
+or
+
+lea ebx, Point1_x
+mov eax,   ; 12'th byte after the first as defined above
+</code></pre>
+
+<strong>This is ok, but it would be easier to use data if they are grouped together as one type of data:</strong>
+<pre><code>
+My_Point struc
+   x   dd  ?
+   y   dd  ?
+My_Point ends
+
+and in .data
+  
+  Point1  My_Point  <0,0>  ; initialize x,y to 0,0
+  Point2  My_Point  <2,0>  ; initialize x,y to 2,0
+
+or in .data?
+   
+  Point3  My_Point <>  ; uninitialized data <?,?>
+  Point4  My_Point <>
+</code></pre>
+
+The in the data segments, the stucture is used as a template to allocate the amount of memory (dd's) in the order they appear in the template.  This is why i say stucts are NOT data in themselves.  Now, if i were to disassemble the data segment of this one or the pervious above, they data would be in the same order (point1's x data, point1's y data, point2's x data, point2's y data).  The difference is by simply telling MASM this will by a structured define, you can skip the redundancy of typing it all out in order.
+
+<strong>The code to use these are now:</strong>
+<pre><code>
+
+  mov eax, Point2.y  
+
+  ; y is the structure member that masm used to determin the offset
+  ; this is the same as
+  ;    lea ebx, Point2
+  ;    mov eax,   ; 4 bytes after the first (y data)
+</code></pre>
+
+One of the benifits is the fact the data HAS to be grouped together as prescibed in the structure template..  my origional example of separated data IS grouped together, but doesnt has to be.  It could be a random like such:
+<pre><code>
+Point1_x dd 0
+MyFlag   dd 0
+Point1_y dd 0
+Point2_x dd 0
+IsOn     dd 0
+Point2_y dd 0
+</code></pre>
+If i were asked to have the address to a point in this setup, you couldnt do it, because MyFlag is inbetween Point1_x and Point1_y:
+<pre><code>
+invoke SomeFunct, addr Point1_x
+
+will be used as:
+
+mov ebx, Point1_x  ; base address of a point
+mov eax,      ; get the x data
+mov eax,  ; get the y data (assumed 4 bytes after the base)
+</code></pre>
+The problem here is, 4 bytes after the first is MyFlag!!!!  Using structures insures this problem is always taken care of (assuming the structure is defined in the correct order).
+
+<strong>Taking this a step further, you can also NEST structures to build more complex bounded data:</strong>
+<pre><code>
+My_Circle sturct
+  Center  My_Point <>
+  Radius  dd       ?
+My_Circle ends
+
+Colored_Circle struct
+  Circle  My_Circle <>
+  Color   dd        ?
+Colored_Circle ends
+</code></pre>
+<strong>By simple defining in .data? </strong>
+<pre><code>
+  RGB_Circle  Colored_Circle  <>
+
+i have allocated memory in the data segment in this order:
+
+RGB_Circle:  4 bytes, Referenced as (this).Circle.Center.x
+            +4 bytes, Referenced as (this).Circle.Center.y
+            +4 bytes, Referenced as (this).Circle.Raduis
+            +4 bytes, Referenced as (this).Color
+
+NOTE: (this) refers to the name of the defined data for 'this' structure type,
+in this case it would be RGB_Circle.Circle.Center.x
+
+ALSO NOTE: the 'SIZEOF Colored_Circle' command would return the above
+evaluation = 16 bytes.
+</code></pre>
+
+As a final thought, the use of stuctures are also advantageous when dealin with them as pointer, by simply passing a simple 4 byte pointer, it can be used to directly reference (in the above case) 16 bytes of data. (this speeds up your function calling, because less is being pushed on the stack).
+<pre><code>
+; my fuction used a colored circle...
+My_Fuction proc lpColored</div>
+    <div class="meta">Posted on 2001-05-02 15:28:00 by NaN</div>
+   </div>
+   <div class="post" id="post-198472">
+    <div class="subject"><a href="#post-198472">Structures - Please explain</a></div>
+    <div class="body"><strong>I think this kind of reply's should be saved somewhere for further reference...</strong>
+
+Hiro? Are you listening?
+
+<u>Good work NaN !</u></div>
+    <div class="meta">Posted on 2001-05-02 15:55:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198473">
+    <div class="subject"><a href="#post-198473">Structures - Please explain</a></div>
+    <div class="body">Everything Nan said he said well and true. However, a few thoughts on using assume.
+
+We all know, when you ASSUME something, you make an ASS of U and ME.  Trite, but still true.
+
+If you assume a register, then forget to unassume it, you can get strange results. Or, the assume could be so far from the line that needs it the meaning is left unclear (to the human reading the code). I'm not a big fan of weird "action at a distance" operators like this.
+
+I am a devoted user of structures, they are just so handy. I used to use the syntax Nan stated, until I found a slightly more compace (but just as readable) form MASM accepts:
+
+<pre><code>
+ mov ebx, lpColoredCircle
+ mov eax, (Colored_Circle PTR ).Circle.Center.x   ;get x
+ mov edx, (Colored_Circle PTR ).Circle.Center.y   ;get y
+ mov esi, (Colored_Circle PTR ).Radius            ;get Rad
+ mov edi, (Colored_Circle PTR ).Color             ;get Color
+
+may also be stated as:
+
+ mov ebx, lpColoredCircle
+ mov eax, .Colored_Circle.Circle.Center.x   ;get x
+ mov edx, .Colored_Circle.Circle.Center.y   ;get y
+ mov esi, .Colored_Circle.Radius            ;get Rad
+ mov edi, .Colored_Circle.Color             ;get Color
+</code></pre>
+
+To my eyes, either is just as clear in it's meaning, but the 2nd is slightly less typing.</div>
+    <div class="meta">Posted on 2001-05-02 18:49:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-198474">
+    <div class="subject"><a href="#post-198474">Structures - Please explain</a></div>
+    <div class="body">skud,
+
+Conceptually a structure is very similar to an array in that the
+data that they can hold is sequential in memory. Where they differ
+is that you can have different size pieces of data in a structure.
+
+Much of Windows and especially NT4 and Win2k was written by programmers
+with a VAX/VMS background so you get different code than traditional
+stack based parameters used regularly.
+
+Structures can be used in a number of different ways, when you create a
+window, you first allocate a WNDCLASSEX structure, fill it with the attributes
+that you need and then use that structure when you register the
+window class.
+
+Another technique widely used is to allocate an empty structure
+and call a function that fills it for you.
+
+    LOCAL Rct:RECT
+
+This allocates a rectangle structure on the stack in a procedure.
+
+You then make an API call like GetWindowRect() that fills the RECT
+structure with the dimensions of the window. You access the info
+returned by using Rct.left, Rct.top etc ... and they are treated
+as memory operands in code.
+
+NAN has given you some good examples of how structures are used and
+how they are often nested. The trick with nested structures is to
+go backwards to see what you need to allocate and what structures
+need to be filled in with values first if needed.
+
+Ernie has shown the difference between two methods of handling
+structures passed as addresses, the ASSUME syntax is well suited
+for block structure handling where the other method of individually
+type casting the members is more flexible in single instances.
+
+Once you get the feel of how they work, you will find them very
+useful in the code you write.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-02 20:56:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198475">
+    <div class="subject"><a href="#post-198475">Structures - Please explain</a></div>
+    <div class="body">Is there a way to allocate a structure with,let's say GlobalAlloc?</div>
+    <div class="meta">Posted on 2001-05-03 07:32:00 by brewmanchu</div>
+   </div>
+   <div class="post" id="post-198476">
+    <div class="subject"><a href="#post-198476">Structures - Please explain</a></div>
+    <div class="body">The idea of a structure is purely for us the programmer.
+All the computer sees is data, for example:
+<pre><code>
+MyStruct STRUCT
+  a DWORD ?
+  b BYTE  ?
+  c WORD  ?
+  d BYTE 3 DUP (?)
+MyStruct ENDS
+</code></pre>
+As far as memory allocation is concerned this is 10 bytes, nothing else. To the assembler, it is also a method of formating accesses to that data, and it is possible to apply that formating to any piece of memory.
+
+This allows the following code:
+<pre><code>
+FourLetterWord STRUCT
+  FirstLetter    BYTE ?
+  SecondLetter   BYTE ?
+  ThirdLetter    BYTE ?
+  FourthLetter   BYTE ?
+  NullTerminator BYTE ?
+FourLetterWord ENDS
+
+.data
+ Word1 db "spam",0
+ Word2 db "clam",0
+
+.code
+start:
+  mov edx, ADDR Word1
+  mov (FourLetterWord PTR ).FirstLetter, 'c'
+
+  invoke ExitProcess, 0
+end start
+</code></pre>
+Although we declared Word1 as a string of bytes, we can apply the formating of the FourLetterWord structure to it.
+
+So in the case of GlobalAlloc, you need to do something like:
+<pre><code>
+invoke GlobalAlloc, ACCESS_TYPE, SIZEOF MyStruct * number_needed
+</code></pre>
+
+This will create enough data to apply the format of MyStruct without causing errors.
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-03 08:52:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-198477">
+    <div class="subject"><a href="#post-198477">Structures - Please explain</a></div>
+    <div class="body">Exactly, your simply allocating a bunch of bytes.. but if you keep control of all your allocated bytes of data (ie, add proper offsets to your global data pointer), then you can use the above methods with pointers as Ernie outlined.
+
+Structures are simply masks or templates to make your memory 'look' organized... as Mirno demonstrates (good example BTW).
+
+I could still allocate 5 bytes of heap memory, and use my above structure (size 16 bytes templated) to reference it!  The catch is, i would only be able to access:
+
+ mov ebx, GlobalDataPointer
+ mov eax, (Colored_Circle PTR ).Cricle.Center.x 
+
+ Because this is the first 4 bytes templated by my structure. To try to go to 'y' would violate the heap space alocated, since in my example i have only allocated 5 bytes in all.  This is why Mirno suggests 'N * sizeof Colored_Circle' where N is Integers > 1.  That way you will always have just enough data, to imply an array of N Colored_Cirlce structures, and know you have enough data set asside for each memeber!
+
+NaN</div>
+    <div class="meta">Posted on 2001-05-03 10:11:00 by NaN</div>
+   </div>
+   <div class="post" id="post-198478">
+    <div class="subject"><a href="#post-198478">Structures - Please explain</a></div>
+    <div class="body">ok. thanks for all the response :)
+i understand all this but what i dont get now is how to move any data to the structure.
+how does it know which sub-section part of the structure to add the data to?
+an example of how to do this would be great.
+
+btw; i am trying to use the sockaddr_in STRUCT 
+with the connect API (winsock)
+
+thanks again; skud.</div>
+    <div class="meta">Posted on 2001-05-07 08:44:00 by skud</div>
+   </div>
+   <div class="post" id="post-198479">
+    <div class="subject"><a href="#post-198479">Structures - Please explain</a></div>
+    <div class="body">Ok last thought...
+
+If i wrote an API function, with one of the parameters being "lpSOMETHING: DWORD" tp which it does this:
+<pre><code>
+AFunction proc lpSOMETHING:DWORD
+  push ebx
+  mov ebx, lpSOMETHING
+  mov , eax
+  mov , ch
+  mov , dx
+  mov , esi
+  mov , cl
+  pop ebx
+  ret
+AFunction endp
+</code></pre>
+The lpSOMETHING (which is just an address to memory) will end up having memory filled with "eax, ch, dx, esi, cl" sequentially in order.  Now, lets say i wanted to better access that. Then using a structure (DESIGNED IN SEQUETIAL ORDER TO HOW THE MEMORY IS PARTITIONED (4 bytes)(1 BYTE)(2 BYTES)(4 BTYES)(1 BYTE) ) will allow me to access the modified memory locations individually.
+<pre><code>
+DONTCAREFORANAME STUCT
+  Name1  DWORD ?
+  Name2  BTYE ?
+  Name3  WORD ?
+  Name4  DWORD ?
+  Name5  BTYE ?
+DONTCAREFORANAME STUCT
+</code></pre>
+
+So, if i use this API in a program like so:
+<pre><code>
+.data?
+  SOMEMEM BYTE 12 DUP (?)  ; api modifies 12 bytes in all
+
+.code
+  invoke AFunction, addr SOMEMEM
+  lea ebx, SOMEMEM
+  mov eax, 
+  ; eax has the value of ESI that AFunction had
+
+OR, I COULD USE A STUCT
+
+.code
+  invoke AFunction, addr SOMEMEM
+  lea ebx, SOMEMEM
+  mov eax, (DONTCAREFORANAME PTR ).Name4
+</code></pre>
+
+Since the stucture KNOWS that Name4 is defined 7 bytes from the first entry.
+
+BOTTOM LINE, API's that fill structures, are designed FOR the stuctures, not the other way around.
+
+NaN</div>
+    <div class="meta">Posted on 2001-05-07 17:07:00 by NaN</div>
+   </div>
+   <div class="post" id="post-198480">
+    <div class="subject"><a href="#post-198480">Structures - Please explain</a></div>
+    <div class="body">Thanks NaN  and mirno that example "spam" clarified it for me.
+I always thought that the struct 'tags' were included in the struct.</div>
+    <div class="meta">Posted on 2001-05-08 20:41:00 by brewmanchu</div>
+   </div>
+  </div>
+ </body>
+</html>

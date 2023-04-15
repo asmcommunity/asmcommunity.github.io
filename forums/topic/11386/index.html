@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>1/n approximation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11386" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=11386">1/n approximation</a></p>
+   <div class="post" id="post-86090">
+    <div class="subject"><a href="#post-86090">1/n approximation</a></div>
+    <div class="body">Hola,<br /><br />Spent a few minutes making an approximation for 1/n in assembly for a c++ routine I was working on...<br /><br />#define FP_ONE_BITS 0x3F800000<br /><pre><code><br />    int _i = 2 * FP_ONE_BITS - *&#40;int *&#41;&amp;&#40;p&#41;;<br />    r = *&#40;float *&#41;&amp;_i;<br />    r = r * &#40;2.0f - &#40;p&#41; * r&#41;;    <br /></code></pre><br /><br />into<br /><br /><pre><code><br />		__asm <br />		&#123; <br />			mov     eax,0x7F000000    <br />			sub     eax,dword ptr &#91;t&#93;  <br />			mov     dword ptr &#91;it&#93;,eax<br />			fld     dword ptr &#91;t&#93;      <br />			fmul    dword ptr &#91;it&#93;<br />			fsubr   &#91;two&#93;  <br />			fmul    dword ptr &#91;it&#93; <br />			fstp    dword ptr &#91;it&#93;    <br />		&#125;<br /></code></pre><br /><br />where 't' = a floating point number (ex: 10.0f) and 'it' = the approximation of 1/t<br /><br />The problem isn't the conversion, but more to the point how does it work... :)<br /><br />for example using 10.0<br />the floating point would be...<br /><br />0 100000101 01000000000000000000000<br /><br />and 0x7F000000 = 01111111000000000000000000000000<br /><br />but I'm not sure I'm doing my math right, because following this it doesn't work on paper...<br /><br />Maybe someone could help me out...<br /><br />Any optimizations would be really appreciated as well...<br /><br />Sliver</div>
+    <div class="meta">Posted on 2003-03-09 16:05:33 by Sliver</div>
+   </div>
+   <div class="post" id="post-86152">
+    <div class="subject"><a href="#post-86152">1/n</a></div>
+    <div class="body"><strong>Sliver</strong>, cool algo - I never seen that one before.  You have to remember the IEEE 754 standard and the format of REAL4 numbers.  The leading one bit is assumed, and the floating point is a positive biased number.  So, the algo is playing with the exponent - namely, the exponent of the number is subtracted from twice the bias.  If the number is greater than one, then the number is already biased plus another constant amount.<br /><br />bias = 7F<br /><br />number = 7F + c<br /><br />2*bias - number = 7F - c<br /><br />You see how the scale of the number is inverted?<br /><br />The rest is just to improve the approximation:<br />2 - ( X * 1/X ) should be close to one...</div>
+    <div class="meta">Posted on 2003-03-09 22:39:50 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-86159">
+    <div class="subject"><a href="#post-86159">1/n</a></div>
+    <div class="body">would this be any faster than an fdiv?</div>
+    <div class="meta">Posted on 2003-03-09 22:59:36 by iblis</div>
+   </div>
+   <div class="post" id="post-86163">
+    <div class="subject"><a href="#post-86163">1/n</a></div>
+    <div class="body">I believe it is... (Inotherwords, I really hope so...) ;)<br /><br />it ran faster than <br /><pre><code><br />			fld1<br />			fld dword ptr &#91;t&#93;<br />			fdiv<br />			fstp dword ptr &#91;it&#93; <br /></code></pre><br /><br />on some initial tests, but I could be wrong...<br /><br />Haven't done much profiling except the usualy 0x0F 0x31 for clocking cycles<br />So if anyone feels the desire I'd like to see the results...<br /><br />Again anything added would be cool :)<br /><br />BitRAKE:<br />I do understand the bias, but I still don't understand what bit manipulation it's doing... any more clarrification possible?<br /><br />so is it multiplying the number by it's -exponent equivalent ?<br /><br />for example using 10 we have an exponent of 4 <br />(after the bias) so IEEE would be stated as:<br />2^4 * .625<br /><br />so when you subtract the floating point exponent from the bias do you get 2^-4?<br /><br />The problem is I can't wrap my mind around something I can't easily parse and view (it would be easier is I could just do a bunch of masking and view the exponent, but I don't have much to work with when dealing with floating points...<br /><br />Obviously help is always appreciated :) :) :)<br /><br />Sliver</div>
+    <div class="meta">Posted on 2003-03-09 23:37:44 by Sliver</div>
+   </div>
+   <div class="post" id="post-86169">
+    <div class="subject"><a href="#post-86169">1/n</a></div>
+    <div class="body"><pre><code>; first approximation&#58;<br />mov     eax,0x7F000000		; bias&#40;1&#41; * 2<br />sub     eax,dword ptr &#91;t&#93;	; bias&#40;1&#41; * 2 - bias&#40;t&#41;<br />mov     dword ptr &#91;it&#93;,eax	;= ~1/t<br />; second approximation&#58;<br />fld     dword ptr &#91;t&#93;		;<br />fmul    dword ptr &#91;it&#93;		; t * &#40;~1/t&#41; = ~1-<br />fsubr   &#91;two&#93;			; 2 - &#40;~1&#41; = ~1+<br />fmul    dword ptr &#91;it&#93;		; ~1+ * it<br />fstp    dword ptr &#91;it&#93;		;= 1/t</code></pre>'~' means approximate<br /><br />I'm not sure what part you don't understand?  It sound like you understand from what you state.  Just look at the numbers in a debugger - paying attention to only the exponent bits.  If you really don't care about accuracy then you could use the first approximation.</div>
+    <div class="meta">Posted on 2003-03-10 00:14:13 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-86176">
+    <div class="subject"><a href="#post-86176">1/n</a></div>
+    <div class="body"><div class="quote"><br /><br /><br />I'm not sure what part you don't understand?  It sound like you understand from what you state. </strong> </div><br /><br />*Exercises in stupidity*<br /><br />:(  Ok I just spent the last few hours in learning the fine art of stupidity <br /><br />So I do understand this after all (here is a good example why you should always (a) use a debugger (b) make sure the numbers you use on paper are the same numbers your testing in the program :(  I could almost cry...<br /><br />Seems I was testing using the number <br /><br />t = 1234.24532<br />so I &quot;thought&quot; the answer was 0.0008102117 (with my approx being   0.0008048193)<br /><br />instead I was using (on paper) t = 10.0<br />which is 0.10000<br /><br />So obviously I'm looking at the computer saying &quot;I'm not getting what I should be after taking the bias&quot; :( but since I *knew* this was wrong I kept re-doing the problem... <br /><br />BitRAKE:<br />Thanks for helping me fine my way out of that mess...<br /><br />Sliver</div>
+    <div class="meta">Posted on 2003-03-10 01:45:50 by Sliver</div>
+   </div>
+   <div class="post" id="post-86179">
+    <div class="subject"><a href="#post-86179">1/n</a></div>
+    <div class="body">Obviously this isn't the end all be all of testing... :) <br /><br />Given: t = 10.0f<br /><pre><code><br />for &#40;int i = 0; i &lt; 100000; i++&#41;<br />&#123;<br />	__asm <br />	&#123; <br />		mov     eax,0x7F000000    <br />		sub     eax,dword ptr &#91;t&#93;  <br />		mov     dword ptr &#91;it&#93;,eax<br />		fld     dword ptr &#91;t&#93;      <br />		fmul    dword ptr &#91;it&#93;<br />		fsubr   &#91;two&#93;  <br />		fmul    dword ptr &#91;it&#93; <br />		fstp    dword ptr &#91;it&#93;    <br />	&#125;		<br />&#125;<br /></code></pre><br />inv  expected         0.1000000000  approx         0.0991210938<br />Gross time (est): P2-450 / 0.00512982 sec<br /><br /><br /><pre><code><br />for &#40;int i = 0; i &lt; 100000; i++&#41;<br />&#123;<br />	__asm<br />	&#123;<br />		fld1<br />		fld dword ptr &#91;t&#93;<br />		fdiv<br />		fstp dword ptr &#91;it&#93; <br />	&#125;		<br />&#125;<br /></code></pre><br />inv  expected         0.1000000000  approx         0.1000000015<br />Gross time (est): P2-450 / 0.00852415 sec<br /><br /><br /><pre><code><br />for &#40;int i = 0; i &lt; 100000; i++&#41;<br />&#123;<br />                 it = 1/t;		<br />&#125;<br /></code></pre><br />inv  expected         0.1000000000  approx         0.1000000015<br />Gross time (est): P2-450 / 0.00940774 sec</div>
+    <div class="meta">Posted on 2003-03-10 01:55:09 by Sliver</div>
+   </div>
+   <div class="post" id="post-86247">
+    <div class="subject"><a href="#post-86247">1/n</a></div>
+    <div class="body"><div class="quote"><br />Obviously this isn't the end all be all of testing... :)</div>Yeah, I'll just keep it in the toolbox like an old philips driver.  It's too small a piece of code to test by itself.</div>
+    <div class="meta">Posted on 2003-03-10 08:27:37 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-93715">
+    <div class="subject"><a href="#post-93715">1/n</a></div>
+    <div class="body">Hey help me out here, what is a biased number? Excuse me for sounding stupid but I'm only in Grade 11 :(</div>
+    <div class="meta">Posted on 2003-04-06 18:14:26 by x86asm</div>
+   </div>
+   <div class="post" id="post-93722">
+    <div class="subject"><a href="#post-93722">1/n</a></div>
+    <div class="body">The IEEE format uses a bias for the exponent - 7Fh for REAL4 format. This bias allows floating point numbers to be compared with integer compares! :)  An exponent of 7Fh is zero - note the one bit is implied - so the number is one (1).</div>
+    <div class="meta">Posted on 2003-04-06 19:37:44 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-93724">
+    <div class="subject"><a href="#post-93724">1/n</a></div>
+    <div class="body">Sliver:<br /><br />It is not necessary to load the divisor for performing the dividion with the FPU. It would be interesting to see the relative comparison with your time figures if you replace the two instructions<br /><br />fld dword ptr <br />fdiv<br /><br />by the single instruction<br /><br />fdiv dword ptr <br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-04-06 19:51:26 by Raymond</div>
+   </div>
+   <div class="post" id="post-93727">
+    <div class="subject"><a href="#post-93727">1/n</a></div>
+    <div class="body">The P4 takes no less than 23 / 38 / 43 cycles for the FDIV!  Athlon does a little better with 16 / 20 / 24 - three latency numbers refer to precision control settings of single precision, double precision, and extended precision, respectively.</div>
+    <div class="meta">Posted on 2003-04-06 19:58:16 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-94321">
+    <div class="subject"><a href="#post-94321">1/n</a></div>
+    <div class="body">Things look better on Athlon XPs: pfrcp and rcpss take 3 clocks.</div>
+    <div class="meta">Posted on 2003-04-08 11:12:09 by Jan Wassenberg</div>
+   </div>
+   <div class="post" id="post-95379">
+    <div class="subject"><a href="#post-95379">1/n</a></div>
+    <div class="body"><pre><code><br />__asm<br />&#123;<br />	fld1<br />	fdiv dword ptr &#91;t&#93;<br />	fstp dword ptr &#91;it&#93; <br />&#125;<br /><br />		<br /></code></pre><br /><br />inv  expected         0.1000000000  approx         0.1000000015<br />Gross time (est): P2-450 / 0.00849256 sec, P2-500 / 0.01, P2-650 / 0.01<br /><br />Still beats it cosistantly by approx. '.003 seconds'<br /><br />This of course is by no means conclusive, but it's not meant to be :p<br /><br />Here is the code I use to check it (in c/c++)<br /><br /><pre><code><br />#include &lt;stdlib.h&gt;<br />#include &lt;stdio.h&gt;<br />#include &lt;math.h&gt;<br />#include &lt;assert.h&gt;<br /><br />#define COUNT_CYCLES 1<br /><br />/*****************************************************************************/<br />#if COUNT_CYCLES<br />/*****************************************************************************/<br /><br />#pragma warning&#40;disable&#58;4035&#41;<br /><br />#define CCNT_OVERHEAD64 13<br /><br />__int64         GetCycleCount64&#40;&#41;<br />&#123;<br />__asm   _emit   0x0F<br />__asm   _emit   0x31<br />&#125;;<br /><br />#define CCNT_OVERHEAD32 13<br /><br />unsigned        GetCycleCount32&#40;&#41;        // enough for about 40 seconds<br />&#123;<br />__asm   push    EDX<br />__asm   _emit   0x0F<br />__asm   _emit   0x31<br />__asm   pop     EDX<br />&#125;;<br /><br />#pragma warning&#40;default&#58;4035&#41;<br /><br />/*****************************************************************************/<br /><br />static<br />__int64         cycleBegin;<br /><br />static<br />__int64         cycleTotal;<br /><br />static<br />__int64         cycleStart;<br /><br />static<br />unsigned        cyclePause;<br /><br />unsigned        cycleExtra;<br /><br />static<br />void            cycleCounterInit&#40;&#41;<br />&#123;<br />    cycleBegin = GetCycleCount64&#40;&#41;;<br />    cycleTotal = 0;<br />    cycleStart = 0;<br />    cyclePause = 0;<br />&#125;<br /><br />static<br />__int64         cycleCounterDone&#40;__int64 *realPtr&#41;<br />&#123;<br />    assert&#40;cyclePause == 0&#41;;<br /><br />    *realPtr = GetCycleCount64&#40;&#41; - cycleBegin;<br /><br />    return cycleTotal;<br />&#125;<br /><br />void            cycleCounterBeg&#40;&#41;<br />&#123;<br />    assert&#40;cyclePause == 0&#41;;<br /><br />    cycleStart = GetCycleCount64&#40;&#41;;<br />&#125;<br /><br />void            cycleCounterEnd&#40;&#41;<br />&#123;<br />    assert&#40;cycleStart != 0&#41;;<br />    assert&#40;cyclePause == 0&#41;;<br /><br />    cycleTotal += GetCycleCount64&#40;&#41; - cycleStart;<br /><br />    cycleStart  = 0;<br />&#125;<br /><br />void            cycleCounterPause&#40;&#41;<br />&#123;<br />    assert&#40;cycleStart != 0&#41;;<br /><br />    if  &#40;!cyclePause&#41;<br />        cycleTotal += GetCycleCount64&#40;&#41; - cycleStart;<br /><br />    cyclePause++;<br />&#125;<br /><br />void            cycleCounterResume&#40;&#41;<br />&#123;<br />    assert&#40;cycleStart != 0&#41;;<br />    assert&#40;cyclePause != 0&#41;;<br /><br />    if  &#40;--cyclePause&#41;<br />        return;<br /><br />    cycleStart = GetCycleCount64&#40;&#41;;<br />&#125;<br /><br />/*****************************************************************************/<br />#endif//COUNT_CYCLES<br /><br />#define FP_ONE_BITS 0x3F800000<br />// r = 1/p<br />#define FP_INV&#40;r,p&#41;                                                          \<br />&#123;                                                                            \<br />    int _i = 2 * FP_ONE_BITS - *&#40;int *&#41;&amp;&#40;p&#41;;                                 \<br />    r = *&#40;float *&#41;&amp;_i;                                                       \<br />    r = r * &#40;2.0f - &#40;p&#41; * r&#41;;                                                \<br />&#125;<br /><br />float   two = 2.0f;<br /><br />#define FP_INV2&#40;r,p&#41;                     \<br />&#123;                                        \<br />    __asm &#123; mov     eax,0x7F000000    &#125;; \<br />    __asm &#123; sub     eax,dword ptr &#91;p&#93; &#125;; \<br />    __asm &#123; mov     dword ptr &#91;r&#93;,eax &#125;; \<br />    __asm &#123; fld     dword ptr &#91;p&#93;     &#125;; \<br />    __asm &#123; fmul    dword ptr &#91;r&#93;     &#125;; \<br />    __asm &#123; fsubr   &#91;two&#93;             &#125;; \<br />    __asm &#123; fmul    dword ptr &#91;r&#93;     &#125;; \<br />    __asm &#123; fstp    dword ptr &#91;r&#93;     &#125;; \<br />&#125;<br /><br />void main&#40;&#41;<br />&#123;<br />	#if COUNT_CYCLES<br /><br />			/* Reset the cycle counter */<br /><br />			cycleCounterInit&#40;&#41;;<br />			assert&#40;cycleTotal == 0&#41;;<br />			cycleCounterBeg&#40;&#41;;<br />	#endif<br /><br /><br />	float t, it;<br />	t = 10.0f;<br /><br />	for &#40;int i = 0; i &lt; 100000; i++&#41;<br />	&#123;<br /><br /><br />		__asm <br />		&#123; <br />			mov     eax,0x7F000000    <br />			sub     eax,dword ptr &#91;t&#93;  <br />			mov     dword ptr &#91;it&#93;,eax<br />			fld     dword ptr &#91;t&#93;      <br />			fmul    dword ptr &#91;it&#93;<br />			fsubr   &#91;two&#93;  <br />			fmul    dword ptr &#91;it&#93; <br />			fstp    dword ptr &#91;it&#93;    <br />		&#125;<br />/*<br />		__asm<br />		&#123;<br />			fld1<br />			fdiv dword ptr &#91;t&#93;<br />			fstp dword ptr &#91;it&#93; <br />		&#125;<br />*/<br />	&#125;	<br /><br />	printf&#40;&quot;inv  expected %20.10f  approx %20.10f\n&quot;, 1/t, it&#41;;<br /><br />#if COUNT_CYCLES<br /><br />        __int64         cycleTotal;<br />        __int64         cycleSpent;<br /><br />        cycleSpent = cycleCounterDone&#40;&amp;cycleTotal&#41;;<br /><br />        if  &#40;cycleTotal&#41;<br />            printf&#40;&quot;Gross time &#40;est&#41;&#58; P2-450 / %2.8f sec, P2-500 / %4.2f, P2-650 / %4.2f\n&quot;, &#40;float&#41;cycleTotal/450000000, &#40;float&#41;cycleTotal/500000000, &#40;float&#41;cycleTotal/650000000&#41;;<br />        if  &#40;cycleSpent&#41;<br />            printf&#40;&quot;Net   time &#40;est&#41;&#58; P2-450 / %2.2f sec, P2-500 / %4.2f, P2-650 / %4.2f\n&quot;, &#40;float&#41;cycleSpent/450000000, &#40;float&#41;cycleSpent/500000000, &#40;float&#41;cycleSpent/650000000&#41;;<br />        if  &#40;cycleExtra&#41;<br />            printf&#40;&quot;Extra time &#40;est&#41;&#58; P2-450 / %4.2f sec, P2-500 / %4.2f, P2-650 / %4.2f\n&quot;, &#40;float&#41;cycleExtra/450000000, &#40;float&#41;cycleExtra/500000000, &#40;float&#41;cycleExtra/650000000&#41;;<br />  <br />        printf&#40;&quot;\n&quot;&#41;;<br /><br />#endif<br /><br />&#125;<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-11 00:03:32 by Sliver</div>
+   </div>
+   <div class="post" id="post-101236">
+    <div class="subject"><a href="#post-101236">1/n</a></div>
+    <div class="body">A paper wrote about the approximation method for inverse square root.<br /><a target="_blank" href="http://www.math.purdue.edu/~clomont/Math/Papers/2003/InvSqrt.pdf">http://www.math.purdue.edu/~clomont/Math/Papers/2003/InvSqrt.pdf</a></div>
+    <div class="meta">Posted on 2003-05-05 01:38:28 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-102297">
+    <div class="subject"><a href="#post-102297">1/n</a></div>
+    <div class="body">It was an interesting look at trying to better that approximation...<br /><br />The funny part was he never really figured out what made that constant so important...<br />Brought me back to a math class a couple of years ago when I tried to understand why Sqrt(2 pi n) so was damn accurate (at least in ratio's) in Sterlings Approximation using PI = 3.141592653579 (since at the time I'd never seen &quot;e&quot; and &quot;PI&quot; in the same equation before)<br /><br />Sliver</div>
+    <div class="meta">Posted on 2003-05-10 12:50:14 by Sliver</div>
+   </div>
+   <div class="post" id="post-102302">
+    <div class="subject"><a href="#post-102302">1/n</a></div>
+    <div class="body">About mathematical approximations, there is a small optimization project:<br /><br /><a target="_blank" href="http://www.optimalcode.com/fastcode/index.htm">http://www.optimalcode.com/fastcode/index.htm</a><br /><br />Dennis Christensen wrote his own DKC optimizer, which computes the best coefficients for a given expression (perhaps using PSLQ or LLL ?).<br /><br />JC</div>
+    <div class="meta">Posted on 2003-05-10 13:25:20 by MCoder</div>
+   </div>
+  </div>
+ </body>
+</html>

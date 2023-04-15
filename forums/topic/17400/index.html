@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Threading the needle - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17400" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17400">Threading the needle</a></p>
+   <div class="post" id="post-134753">
+    <div class="subject"><a href="#post-134753">Threading the needle</a></div>
+    <div class="body">Recently I saw a question about DoEvents and someone had mentioned doing it in a thread. I have been trying to figure out if it's possible. When you use PeekMessage it will only &quot;see&quot; messages from the current thread so if you try to do it in a thread it will not see the messages and essentially just does nothing. I tried to use AttachThreadInput but that really isn't the message queue so it doesn't work either. Is there a way to &quot;see&quot; the messages in another thread besides a message hook ?<br /><br />Called as follows :<br /><br /><pre><code>invoke CreateMutex,NULL,TRUE,&quot;ThreadSyncMutex&quot;<br />mov &#91;hMutex&#93;,eax<br />invoke GetCurrentThreadId<br />invoke CreateThread,NULL,NULL,OFFSET DoEventsProc,eax,NULL,ADDR DoEventsID<br />invoke CloseHandle,eax</code></pre><pre><code>DoEventsProc FRAME lParam ; LParam = Thread ID of main thread<br />	LOCAL msg &#58;MSG<br /><br />	; Force a message queue to be created by making a GDI call<br />	invoke GetDC,NULL<br />	invoke ReleaseDC,NULL,eax<br /><br />	invoke GetCurrentThreadId<br />	invoke AttachThreadInput,eax,&#91;lParam&#93;,TRUE<br /><br />	.GETMESSAGES<br />		invoke PeekMessage,OFFSET msg,NULL,NULL,NULL,PM_REMOVE<br />		or eax,eax<br />		jz &gt;.WAITFOROBJ<br />		invoke TranslateMessage,OFFSET msg<br />		invoke DispatchMessage,OFFSET msg<br />		jmp &lt;.GETMESSAGES<br /><br />	.WAITFOROBJ<br />		invoke WaitForSingleObject,&#91;hMutex&#93;,1000<br />		cmp eax,WAIT_ABANDONED<br />		je &gt;.ENDTHREAD<br />		cmp eax,WAIT_OBJECT_0<br />		jne &lt;.GETMESSAGES<br /><br />	.ENDTHREAD<br />		invoke GetCurrentThreadId<br />		invoke AttachThreadInput,eax,&#91;lParam&#93;,FALSE<br />		invoke ExitThread,0<br />	RET<br />ENDF</code></pre><br /><br />The Mutex is freed when I want the thread to exit.</div>
+    <div class="meta">Posted on 2004-02-24 22:40:26 by donkey</div>
+   </div>
+   <div class="post" id="post-134757">
+    <div class="subject"><a href="#post-134757">Threading the needle</a></div>
+    <div class="body">Bah,<br /><br />Pretty much decided it's not possible without trickery. I think I'll stick to letting my message loop run and doing the other stuff in the thread.</div>
+    <div class="meta">Posted on 2004-02-24 23:12:27 by donkey</div>
+   </div>
+   <div class="post" id="post-134760">
+    <div class="subject"><a href="#post-134760">Threading the needle</a></div>
+    <div class="body">Perhaps you could do the GetMessage in your main thread, but send off Translate+DispatchMessage to the other thread - can't really see anything but disadvantages doing it this way, though :)<br /><br />Are there any disadvantages for you by doing message processing in your main thread, and offloading work to a worker thread?</div>
+    <div class="meta">Posted on 2004-02-25 00:42:43 by f0dder</div>
+   </div>
+   <div class="post" id="post-134764">
+    <div class="subject"><a href="#post-134764">Threading the needle</a></div>
+    <div class="body">No, I was just curious because I always thought it was not possible. But someone had mentioned it as a possiblity so I thought I would try to see if there was an easy way to do it. My only current project that uses multithreading already offloads the intensive work to the thread and continues the loop. The only real advantage would be that I could signal the loop and do a clean exit in case of a cancel. It is a much more complicated affair with the intensive part in the thread because I would have to set up way-points to listen for a cancel in the thread, inside a message loop I just wait for the object to become signalled. I could avoid the TerminateThread if the message processing were in the thread.</div>
+    <div class="meta">Posted on 2004-02-25 03:51:42 by donkey</div>
+   </div>
+   <div class="post" id="post-134784">
+    <div class="subject"><a href="#post-134784">Threading the needle</a></div>
+    <div class="body">Always nice to play around with stuff :P<br /><br />As for signalling... it's very easy to terminate the messageloop from a worker thread, but it indeed requires some annoying logic to terminate worker threads (cleanly) - like checking for an event object every X iterations or similar :/</div>
+    <div class="meta">Posted on 2004-02-25 10:08:31 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

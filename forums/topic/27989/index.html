@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Opening a file. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27989" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27989">Opening a file.</a></p>
+   <div class="post" id="post-198924">
+    <div class="subject"><a href="#post-198924">Opening a file.</a></div>
+    <div class="body">Opening a file. 
+
+I want to open a file, whit out using the open file dialog 
+(comdlg32.inc/.lib), and after opening it I want to draw the text in a Window 
+(using the Edit class).
+
+how do I do?
+
+Can I use the <pre><code>SetWindowText</code></pre> to "draw" the text?
+
+
+
+//_________________________
+
+Hans ollonen "d00zer"
+neux_________________________
+\\</div>
+    <div class="meta">Posted on 2001-05-09 07:43:00 by d00zer</div>
+   </div>
+   <div class="post" id="post-198925">
+    <div class="subject"><a href="#post-198925">Opening a file.</a></div>
+    <div class="body">Try the following code (based partly on Icz's tut 13 file mapping):
+<pre><code>
+.386
+.model flat,stdcall
+option casemap:none
+
+WinMain proto :DWORD,:DWORD,:DWORD,:DWORD
+
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+
+
+.data
+AppName     db          "Window title",0
+ClassName   db          "WndClass",0
+EditClass   db          "EDIT",0
+
+TargetFile  db          "C:\install.log",0
+
+.data?
+hInstance   HINSTANCE   ?
+hEdit       HWND        ?
+hFile       HANDLE      ?
+hMap        HANDLE      ?
+pMemory     DWORD       ?
+
+.code
+start:
+        invoke GetModuleHandle, NULL
+        mov hInstance, eax
+
+        invoke WinMain, eax, NULL, NULL, SW_SHOWDEFAULT
+
+        invoke ExitProcess, eax
+
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
+        LOCAL wc:WNDCLASSEX
+        LOCAL msg:MSG
+        LOCAL hwnd:HWND
+
+        mov wc.cbSize, SIZEOF WNDCLASSEX
+        mov wc.style, CS_HREDRAW or CS_VREDRAW
+        mov wc.lpfnWndProc, OffSet MainProc
+        mov wc.cbClsExtra, NULL
+        mov wc.cbWndExtra, NULL
+        push hInst
+        pop wc.hInstance
+        mov wc.hbrBackground, NULL
+        mov wc.lpszMenuName, NULL
+        mov wc.lpszClassName, OffSet ClassName
+        invoke LoadIcon, NULL, IDI_APPLICATION
+        mov wc.hIcon, eax
+        mov wc.hIconSm, eax
+        invoke LoadCursor, NULL, IDC_ARROW
+        mov wc.hCursor, eax
+        invoke RegisterClassEx, ADDR wc
+        invoke CreateWindowEx,NULL,ADDR ClassName,ADDR AppName,\
+           WS_OVERLAPPEDWINDOW or WS_CLIPCHILDREN,CW_USEDEFAULT,\
+           CW_USEDEFAULT,400,300,NULL,NULL,\
+           hInst,NULL
+        mov hwnd, eax
+
+        invoke ShowWindow, eax,SW_SHOWNORMAL
+        invoke UpdateWindow, hwnd
+        .WHILE TRUE
+                invoke GetMessage, ADDR msg,NULL,0,0
+                .BREAK .IF (!eax)
+                invoke TranslateMessage, ADDR msg
+                invoke DispatchMessage, ADDR msg
+        .ENDW
+        mov eax,msg.wParam
+        ret
+WinMain endp
+
+MainProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+      .IF uMsg == WM_DESTROY
+            invoke PostQuitMessage,NULL
+
+      .ELSEIF uMsg == WM_CREATE
+            invoke CreateWindowEx, WS_EX_CLIENTEDGE,\
+                ADDR EditClass, NULL,\
+                WS_CHILD or WS_VISIBLE or WS_VSCROLL or \
+                ES_LEFT or ES_MULTILINE or ES_READONLY,\
+                0, 0, 0, 0,\
+                hWnd, NULL, hInstance, NULL
+            mov hEdit, eax
+            ;Create an edit box
+
+            invoke SetFocus, eax
+            ;Set the focus on it
+
+
+            invoke CreateFile, ADDR TargetFile, GENERIC_READ, \
+                FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL
+            mov hFile, eax
+
+            invoke CreateFileMapping, eax, NULL, PAGE_READONLY, 0, 0, NULL
+            mov hMap, eax
+
+            invoke MapViewOfFile, eax, FILE_MAP_READ, 0, 0, 0
+		mov pMemory,eax
+
+            invoke SendMessage, hEdit, WM_SETTEXT, 0, pMemory
+
+            invoke UnmapViewOfFile, pMemory
+            invoke CloseHandle,hMap
+            invoke CloseHandle,hFile
+
+      .ELSEIF uMsg == WM_SIZE
+            mov edx, lParam
+            mov eax, lParam
+            shr edx, 16
+            and eax, 0FFFFh
+
+            invoke SetWindowPos, hEdit, NULL,\
+                0, 0, eax, edx, SWP_NOZORDER
+            ;Resize the edit box to fill the whole window
+      .ELSE
+            invoke DefWindowProc,hWnd,uMsg,wParam,lParam
+            ret
+      .ENDIF
+
+      xor    eax,eax
+      ret
+MainProc endp
+
+end start
+</code></pre>
+
+If you want it explaining, post again, but its quite simple!
+Icz's tut 13 is also a very good source of info for this.
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-09 08:20:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-198926">
+    <div class="subject"><a href="#post-198926">Opening a file.</a></div>
+    <div class="body">Thanks! 
+
+It worked to open the file and "draw" it. 
+But there is a anoying error I can't fix.
+After opening it and "draw" it to the edit class window, the program self
+add som strange characters after the end of file (EOF)
+
+Why?
+How can i fix it?
+
+Example what the program draw after the file: 
+
+ÑèPWVÿôqÑà‰E„à
+
+//_________________________
+
+  Hans ollonen "d00zer"
+  doozer@neuxsoftware.com
+ www.neuxsoftware.com 
+  _________________________
+\\</div>
+    <div class="meta">Posted on 2001-05-16 03:47:00 by d00zer</div>
+   </div>
+  </div>
+ </body>
+</html>

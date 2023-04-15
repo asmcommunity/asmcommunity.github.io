@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>MOV opcode confusion - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18880" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18880">MOV opcode confusion</a></p>
+   <div class="post" id="post-146118">
+    <div class="subject"><a href="#post-146118">MOV opcode confusion</a></div>
+    <div class="body">Hello all, my first post here so please be gentle :)<br /><br />I'm having trouble encoding the MOVE instruction properly. It seems that when EBP is used as a base in an effective address, things go a little crazy. The manuals on sandpile.org are a little confusing to say the least, and have &quot;#1&quot; in the place I would expect EBP to be (on the <a target="_blank" href="http://www.sandpile.org/ia32/opc_sib.htm">SIB byte page</a>).<br /><br />I tried assembling with MASM and then disassembling to check out the opcodes, but it still doesn't make sense. It seems that something totally different comes out.<br /><pre><code><br />mov     ebx,&#91;ebp+ecx*2&#93;              ;8B5C4D00<br /></code></pre><br />But surely 5Ch is Reg+DWord with EDI as the destination? And what's that extra 00h for?<br /><br />When I'm encoding other effective addresses that don't use EBP as the base, it comes out fine - so this must be a special condition (the sandpile pages would agree with me).<br /><br />Thanks for any help,<br />Will.</div>
+    <div class="meta">Posted on 2004-07-15 06:22:04 by </div>
+   </div>
+   <div class="post" id="post-146121">
+    <div class="subject"><a href="#post-146121">MOV opcode confusion</a></div>
+    <div class="body">Forgive me but it has been long.. so..<br /><br />First thing you need to do is view 4Dh in binary. It is 01001101b which means that the scale is 2, index is ecx and base is ebp, but... if mod = 01b and the base is ebp, then it would be encoded as ebp + signed byte.... <br /><br />Since when is 5Ch reg+dword? It is only reg+dword if the mod is 10b, but the mod is not 10b, but instead 01b.</div>
+    <div class="meta">Posted on 2004-07-15 07:55:59 by roticv</div>
+   </div>
+   <div class="post" id="post-146122">
+    <div class="subject"><a href="#post-146122">The encoding is OK</a></div>
+    <div class="body">Hi ChiefRB,<br /><br />The instructions without the prefix bytes are encoded in max. 5 field. The first 3 fields are bytes, the next 2 fields are bytes, words or doublewords. As for the instruction<br /><pre><code>mov ebx,&#91;ebp+ecx*2&#93;</code></pre><br />the encoded form is the following:<br /><pre><code><br /> Opcode   | ModR/M      | SIB           | Displacement<br /> =========|=============|===============|=========<br /> 1000101w | mod reg r/m | ss index base | xxxxxxxx<br /> ---------|-------------|---------------|---------<br /> 10001011 |  01 011 100 | 01  001   101 | 00000000<br /><br />     &#91;I&#93;w&#91;/I&#93;&#58;   1 - Word/DoubleWord operation<br />   &#91;I&#93;mod&#91;/I&#93;&#58;  01 - EBP+disp8, the opcode contains also a displacement byte<br /> &#40;it's not possible to use only EBP&#41;<br />   &#91;I&#93;reg&#91;/I&#93;&#58; 011 - BX/EBX register<br />   &#91;I&#93;r/m&#91;/I&#93;&#58; 100 - &#91;--&#93;&#91;--&#93;, the ModR/M is followed by a SIB byte<br />    &#91;I&#93;ss&#91;/I&#93;&#58;  01 - scale index with 2<br /> &#91;I&#93;index&#91;/I&#93;&#58; 001 - index is ECX register<br />  &#91;I&#93;base&#91;/I&#93;&#58; 101 - base is EBP register<br />and at the and the &#91;I&#93;disp8&#91;/I&#93; byte with 0, because there is no displacement.<br /></code></pre></div>
+    <div class="meta">Posted on 2004-07-15 08:03:21 by bszente</div>
+   </div>
+   <div class="post" id="post-146123">
+    <div class="subject"><a href="#post-146123">MOV opcode confusion</a></div>
+    <div class="body">roticv - Ah yes, I missed the leading 0 on there. Thanks :)<br /><br />bszente - Thanks for the explanation!<br /><br />I'm actually encoding the instruction myself, and when using other registers except EBP it works fine. This part:<br /><div class="quote">mod:  01 - EBP+disp8, the opcode contains also a displacement byte<br /> (it's not possible to use only EBP)</div> is I suppose what my question was - why isn't is possible to just use EBP? Why must we have a single displacement byte?<br /><br />The more I look into MOV the more of these odd little exceptions to the rule I find. For example:<br /><pre><code><br />mov eax, &#91;addr&#93;<br /></code></pre>has it's own opcode (i would guess for speed since this is a common operation). My routine to encode MOV is becoming gargantuan :)</div>
+    <div class="meta">Posted on 2004-07-15 08:16:09 by </div>
+   </div>
+   <div class="post" id="post-146127">
+    <div class="subject"><a href="#post-146127">MOV opcode confusion</a></div>
+    <div class="body">It is just like xchg eax, edx can be encoded either as 2 bytes or 1 byte.</div>
+    <div class="meta">Posted on 2004-07-15 09:18:46 by roticv</div>
+   </div>
+   <div class="post" id="post-146128">
+    <div class="subject"><a href="#post-146128">MOV opcode confusion</a></div>
+    <div class="body">The only possibility to use the EBP register as base in scaled&amp;based addressing is to put that &quot;dummy&quot; 0 displacement.<br />In fact only the <strong>MOV register,</strong> instruction can be encoded, and displacement is 0 in your case. The explanation is the following:<br /><br />1. The ModR/M byte's <strong><em>reg</em></strong> field should be 011 for EBX. This is ok.<br />2. The ModR/M byte's <strong><em>r/m</em></strong> field should be 100 to allow the use of the SIB byte, that is for the scaled-index-based addressing, what you are using.<br />3. The SIB byte's 3 field is simple: ss is 2 (the scale), index is ECX (001), and if you take a look in the SIB table you will see, that there isn't value dedicated to EBP as base. You will see the #1 column with value 101. If you take a look at the bottom for notes, you will see that for using EBP as base the ModR/M byte's <strong><em>mod</em></strong> field should take 01 or 10. In the case of 00 only a direct DWord is considered as base. And you wouldn't use 10 either, because you would have to put 4 zeros (as DWord) and not only a single 0 byte. That's the explanation of the &quot;useless&quot; 0 byte.<br />4. So the ModR/N byte's <strong><em>mod</em></strong> field should be 01, and you put the &quot;dummy&quot; 0 byte. In the case of the other registers you may use 00 for the <strong><em>mod</em></strong> field and in this case you don't have to put the displacement bytes.<br /><br />And of course, as you said there are several instructions using the accumulator register (EAX) with shorted form, that's why it is recomended to use the accumulator as much as possible.</div>
+    <div class="meta">Posted on 2004-07-15 10:28:53 by bszente</div>
+   </div>
+   <div class="post" id="post-146129">
+    <div class="subject"><a href="#post-146129">MOV opcode confusion</a></div>
+    <div class="body">That makes sense bszente, thanks again. Back to encoding! :)</div>
+    <div class="meta">Posted on 2004-07-15 10:32:31 by </div>
+   </div>
+  </div>
+ </body>
+</html>

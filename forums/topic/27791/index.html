@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>trim procedure - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27791" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27791">trim procedure</a></p>
+   <div class="post" id="post-198042">
+    <div class="subject"><a href="#post-198042">trim procedure</a></div>
+    <div class="body">This is a procedure destined for the MASM32 library, it trims
+the tab and space junk from either end of a string and writes
+it back to the same string address.
+
+Any suggestions welcome, as long as they re tested and RELIABLE !!!!
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; ########################################################################
+
+trim proc src:DWORD
+
+    mov ecx, src
+    mov edx, src
+
+  ; ---------------------------
+  ; read leading tabs & spaces
+  ; ---------------------------
+  @@:
+    mov al, 
+    inc ecx
+    cmp al, 32  ; space
+    je @B
+    cmp al, 9   ; tab
+    je @B
+
+    dec ecx     ; correct for following copy
+
+  ; --------------------------------------
+  ; copy the rest including trailing zero
+  ; --------------------------------------
+  @@:
+    mov al, 
+    inc ecx
+    mov , al
+    inc edx
+    cmp al, 0
+    jne @B
+
+  ; --------------------------------------
+  ; back 2 to compare trailing characters
+  ; --------------------------------------
+    sub edx, 2
+
+  ; ----------------------------------------------
+  ; scan backwards to find first non tab or space
+  ; ----------------------------------------------
+  @@:
+    mov al, 
+    dec edx
+    cmp al, 32
+    je @B
+    cmp al, 9
+    je @B
+
+  ; --------------------------------------------------
+  ; place terminator at position of last tab or space
+  ; --------------------------------------------------
+    mov , byte ptr 0
+
+    ret
+
+trim endp
+
+; #########################################################################
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-25 03:17:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198043">
+    <div class="subject"><a href="#post-198043">trim procedure</a></div>
+    <div class="body">Thanks! I used before a function like this:
+<pre><code>
+trim proc szText: DWORD
+    invoke ltrim, szText, szText
+    invoke rtrim, szText, szText
+    ret
+trim endp
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-25 05:44:00 by vkim</div>
+   </div>
+   <div class="post" id="post-198044">
+    <div class="subject"><a href="#post-198044">trim procedure</a></div>
+    <div class="body">I like the proc:
+- It works with the same range of memory so data adresses is always
+in the cache when you write it. It's may be upto 2 times faster than working
+with string and buffer.
+- Loops are well organized, continues loops jmps backward wich is always faster
+- Loops are well pared, it's not pared with the first iteration but will be pared with
+next until the exit from loop.
+- There is no mixture of classical way to use mnemonics for JCC with .IF ect. statements
+I'm not against HLL statements but mixturing them with classic JCC very often lead 
+programmers write very stange un effective code, 'cause they don't fully control visualy
+what kind of code they are writing. So some of this mixtures spoiled code in the  past
+procs and I'm glad that I can not see it here.
+
+--------------------------------------------------
+Minor things:
+1. What will happend if the string consist only tab and space caracters?
+2. Replace cmp al,0 with or al,al
+3. The equal (or may be a little faster code) you may achive using index register while 
+coping. It's not actually impovement, but, I think it's worthy to keep it in mind for
+more complex cases:
+
+	xor ebx,ebx
+@@:	mov al,byte ptr 	
+	mov ,al
+	inc ebx
+	or al,al
+	jne @B
+
+	lea edx,[-2]
+--------------------------------------------------------------
+
+Your code style for 386+  has progressed, I hope you'll  bit up all my algos in short time.
+Good luck.
+The Svin</div>
+    <div class="meta">Posted on 2001-04-29 02:54:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-198045">
+    <div class="subject"><a href="#post-198045">trim procedure</a></div>
+    <div class="body">My only comment is: It should be set up as three functions, or one function with three parameters.
+
+Ltrim()
+Rtrim()
+Alltrim()</div>
+    <div class="meta">Posted on 2001-04-29 11:23:00 by SFinegan</div>
+   </div>
+   <div class="post" id="post-198046">
+    <div class="subject"><a href="#post-198046">trim procedure</a></div>
+    <div class="body">It's pity you ignored my question #1 in previous post.
+I'll say it again - if the string contains only 32h and 9h the proc
+will crash data in lower addresses from the begining of the string.
+In such a case it finds first not 32h or 9h character and it will be zero.
+Then it in the second part write zero at the beginning of the string and
+then will search first not 32h or 9h characters below the string beginning
+in the addresses that not belongs to the string!
+Here is one of possible solutions:
+<pre><code>
+......
+  ; ---------------------------
+  ; read leading tabs & spaces
+  ; ---------------------------
+  @@:
+    mov al, 
+    inc ecx
+    cmp al, 32  ; space
+    je @B
+    cmp al, 9   ; tab
+    je @B
+;! If first "not 32h or 09h" character is 0 then write it as the first byte and exit
+
+    or al,al		;! If you wouldn't do this
+    jne @F		;! and if the sting contains only 32h and 9h
+    mov ,al	;! you ovewrite data under begining of the string!
+    ret		;!
+@@:
+    dec ecx     ; correct for following copy
+
+  ; --------------------------------------
+  ; copy the rest including trailing zero
+  ; --------------------------------------
+  @@:
+    mov al, 
+....
+</code></pre>
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-30 07:58:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-198047">
+    <div class="subject"><a href="#post-198047">trim procedure</a></div>
+    <div class="body">;trim  PROTO
+;Usage: invoke trim, src 
+
+;trim proc src:DWORD
+
+trim proc  ; 
+     pop eax	; return address
+     pop ecx	; src
+  
+     push eax   ; return address
+     mov edx,ecx	
+
+  ;  mov ecx, src
+  ;  mov edx, src
+  ; ---------------------------
+  ; read leading tabs & spaces
+  ; ---------------------------
+  @@:
+    mov al, 
+    inc ecx
+    cmp al, 32  ; space
+    je @B
+    cmp al, 9   ; tab
+    je @B
+    jne L_2 	
+  ; dec ecx     ; correct for following copy
+  ; --------------------------------------
+  ; copy the rest including trailing zero
+  ; --------------------------------------
+  @@:
+    mov al, 
+    inc ecx
+L_2:
+    mov , al
+    inc edx
+    test al,al	
+   ;cmp al, 0
+    jne @B
+  ; --------------------------------------
+  ; back 2 to compare trailing characters
+  ; --------------------------------------
+  ;  sub edx, 2
+  ; ----------------------------------------------
+  ; scan backwards to find first non tab or space
+  ; ----------------------------------------------
+  @@:
+    mov al, 
+    dec edx
+    cmp al, 32
+    je @B
+    cmp al, 9
+    je @B
+  ; --------------------------------------------------
+  ; place terminator at position of last tab or space
+  ; --------------------------------------------------
+  ; mov , byte ptr 0 ; ??
+  ; ret ; ?? may be ret 4
+    mov byte ptr ,0
+    ret
+trim endp</div>
+    <div class="meta">Posted on 2001-05-03 01:49:00 by nadia</div>
+   </div>
+   <div class="post" id="post-198048">
+    <div class="subject"><a href="#post-198048">trim procedure</a></div>
+    <div class="body">Maybe something like the following? Of course, you might want to save ebx etc.
+  mov esi,src    ;src=
+  mov edi,esi    ;cheaper and faster than mov edi,src
+  xor ebx,ebx    ;ebx will record the address of the last non-space, if any
+Loopit: lodsb
+  or al,al
+  jz short Done
+  cmp al," "
+  je short Special
+  cmp al,9
+  je short Special
+  stosb
+  mov ebx,edi    ;update ebx
+  jmp short Loopit
+Special: or ebx,ebx
+  jz short Loopit   ;don't store leading space
+  stosb             ;don't update ebx, in case only spaces will follow
+  jmp short Loopit
+Done: or ebx,ebx
+  jz short UseEDI   ;for 486+, prefer a conditional mov
+  mov edi,ebx
+UseEDI: stosb
+
+(and ret 4)</div>
+    <div class="meta">Posted on 2001-05-22 03:06:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-198049">
+    <div class="subject"><a href="#post-198049">trim procedure</a></div>
+    <div class="body">Alex,
+
+======================================================
+It's pity you ignored my question #1 in previous post.
+======================================================
+
+Not so, I have one life and time and it gets filled up with other
+things from time to time. The version I posted has no error check
+for a string that has only tabs and spaces. It remains to be seen
+if it is of use to put a checking mechanism in the procedure.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-22 04:42:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198050">
+    <div class="subject"><a href="#post-198050">trim procedure</a></div>
+    <div class="body"><strong>Larry</strong>, nice algo.  I like the compactness of the code.  I'd use other registers besides EBX, ESI, EDI; but that's just 'cus of windows. :)</div>
+    <div class="meta">Posted on 2001-05-22 13:07:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198051">
+    <div class="subject"><a href="#post-198051">trim procedure</a></div>
+    <div class="body">Thx bitRAKE; the things you learn from such gross jobs as
+writing command-tail parsing code for DOS:)
+Cmpxchg would be better than conditional mov, on second thought.
+Here is a variant, "LTrim":
+
+mov esi,src ;src=
+mov edi,esi
+Loopit: lodsb
+or al,al
+jz short Done
+cmp al," "
+je short Special
+cmp al,9
+je short Special
+stosb
+jmp short Loopit
+Special: cmp edi,src
+je short Loopit   ;don't store leading space
+stosb
+jmp short Loopit
+Done: stosb       ;al=0
+(ret 4)
+
+and here is a candidate for "RTrim":
+
+mov esi,src ;src=
+xor edx,edx
+Loopit: lodsb
+or al,al
+jz short Done
+cmp al," "
+je short Loopit
+cmp al,9
+je short Loopit
+mov edx,esi        ;update edx
+jmp short Loopit
+Done: or edx,edx
+jz short UseESI    ;esi will be src if edx=0
+mov esi,edx
+UseESI: mov ,al      ;al=0
+(ret 4)
+
+
+This message was edited by Larry Hammick, on 5/23/2001 9:59:02 AM
+
+This message was edited by Larry Hammick, on 5/23/2001 10:00:48 AM</div>
+    <div class="meta">Posted on 2001-05-23 04:10:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-198052">
+    <div class="subject"><a href="#post-198052">trim procedure</a></div>
+    <div class="body">A couple of things for thew discussion on this basic algo type,
+
+Alex,
+=================================
+2. Replace cmp al,0 with or al,al
+=================================
+OR does not pair as well as CMP so for speed related code, CMP
+is a better choice of instruction.
+
+In relation to writing the algo with error checking for a string
+that is comprised of tabs and spaces only, the circumstance is rare
+enough to write a seperate algo to scan for the occurrence of any
+character before ascii zero if the contents of the string being
+stripped cannot be assured.
+
+Larry,
+
+The problem with using string instructions is that almost exclusively
+the operations can be done faster using indexed addressing. Especially
+when the string instruction are not using a REP prefix. The literature
+by Agner Fog has quantitative testing that shows the string instructions
+are not well optimised on later Intel processors.
+
+Interestingly enough, some of the later AMD processors manage the
+older string instructions faster than later Intel processors. The
+problem is that if you want code that performs well across the range
+of x86 processors, you cannot target the capacity of one at the
+expense of another.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-23 20:43:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198053">
+    <div class="subject"><a href="#post-198053">trim procedure</a></div>
+    <div class="body">I see. I didn't know that about string instructions.
+But we could just replace each lodsb or stosb with
+two instructions (an indexed mov and an inc of the
+index). Movsb would need 3 instructions, maybe 4.</div>
+    <div class="meta">Posted on 2001-05-25 04:00:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-198054">
+    <div class="subject"><a href="#post-198054">trim procedure</a></div>
+    <div class="body">The string instructions come in very handy if your coding for small size, but that doesn't seem to be the direction the software world is going. :)  The multiple instruction that replace the string instructions almost always improve pairing - the programmer doesn't have to be concerned with default register dependancies either.</div>
+    <div class="meta">Posted on 2001-05-25 13:59:00 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>AsmCtrl Font Property - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17671" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=17671">AsmCtrl Font Property</a></p>
+   <div class="post" id="post-136555">
+    <div class="subject"><a href="#post-136555">AsmCtrl Font Property</a></div>
+    <div class="body">I've been trying to add a Stock Font Property to japheth's Asm Control.<br />Everything worked fine with the get &amp; put font methods so I add an entry for PropertyBag.<br />Now, in VB IDE the get/set work fine, PropertyBag saves &amp; loads fine. But when I try to<br />run it from the IDE or  compiled I get 80010108 error. Debug shows it's dying on the get_Font method.<br />I'm not sure at all if what i've implemented is correct. Can anyone take a look and give me an idea of<br />what may be wrong.<br /><br />Thanks</div>
+    <div class="meta">Posted on 2004-03-20 19:49:25 by Wayne</div>
+   </div>
+   <div class="post" id="post-136578">
+    <div class="subject"><a href="#post-136578">AsmCtrl Font Property</a></div>
+    <div class="body">Hi Wayne,<br /><br />with the debug messages its easy to see that VB - at least the version I used - used IPersistStreamInit to save and load an object's state. The code for the implementation of this interface in olectrl.inc is pretty simple:<br /><br /><pre><code><br />	mov ax,&#91;esi&#93;.BagEntry.varType<br />	.if &#40;ax == VT_I2&#41;<br />		mov dl,2<br />	.else<br />		mov dl,4<br />	.endif<br />	movzx edx,dl<br />	mov dwSize,edx<br />	mov ecx,&#91;esi&#93;.BagEntry.dwOffset<br />	add ecx, __this<br /><br />following ----&gt;<br /><br />	invoke vf&#40;pStream, IStream, Write&#41;, ecx, dwSize, ADDR bCount    ;for Save method<br />	invoke vf&#40;pStream, IStream, Read&#41;, ecx, dwSize, ADDR bCount    ;for Load method<br /></code></pre><br /><br />This doesnt work for IDispatch objects, the save method will save the pointer itself - which is pretty useless - and to load and use such a pointer will most likely crash the app.<br /><br />To handle IDispatchs the code for IPersistStreamInit::Save should be modified to something like:<br /><br /><pre><code><br />	mov dwSize,edx<br />	mov ecx,&#91;esi&#93;.BagEntry.dwOffset<br />	add ecx, __this<br />;----------------------------------- 21.3.2004&#58; VT_DISPATCH case added<br />	.if &#40;ax == VT_DISPATCH&#41;<br />	     mov ecx, &#91;ecx&#93;<br />	     invoke vf&#40;ecx, IUnknown, QueryInterface&#41;, addr IID_IPersistStream, addr pPersistStream<br />    	     .if &#40;eax == S_OK&#41;<br />		invoke OleSaveToStream, pPersistStream, pStream<br />		invoke vf&#40;pPersistStream, IUnknown, Release&#41;<br />  	    .endif<br />	.else<br />	    invoke vf&#40;pStream, IStream, Write&#41;, ecx, dwSize, ADDR bCount<br />	.endif<br /></code></pre><br /><br />and for IPersistStreamInit::Load it is<br /><br /><pre><code><br />	mov dwSize,edx<br />	mov ecx,&#91;esi&#93;.BagEntry.dwOffset<br />	add ecx, __this<br />;----------------------------------- 21.3.2004&#58; VT_DISPATCH case added<br />	.if &#40;ax == VT_DISPATCH&#41;<br />		invoke OleLoadFromStream, pStream, addr IID_IDispatch, ecx <br />	.else<br />		invoke vf&#40;pStream, IStream, Read&#41;, ecx, dwSize, ADDR bCount<br />	.endif<br /></code></pre><br /><br />This code will not handle IDispatch objects which are NULL!<br /><br />I attached my current versions of the include files. <br />If you get unresolved external _FireEvent, add &quot;DEFINE_FIREEVENTHELPER&quot; somewhere to your code<br /><br />Japheth</div>
+    <div class="meta">Posted on 2004-03-21 03:41:29 by japheth</div>
+   </div>
+   <div class="post" id="post-136594">
+    <div class="subject"><a href="#post-136594">AsmCtrl Font Property</a></div>
+    <div class="body">Thanks for the help Japheth.<br />It makes sense to me now.<br />I was thrown off because the save &amp; load seemed to be working in the design mode so I was looking elsewhere.<br /><br />Wayne</div>
+    <div class="meta">Posted on 2004-03-21 10:58:44 by Wayne</div>
+   </div>
+  </div>
+ </body>
+</html>

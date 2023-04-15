@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>zf flag not set - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30579" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30579">zf flag not set</a></p>
+   <div class="post" id="post-214503">
+    <div class="subject"><a href="#post-214503">zf flag not set</a></div>
+    <div class="body">hi everybody<br /><br />i have a problem with c3 bit, zf flag and jz jump<br />i hope that someone can help me out with this problem<br />following code does not set the fpu c3 bit, or is not copied correctly to cpu flag register ???<br /><br /><pre><code>finit		&nbsp; 	; initaliaze fpu<br />	fld fRotation 	; starts with 0.0 inc with 0.01<br />	fcomp f180&nbsp; &nbsp; 	; 1.57 (90 degree)<br />	fnstsw ax		; Store Status Word in ax<br />	sahf			; Store AH Register<br />	jz @NewFile@	; Jump if Zero (ZF=1)</code></pre><br /><br />it does not jump when fRotation and f180 are equal<br />the fcomi instruction gives the same result<br /><br />jpam</div>
+    <div class="meta">Posted on 2011-06-23 13:01:30 by jpam</div>
+   </div>
+   <div class="post" id="post-214504">
+    <div class="subject"><a href="#post-214504">Re: zf flag not set</a></div>
+    <div class="body">Your problem probably has to do with accumulation-of-error.<br />Floating point operations suffer from rounding. Therefore the result of a floating point operation is rarely *exactly* the result you expect, unlike integers.<br />Instead of doing a direct compare, you should generally use a small margin of error, commonly referred to as &#039;epsilon&#039;.<br />Eg, instead of doing this:<br />if (x == 90.0)<br />You should do something like this:<br />if (abs(x - 90.0) &lt; epsilon)<br />Where &#039;epsilon&#039; is a very small number, depending on the expected precision. Eg: epsilon == 0.0001.</div>
+    <div class="meta">Posted on 2011-06-23 13:31:05 by Scali</div>
+   </div>
+   <div class="post" id="post-214512">
+    <div class="subject"><a href="#post-214512">Re: zf flag not set</a></div>
+    <div class="body">thanks scali<br /><br />but when i load a float of 0.0<br />and i increase that float every frame with fadd 0.01<br />how does that look internaly in the fpu register ?<br /><br />i know the fpu converts the float to a real10 for calculations<br />but a float of 0.01 should be the same in real4 and real10 ?<br /><br />so my logical thinking would be , when the float reeds the 1.57 the fcomp instruction should set the c3 bit<br /><br />i rewrote my code with a small margin, and it is working ok now<br /></div>
+    <div class="meta">Posted on 2011-06-24 11:09:31 by jpam</div>
+   </div>
+   <div class="post" id="post-214513">
+    <div class="subject"><a href="#post-214513">Re: zf flag not set</a></div>
+    <div class="body">It&#039;s a bit difficult to explain how it looks.<br />But in short, a floating point number is composed something like this:<br />sign * (mantissa * radix^exponent)<br /><br />Sign can be 1 or -1.<br />Mantissa is an integer number, the radix is the base of the number system you use (eg. decimal has radix 10, hexadecimal has radix 16, binary has radix 2 etc). The mantissa is always normalized, so basically between 0...1 range.<br />The exponent is well, the exponent. It is used as a scale factor, basically to move the decimal point for the mantissa forward or backward (hence the name &#039;floating point&#039;).<br />The radix is fixed, and in IEEE754-standardized floating point (such as x87), the radix is 2.<br />Only the mantissa and exponent are stored.<br /><br />So for example, if you had a number such as -12.345, it would be stored in decimal as such:<br />radix = 10<br />sign = -1<br />mantissa = 0.12345<br />exponent = 2<br /><br />So, take the above formula and you get:<br />(-1 * 0.12345) * 10^2 = -0.12345 * 100 = -12.345<br /><br />The problem here lies in the fact that you only have limited precision for each component.<br />For single precision IEEE754 floats (32-bit), you get 1 sign bit, 23 mantissa bits and 8 exponent bits.<br />For double precision IEEE754 floats (64-bit), you get 1 sign bit, 52 mantissa bits and 11 exponent bits.<br /><br />As a result, the mantissa needs to be rounded after it is normalized, which cuts off some of the least significant digits at the end. This is where errors will occur.<br />When you specify 0.01 as a decimal number, it will not be stored *exactly* as 0.01 in a binary float. It may actually be something like 0.0099999999 (decimal doesn&#039;t map &#039;nicely&#039; to binary). So everytime you add it, you &#039;lose&#039; a bit. That is why the comparison with an epsilon value is required. You factor in that you have a small error.<br />It is generally not advisable to repeatedly add floating point numbers anyway.<br />Instead, it is better to use an integer counter, and multiply by a float:<br />floatX = intCounter * floatStep;<br /><br />This way you avoid the accumulation-of-error. The int counter is always exact, and you only get rounding once, after the multiply. You don&#039;t stack error upon error of previous iterations.<br /><br />That is the short version, in reality there is some minor trickery applied when storing the mantissa (one bit is &#039;implied&#039;).<br />For more detailed information, I will direct you to: http://en.wikipedia.org/wiki/Floating_point</div>
+    <div class="meta">Posted on 2011-06-24 11:54:05 by Scali</div>
+   </div>
+   <div class="post" id="post-214514">
+    <div class="subject"><a href="#post-214514">Re: zf flag not set</a></div>
+    <div class="body">wow thanks for the detailed information about the fpu scali !<br /><br />never knew that the internal working of the fpu was that complicated<br />now i see why my zero jump wasn&#039;t working :)<br /><br /></div>
+    <div class="meta">Posted on 2011-06-24 12:22:09 by jpam</div>
+   </div>
+  </div>
+ </body>
+</html>

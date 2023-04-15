@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>who owns the registers? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12087" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12087">who owns the registers?</a></p>
+   <div class="post" id="post-92823">
+    <div class="subject"><a href="#post-92823">who owns the registers?</a></div>
+    <div class="body">Hi, here's one thing I don't understand.  Windows may have multiple programs, processes, threads, whatever going at the same time.   Each one runs in it's own memeory space, and that seems clear.  Each one also gets slices of CPU time, that also makes sense.<br /><br />But the registers are a pretty limite resource!  Am I to presume that Windows turns over ALL of the registers to the process while it has CPU time?  Does Windows page the data in and out of the registers (perhaps push them to the stack?) each time a new process takes over?<br /><br />How does this affect optimizations?  Does keeping data in registers really help?  It seems that if Windows is obligated to push and pop these all the time, how does that help? It would be just as well to keep them in memory. I'm sure there is a simple (or not so simple) explanation.<br /><br />Can someone help me see?<br /><br />Greg</div>
+    <div class="meta">Posted on 2003-04-03 04:02:16 by bushpilot</div>
+   </div>
+   <div class="post" id="post-92826">
+    <div class="subject"><a href="#post-92826">who owns the registers?</a></div>
+    <div class="body">Yeah, Win pushes all the registers and pops them when there's a transition. But do not be scared. Win does this usually no more than 18 times a second. And the transition takes almost nothing! A program of mine makes Windows switch between threads and processes 280 times a second, and everything is running perfectly, taking up to 20% cpu though 67 times a second the program {copies a 800x800 bitmap 3 times in sequence, each time processes it, after that it copies it to screen (redraws everything!) }<br />play with thread priorities if you want to make the optimizations 100% worthy, not 99.99%. :grin: <br /><br />In plain English: Do <strong>NOT</strong> worry about task switching, pretend that it does not exist! The places where switching usually occurs is when you exit a window loop (WndProc (hWnd,msg,w,L){;})  and Sleep(100);. These are the places, after which you can be 99% sure that task switching occurs, so you can use them to control the cpu even more ;). I do so.</div>
+    <div class="meta">Posted on 2003-04-03 04:24:40 by Ultrano</div>
+   </div>
+   <div class="post" id="post-92828">
+    <div class="subject"><a href="#post-92828">who owns the registers?</a></div>
+    <div class="body">Ah, and one more thing, you can use 8 of the registers, being sure that they will not be modified by Windows<br /><br />In fact, you can use 7 registers:<br /><br />EAX EBX ECX EDX ESI EDI<br />the 7th register that you can use is either ESP or EBP, you have to choose. To see how to use them, see<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=11767&amp;highlight=esp2">http://www.asmcommunity.net/board/index.php?topic=11767&amp;highlight=esp2</a><br />(the bottom of the page, my post).  There's described why only 7, not 8.<br /><br />however, there are some nasty APIs that modify ecx and edx, and usually use eax, even if they're <br />void SomeApi(....);<br />After calling APIs, you can never be sure that EAX, ECX or EDX are the way you left them. But EBX, ESI, EDI, EBP and ESP <strong>are</strong> exactly the way you had them, so you don't have to care about saving them (push/pop tech)</div>
+    <div class="meta">Posted on 2003-04-03 04:33:25 by Ultrano</div>
+   </div>
+   <div class="post" id="post-92853">
+    <div class="subject"><a href="#post-92853">who owns the registers?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by Ultrano </em><br />In fact, you can use 7 registers:<br /><br />EAX EBX ECX EDX ESI EDI<br />the 7th register that you can use is either ESP or EBP, you have to choose.</div><br /><br />You don't have to choose. Use both of them:<br /><br /><pre><code><br />.DATA?<br />saveESP dd ?        ; global variable that holds the value of ESP<br />saveEBP dd ?        ; global variable that holds the value of EBP<br />saveEBX dd ?        ; global variable that holds the value of EBX<br />saveEDI dd ?        ; global variable that holds the value of EDI<br />saveESI dd ?        ; global variable that holds the value of ESI<br /><br />.CODE<br /><br />myproc proc lpThis&#58;DWORD, lpThat&#58;DWORD<br /><br />    LOCAL   myLocal   &#58;DWORD<br /><br />    mov     saveESP, esp<br />    mov     saveEBP, ebp<br />    mov     saveEBX, ebx<br />    mov     saveEDI, edi<br />    mov     saveESI, esi<br /><br />    ; Code that benefits from the use of all eight registers goes here.<br />    ; NOTE&#58;<br />    ; Re-load EBP from saveEBP if you change it, but need to access<br />    ; the parameters or the local variable afterwards.<br /><br />    mov     esp, saveESP<br />    mov     ebp, saveEBP<br />    mov     ebx, saveEBX<br />    mov     edi, saveEDI<br />    mov     esi, saveESI<br /><br />    ret<br /><br />myproc endp<br /></code></pre><br />Regards, Frank</div>
+    <div class="meta">Posted on 2003-04-03 07:28:09 by Frank</div>
+   </div>
+   <div class="post" id="post-92863">
+    <div class="subject"><a href="#post-92863">who owns the registers?</a></div>
+    <div class="body">bushpilot, there's a lot of switches going on all the time in windows. There's the usual thread switching, where the whole context is swapped (registers, FPU if used, etc). On process switching, CR3 (pagetable) is reloaded (on NT - 9x iirc patches the pagetable instead). Context is also changed on ring3&lt;-&gt;ring0 transitions which also happen a lot, and on ugly 9x there's even 32&lt;-&gt;16bit transitions (and for more often than you'd like).<br /><br />This generally isn't much of a problem, though. Each thread gets a timeslice to run in, and the foreground application gets a priority boost. So most of the time, it's not necessary to play with thread priorities (and setting to realtime is generally foolish - it can be dangerous).</div>
+    <div class="meta">Posted on 2003-04-03 08:04:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-93041">
+    <div class="subject"><a href="#post-93041">who owns the registers?</a></div>
+    <div class="body">Even when Win is doing &quot;alot&quot; of task switching, you still usually get to run thousands, if not hundreds of thousands, of instructions in each slice. :)</div>
+    <div class="meta">Posted on 2003-04-04 01:37:04 by S/390</div>
+   </div>
+   <div class="post" id="post-93065">
+    <div class="subject"><a href="#post-93065">who owns the registers?</a></div>
+    <div class="body">Frank, the code is good but prevents you from working with recursive algos.  I would rather use pushes for most of the registers, push in the value of saveESP, THEN mov saveESP,esp.  Then, to invert that, mov esp,saveESP, pop saveESP, then pop  off all the other registers  - this allows us to have completely reentrant and recursive code.<br /><br />Not that reentrant code is actually USEFUL... It's just the way I'd prefer it.</div>
+    <div class="meta">Posted on 2003-04-04 02:37:29 by AmkG</div>
+   </div>
+   <div class="post" id="post-93090">
+    <div class="subject"><a href="#post-93090">Re: who owns the registers?</a></div>
+    <div class="body"><div class="quote"><br />But the registers are a pretty limite resource!  Am I to presume that Windows turns over ALL of the registers to the process while it has CPU time?  Does Windows page the data in and out of the registers (perhaps push them to the stack?) each time a new process takes over?<br /></div>A process can have more than one thread. Windows keeps a copy of the registers when  a thread gets switched out.  This is necessary because the threads can be switched out at any time -- or from a coding point of view, at any point in the code.<br /><br />Segment registers must not be altered by your code.</div>
+    <div class="meta">Posted on 2003-04-04 03:22:44 by tenkey</div>
+   </div>
+   <div class="post" id="post-93163">
+    <div class="subject"><a href="#post-93163">who owns the registers?</a></div>
+    <div class="body">Well, that's not quite true. Just keep this in mind:<br />- avoid changing SS when executing with privilege level 0<br />- FS should be left with its original value when calling operating system functions</div>
+    <div class="meta">Posted on 2003-04-04 07:26:45 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-93170">
+    <div class="subject"><a href="#post-93170">who owns the registers?</a></div>
+    <div class="body">Thanks for the help.<br /><br />Greg</div>
+    <div class="meta">Posted on 2003-04-04 08:17:04 by bushpilot</div>
+   </div>
+   <div class="post" id="post-96845">
+    <div class="subject"><a href="#post-96845">who owns the registers?</a></div>
+    <div class="body">I'm not trying to be mean or nuttin, but something I thought was a little funny..<br /><br />you asked in a round-about way (but prolly didn't realize it/already knew it) if windoze owned the machine. answer is nope, it's the other way around.<br />It's like buying a car for it's looks and ignoring the edsel inside@.</div>
+    <div class="meta">Posted on 2003-04-15 03:13:17 by drarem</div>
+   </div>
+   <div class="post" id="post-96853">
+    <div class="subject"><a href="#post-96853">who owns the registers?</a></div>
+    <div class="body">I'd say it's windows &quot;owning&quot; the machine - it's the one telling your CPU what to do, managing the hardware, controlling task switching (etc).</div>
+    <div class="meta">Posted on 2003-04-15 03:39:14 by f0dder</div>
+   </div>
+   <div class="post" id="post-96869">
+    <div class="subject"><a href="#post-96869">who owns the registers?</a></div>
+    <div class="body"><div class="quote">who owns the registers? </div> <br /><strong>I</strong> own the registers:grin:</div>
+    <div class="meta">Posted on 2003-04-15 04:50:57 by clippy</div>
+   </div>
+   <div class="post" id="post-96870">
+    <div class="subject"><a href="#post-96870">who owns the registers?</a></div>
+    <div class="body">Actually no. You're just borrowing them for a limited timeslice ^_^</div>
+    <div class="meta">Posted on 2003-04-15 04:53:57 by f0dder</div>
+   </div>
+   <div class="post" id="post-96871">
+    <div class="subject"><a href="#post-96871">who owns the registers?</a></div>
+    <div class="body">They are mine. My <strong>precious</strong> :grin: <br /><br />I got them. Bought then off the store. Dont need to borrow, &quot;my <em>precious</em>&quot; registers :grin:</div>
+    <div class="meta">Posted on 2003-04-15 05:00:44 by clippy</div>
+   </div>
+   <div class="post" id="post-96880">
+    <div class="subject"><a href="#post-96880">who owns the registers?</a></div>
+    <div class="body">LOL  true, but what allows windows to run on it? If it weren't for the structure there would not be any walls, paint, etc..  I guess windoze does the plumbing tho.<br /><br />Rule of thumb: make sure your toilet is working properly or you could end up knee deep in some dark brown stuff.</div>
+    <div class="meta">Posted on 2003-04-15 06:48:01 by drarem</div>
+   </div>
+   <div class="post" id="post-97090">
+    <div class="subject"><a href="#post-97090">who owns the registers?</a></div>
+    <div class="body"><div class="quote"><br />LOL  true, but what allows windows to run on it? If it weren't for the structure there would not be any walls, paint, etc..  I guess windoze does the plumbing tho.<br /><br />Rule of thumb: make sure your toilet is working properly or you could end up knee deep in some dark brown stuff. </div><br /><br />I was eating :mad:  ;)<br /><br />I'm assuming that Windows will change the register contexts in the main CPU everytime it goes to another thread, but the I read somewhere in my Intel manuals that the once the CPU goes to a new task it sets the TS bit (which I think is in CR0). Once it is set and code tries to execute an FPU/SSE instruction the CPU will generate a Device Not Available exception and that is where I assume that Windows swaps the FPU/SSE context. You see its a good idea cause why restore an FPU context for a thread thats not going to use it ?</div>
+    <div class="meta">Posted on 2003-04-15 18:14:42 by x86asm</div>
+   </div>
+   <div class="post" id="post-97158">
+    <div class="subject"><a href="#post-97158">who owns the registers?</a></div>
+    <div class="body">yes - especially since FPU and SSE2 registers take up quite some space.<br />Iirc, NT uses the IA32 tasking way to switch registers, while 9x does manual context switching - but it's been a while.</div>
+    <div class="meta">Posted on 2003-04-16 01:51:10 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

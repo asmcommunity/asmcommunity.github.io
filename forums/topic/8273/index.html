@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Is there a way to detect that macros parameter is memory exp - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8273" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=8273">Is there a way to detect that macros parameter is memory exp</a></p>
+   <div class="post" id="post-60522">
+    <div class="subject"><a href="#post-60522">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">Is there a way to detect that macros parameter is memory expression? <br />I want to make an invoke macros in such a way that it accept strings as parameters. It can be done this way:<br /><br />macro stdcall proc,		; call procedure<br /> { local ..cont<br />    reverse<br />     if arg eq +arg<br />       push arg                                       ; it's number<br />     else<br />       call ..cont<br />       db arg, 0<br />  ..cont:<br />     endif<br />   common<br />     call proc }<br /><br />but when I pass memory expression (for example in another API call) as argument fasm generates error in the line with if.</div>
+    <div class="meta">Posted on 2002-10-03 21:08:00 by wanderer</div>
+   </div>
+   <div class="post" id="post-60526">
+    <div class="subject"><a href="#post-60526">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">If I am understanding your purposes, it left only to determine wether arg is a register or not. In such a case, a construction like:<br /><br />  if arg in &lt;eax,ebx,...,edi&gt;<br /><br />Resuming:<br /> - Constants OK<br /> - Addresses OK<br /> - Registers OK<br /><br />the remaining is treated as a string.<br /><br />I suggest also to replace the call with a jmp in<br /><br />jmp ..cont<br />db arg, 0<br />..cont:<br /><br />Regards,</div>
+    <div class="meta">Posted on 2002-10-04 03:27:47 by pelaillo</div>
+   </div>
+   <div class="post" id="post-60629">
+    <div class="subject"><a href="#post-60629">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">&gt; If I am understanding your purposes, it left only to determine wether arg is a register or not. In such a case, a construction like:<br /><br />&gt; if arg in &lt;eax,ebx,...,edi&gt;<br /><br />The problem is that when I determine if arg is number or string and the arg is memory expression, fasm generates error, because expression like + is incorrect. The solution would be to determine if arg is string or anything else, but I don't know a way to do this. It would be great if one could write something like:<br /><br />  invoke MessageBox, NULL, &quot;Hello, world!&quot;, &quot;Sample&quot;, MB_OK+MB_ICONINFORMATION<br /><br />or<br /><br />sz_text db &quot;Hello, world!&quot;, 0<br /> ...<br />  invoke MessageBox, NULL, sz_text, sz_text, MB_OK+MB_ICONINFORMATION<br /><br />&gt; I suggest also to replace the call with a jmp in<br /><br />&gt; jmp ..cont<br />&gt; db arg, 0<br />&gt; ..cont:<br /><br />This part of macros should place string address in stack, that's why call is needed, it pushes address of the next command in stack and jumps over string placed on this address.</div>
+    <div class="meta">Posted on 2002-10-05 09:24:53 by wanderer</div>
+   </div>
+   <div class="post" id="post-60647">
+    <div class="subject"><a href="#post-60647">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">I think, I found a kind of solution. It's not what I exactly intended to do, but works.<br /><br />format PE GUI 4.0<br />entry win_main<br /><br />include 'macro\import.inc'<br />include 'kernel32.inc'<br />include 'user32.inc'<br /><br />data import<br />	library kernel32, &quot;kernel32.dll&quot;, \<br />		user32, &quot;user32.dll&quot;<br />  kernel32:<br />	import	ExitProcess, &quot;ExitProcess&quot;<br />  user32:<br />	import	MessageBox, &quot;MessageBoxA&quot;<br />end data<br /><br />macro a v<br />{<br />  lea eax, v<br />  push eax<br />}<br /><br />macro p a<br />{<br />  push a<br />}<br /><br />macro t s<br />{ local ..cont<br />    call ..cont<br />    db s, 0<br />  ..cont:<br />}<br /><br />macro stdcall pr, <br />{<br />  reverse<br />    par<br />  common<br />    call pr<br />}<br /><br />macro invoke pr, <br />{<br />  reverse<br />    par<br />  common<br />    call <br />}<br /><br />win_main:<br />  invoke MessageBox, p NULL, t &quot;Hello, world!&quot;, t &quot;Sample&quot;, p MB_OK+MB_ICONINFORMATION<br />  invoke ExitProcess, p 0</div>
+    <div class="meta">Posted on 2002-10-05 12:10:12 by wanderer</div>
+   </div>
+   <div class="post" id="post-60663">
+    <div class="subject"><a href="#post-60663">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">It's very interesting problem, and quite hard to solve. My final solution needs two fixes in the fasm itself, I'll probably include them in 1.41 (coming soon) when I ensure they won't break the backward compatibility. Before it's released you can make these changes yourself. First, remove the lines 287-288 from PARSER.INC file:<br /><pre><code><br />        cmp     eax,8<br />        ja      string_argument<br /></code></pre><br />This check is not really needed and causes my solution to not work in some cases. The second change should be made in EXPRESSI.INC  file, lines 2015-2016 and 2027-2028 contain the same two instructions:<br /><pre><code><br />        call    check_character<br />        jc      invalid_expression<br /></code></pre><br />Both two occurences should be replaced with:<br /><pre><code><br />        mov     al,&#91;esi&#93;<br />        or      al,al<br />        jz      invalid_expression<br />        cmp     al,0Fh<br />        je      invalid_expression<br /></code></pre><br />After applying these changes to source, recompile fasm, now you can try my solution (it's a bit tricky, but should work):<br /><br /><pre><code><br />macro stdcall proc,&#91;arg&#93;<br />&#123;  local ..cont<br />  reverse<br />   if arg in &lt;&#40;arg&#41;&gt; | arg +0 eq arg 0<br />      push arg<br />   else<br />      call ..cont<br />      db arg, 0<br />      ..cont&#58;<br />   end if<br />  common call proc &#125;<br /></code></pre></div>
+    <div class="meta">Posted on 2002-10-05 15:13:40 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-60706">
+    <div class="subject"><a href="#post-60706">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">Your problem forced me to rethink and improve some parts of parser and so thanks to you 1.41 will have it much better, less strict and more flexible, while keeping all the needed error detection. I'm attaching the first alpha version of fasm 1.41 with all these fixes (and it has also the native AMD 3DNow! support). With this new version solution to your problem can be written even clearlier:<br /><pre><code><br />macro stdcall proc,&#91;arg&#93;<br />&#123;  local ..cont<br />  reverse<br />   if +arg eq arg | arg +0 eq arg 0<br />      push arg<br />   else<br />      call ..cont<br />      db arg, 0<br />      ..cont&#58;<br />   end if<br />  common call proc &#125;<br /></code></pre><br />You have also asked me (privately) about MASM's ADDR equivalent. It can be done by further extending the stdcall macro, here is the working version (fasm 1.41+ only):<br /><pre><code><br />macro stdcall proc,&#91;arg&#93;<br />&#123;  local ..x,..y<br />  reverse<br />   if +arg eq arg<br />      label ..x at arg<br />      virtual at 0<br />        mov eax,&#91;..x&#93;<br />        load ..y from 0<br />      end virtual<br />      if ..y = 0A1h<br />        push arg<br />      else<br />        lea eax,&#91;..x&#93;<br />        push eax<br />      end if<br />   else if arg +0 eq arg 0<br />      push arg<br />   else<br />      call ..x<br />      db arg, 0<br />      ..x&#58;<br />   end if<br />  common call proc &#125;<br /></code></pre><br />Addresses that cannot be pushed on stack directly (like ebp+something) will be pushed through eax (lea+pop).</div>
+    <div class="meta">Posted on 2002-10-06 06:42:10 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-60737">
+    <div class="subject"><a href="#post-60737">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">Thank you very much!<br /><br />You are wizard!</div>
+    <div class="meta">Posted on 2002-10-06 13:55:24 by wanderer</div>
+   </div>
+   <div class="post" id="post-72014">
+    <div class="subject"><a href="#post-72014">data in code section</a></div>
+    <div class="body">Privalov,<br /><br />Do you think is it a good idea to place data in code section?<br />Intel says:<br />&quot;Do not place data in the code segment.&quot;<br /><br />Maybe you can add some support for on- the- fly data section from the assembler.</div>
+    <div class="meta">Posted on 2002-12-20 21:44:47 by Sergo</div>
+   </div>
+   <div class="post" id="post-72025">
+    <div class="subject"><a href="#post-72025">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">Read and Write data and constant (Read Only) is the difference data.<br />Constant data is the code! (IMHO)</div>
+    <div class="meta">Posted on 2002-12-21 02:27:13 by tserk</div>
+   </div>
+   <div class="post" id="post-72030">
+    <div class="subject"><a href="#post-72030">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body"><div class="quote"><br />Do you think is it a good idea to place data in code section?<br />Intel says:<br />&quot;Do not place data in the code segment.&quot;<br /></div><br /><br />As I understand, there is no trouble with placing strings like it's done in this macros, because it (string) anyway will be addressed using ds, and in flat memory model (used in win32) offsets are the same for code and for data. ;) I think one can also put variables inside code as long as cs and ds has the same base.</div>
+    <div class="meta">Posted on 2002-12-21 03:30:32 by wanderer</div>
+   </div>
+   <div class="post" id="post-72042">
+    <div class="subject"><a href="#post-72042">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body"><div class="quote"><br />I think one can also put variables inside code as long as cs and ds has the same base.<br /></div><br />Only if the code section has readable and writeable flags - there's also a page-based protection, not only selector-based.</div>
+    <div class="meta">Posted on 2002-12-21 04:44:59 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-72045">
+    <div class="subject"><a href="#post-72045">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body">Of course :)</div>
+    <div class="meta">Posted on 2002-12-21 04:56:01 by wanderer</div>
+   </div>
+   <div class="post" id="post-72047">
+    <div class="subject"><a href="#post-72047">Is there a way to detect that macros parameter is memory exp</a></div>
+    <div class="body"><div class="quote">I think one can also put variables inside code as long as cs and ds has the same base.</div><br /><br />If you're using cs &amp; ds, and you don't have a bloated big brother app running in protected mode watching over your should, you can do what ever you damn well please :)<br /><br />Though, if you don't do any writes to the said vairiables (in other words, constants) then all is good.</div>
+    <div class="meta">Posted on 2002-12-21 04:57:45 by eet_1024</div>
+   </div>
+   <div class="post" id="post-72170">
+    <div class="subject"><a href="#post-72170">think of caches</a></div>
+    <div class="body">I'm not an expert in optimization.<br />Part of the problem is that data and code cache are distinct.<br />In this case, when there is no writes to code section, there is no need for the caches syncronization,<br />but I still don't think it's a good idea.<br />For example, what happen if future versions of image<br />loader decide to mark code section as EXECUTE_ONLY by default.<br /><br />Another issue, that since the data follow unconditional branch they won't be prefetch, but<br />the same way the won't prefetched if they were in a separate data section.<br /><br /><br />But anyway another quote from &quot;Intel ? Architecture Optimization Reference Manual&quot;:<br />========================================<br />During the process of instruction prefetch the address of a conditional<br />instruction is checked with the entries in the BTB. When the address is not<br />in the BTB, execution is predicted to fall through to the next instruction.<br />This suggests that branches should be followed by code that will be<br />executed. The code following the branch will be fetched, and in the case of<br />Pentium Pro, Pentium II processors, and Pentium III processor the fetched<br />instructions will be speculatively executed. Therefore, never follow a<br />branch instruction with data.<br />========================================</div>
+    <div class="meta">Posted on 2002-12-22 01:14:16 by Sergo</div>
+   </div>
+   <div class="post" id="post-72172">
+    <div class="subject"><a href="#post-72172">correction</a></div>
+    <div class="body">Addition:<br />I guess this doesn't matter <br />==<br />For example, what happen if future versions of image<br />loader decide to mark code section as EXECUTE_ONLY by default.<br />=========<br />since execute only is only is at segment level.<br />Pages have only read/write flag, so<br />in case of Win32 data in code section is still accessible using ds selector.</div>
+    <div class="meta">Posted on 2002-12-22 01:27:33 by Sergo</div>
+   </div>
+  </div>
+ </body>
+</html>

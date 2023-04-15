@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Performance of winsock I/O strategies - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12530" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=12530">Performance of winsock I/O strategies</a></p>
+   <div class="post" id="post-96721">
+    <div class="subject"><a href="#post-96721">Performance of winsock I/O strategies</a></div>
+    <div class="body"><strong>--- continuation of <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=12504">&quot;recv commands receives everything in one call !&quot;</a> ---</strong><br /><br /><div class="quote"><br />Thanks :) I can't wait digging into the I/O completion ports too but it has to wait, might not be the best starting point for beginners :).<br /></div><br />True.<br />As for the &quot;simpler&quot; methods, how would you say the following would rate against eachother in terms of speed/flexibility?<br />*) blocking, threaded (read note further below)<br />*) nonblocking, messages<br />*) nonblocking, events<br /><br />for the blocking+threaded, I would try to devise some &quot;worker&quot; scheme, so that you have N worker threads that are preallocated, and delegate socket work to them. This way, you don't have to do the constant (and, in case of heavy load, time consuming) work of thread setup/teardown. I guess this might be similar to IO Completion Ports?<br /><br />I would assume the window messaging approach to be the least flexible and slowest. Wouldn't really bother me, as I dislike that way of programming sockets ^_^<br /><br />I expect events to be pretty efficient - of course there's a whole lot of ways to use them (my idea would be a GUI thread and a socket thread that does WaitForMultipleObjects, and doesn't spawn work to worker threads. This of course assumes each socket operation completes quickly).<br /><br />Oh by the way, I like that you're constantly disapproving of polling. You're sorta the socket authorative on the board; nice to see you live up to this responsibility by being sensible :)<br /><br />Anyway, time for bed.</div>
+    <div class="meta">Posted on 2003-04-14 17:58:14 by f0dder</div>
+   </div>
+   <div class="post" id="post-96960">
+    <div class="subject"><a href="#post-96960">Performance of winsock I/O strategies</a></div>
+    <div class="body">yes, probably got a bit offtopic, thanks for splitting :)</div>
+    <div class="meta">Posted on 2003-04-15 10:40:03 by f0dder</div>
+   </div>
+   <div class="post" id="post-96962">
+    <div class="subject"><a href="#post-96962">Performance of winsock I/O strategies</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by f0dder </em><br />True.<br />As for the &quot;simpler&quot; methods, how would you say the following would rate against eachother in terms of speed/flexibility?<br />*) blocking, threaded (read note further below)<br />*) nonblocking, messages<br />*) nonblocking, events<br /><br />for the blocking+threaded, I would try to devise some &quot;worker&quot; scheme, so that you have N worker threads that are preallocated, and delegate socket work to them. This way, you don't have to do the constant (and, in case of heavy load, time consuming) work of thread setup/teardown. I guess this might be similar to IO Completion Ports?</div><br />Blocking sockets are probably the slowest. If you use pure blocking sockets, you will need a thread per socket (or two if sending and receiving is not done in turns like most protocols do). With high server load, you will quickly run out of resources (threads aren't lightweight resources :) ).<br />An IO completion port is an advanced, very efficient and scalable way to automatically create a worker thread queue. The threads still block (you can send custom messages if necessary to interrupt the blocking), but they just wait for something to do, not for the operation to complete. That way they will never block (long) if there's enough to do which is very efficient.<br /><br /><div class="quote">I would assume the window messaging approach to be the least flexible and slowest. Wouldn't really bother me, as I dislike that way of programming sockets ^_^</div><br />Window messages are quite poor too, but it is more flexible than blocking since you don't loose control because of the blocking. Messages are slow so it isn't much of a strategy for high performance servers. Personally I don't really like using window messages for anything non-GUI related.<br /><br /><div class="quote">I expect events to be pretty efficient - of course there's a whole lot of ways to use them (my idea would be a GUI thread and a socket thread that does WaitForMultipleObjects, and doesn't spawn work to worker threads. This of course assumes each socket operation completes quickly).</div><br />Events are pretty efficient, they are a much faster notification method than messages. There are two basic ways to use them: overlapped or not. Non-overlapped will work like WSAAsyncSelect (ie. notifications on network events), overlapped mode will use the event to signal operation completion. Overlapped is probably faster because it doesn't require calling send/recv again if it failed the first time.<br />Still one thread might not work very well, since you can only wait for 64 objects at a time (windows limitation). So if you need more connections you need more threads. IO completion ports don't need this and can easily support thousands of connections with just two threads (usually 1 or 2 thread per CPU). You do need to take care of the administration since you will loose the thread-connection relation that way.<br /><br /><div class="quote">Oh by the way, I like that you're constantly disapproving of polling. You're sorta the socket authorative on the board; nice to see you live up to this responsibility by being sensible :)</div><br />Hehe :), I can't think of a situation to justify polling in a multi-tasking environment, last time I used polling was on a microcontroller ;).<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-04-15 10:52:29 by Thomas</div>
+   </div>
+   <div class="post" id="post-96963">
+    <div class="subject"><a href="#post-96963">Performance of winsock I/O strategies</a></div>
+    <div class="body">Almost forgot this:<br />Here's a very interesting article (sample chapter of a book actually) about winsock performance:<br /><br /><a target="_blank" href="http://www.microsoft.com/mspress/books/sampchap/5726a.asp">http://www.microsoft.com/mspress/books/sampchap/5726a.asp</a><br /><br />There's also another article about multithreading performance in general, might be interesting too (haven't read it fully yet):<br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dndllpro/html/msdn_threadli.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dndllpro/html/msdn_threadli.asp</a><br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-04-15 10:55:47 by Thomas</div>
+   </div>
+   <div class="post" id="post-97218">
+    <div class="subject"><a href="#post-97218">Performance of winsock I/O strategies</a></div>
+    <div class="body">Some other related articles:<br /><br /><a target="_blank" href="http://msdn.microsoft.com/msdnmag/issues/1000/winsock/">Windows Sockets 2.0: Write Scalable Winsock Apps Using Completion Ports</a><br /><a target="_blank" href="http://support.microsoft.com/default.aspx?scid=KB;en-us;q192800">INFO: Design Issues When Using IOCP in a Winsock Server</a><br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-04-16 06:35:32 by Thomas</div>
+   </div>
+   <div class="post" id="post-97234">
+    <div class="subject"><a href="#post-97234">Performance of winsock I/O strategies</a></div>
+    <div class="body">A stray thought:<br />what would happen if you specify a socket handle to TransmitFile, instead of a file handle? :)</div>
+    <div class="meta">Posted on 2003-04-16 07:19:30 by f0dder</div>
+   </div>
+   <div class="post" id="post-97520">
+    <div class="subject"><a href="#post-97520">Performance of winsock I/O strategies</a></div>
+    <div class="body"><div class="quote"><br />A stray thought:<br />what would happen if you specify a socket handle to TransmitFile, instead of a file handle? :) </div><br />Hehe :grin: I should test that some time.<br /><br />Or what about using TransmitFile specifying the same socket for both hSocket and hFile, setting nNumberOfBytesToWrite to 0 (transmit entire file) and a non-empty header buffer ;)?<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-04-17 13:04:38 by Thomas</div>
+   </div>
+   <div class="post" id="post-97522">
+    <div class="subject"><a href="#post-97522">Performance of winsock I/O strategies</a></div>
+    <div class="body">Heh yeah :).<br />Hm, wonder if it might accept a filehandle in place of the socket? Kernel-mode filecopy - not that it would be too useful :)</div>
+    <div class="meta">Posted on 2003-04-17 13:14:55 by f0dder</div>
+   </div>
+   <div class="post" id="post-98815">
+    <div class="subject"><a href="#post-98815">Performance of winsock I/O strategies</a></div>
+    <div class="body">now I KNOW ur taking the piss - ur well aware that socket handles and file handles are effectively the same thing :rolleyes:<br /><br /><br />How about this ... SetParent,HWND_DESKTOP,hWnd<br />&quot;The new parent window and the child window must belong to the same application.&quot; is totally untrue, I've parented child controls from app to app without an issue, but I haven't tried parenting the whole desktop to an app ... (is it raining?)</div>
+    <div class="meta">Posted on 2003-04-23 08:14:48 by Homer</div>
+   </div>
+   <div class="post" id="post-98816">
+    <div class="subject"><a href="#post-98816">Performance of winsock I/O strategies</a></div>
+    <div class="body">Not 100%, there's a few differences at application level and even more at kernel level. I'm wondering whether the kernel would check for file vs. socket handles... otherwise interesting things could happen.</div>
+    <div class="meta">Posted on 2003-04-23 08:17:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-98818">
+    <div class="subject"><a href="#post-98818">Performance of winsock I/O strategies</a></div>
+    <div class="body">Well, obviously you can't create a socket handle with CreateFile, but once you have a socket handle, you can use ReadFile, WriteFile and most of the gamut of IO functions to access it (IOCTL etc), as I'm sure u already know... <br />afaik, most implementations of bsd sockets follow this logic, but I believe originally it was due to sheer laziness in basing the networking io model so heavily on the existing io functionality... I've not tried using Send and Recv to access files, but I'm confident that it would work, since the reverse it true.<br />Yes, they are like bananas and apples, not the same, but both very fruity :tongue:</div>
+    <div class="meta">Posted on 2003-04-23 08:25:02 by Homer</div>
+   </div>
+   <div class="post" id="post-98825">
+    <div class="subject"><a href="#post-98825">Performance of winsock I/O strategies</a></div>
+    <div class="body">ReadFile/WriteFile/CreateFile etc are pretty damn generic and can be used for a lot of stuff - the same isn't necessarily true for other APIs, just because you can usually use read/writefile to operate on their objects. I doubt recv/send would work on anything but sockets, but - well, I guess it should be tested.<br /><br />And there's some special restrictions with sockets that don't apply to most other objects - most importantly they are _NOT_ inheritable by child processes, unless the child processes cooperates (look in the winsock reference).</div>
+    <div class="meta">Posted on 2003-04-23 08:48:35 by f0dder</div>
+   </div>
+   <div class="post" id="post-98836">
+    <div class="subject"><a href="#post-98836">Performance of winsock I/O strategies</a></div>
+    <div class="body">I honestly can't say I've tried that, what kind of access violation does it generate? I've embedded socket code in DLL before, but they are mapped into the process who loads them (or vice versa), so that doesn't count.<br />In fact I can't even think of many situations where it would be desirable to share a socket across processes !! I do believe you about the inheritance rule, what a quirky, kinky thing to do lol...</div>
+    <div class="meta">Posted on 2003-04-23 09:23:51 by Homer</div>
+   </div>
+   <div class="post" id="post-98840">
+    <div class="subject"><a href="#post-98840">Performance of winsock I/O strategies</a></div>
+    <div class="body">It doesn't generate an exception, it just doesn't work - the target app needs to cooperate, and you have to use WSADuplicateSocket. Bit of a shame, since you have to do some rather funky stuff involving pipes (those are inheritable) if you want to pass a socket to a child app.<br /><br />Can't think of a reason to do it? Think inetd superserver spawning connections off to child apps, with redirected stdin/stdout handles.</div>
+    <div class="meta">Posted on 2003-04-23 09:35:35 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

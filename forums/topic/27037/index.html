@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Editing Bitmaps in the Memory? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27037" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27037">Editing Bitmaps in the Memory?</a></p>
+   <div class="post" id="post-194312">
+    <div class="subject"><a href="#post-194312">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">Im wondering is it possible to get/set pixels of a 24 bit bitmap in the memory without using gdi/directx, I know how to get/set pixels in a bitmap file,  but how would do that to the bits in the memory or dc?</div>
+    <div class="meta">Posted on 2001-02-27 05:50:00 by moxy</div>
+   </div>
+   <div class="post" id="post-194313">
+    <div class="subject"><a href="#post-194313">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">You should look up CreateCompatibleDC, CreateDIBSection
+and SelectObject. I can post some (ugly!) C source code if
+you'd like me to, which works. Or should work. Well, it's used
+in a commercial project, so it had better work ;-).</div>
+    <div class="meta">Posted on 2001-02-27 06:31:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-194314">
+    <div class="subject"><a href="#post-194314">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">I can create the dc's and get the bitmap in there, but how would i view/edit the colorbits after selecting the bitmap into the memorydc? (edit the hbmp or hdc directly without gdi?) if you have the C source please post it =)</div>
+    <div class="meta">Posted on 2001-02-27 06:58:00 by moxy</div>
+   </div>
+   <div class="post" id="post-194315">
+    <div class="subject"><a href="#post-194315">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">okay, you asked for it :) It is for 32bpp (though by changing
+"a few things", you should be able to make it work for any
+resolution). After you have created the drawbuf, you can access
+drawbuf->buf directly. When done with your changes, blit the
+bitmap to screen the usual way.
+
+
+<pre><code>
+typedef struct _DrawBuf {
+	int		w;
+	int		h;
+	unsigned int*	buf;
+	BITMAPINFO	bmp;
+	HBITMAP		hbmp;
+	HDC		hdcbmp;
+} DrawBuf;
+
+
+static bool createDrawBuf(DrawBuf *db, int width, int height)
+{
+	memset(db, 0, sizeof(*db));
+	db->w = width;
+	db->h = height;
+
+	db->bmp.bmiHeader.biBitCount = 32;
+
+	// no colorTable since we're doing 32bpp.
+	db->bmp.bmiHeader.biClrImportant = 0;
+	db->bmp.bmiHeader.biClrUsed = 0;
+
+	db->bmp.bmiHeader.biCompression = BI_RGB;
+
+	// biHeight must be negative so we get a top-down bitmap. Fucked up MS.
+	db->bmp.bmiHeader.biHeight = 0 - (db->h);
+
+	db->bmp.bmiHeader.biPlanes = 1;
+	db->bmp.bmiHeader.biSize = sizeof(db->bmp.bmiHeader);
+	db->bmp.bmiHeader.biSizeImage = db->w * db->h * 4;
+	db->bmp.bmiHeader.biWidth = db->w;
+
+	db->hdcbmp = CreateCompatibleDC(NULL);
+	if(db->hdcbmp == NULL) return false;
+
+	db->hbmp = CreateDIBSection(db->hdcbmp, &db->bmp, DIB_RGB_COLORS, (void **) &db->buf, NULL, 0);
+	if(db->hbmp == NULL) return false;
+
+	SelectObject(db->hdcbmp, db->hbmp);
+
+	return true;
+}
+
+
+static void killDrawBuf(DrawBuf *db)
+{
+	DeleteObject(db->hbmp);
+	DeleteDC(db->hdcbmp);
+	memset(db, 0, sizeof(*db));
+}
+</code></pre></div>
+    <div class="meta">Posted on 2001-02-27 07:06:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-194316">
+    <div class="subject"><a href="#post-194316">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">After you select the bitmap into the dc, is it possible to edit it from there (setpixel,getpixel) directly? :( For example if i was to edit a bitmaps data section i would select the data into edi and write at a offset the new color. How would i edit a bitmap selected into a memoryDC without using set/get pixel? :ashamed:</div>
+    <div class="meta">Posted on 2001-02-27 08:49:00 by moxy</div>
+   </div>
+   <div class="post" id="post-194317">
+    <div class="subject"><a href="#post-194317">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">The way I do it is to draw in "gfxboard.buf", which is pretty
+easy. And then use a bitblt to display on screen. This means
+that you'll have to bitblt every time you have made changes
+(not per pixel please, but after all changes are done).
+
+This approach requires you to handle all (re)drawing of the
+area where you want to show the image. If you'd rather have a
+"normal" bitmap where windows handles the updating (good for a
+bitmap you don't change very often), you should probably use
+another technique.
+
+I hate working with bitmaps under windows :)</div>
+    <div class="meta">Posted on 2001-02-28 05:01:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-194318">
+    <div class="subject"><a href="#post-194318">Editing Bitmaps in the Memory?</a></div>
+    <div class="body">Thanks alot the code works great!! :)</div>
+    <div class="meta">Posted on 2001-02-28 06:25:00 by moxy</div>
+   </div>
+  </div>
+ </body>
+</html>

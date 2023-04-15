@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>error help: struct in this proc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10050" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=10050">error help: struct in this proc</a></p>
+   <div class="post" id="post-75158">
+    <div class="subject"><a href="#post-75158">error help: struct in this proc</a></div>
+    <div class="body">can't figure out why getting this error<br /><br />as you can see the typedef of ord to DWORD takes<br /><br />the struct is in windows.inc:<br />COORD<br />x word ?<br />y word ?<br />ends<br /><br />: error A2114: INVOKE argument type mismatch : argument : 3<br /><br /><br /><pre><code><br />	LOCAL sz&#58;COORD<br />	LOCAL ord&#58;DWORD<br />			;BOOL ReadConsoleOutput&#40;<br />			;  HANDLE hConsoleOutput,	// handle of a console screen buffer<br />			;  PCHAR_INFO lpBuffer,	// address of buffer that receives data<br />			;  COORD dwBufferSize,	// column-row size of destination buffer<br />			;  COORD dwBufferCoord,	// upper-left cell to write to<br />			;  PSMALL_RECT lpReadRegion 	// address of rectangle to read from<br /><br />	invoke ReadConsoleOutput,hmystdout, addr buffer,  sz ,ord, addr smRect<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-08 19:26:47 by RockyJ</div>
+   </div>
+   <div class="post" id="post-75159">
+    <div class="subject"><a href="#post-75159">error help: struct in this proc</a></div>
+    <div class="body">I guess the proto only allows DWORD <br /><br />Any way to typedef to a DWORD or equ it.</div>
+    <div class="meta">Posted on 2003-01-08 19:32:30 by RockyJ</div>
+   </div>
+   <div class="post" id="post-75222">
+    <div class="subject"><a href="#post-75222">error help: struct in this proc</a></div>
+    <div class="body"><pre><code><br />invoke ReadConsoleOutput,hmystdout, addr buffer,  addr sz ,addr ord, addr smRect<br /></code></pre><br /><br />Struct are accessed by pointers.</div>
+    <div class="meta">Posted on 2003-01-09 04:33:09 by roticv</div>
+   </div>
+   <div class="post" id="post-75228">
+    <div class="subject"><a href="#post-75228">error help: struct in this proc</a></div>
+    <div class="body">i dont think that function expects a pointer for arguments 3 and 4, since the coord structure is 32 bits, its more efficient just to push a dword onto the stack... there is probably a better way to do this but here is a temp fix...<br /><br /><pre><code>LOCAL sz&#58;COORD<br />LOCAL ord&#58;DWORD<br />; copy sz.x and sz.y to edx &#40;cant use eax because of invoke conflicts&#41;<br />mov dx, sz.x<br />shl edx, 16<br />mov dx, sz.y<br />; copy ord.x and ord.y to ecx<br />mov cx, ord.x<br />shl ecx, 16<br />mov cx, ord.y<br />; use ecx and edx instead of structs<br />invoke ReadConsoleOutput,hmystdout, addr buffer,  edx , ecx, addr smRect</code></pre><br /><br />if I were using C i could always use the helpful cast method, but I have never seen this done in masm... maybe this prototype needs to be modified to work correctly? I have no idea... :confused:</div>
+    <div class="meta">Posted on 2003-01-09 05:05:06 by BubbaFate</div>
+   </div>
+   <div class="post" id="post-75329">
+    <div class="subject"><a href="#post-75329">error help: struct in this proc</a></div>
+    <div class="body">Bubba, thats the way I coded it or similar, but as far as a new prototype I haven't tried changing the windows. inc.  <br /><br />Also I don't know how to state an immediate in a typed form like:<br /><br />invoke somefunctionneedingCoord, COORD &lt;80,160&gt;<br /><br />instead of somefunctionneedingCoord, 005000A0h</div>
+    <div class="meta">Posted on 2003-01-09 17:50:49 by RockyJ</div>
+   </div>
+   <div class="post" id="post-75621">
+    <div class="subject"><a href="#post-75621">error help: struct in this proc</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by RockyJ </em><br />Also I don't know how to state an immediate in a typed form like:<br />invoke somefunctionneedingCoord, COORD &lt;80,160&gt;</div><br />I don't think you can. You can use this though:<br /><pre><code>invoke func, 80 OR &#40;160 SHL 16&#41;</code></pre><br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-01-11 04:09:31 by Thomas</div>
+   </div>
+   <div class="post" id="post-75688">
+    <div class="subject"><a href="#post-75688">error help: struct in this proc</a></div>
+    <div class="body">Problem 1)<br /><br />My Windows.inc has:<pre><code>&#91;b&#93;COORD STRUCT&#91;/b&#93;<br />  x  WORD      ?<br />  y  WORD      ?<br />&#91;b&#93;COORD&#91;/b&#93; ENDS</code></pre><br /><br />Yours is something that im surprised will comiple with out error...<br /><br />Problem 2) <br /><div class="quote">Struct are accessed by pointers.</div><br />This is correct, but does not (and should not) imply you have to pass pointers in function calls.  Its only more efficient to do so, but does not mean its a limitation!!<br /><br />Problem 3)<br /><br />BubbaFate is 100% correct in his solution.  The problem IS the fact that there is not a pointer required since the struct is 32 bits anyways (in this case its not efficient for the API).  Instead of changing your Kernel32 and making your source different from the 'standard' that Hutch and Iczelion has prepared for us a solution is using macros:<br /><pre><code>Cast2DWORD MACRO areg&#58;REQ, MemAddr&#58;VARARG<br />   LOCAL outstring<br />   IF &#40;OPATTR &#40;areg&#41;&#41; AND 00000100y ;; If an immediate Value<br />      outstring TEXTEQU &lt;&amp;areg OR &#40; &amp;MemAddr SHL 16 &#41;&gt;<br />   ELSE<br />      lea eax , MemAddr<br />      mov areg, &#91;eax&#93;<br />      outstring TEXTEQU &lt;&amp;areg&gt;<br />   ENDIF<br />   EXITM &lt;&amp;outstring&gt;<br />ENDM</code></pre><pre><code>.data?<br />lala   COORD &lt;&gt;<br />.code<br />...<br />invoke ReadConsoleOutput,NULL, NULL, Cast2DWORD&#40;edx,lala&#41;, Cast2DWORD&#40;1,2&#41;, NULL</code></pre><pre><code>00401FFD &gt;/$ 8D05 08384000  LEA EAX,DWORD PTR DS&#58;&#91;403808&#93;<br />00402003  |. 8B10           MOV EDX,DWORD PTR DS&#58;&#91;EAX&#93;<br />00402005  |. 6A 00          PUSH 0                                   ; /pSourceRect = NULL<br />00402007  |. 68 01000200    PUSH 20001                               ; |DestBufferCoord = &#40;X=1.,Y=2.&#41;<br />0040200C  |. 52             PUSH EDX                                 ; |DestBufferSize<br />0040200D  |. 6A 00          PUSH 0                                   ; |DestBuffer = NULL<br />0040200F  |. 6A 00          PUSH 0                                   ; |hConsole = NULL<br />00402011  |. E8 3A010000    CALL &lt;JMP.&amp;KERNEL32.ReadConsoleOutputA&gt;  ; \ReadConsoleOutputA</code></pre><br />It works by looking at the first param.  If its a register, it uses memory access to get the coord (or any 32 bit value from memory).  If its a litteral value, it assumes your building a DWORD and builds the litteral value as Thomas pointed out.<br /><br />This macro can be used for other purposes as well, like making WM_COMMAND params.  Something that comes to mind is the CombBox messages:<br />&quot;<strong>invoke SendMessage, hWindow, WM_COMMAND, Cast2DWORD( CB_ID_NUM, CB_SELCHANGE ), lParam</strong>&quot;.<br /><br />Anywho.. Enjoy.<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2003-01-11 15:00:10 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

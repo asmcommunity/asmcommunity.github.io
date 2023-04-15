@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>HTODW.ASM part 4 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26660" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26660">HTODW.ASM part 4</a></p>
+   <div class="post" id="post-192484">
+    <div class="subject"><a href="#post-192484">HTODW.ASM part 4</a></div>
+    <div class="body">Part 4
+Look at the begining of HTODW.ASM
+
+    LOCAL Result:DWORD
+
+    mov Result, 0
+    mov edi, String
+    invoke lstrlen, String
+    mov esi,eax
+Nice code :) Esp. for string which cannot be more than 8 bytes long...
+First question why not at least
+    invoke lstrlen,edi
+since we already have String in edi it would be 3 bytes shorter and 1 clock 
+faster...
+But it's a minor thing comparing to the use of lstrlen itself
+Let's look what it really does:
+
+lstrlenA:
+
+:77F1297C 64A100000000            mov eax, dword ptr fs:[00000000]
+:77F12982 55                      push ebp
+:77F12983 8BEC                    mov ebp, esp
+:77F12985 6AFF                    push FFFFFFFF
+:77F12987 6878CDF377              push 77F3CD78
+:77F1298C 6874B8F377              push 77F3B874
+:77F12991 50                      push eax
+:77F12992 64892500000000          mov dword ptr fs:[00000000], esp
+:77F12999 83EC0C                  sub esp, 0000000C
+:77F1299C 53                      push ebx
+:77F1299D 56                      push esi
+:77F1299E 57                      push edi
+:77F1299F 8965E8                  mov dword ptr , esp
+:77F129A2 C745FC00000000          mov , 00000000
+:77F129A9 8B7D08                  mov edi, dword ptr 
+:77F129AC BAFFFFFFFF              mov edx, FFFFFFFF
+:77F129B1 8BCA                    mov ecx, edx
+:77F129B3 2BC0                    sub eax, eax
+:77F129B5 F2                      repnz
+:77F129B6 AE                      scasb
+:77F129B7 F7D1                    not ecx
+:77F129B9 8D41FF                  lea eax, dword ptr 
+:77F129BC 8955FC                  mov dword ptr , edx
+
+:77F129BF EB12                    jmp 77F129D3 !look below for ref
+:77F129C1 B801000000              mov eax, 00000001
+:77F129C6 C3                      ret
+
+* Referenced by a (U)nconditional or (C)onditional Jump at Address:
+|:77F129BF(U)
+|
+:77F129D3 8B4DF0                  mov ecx, dword ptr 
+:77F129D6 5F                      pop edi
+:77F129D7 64890D00000000          mov dword ptr fs:[00000000], ecx
+:77F129DE 5E                      pop esi
+:77F129DF 5B                      pop ebx
+:77F129E0 8BE5                    mov esp, ebp
+:77F129E2 5D                      pop ebp
+:77F129E3 C20400                  ret 0004
+
+That's it :)
+35 commands + 2 for invoke.
+We clock it later for now let's replace the begining we have at the moment:
+
+    LOCAL Result:DWORD
+    mov Result, 0
+    mov edi, String
+    invoke lstrlen, String
+    mov esi,eax
+    xor edx,edx
+ With this code:
+;we leave out LOCAL: Result at all, we'll use ebx for it
+        mov edi, String
+        mov esi, String 
+	ALIGN 4
+again:  mov	al,
+	inc	edi
+	or	al,al
+	jnz	again  ;scan for 0 takes 4 clocks + 2*(len-1)
+		       ;jnz + mov and inc or make pare after 1st iteration
+
+	sub	esi,edi ;neg differ. between addr String and 0 pos
+	xor 	ebx,ebx ;0ed ebx for future sub+xor will take 1 clock
+			;for both of the commands
+	add	edi,esi ;this will get addr String back to edi
+        xor edx,edx     ;xor and add will take 1 clock for both commands
+
+	not	esi   ;esi = lenth: positive difference -1
+		      ;which is lenth without 0
+
+We can see here 11 commands and they do:
+1. zeroed ebx
+2. zeroed edx
+3. addr String in edi
+4. lenth of String in esi
+
+Replaced beginning had 6 line which actually resulted in
+1 command to make space for local
+1 command to fill the local with 0 (please note - the previous proc reads
+local only at the and all the time writes to it, who know how cach works could
+understand the point)
+1 command to fill edi with adress of String
+2 commands to call lstrlen
+35 commands lstrlen itself
+1 command to put the lenth in esi
+1 command to xor edx
+SUM: 42 commands against 11 :)
+I'm not of clocking it yet... too painfull :( ... :)))
+We close to the end... but there is still more which shall be done,
+though we already have optimized it so it will run ~ a hundred times faster.
+And we are really talking not of the proc.
+Actually methods shown here m</div>
+    <div class="meta">Posted on 2001-01-22 03:44:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-192485">
+    <div class="subject"><a href="#post-192485">HTODW.ASM part 4</a></div>
+    <div class="body">very very intresting, makes ya wonder, that if an average asm prog vs a c++, or delphi etc is still much smaller, and just that littl' bit faster (from what humans standeds and what humans can detect considering a 100Mhz PC has a clock cycle of once every 10 nano seconds), then how much faster a a prog with a few critical loops been optimized could run.
+
+Also another difficulty with optimizing, is there is only so much you can do with windoze, before you have to start making API calls. Which starts to become a enitre new game</div>
+    <div class="meta">Posted on 2001-01-22 04:50:00 by steak </div>
+   </div>
+   <div class="post" id="post-192486">
+    <div class="subject"><a href="#post-192486">HTODW.ASM part 4</a></div>
+    <div class="body">Yes, yes and yes!
+There is a lot of things to challenge you as asm programmer
+with no or little API involved.
+And there are too many ways to use API which resalt on speed.
+And don't fool me that speed in nowdays comp. is not a problem!
+They are all too slow!!!!!!
+I have 1000s examples and tasks!
+And I don't know what usual user you are talking about -
+I hate speed of the programms as user not as programmer.
+The speed is good with these programms only if you doing nothing
+but looking at the screen.
+Give them task and you become very angry.
+I start making programms in asm only because I as user
+hated quality of the present programs.
+Searching, loading \ unloading, data manipulations ect. ect...
+All this so slow that users just adapt their task to posibility
+of present programms.
+In other words they(users) don't give them any worthy tasks.
+And they treat them mostly like toys or garbige.
+Development leens to quantity not quality.
+10000s progs in which most people don't bother even read docs.
+Most common task is install and uninstall programms.
+Users don't use apps any more - they "taking a look" at them :))
+As to using API I may give you little example:
+Consider you're making simple text editor (for some special purpose as asm shell or spec. batch editor with spec functions)
+You can make a lot of useful proc wich allowed user to formate 
+selected text in different ways.
+Let say your procs will take selected text as input in based on the input make text for output and replace selected text with it.
+You need only send to API msgs EM_GETSEL and EM_REPLACESEL,
+and there are hundreds of different formating procs you can do!
+In those procs you don't need any API calls!
+They will be just only your creative code.
+Some proc (for exapmle part wich handle menu) msgs will check msg
+get info of selected text and send this info indexes to approprite proc so that this proc will make another string from given text and return. And on return the handler will replace
+selected text with new made string.
+So that there will be just one for enter and exit rutine but number of useful procs you can do to formate textstring is limited just only by your imagenation.
+Do you want task? Which really need speed? And almost dont use API?
+Just let me know :)
+I have thousands
+Be well...
+The Svin.</div>
+    <div class="meta">Posted on 2001-01-22 07:54:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192487">
+    <div class="subject"><a href="#post-192487">HTODW.ASM part 4</a></div>
+    <div class="body">Yes, yes and yes!
+There is a lot of things to challenge you as asm programmer
+with no or little API involved.
+And there are too many ways to use API which result on speed.
+And don't fool me that speed in nowdays comp. is not a problem!
+They are all too slow!!!!!!
+I have 1000s examples and tasks!
+And I don't know what usual user you are talking about -
+I hate speed of the programms as user not as programmer.
+The speed is good with these programms only if you doing nothing
+but looking at the screen.
+Give them task and you become very angry.
+I start making programms in asm only because I as user
+hated quality of the present programs.
+Searching, loading \ unloading, data manipulations ect. ect...
+All this so slow that users just adapt their task to posibility
+of present programms.
+In other words they(users) don't give them any worthy tasks.
+And they treat them mostly like toys or garbige.
+Development leens to quantity not quality.
+10000s progs in which most people don't bother even read docs.
+Most common task is install and uninstall programms.
+Users don't use apps any more - they "taking a look" at them :))
+As to using API I may give you little example:
+Consider you're making simple text editor (for some special purpose as asm shell or spec. batch editor with spec functions)
+You can make a lot of useful proc wich allowed user to formate 
+selected text in different ways.
+Let say your procs will take selected text as input in based on the input make text for output and replace selected text with it.
+You need only send to API msgs EM_GETSEL and EM_REPLACESEL,
+and there are hundreds of different formating procs you can do!
+In those procs you don't need any API calls!
+They will be just only your creative code.
+Some proc (for exapmle part wich handle menu) msgs will check msg
+get info of selected text and send this info indexes to approprite proc so that this proc will make another string from given text and return. And on return the handler will replace
+selected text with new made string.
+So that there will be just one for enter and exit rutine but number of useful procs you can do to formate textstring is limited just only by your imagenation.
+Do you want task? Which really need speed? And almost dont use API?
+Just let me know :)
+I have thousands
+Be well...
+The Svin.</div>
+    <div class="meta">Posted on 2001-01-22 07:55:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192488">
+    <div class="subject"><a href="#post-192488">HTODW.ASM part 4</a></div>
+    <div class="body">I decided to give it a go, so heres it is...All this is, is part of of a simple routine to read a file incremently into memory in chunks of 4096 bytes until there is less than 4096 bytes left, in which, that amount of file is read. Both sets of code end with eax as the number of bytes to read
+
+This is what i started off with:
+xor edx,edx
+mov eax,bSize ;'bSize' is the total size of the file
+sub eax,edi   ;'edi' is the current write position in mem
+add eax,hMem  ;'hMem is the handle/pointer to the block of mem to read the file into
+
+mov ecx,4096
+div ecx
+.IF eax > 0
+    mov eax,4096
+.ELSE
+    mov eax,edx
+.ENDIF
+
+And after a bit of extra work:
+mov eax,bSize
+sub eax,edi
+add eax,hMem
+
+mov edx,eax
+and edx,0fffh
+and eax,NOT 0fffh
+.IF eax > 0       
+    mov eax,4096
+.ELSE
+    mov eax,edx
+.ENDIF        
+
+
+I know there will be a better way for the .IF-.ENDIF block, but i am unsure.</div>
+    <div class="meta">Posted on 2001-01-22 07:59:00 by manimal </div>
+   </div>
+   <div class="post" id="post-192489">
+    <div class="subject"><a href="#post-192489">HTODW.ASM part 4</a></div>
+    <div class="body">If you know size before you read file then you don't need
+to do all the checking each time.
+Before you start read it
+	mov eax,cbSize
+	mov edx,cbSize
+	shr eax,12 ;how many times read 4096 bytes parts
+	and edx,0FFFh
+	mov counter,eax
+	mov remains,edx
+	.while counter !=0
+	... read file 4096 byte parts
+	.endw
+	... read  remains
+
+Of course, you may use registers as a counter and remains
+It's important for counter.
+If I got it wrong may be you show a little biger part of your programm.
+
+Good luck with speed.
+The Svin.</div>
+    <div class="meta">Posted on 2001-01-22 13:17:00 by The Svin </div>
+   </div>
+   <div class="post" id="post-192490">
+    <div class="subject"><a href="#post-192490">HTODW.ASM part 4</a></div>
+    <div class="body">If you know size before you read file then you don't need
+to do all the checking each time.
+Before you start read it
+	mov eax,cbSize
+	mov edx,cbSize
+	shr eax,12 ;how many times read 4096 bytes parts
+	and edx,0FFFh
+	mov counter,eax
+	mov remains,edx
+	.while counter !=0
+	... read file 4096 byte parts
+        dec counter
+	.endw
+	... read  remains
+
+Of course, you may use registers as a counter and remains
+It's important for counter.
+If I got it wrong may be you show a little biger part of your programm.
+
+Good luck with speed.
+The Svin.</div>
+    <div class="meta">Posted on 2001-01-22 13:21:00 by The Svin </div>
+   </div>
+  </div>
+ </body>
+</html>

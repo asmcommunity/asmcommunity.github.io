@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>feof in C is what ASM - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3095" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3095">feof in C is what ASM</a></p>
+   <div class="post" id="post-20298">
+    <div class="subject"><a href="#post-20298">feof in C is what ASM</a></div>
+    <div class="body">I'm trying to figure out what feof would be in ASM<br />So I can pick this apart<br /><br />for(x=0;cl &amp;&amp; (!feof(stdin));x++)<br /><br />The end of the Buffer?<br /><br />And I guess stdin is the address of the beginning of the buffer<br /><br />Will <br />invoke	GetStdHandle, STD_INPUT_HANDLE<br />	mov		hStdIn, eax<br /><br />put stdin in , hStdIn  ?<br /><br /><br /><br /><br />Thanks Andy981!</div>
+    <div class="meta">Posted on 2002-01-21 12:52:21 by andy981</div>
+   </div>
+   <div class="post" id="post-20317">
+    <div class="subject"><a href="#post-20317">feof in C is what ASM</a></div>
+    <div class="body">Can you post the rest of the snippet? A quick search in the Win32 API:<div class="quote">fEof<br /><br />Specifies whether the end-of-file (EOF) character has been received. If this member is TRUE, the EOF character has been received.</div><br /><br />That was found in the COMSTAT structure.</div>
+    <div class="meta">Posted on 2002-01-21 15:49:27 by eet_1024</div>
+   </div>
+   <div class="post" id="post-20318">
+    <div class="subject"><a href="#post-20318">feof in C is what ASM</a></div>
+    <div class="body">The EOF is found by reading the next character, and comparing it with '10 h', which is the EOF code. <br /><br />As for the StdIn stuff, i dunno, never used that api, look it up on the <a target="_blank" href="http://search.microsoft.com/us/dev/default.asp">MSDN Search...</a> <br /><br />NaN</div>
+    <div class="meta">Posted on 2002-01-21 15:53:03 by NaN</div>
+   </div>
+   <div class="post" id="post-20324">
+    <div class="subject"><a href="#post-20324">feof in C is what ASM</a></div>
+    <div class="body">Wrong, NaN. feof() determines if the end of the file is reached by<br />seeing if the file pointer is, well, at the end of file file :). It *might*<br />return eof if it has read an EOF char (which is 01Ah or 01Bh, not 10h),<br />but I don't think so.<br /><br />andy, the C buffered file I/O (fopen, fread, fwrite, fseek, ftell, fclose,<br />feof et cetera)<br />have no direct counterparts in asm. (Might be some m32lib, but I<br />dunno... check the m32lib help file).<br /><br />stdin is more than a buffer. You can think of it as a file object. Internally<br />it is (usually) composed of a file handle, buffer, buffer size, current<br />position in buffer.<br /><br />You can generally just use the win32 native File* functions. But even<br />though windows does caching itself, if you do very small reads (like<br />a few bytes at a time), implementing a buffered scheme on top<br />should give a performance increase.</div>
+    <div class="meta">Posted on 2002-01-21 16:16:18 by f0dder</div>
+   </div>
+   <div class="post" id="post-20327">
+    <div class="subject"><a href="#post-20327">Has to do with iobuf, I guess</a></div>
+    <div class="body">Here is the listing of<br /><br />It has to do with  __iob<br /><br />  for(x=0;cl &amp;&amp; (!feof(stdin));x++) {<br />        m=x;<br />        entries.val = fmakeword(stdin,'&amp;',&amp;cl);<br />        plustospace(entries.val);<br />        unescape_url(entries.val);<br />        entries.name = makeword(entries.val,'=');<br />    }<br /><br /><br /><br />; 77   :     for(x=0;cl &amp;&amp; (!feof(stdin));x++) {<br /><br />	mov	DWORD PTR _x$, 0<br />	jmp	SHORT $L1272<br />$L1273:<br />	mov	eax, DWORD PTR _x$<br />	add	eax, 1<br />	mov	DWORD PTR _x$, eax<br />$L1272:<br />	cmp	DWORD PTR _cl$, 0<br />	je	$L1274<br />	mov	ecx, DWORD PTR __iob+12<br />	and	ecx, 16					; 00000010H<br />	test	ecx, ecx<br />	jne	$L1274<br /><br />; 78   :         m=x;<br /><br />	mov	edx, DWORD PTR _x$<br />	mov	DWORD PTR _m$, edx<br /><br />; 79   :         entries.val = fmakeword(stdin,'&amp;',&amp;cl);<br /><br />	lea	eax, DWORD PTR _cl$<br />	push	eax<br />	push	38					; 00000026H<br />	push	OFFSET FLAT:__iob<br />	call	?fmakeword@@YAPADPAU_iobuf@@DPAH@Z	; fmakeword<br />	add	esp, 12					; 0000000cH<br />	mov	ecx, DWORD PTR _x$<br />	mov	DWORD PTR _entries$, eax<br /><br />; 80   :         plustospace(entries.val);<br /><br />	mov	edx, DWORD PTR _x$<br />	mov	eax, DWORD PTR _entries$<br />	push	eax<br />	call	?plustospace@@YAXPAD@Z			; plustospace<br />	add	esp, 4<br /><br />; 81   :         unescape_url(entries.val);<br /><br />	mov	ecx, DWORD PTR _x$<br />	mov	edx, DWORD PTR _entries$<br />	push	edx<br />	call	?unescape_url@@YAXPAD@Z			; unescape_url<br />	add	esp, 4<br /><br />; 82   :         entries.name = makeword(entries.val,'=');<br /><br />	push	61					; 0000003dH<br />	mov	eax, DWORD PTR _x$<br />	mov	ecx, DWORD PTR _entries$<br />	push	ecx<br />	call	?makeword@@YAPADPADD@Z			; makeword<br />	add	esp, 8<br />	mov	edx, DWORD PTR _x$<br />	mov	DWORD PTR _entries$, eax<br /><br />; 83   :     }<br /><br />	jmp	$L1273<br />$L1274:</div>
+    <div class="meta">Posted on 2002-01-21 16:58:03 by andy981</div>
+   </div>
+   <div class="post" id="post-20340">
+    <div class="subject"><a href="#post-20340">feof in C is what ASM</a></div>
+    <div class="body">When fread() returns 0 as the number of bytes read, or getc()/fgetc() returns int(-1) as the actual byte &quot;read&quot;, the input routines have gotten an error or else an eof has been detected.<br /><br />One status bit in the iob structure is set if it was eof (checked with feof), and another status bit is set if it was an error (checked with ferror).<br /><br />In text mode, the old DOS eof character (ctrl-Z, 01Ah) may be interpreted as EOF.<br /><br />C's stdio functions hide a lot of code. The prinf/scanf functions have a lot of conversion code behind them. And the putc/getc functions hide buffering and error detection.<br /><br />If you're comfortable with C, there exist free compilers with source code to the standard function libraries. Take a look at them to see how much work is handled by the I/O routines.</div>
+    <div class="meta">Posted on 2002-01-21 19:18:59 by tank</div>
+   </div>
+   <div class="post" id="post-20364">
+    <div class="subject"><a href="#post-20364">feof in C is what ASM</a></div>
+    <div class="body">Thanx for the correction....  I looked up a source of mine that works (but used with memory mapped files) and i have its EOF code equated to 10h.  I should give it a look over.  Kinda odd that it never gave me a hard time before...  <br /><br />Anywho, im sure two to one has to mean something :)<br />Thanx..<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-01-22 02:07:32 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>(Question) Simple fgets, how to implement it? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16740" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16740">(Question) Simple fgets, how to implement it?</a></p>
+   <div class="post" id="post-130017">
+    <div class="subject"><a href="#post-130017">(Question) Simple fgets, how to implement it?</a></div>
+    <div class="body">Should I read one byte at a time from a file until I find an end of line character, and depend on the windows cache system<br />This would be a simple way, but will it be fast enough?<br /><br />Or should I create a structure to read chunks from the file at a time and limit all the reads and writes to special routines instead of using directly the windows ones? This would be much more complex.<br /><br />Basically I need to read from a file a line at a time, without using C/C++ to do that.<br /><br />Any comments would be apreciated.</div>
+    <div class="meta">Posted on 2004-01-07 21:50:16 by Xanatose</div>
+   </div>
+   <div class="post" id="post-130393">
+    <div class="subject"><a href="#post-130393">(Question) Simple fgets, how to implement it?</a></div>
+    <div class="body">Xanatose,<br /><br />For reading text files, the following will work. It is actual code from my compiler to read in a byte of source code.<br /><br />When this code completes, RawData will contain the data just read. You can then check this var for CR or LF or whatever.<br /><br />InpFile is an array of file handles which allows for the &quot;include&quot; statement to read in other files than the main one.<br /><br /><pre><code><br />; LN&#58;13213 STATUS=GET InpFile&#40;InpFilPtr&#41;,RawData<br />mov esi,InpFile-&#40;1*4&#41;<br />mov eax, dword &#91;InpFilPtr&#93;<br />shl eax,2<br />add esi,eax;<br />mov &#91;_TmpVec1&#93;,esi<br />mov edi,&#91;_TmpVec1&#93;<br />mov eax, dword &#91;edi&#93;<br />mov &#91;_IOPthNum&#93;,eax<br />mov esi,&#91;RawData&#93;<br />mov &#91;_XferAddr&#93;,esi<br />mov &#91;XferCount&#93;,1<br />invoke ReadFile,&#91;_IOPthNum&#93;,&#91;_XferAddr&#93;,&#91;XferCount&#93;,XferCount,0<br />mov &#91;STATUS&#93;,eax<br /></code></pre><br /><br />If XferCount=0 you have reached the end of the file.<br /><br />You could determine the file size and then read in the whole thing if you prefer, and then scan through the buffer. That would be faster, but would require buffer management.<br /><br />If you are just reading in text to process, the text processing time will likely be long compared to the file stuff, so I just do it the way given in the example.<br /><br />Obviously, if you're doing this in pure asm, you can dispense with most of the vars shown and just use registers.<br /><br />Hope this helps.<br /><br />Mike</div>
+    <div class="meta">Posted on 2004-01-11 18:06:46 by msmith</div>
+   </div>
+   <div class="post" id="post-130401">
+    <div class="subject"><a href="#post-130401">(Question) Simple fgets, how to implement it?</a></div>
+    <div class="body">For myself, when dealing with files under 5 MB I use the following routine, it is written in GoAsm but should be easy enough to translate. It reads the entire file in one chunk then processes it through a callback one line at a time. It is very fast (I think around 1.5 million lines/sec with Windows.inc) but large files are verbotten because it uses physical memory. In this case it will just count the number of lines in the text file.<br /><br /><pre><code>ReadFileLines FRAME hFile<br />	uses esi,edi<br />	LOCAL nBytes		&#58;D<br />	LOCAL pMem			&#58;D<br /><br />	invoke GetFileSize,&#91;hFile&#93;,ADDR nBytes<br />	mov edi,eax<br />	inc eax<br />	invoke VirtualAlloc,NULL,eax,MEM_COMMIT,PAGE_READWRITE<br />	mov esi,eax<br />	mov &#91;pMem&#93;,eax<br />	or eax,eax<br />	jz &gt;&gt;.ERRORMEM<br /><br />	invoke ReadFile,&#91;hFile&#93;,esi,edi,ADDR nBytes,NULL<br /><br />	; verify that everything went well<br />	invoke GetLastError<br />	or eax,eax<br />	jnz &gt;&gt;.ERROR<br /><br />	mov eax,&#91;nBytes&#93;<br />	or eax,eax<br />	mov eax,ERROR_NO_DATA<br />	jz &gt;&gt;.ERROR<br /><br />	mov ecx,edi<br />	mov edi,esi<br />	xor eax,eax<br />	cld<br />	jmp &gt;L4<br />		L1&#58;<br />		mov al,13<br />		repne scasb<br />		dec ecx<br />		push edi<br />		push ecx<br />		; Handle the last character problem<br />		mov eax,edi<br />		sub eax,esi<br />		cmp B&#91;edi-1&#93;,13<br />		jne &gt;L2<br />			mov B&#91;edi-1&#93;,0<br />			dec eax<br />			jmp &gt;L3<br />		L2&#58;<br />			mov B&#91;edi&#93;,0<br />		L3&#58;<br />		; Pass the line to the callback routine<br />		invoke FileCB ,esi,eax<br />		;<br />		pop ecx<br />		pop edi<br />		inc edi<br />		mov esi,edi<br />	L4&#58;<br />	cmp ecx,0<br />	jg &lt;L1<br /><br />	invoke VirtualFree,&#91;pMem&#93;,0,MEM_RELEASE<br />	xor eax,eax<br />	dec eax<br />	RET<br /><br />	.ERROR<br />	push eax<br />	invoke VirtualFree,&#91;pMem&#93;,0,MEM_RELEASE<br />	pop eax<br />	invoke SetLastError,eax<br /><br />	.ERRORMEM<br />	xor eax,eax<br />	dec eax<br />	ret<br /><br />ENDF<br /><br />FileCB FRAME pszString,len<br /><br />	inc D&#91;Lines&#93;<br /><br />	ret<br /><br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-01-11 20:02:46 by donkey</div>
+   </div>
+   <div class="post" id="post-130445">
+    <div class="subject"><a href="#post-130445">(Question) Simple fgets, how to implement it?</a></div>
+    <div class="body">thanks.</div>
+    <div class="meta">Posted on 2004-01-12 12:07:53 by Xanatose</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Nasm and Quick Basic vs Masm and Quick Basic - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29645" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29645">Nasm and Quick Basic vs Masm and Quick Basic</a></p>
+   <div class="post" id="post-209322">
+    <div class="subject"><a href="#post-209322">Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">I&#039;ve got a question over on the Nasm forum that I can&#039;t figure out the answer to.<br /><br />&quot;Normally&quot;, we&#039;d be writing an asm routine and calling it from QB. This guy is trying to write an asm &quot;main&quot; and call a function (B$PESD) from the Quick Basic Library (BCOM45.LIB) to print a message (don&#039;t ask &quot;why&quot;... that way lies madness).<br /><br />He&#039;s got working code using the &quot;simplified&quot; Masm directives - &quot;.model medium, basic&quot;, but can&#039;t get it to work (no output at all, apparently) with Nasm, or with Masm&#039;s &quot;classic&quot; directives.<br /><br />Any Masm gurus know what &quot;.model medium, basic&quot; does? Particularly the &quot;basic&quot; modifier? I think I can beat Nasm into submission if I know what we&#039;re supposed to be doing...<br /><br />TIA for any help or advice.<br /><br />Best,<br />Frank<br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2009-10-26 11:00:08 by fbkotler</div>
+   </div>
+   <div class="post" id="post-209323">
+    <div class="subject"><a href="#post-209323">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">I found <a target="_blank" href="http://support.microsoft.com/kb/39381">this</a> that seems to illustrate some of the differences.</div>
+    <div class="meta">Posted on 2009-10-26 11:22:59 by SpooK</div>
+   </div>
+   <div class="post" id="post-209329">
+    <div class="subject"><a href="#post-209329">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Probably BASIC runtime is not properly initialized when he tries to call that function.<br /><br />Is he trying to statically link against BCOM45.LIB? Brave effort, perhaps he should compile and link several simple BASIC programs and examine generated .Obj/.Exe files for clues.<br /><br />Entry point appears to be in CRT0 module, namely <strong>__astart</strong>. It calls <strong>_main</strong> in <strong>RTINIT</strong>, which uses <strong>BC_SAB</strong> segment as a placeholder for some initialization structure (it does far jmp via some pointer at offset 0 in this segment +30h).<br /><br />What&#039;s so valuable in this (supposedly output) function?<br /><br /><strong>BASIC</strong> in the <strong>.MODEL</strong> directive sets default calling/naming conventions for <strong>PROC</strong>/<strong>PROTO</strong> and external/public symbols. They&#039;re identical for Pascal/FORTRAN/BASIC, symbols all-caps, parameters pushed left-to-right, callee stack cleanup. Does anybody read manuals nowadays?<br /><br /><strong>UPDATE</strong>: It&#039;s <strong>BC_SA</strong> segment that really contains far pointer to module descriptor (sandwiched between <strong>BC_SAB</strong> and <strong>BC_SAE</strong>). Module descriptor contains notorious &quot;bm&lt;MODNAME&gt;&quot; signature and is 0x30 bytes in length. Immediately after it module startup code begins. With some patience willing developer can coax BASIC runtime to think that his .Obj is legal BASIC module.</div>
+    <div class="meta">Posted on 2009-10-26 14:07:34 by baldr</div>
+   </div>
+   <div class="post" id="post-209330">
+    <div class="subject"><a href="#post-209330">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Thanks for the link, SpooK - I&#039;ve passed it along.<br /><br />Baldr&#039;s suggestion the some &quot;initialization&quot; may be required makes perfect sense to me, but doesn&#039;t explain why &quot;avcaballero&quot; (the guy on the Nasm forum) Masm example works, and his Nasm example doesn&#039;t. Here&#039;s (part of) what he&#039;s posted:<br /><br />Working Masm code:<br /><br />0001 BA9A22&nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; DX,229A<br />0004 8EDA&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; DS,DX<br />0006 8CD3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; BX,SS<br />0008 2BDA&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  SUB&nbsp; &nbsp; BX,DX<br />000A D1E3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  SHL&nbsp; &nbsp; BX,1<br />000C D1E3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  SHL&nbsp; &nbsp; BX,1<br />000E D1E3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  SHL&nbsp; &nbsp; BX,1<br />0010 D1E3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  SHL&nbsp; &nbsp; BX,1<br />0012 FA&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  CLI<br />0013 8ED2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; SS,DX<br />0015 03E3&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ADD&nbsp; &nbsp; SP,BX<br />0017 FB&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  STI<br />0018 B81A00&nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; AX,001A<br />001B 50&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  PUSH&nbsp;  AX<br />001C 9ACA1DFB1F&nbsp; &nbsp;  CALL&nbsp;  1FFB:1DCA<br />0021 B44C&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; AH,4C<br />0023 CD21&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  INT&nbsp; &nbsp; 21<br /><br />Not working Nasm code:<br /><br />0000 B83522&nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; AX,2235<br />0003 8ED0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; SS,AX<br />0005 BC0001&nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; SP,0100<br />0008 B83322&nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; AX,2233<br />000B 8ED8&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; DS,AX<br />000D B81200&nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; AX,0012<br />0010 50&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  PUSH&nbsp;  AX<br />0011 9AC41DF91F&nbsp; &nbsp;  CALL&nbsp;  1FF9:1DC4<br />0016 B44C&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV&nbsp; &nbsp; AH,4C<br />0018 CD21&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  INT&nbsp; &nbsp; 21<br /><br />I&#039;ve just learned from baldr&#039;s reply to dre (in &quot;physical address&quot;) that the stack manipulation is generated by the &quot;.STARTUP&quot; macro. Outside of the difference in the way the stack is set up (why??? in either case? DOS sets up the stack for us!), it looks about the same to me. He&#039;s tried (or promised to try) duplicating the stack manipulation exactly the way Masm does it. No joy yet...<br /><br />Apologies for the awkwardness of doing this &quot;second hand&quot;. We&#039;re probably doing something simple wrong. Perhaps he&#039;ll be along to discuss it for himself...<br /><br />Skywalker just mentioned moving a post to &quot;heap&quot; because it was 16-bit code. Should I have done that?<br /><br />Thanks for the help so far!<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2009-10-26 17:35:53 by fbkotler</div>
+   </div>
+   <div class="post" id="post-209331">
+    <div class="subject"><a href="#post-209331">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body"><div class="quote"><br />Skywalker just mentioned moving a post to &quot;heap&quot; because it was 16-bit code. Should I have done that?<br /></div><br /><br />MAIN is pretty much for everything ASM, The Heap is pretty much for everything non-ASM.</div>
+    <div class="meta">Posted on 2009-10-26 19:48:25 by SpooK</div>
+   </div>
+   <div class="post" id="post-209333">
+    <div class="subject"><a href="#post-209333">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Many moons ago 16bit code used to get sent to the heap. Why never really made sense to me... </div>
+    <div class="meta">Posted on 2009-10-26 20:08:30 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-209334">
+    <div class="subject"><a href="#post-209334">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body"><div class="quote"><br />Many moons ago 16bit code used to get sent to the heap. Why never really made sense to me... <br /></div><br /><br />I&#039;m guessing it was back when this place was solely concentrating on Win32ASM and/or MASM32 :lol:</div>
+    <div class="meta">Posted on 2009-10-26 20:10:55 by SpooK</div>
+   </div>
+   <div class="post" id="post-209335">
+    <div class="subject"><a href="#post-209335">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Well, it was his post... :)<br /><br />16-bit code - especially calling QB from asm - isn&#039;t a real &quot;high interest&quot; area these days. Thought you might be reserving &quot;main&quot; for 32-bit code...<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2009-10-26 20:11:59 by fbkotler</div>
+   </div>
+   <div class="post" id="post-209338">
+    <div class="subject"><a href="#post-209338">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">I don&#039;t code DOS, haven&#039;t in years, and I can&#039;t honestly say I&#039;ve ever had any interest in PB. But just out of curiosity, has he tried something like:<br /><br /><pre><code>	BITS 16<br />	EXTERN B$PESD<br /><br />	;:::::&lt;&lt; DYNAMIC STRING MACRO &gt;&gt;:::::;<br />	%macro DSTR 2<br />	%push _DSTR_<br />	%%lbl:	DB %2<br />	%{1}:	DW ($-%%lbl), %%lbl<br />	%pop<br />	%endm<br /><br />SEGMENT DATA ALIGN=16<br />	DSTR g_Desc, &quot;Hola, Quick Basic!&quot;<br /><br />SEGMENT BSS STACK<br />	RESB 256<br /><br />SEGMENT CODE FAR<br />..start:<br />	;:::::&lt;&lt; UPDATE DATA SEGMENT &gt;&gt;:::::;<br />	MOV DX, DATA	<br />	MOV DS, DX<br /><br />	;:::::&lt;&lt; SETUP STACK SEGMENT &gt;&gt;:::::;<br />	MOV BX, SS<br />	SUB BX, DX<br />	SHL BX, 4<br />	CLI<br />	MOV SS, DX<br />	ADD SP, BX<br />	STI<br /><br />	;:::::&lt;&lt; CALL B$PESD &gt;&gt;:::::;<br />	MOV AX, g_Desc<br />	PUSH AX<br />	CALL B$PESD<br /><br />	;:::::&lt;&lt; EXIT TO DOS &gt;&gt;:::::;<br />	MOV AH, 4Ch<br />	INT 21H</code></pre><br /><br />Ignore the macro, I just added that while doing a little testing to try and accomplish a similar disassembly to the MASM version. If that works, it might have something to do with something I read once before about PB internal procedures using some kind of internal interrupt trapping system for allowing procedures to communicate without dealing with various relocations. This might be why the IF is set before the call.<br /><br />I am glad you brought this here however, I&#039;m kinda liking the dynamic string layout and it seems much more useful than ASCIIZ. I might start using it internally in some of my stuff.&nbsp; :thumbsup:</div>
+    <div class="meta">Posted on 2009-10-26 21:36:15 by Synfire</div>
+   </div>
+   <div class="post" id="post-209339">
+    <div class="subject"><a href="#post-209339">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Well, the original code he posted did something like:<br /><br />mov ax, pila<br />mov ss, ax<br />mov sp, initiopila<br /><br />There&#039;s an example in the Nasm manual that shows this - pointless, AFAIK. Dos sets ss:sp, this just reloads the same values, in my experience. He doesn&#039;t cli/sti around it. The CPU is supposed to disable interrupts for one instruction after a move to ss, but some buggy CPUs failed to do this, so it was considered &quot;good form&quot; to cli/sti around it. I don&#039;t think we&#039;re likely to run into any of the offending CPUs these days, but I suppose it&#039;s still &quot;good form&quot;. Are you saying that this might be key to calling Qbasic? Worth a try...<br /><br />I don&#039;t understand the point of the stack manipulation that Masm apparently emits from the &quot;.STARTUP&quot; macro/directive. We make ss=ds and adjust sp so it points to the same place as the original ss:sp... I suppose it allows us to reference the data segment with bp... maybe QB counts on that??? I&#039;ll pass the idea along...<br /><br />Nice macro. I&#039;ll pass that along, too. If I may ask, what&#039;s the purpose of the &quot;%push&quot;/&quot;%pop&quot; of the context stack? My (limited) understanding was that the context stack was useful mostly in multiple macros that had to interact with each other - like IF/ELSE/ENDIF, or so.<br /><br />Are you running Linux? Are you familiar with sys_writev (and sys_readv)? A similar macro might be useful for making &quot;vectors&quot; to use with sys_writev... Just a thought..<br /><br />Thanks for looking at this!<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2009-10-27 00:23:01 by fbkotler</div>
+   </div>
+   <div class="post" id="post-209344">
+    <div class="subject"><a href="#post-209344">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Thank you for your interest!...<br /><br />16 bit coding generates controversia as I can see... Well, someone could say that asm programming too... :)<br /><br />What I am doing is documenting asm coding for myself. Now I am writing mixing asm and hll. Writing an message in asm calling &quot;printf&quot; in c is probably more common, but i thought why not in Turbo Pascal too? and quick basic?. Well, I could do it in Quick Basic with masm simplified code, but I couldn&#039;t in turbo pascal :(.<br /><br />I think 16 bit programming is the first place to learn programming. At least asm programming. Only 16 bit programming?. No, of course.<br /><br />I will probe something more as soon as I can.<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2912" target="_blank">Source.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-10-27 05:47:47 by avcaballero</div>
+   </div>
+   <div class="post" id="post-209347">
+    <div class="subject"><a href="#post-209347">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Ooops! can&#039;t paste images, I submit a file!</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2913" target="_blank">Doc.doc</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-10-27 07:01:56 by avcaballero</div>
+   </div>
+   <div class="post" id="post-209351">
+    <div class="subject"><a href="#post-209351">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">QuickBASIC RTL expects <em>specific</em> variation of <strong>medium</strong> model, SS equals DS (i.e. they&#039;re <strong>group</strong>ed together). I added <strong>group DGROUP Datos Pila</strong> and replaced them in seg. reg. initialization with <strong>DGROUP</strong>. It works.</div>
+    <div class="meta">Posted on 2009-10-27 10:27:36 by baldr</div>
+   </div>
+   <div class="post" id="post-209352">
+    <div class="subject"><a href="#post-209352">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body">Yuhuuuu!. It&#039;s like to see born a baby... Thank you!<br /><br /></div>
+    <div class="meta">Posted on 2009-10-27 10:57:51 by avcaballero</div>
+   </div>
+   <div class="post" id="post-209361">
+    <div class="subject"><a href="#post-209361">Re: Nasm and Quick Basic vs Masm and Quick Basic</a></div>
+    <div class="body"><div class="quote"><br />Nice macro. I&#039;ll pass that along, too. If I may ask, what&#039;s the purpose of the &quot;%push&quot;/&quot;%pop&quot; of the context stack? My (limited) understanding was that the context stack was useful mostly in multiple macros that had to interact with each other - like IF/ELSE/ENDIF, or so.</div><br /><br />During the development of NASMX I found that local labels &#039;%%lbl&#039; in this instance, don&#039;t expand well and sometimes conflict when you don&#039;t setup a context for the macro. By adding a context you effectively put the local value into it&#039;s own space to avoid any possible, future or past, naming conflicts. So personally I always setup macros with:<br /><br /><pre><code>%macro NAME 0<br />%push _NAME_<br />	; code here<br />%pop<br />%endm</code></pre><br /><br />Unless I explicitly need the context stack to span multiple macros in which case I move the %pop into the other macro. This mirrors the include layout of:<br /><br /><pre><code>%ifndef _NAME_<br />%define _NAME_<br />	<br />%endif</code></pre><br /><br />Almost exactly and I&#039;ve grown fond of both. :)<br /><br /><div class="quote"><br />Are you running Linux? Are you familiar with sys_writev (and sys_readv)? A similar macro might be useful for making &quot;vectors&quot; to use with sys_writev... Just a thought..</div><br /><br />Yea, I&#039;m running Linux. That&#039;s why I made that macro when I saw what he was doing. Almost all syscall interrupts deal with flat strings and a size attribute. I basically had the same idea as you, I&#039;m working on adding a dstring.h for use in my personal system.h file. They will take up a little more space in the executable (or memory) but execution times should drop being as there won&#039;t be a need for routines like strlen, and since branches tend to work faster backwards it&#039;ll increase the speed of procedures like strcmp.</div>
+    <div class="meta">Posted on 2009-10-27 23:08:44 by Synfire</div>
+   </div>
+  </div>
+ </body>
+</html>

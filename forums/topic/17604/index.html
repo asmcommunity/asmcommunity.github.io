@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Gradient window background algo + question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17604" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17604">Gradient window background algo + question</a></p>
+   <div class="post" id="post-136140">
+    <div class="subject"><a href="#post-136140">Gradient window background algo + question</a></div>
+    <div class="body">Hiya<br />This is window with gradient background, basically I translated code from this article into asm<br /><a target="_blank" href="http://www.codeproject.com/gdi/win32_gradients.asp?target=gradient%7Csdk">http://www.codeproject.com/gdi/win32_gradients.asp?target=gradient%7Csdk</a><br /><br />Explanation of code:<br />I just used icezilion window example (tut3) and added handler for WM_ERASEBKGND<br /><pre><code><br />	.elseif uMsg==WM_ERASEBKGND<br />		OnEraseBkGnd	proto	&#58;dword<br />		invoke	OnEraseBkGnd,hWnd<br /></code></pre><br />See OnEraseBkGnd proc in source for details<br /><br />Question:<br />All this looks nice however there is problem, you cant use just any combination of colors you want. In my code I use C1_XXX as RGB values for starting color and C2_XXX for ending color, it works ok with example in source but try changing them into this...<br /><pre><code><br />	C1_RED		EQU		255<br />	C1_GREEN	EQU		0<br />	C1_BLUE		EQU		150<br />	<br />	C2_RED		EQU		0<br />	C2_GREEN	EQU		0<br />	C2_BLUE		EQU		100<br /><br /></code></pre><br /><br />Any idea how to solve this? Or I will just have to live with limited set of color combinations :(</div>
+    <div class="meta">Posted on 2004-03-16 16:11:25 by Mikky</div>
+   </div>
+   <div class="post" id="post-136159">
+    <div class="subject"><a href="#post-136159">Gradient window background algo + question</a></div>
+    <div class="body">To do it corectly for any set of colors you will need an &quot;linear interpolator&quot;<br />Ie it is like drawing a line but in the color space..., <br />actually 3 lines one for each RGB color components<br /><br />so you can use:<br />- DDA (floating points) - that will be exact but somehow slow<br />- Bresenham that will be very fast but a little more complicated to implement<br /><br />Depends on how many gradients you have to draw/calculate, for only one i do not know if you really need Bresenham's super speed, Also for a 3D non discreet space a floating point solution could be more accurate.<br /><br />So using whatever linear interpolator you like you will have to go:<br />- from C1_Red to C2_Red<br />- from C1_Blue to C2_Blue <br />- from C1_Green to C2_Green</div>
+    <div class="meta">Posted on 2004-03-16 21:08:32 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-136262">
+    <div class="subject"><a href="#post-136262">Gradient window background algo + question</a></div>
+    <div class="body">Gradient fill between two colors:<pre><code>GradFill PROC USES ebx esi edi, _HWnd_&#58;DWORD<br />	LOCAL	Color1&#58;DWORD, Color2&#58;DWORD<br />	LOCAL	dx1&#58;DWORD, dx2&#58;DWORD, dx3&#58;DWORD<br />	LOCAL	TmpRect&#58;RECT<br />	LOCAL	DC&#58;DWORD, FullLength&#58;DWORD<br /><br />	invoke	GetClientRect, _HWnd_, ADDR TmpRect<br />	sub		TmpRect.right, 2<br />	sub		TmpRect.bottom, 2<br />;calc width of rectangle<br />	mov		ebx,TmpRect.right<br />	sub		ebx,TmpRect.left<br />	mov		FullLength,ebx<br />	jz		@F<br />;prepare tmprect<br />	mov		eax,TmpRect.left<br />	inc		eax<br />	mov		TmpRect.right,eax<br /><br />	invoke	GetWindowLongA,_HWnd_,PWL_GRADDC<br />	mov		DC,eax<br />	invoke	GetWindowLongA,_HWnd_,PWL_BARCOLOR1<br />	mov		Color1,eax<br />	invoke	GetWindowLongA,_HWnd_,PWL_BARCOLOR2<br />	mov		Color2,eax<br /><br />	mov		ecx, Color2<br />	mov		edi, Color1<br />	sal		ecx, 7<br />	sal		edi, 7<br /><br />	mov		eax, ecx<br />	mov		ebx, edi<br />	and		eax, 0FF000000h / 2<br />	and		ebx, 0FF000000h / 2<br />	sub		eax, ebx<br />	cdq<br />	idiv	FullLength<br />	mov		dx1, eax<br /><br />	mov		eax, ecx<br />	mov		esi, edi<br />	and		eax, 0FF0000h / 2<br />	and		esi, 0FF0000h / 2<br />	sub		eax, esi<br />	cdq<br />	idiv	FullLength<br />	mov		dx2, eax<br /><br />	mov		eax, ecx<br />	and		eax, 0FF00h / 2<br />	and		edi, 0FF00h / 2<br />	sub		eax, edi<br />	cdq<br />	idiv	FullLength<br />	mov		dx3, eax<br /><br />	mov		eax, Color1<br />lp&#58; ;fill tmprect<br />	invoke	CreateSolidBrush,eax<br />	push	eax<br />	invoke	FillRect,DC,ADDR TmpRect,eax ; ADDR destroys EAX!<br />	call	DeleteObject<br />;update tmprect<br />	inc		TmpRect.left<br />	inc		TmpRect.right<br /><br />	add	ebx,dx1<br />	add	esi,dx2<br />	mov	edx,ebx<br />	mov	eax,esi<br />	and	edx,0FF000000h / 2<br />	and	eax,0FF0000h / 2<br />	add	edi,dx3<br />	or	edx,eax<br /><br />	mov	eax,edi<br />	and	eax,0FF00h / 2<br />	or	eax,edx<br /><br />	shr	eax, 7<br /><br />	dec	FullLength<br />	jne	lp<br />@@&#58;	ret<br />GradFill ENDP</code></pre></div>
+    <div class="meta">Posted on 2004-03-18 00:43:25 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-136285">
+    <div class="subject"><a href="#post-136285">Gradient window background algo + question</a></div>
+    <div class="body">Hey yo Mikky, thats cute :) i love gradients, jojoj. :D</div>
+    <div class="meta">Posted on 2004-03-18 06:51:46 by JaiKMw</div>
+   </div>
+  </div>
+ </body>
+</html>

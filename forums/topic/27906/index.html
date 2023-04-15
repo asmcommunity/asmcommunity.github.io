@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>File data to a Buffer? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27906" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27906">File data to a Buffer?</a></p>
+   <div class="post" id="post-198559">
+    <div class="subject"><a href="#post-198559">File data to a Buffer?</a></div>
+    <div class="body">Here is my problem. Say I am sending a file via winsock. I select the file I want to share with my friend. Then how do i put the file i've selected into a buffer? The file data i mean. Once i send the buffer(file data) across to the recieving client, i can use the WriteFile API to "put it back together"-(ie. add in the filename/size etc.)
+
+This is what i'm aiming for...
+<pre><code>
+invoke send,hSocket,addr FileData2BeSent_Buffer,eax,NULL
+</code></pre>
+Anyone know?
+
+Sorry if this doesn't make much sense. 
+I am at work and have had quite a bit of caffeine.:eek:
+heheheh
+
+Nok.</div>
+    <div class="meta">Posted on 2001-05-03 15:26:00 by Nokturnal</div>
+   </div>
+   <div class="post" id="post-198560">
+    <div class="subject"><a href="#post-198560">File data to a Buffer?</a></div>
+    <div class="body">Hi Nokturnal,
+
+First of all sorry in case I misinterpreted your question *g*
+
+But I think you want to load the whole file into memory right? In this case you can use this code:
+<pre><code>
+.data?
+hMemory DWORD ?
+pMemory DWORD ? ;pointing at the first byte in the buffer
+
+     invoke GlobalAlloc,GHND,*the size required*
+     mov hMemory,eax
+     invoke GlobalLock,eax
+     mov pMemory,eax
+     ;load file into buffer
+     ;...use the bytes of the file here
+     invoke GlobalUnlock,pMemory
+     invoke GlobalFree,hMemory
+</code></pre>
+
+Personally I use a macro for this... I give you a quick example
+
+<strong>;my own .inc file</strong>
+<pre><code>
+AllocMem MACRO howbig
+     invoke GlobalAlloc,GHND,howbig
+     mov hMemory,eax
+     invoke GlobalLock,eax
+     mov pMemory,eax
+ENDM
+DeAllocMem MACRO
+     invoke GlobalUnlock,pMemory
+     invoke GlobalFree,hMemory
+ENDM
+</code></pre>
+<strong>;the code file</strong>
+<pre><code>
+.data
+FileName db "whatever.txt"
+.data?
+hMemory DWORD ?
+pMemory DWORD ? ;pointing at the first byte in the buffer
+hFile DWORD ?
+filesize DWORD ?
+NumberOfBytes DWORD ?
+
+.code
+;and you can use it easily like this then
+invoke CreateFile,ADDR FileName,GENERIC_READ,0,0,\
+                  OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE
+mov hFile,eax ;now we got your file's handle
+invoke GetFileSize,hFile,0
+mov filesize,eax
+AllocMem eax
+invoke ReadFile,hFile,pMemory,filesize,ADDR NumberOfBytes,0
+.WHILE filesize!=0
+  .IF filesize<=500
+    invoke send,hsock,pMemory,filesize,NULL
+    .BREAK
+  .ENDIF
+  invoke send,hsock,pMemory,500,NULL
+  ;we send 500 bytes of it away
+  sub filesize,500
+  add pMemory,500
+.ENDW
+DeAllocMem
+invoke CloseHandle,hFile
+</code></pre>
+
+Well, I give <u>no garantie</u> that this is <em>working</em> 
+code... you just need to split up your file into pieces as you 
+can's send a complete Buffer of 2-3MB on the socket right 
+away.. :)
+
+Hope this helps a little bit... I think Thomas gives away his 
+source from his HTTP send/receive client a few threads below... 
+be sure to check this out because I believe this is exactly what 
+you're looking for ;)
+
+
+This message was edited by JimmyClif, on 5/3/2001 4:45:20 PM</div>
+    <div class="meta">Posted on 2001-05-03 16:22:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198561">
+    <div class="subject"><a href="#post-198561">File data to a Buffer?</a></div>
+    <div class="body">My http file transfer program shows you how to load a file in memory:
+Take a look at this topic.
+Although this isn't a good method for large files (a 20mb file takes 20mb memory). Have a look at the program itself, too. 
+
+Thomas
+
+This message was edited by Thomas, on 5/3/2001 4:24:13 PM</div>
+    <div class="meta">Posted on 2001-05-03 16:23:00 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

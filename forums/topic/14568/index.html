@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Struct in struct... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14568" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=14568">Struct in struct...</a></p>
+   <div class="post" id="post-112698">
+    <div class="subject"><a href="#post-112698">Struct in struct...</a></div>
+    <div class="body">say you do....<br /><br />struct test {<br />int one;<br />int two;<br />someotherstruckt testthree;<br />dword four;<br />};<br /><br />How would that be stored in memory?<br />DWORD DWORD DWORD DWORD ? or DWORD DWORD BYTE*Sizeof(someotherstruckt) DWORD ?</div>
+    <div class="meta">Posted on 2003-08-01 14:32:11 by SFP</div>
+   </div>
+   <div class="post" id="post-112699">
+    <div class="subject"><a href="#post-112699">Struct in struct...</a></div>
+    <div class="body">If you had (in ASM not C format):<br /><pre><code>SomeStruct STRUCT<br />	Test1	DWORD	?<br />	Test2	DWORD	?<br />SomeStruct ENDS<br /><br />SomeOtherStruct STRUCT<br />	Test1	DWORD	?<br />	Test2	DWORD	?<br />	Test3	SomeStruct	&lt;&gt;<br />	Test4	DWORD	?<br />SomeOtherStruct ENDS<br /><br />it would be stored as follows<br />SomeOtherStruct.Test1 ; Offset 0<br />SomeOtherStruct.Test2 ; Offset 4<br />SomeOtherStruct.SomeStruct.Test1 ; Offset 8<br />SomeOtherStruct.SomeStruct.Test2 ; Offset 12<br />SomeOtherStruct.Test4 ; Offset 16<br /></code></pre>If it was a union :<br /><pre><code>SomeOtherStruct STRUCT<br />	Test1	DWORD	?<br />	Test2	DWORD	?<br />	UNION<br />		Test3	DWORD	?<br />		Test4	WORD	?<br />	ENDS<br />	Test5	DWORD	?<br />SomeOtherStruct ENDS<br /><br />it would be stored as follows<br />SomeOtherStruct.Test1 ; Offset 0<br />SomeOtherStruct.Test2 ; Offset 4<br />SomeOtherStruct.Test3 ; Offset 8 &gt;&gt;&gt; all offsets in the union are equal<br />SomeOtherStruct.Test4 ; Offset 8<br />SomeOtherStruct.Test5 ; Offset 12 &gt;&gt;&gt; The offset of this member is fixed using the largest union member</code></pre></div>
+    <div class="meta">Posted on 2003-08-01 14:54:47 by donkey</div>
+   </div>
+   <div class="post" id="post-112702">
+    <div class="subject"><a href="#post-112702">Re: Struct in struct...</a></div>
+    <div class="body">FYI: Depending on your compiler settings structure members might be aligned to their own size.. This is usally done by default (improves performance). This means that struct blah { char c; int b;} does not take 5 but 8 bytes, because 'b' is aligned on 4 byte boundaries.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-08-01 15:18:03 by Thomas</div>
+   </div>
+   <div class="post" id="post-112706">
+    <div class="subject"><a href="#post-112706">Struct in struct...</a></div>
+    <div class="body">The compiler is MSVC 6....<br /><br />So if I did<br />struct dumb {<br />dword test;<br />dword testtwo;<br />} MyStruct;<br />struct test {<br />int testone;<br />dword testtwo;<br />MyStruct dumbstruct;<br />}<br />it would be stored as<br />struct test... -&gt;<br />int testone (dword)<br />dword testtwo (dword)<br />dword test (dword)<br />dword testtwo (dword)<br />in memory? Mark that I'm using the MyStruct in test and not the struct name...</div>
+    <div class="meta">Posted on 2003-08-01 15:38:36 by SFP</div>
+   </div>
+   <div class="post" id="post-112708">
+    <div class="subject"><a href="#post-112708">Re: Re: Struct in struct...</a></div>
+    <div class="body"><div class="quote"><br />FYI: Depending on your compiler settings structure members might be aligned to their own size.. This is usally done by default (improves performance). This means that struct blah { char c; int b;} does not take 5 but 8 bytes, because 'b' is aligned on 4 byte boundaries.<br /><br />Thomas </div><br />That's true, for MASM the default allignment is 1 but you can over-ride it on a case by case basis using the alignment directive for structures...<br /><pre><code>SomeOtherStruct STRUCT &#91;b&#93;DWORD&#91;/b&#93; ; &#91;i&#93;Align all members on a DWORD boundary&#91;/i&#93;<br />	Test1	DWORD	?<br />	Test2	DWORD	?<br />	Test3	WORD	?<br />	Test4	DWORD	?<br />SomeOtherStruct ENDS<br /><br />would be stored as follows<br />SomeOtherStruct.Test1 ; Offset 0<br />SomeOtherStruct.Test2 ; Offset 4<br />SomeOtherStruct.Test3 ; Offset 8<br />SomeOtherStruct.Test4 ; Offset 12 even though it appears in the 10th byte of the struct</code></pre></div>
+    <div class="meta">Posted on 2003-08-01 15:51:01 by donkey</div>
+   </div>
+   <div class="post" id="post-112710">
+    <div class="subject"><a href="#post-112710">Struct in struct...</a></div>
+    <div class="body"><div class="quote"><br />The compiler is MSVC 6....<br /><br />So if I did<br />struct dumb {<br />dword test;<br />dword testtwo;<br />} MyStruct;<br />struct test {<br />int testone;<br />dword testtwo;<br />MyStruct dumbstruct;<br />}<br />it would be stored as<br />struct test... -&gt;<br />int testone (dword)<br />dword testtwo (dword)<br />dword test (dword)<br />dword testtwo (dword)<br />in memory? Mark that I'm using the MyStruct in test and not the struct name... </div><br /><br />Well actually that wouldn't even compile.. You can't use MyStruct as a type because it isn't. Dumb is the type, MyStruct is an instance of the dumb structure. This would compile:<br /><pre><code><br />struct dumb <br />&#123;<br />    DWORD test;<br />    DWORD testtwo;<br />&#125;;<br /><br />struct test <br />&#123;<br />    int testone;<br />    DWORD testtwo;<br />    dumb dumbstruct;<br />&#125;;</code></pre><br />And that would be in memory like you said. Because all members are 4 bytes there's no padding while they're still aligned.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-08-01 16:18:29 by Thomas</div>
+   </div>
+   <div class="post" id="post-112712">
+    <div class="subject"><a href="#post-112712">Struct in struct...</a></div>
+    <div class="body">ok thx.</div>
+    <div class="meta">Posted on 2003-08-01 16:21:28 by SFP</div>
+   </div>
+   <div class="post" id="post-112728">
+    <div class="subject"><a href="#post-112728">Struct in struct...</a></div>
+    <div class="body">Ok, i will try some.. if you know this sorry ;) is for understand a little more what is a struct or union...<br /><br /><br />ok, at the end (maybe not the very end in that wee have electric circuit and phisic and quimic.. atoms..... ummm??)... ok, returning from this... at the end the programms are stored in memory and executed, but also the space in memory are unidirectional in some way for simplicity 0 to n, then the instructions and the data are stored there in a sucesive form then you have a lot of numbers for acces this address, then if you code some like: (in C like you are saying)<br /><br />int testone; /*(dword)*/<br />dword testtwo; /* (dword)*/<br />dword test; /* (dword)*/<br />dword testtwo;<br /><br />there will be stored in a sucesive way in the space of data.. or in rare cases in the place of code (later in the stack, but always in memory).<br /><br />My gues is if you obtain the direction of the first int (testone) and you move to the next space (ifyou want a cast) you can go troguht the memory and access the sucesive spaces, but in this way you can acces the other directions, ok if you can do this manually... for what you need a struct or union?????<br /><br />Is a little simple, you can organize more the address space to a 'look and feel' that you want and not only address, I dont know if structs/unions can be called abstract data types, but I think they are..., and can be more easely used that do it yourself, for example:<br /><br /><br />x = (int *) malloc (18);<br /><br />In this way you have the same space of the anterior example, but for acces the specific offset you need make some additions and subtractions.. or the called pointer arithmetic, based on the base address add 0 for acces the first member, add 4 for the second, add 8 for the 3 and 12 for the 4th element, remember total size 16.. and now you are organized the memory in a way that you like...., but for acces you need make additions and suchs thins to a pointer...<br /><br />Ok.. here comes the struct (first)<br />you DEFINE how a structure will look of a specific type.. that make sense for your problem and your point of view!!!!<br /><br />typedef struct some some;<br />struct some{<br />int a;<br />int b;<br />};<br />some xx;<br /><br />you cann see this like:<br /><br />make me a label called 'xx' then reserve for me the size of struct some (in this case posible 8??), then mark the first member with offset 0 and the second member to offset 4. And when you do mov eax, , you are doing move eax,  and mov eax,  like mov eax, , then you see that with struct/(unions) you are interpretating the address space like you want, this can be easely translated to stack locals instead on the label they will be defined some like:<br /><br />ebp - offsetInTheStack + offsetInTheDefinitionOfTheStructure<br /><br /><br />and offsetInTheStack  and offsetInTheDefinitionOfTheStructure are constant, then they can be easely added or substracted by the assenbler, and then this will be some like ebp-20<br /><br />Ok.. only a last thing.. the diference between the data types structs and unions... is not much...;<br /><br />the struct the specific offset is always added to the anterior, and the size grow up for the members contained, and the unions, all the offset are the same of the first and the total size is the maxime size of a respective member.<br /><br /><br />1) remember, for data the &quot;steps&quot; can be thinked as:<br /><br />define a label. Reserve the space. Make the offsets.<br /><br />2) For locals (in the stack)<br /><br />Reserve the space including all the other locals in thescope (some like add ebp, -54), instead of the label use a combination of ebp-offset, Make the offsets.<br /><br />3) In the heap or other is very ner to 2), but instead of based from a specific location (like 1) or a register (like 2) is a addres returned from a function in the heap or some where in the addresss space.<br /><br />And at the end for 1) and 2) , 3) the acces is only add the respective offsets of the members.<br /><br />Have nice day.</div>
+    <div class="meta">Posted on 2003-08-01 21:22:42 by rea</div>
+   </div>
+   <div class="post" id="post-112742">
+    <div class="subject"><a href="#post-112742">Struct in struct...</a></div>
+    <div class="body">struct dumb <br />{<br />    DWORD t;<br />    DWORD e;<br />};<br /><br />struct test <br />{<br />    int o;<br />    DWORD n;<br />    dumb d;<br />};<br /><br />this struct test would be in memory as<br />[][][][] test.o<br />[][][][] test.n<br />[][][][] test.d.t<br />[][][][] test.d.e<br />//-----------------------------------------------------<br />struct dumb <br />{<br />    DWORD t;<br />    DWORD e;<br />};<br /><br />struct test <br />{<br />    int o;<br />    DWORD n;<br />    dumb* d;<br />};<br />in test member d would have to be set with a pointer to a struct dumb<br />test.d =(dumb*)&amp;Ddumb<br />[][][][] test.o<br />[][][][] test.n<br />[][][][] test.d-&gt;<br />...<br />...<br />...<br />[][][][] test.d-&gt;t<br />[][][][] test.d-&gt;e<br />hope this helps.</div>
+    <div class="meta">Posted on 2003-08-01 23:55:29 by Qages</div>
+   </div>
+   <div class="post" id="post-112770">
+    <div class="subject"><a href="#post-112770">Struct in struct...</a></div>
+    <div class="body">I've been looking at some other peoples code now and watching how that looks like in memory, they are typedefing the structs like <br /><br />struct test {<br />dword ok;<br />}<br />typedef test mytest;<br /><br />then they are doing<br /><br />struct anothertest {<br />int o;<br />mytest yes;<br />};<br /><br />That seems to make the second dword of anothertest an address though.</div>
+    <div class="meta">Posted on 2003-08-02 09:32:02 by SFP</div>
+   </div>
+  </div>
+ </body>
+</html>

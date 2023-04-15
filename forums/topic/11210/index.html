@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>my first dabble with mmx... lower case algo - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11210" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=11210">my first dabble with mmx... lower case algo</a></p>
+   <div class="post" id="post-84505">
+    <div class="subject"><a href="#post-84505">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">while trying to convert a bunch of bytes to lowercase more than one char at a time I came up with this algo:<br /><br />result = char XOR '@'<br />dec result<br />IF result GT 19H THEN result=00H ELSE result=0FFH<br />result = result AND ('a'-'A')<br />c=c+result<br /><br />I knew mmx was all about paralell data manipulation so I thought I try it.<br /><br />this is what I came up with:<br /><br /><pre><code><br />.data<br />str1 db &quot;'PADD and PSUB are the base mmx addition and subtraction instructions AHH',0<br />str2 db &quot;'PADD and PSUB are the base mmx addition and subtraction instructions AHH',0<br />str3 db &quot;'PADD and PSUB are the base mmx addition and subtraction instructions AHH',0<br />NCHARS equ &#40;sizeof gstr1 -1&#41;<br />NQWORDS equ NCHARS/8 <br />xormask dq 04040404040404040H ;<br />dec1    dq 00101010101010101H ;used to decrement xor result<br />us      dq 07F7F7F7F7F7F7F7FH ;used to clear sign bit<br />maxval  dq 01919191919191919H ;only uppercase characters will be greater<br />a       dq 02020202020202020H ;convert uppercase to lowercase<br />.code<br />mmxtolower1  proc<br />mov eax,offset str1<br />xor ecx,ecx<br />movq mm1,a<br />movq mm2,xormask<br />movq mm3,dec1<br />movq mm4,us<br />movq mm5,maxval<br />.while ecx&lt;NQWORDS<br />  movq mm0,&#91;eax+ecx*8&#93;<br />  pxor mm0,mm2<br />  psubb mm0,mm3 ;subtract 1 from each byte&#40;0-19H&#41;<br />  pand mm0,mm4 ;convert to unsigned values<br />  pcmpgtb mm0,mm5 ;if byte pos &gt;19H put 00 else put FF in byte pos &#40;the reverse of what we want&#41;<br />  pandn mm0,mm1 ;first invert mm0 then perform the and<br />  paddb mm0,&#91;eax+ecx*8&#93; ;add the original values,uppercase letters are now converted to lowercase. all other chars unchanged.<br />  movq &#91;eax+ecx*8&#93;,mm0<br />  inc ecx<br />.endw<br />emms<br />  ret<br />mmxtolower1 endp</code></pre><br /><br />it proved not so straight forward in mmx I had to add a few steps in the mmx version<br /><br />this is the test version so I've left in the .while construct.  Can anyone do it any quicker? (without removing the .while construct)?<br /><br />These routines do the same thing tolower is the non mmx version of the above algo and tolower2 is the standard version:<br /><pre><code>tolower proc<br />  mov ecx,offset str2<br />  mov dh,'@'<br />  add ecx,NCHARS<br />  mov dl,'a'-'A'<br />  .while ecx&gt;offset str2<br />    dec ecx<br />    mov al,&#91;ecx&#93;<br />    mov ah,al<br />    xor al,dh     ;result = char xor '@'<br />    dec al        ;dec result<br />    cmp al,19H    ;<br />    ja greaterthan<br />    mov al,0FFH   ;if result &lt;19H result=0FFH<br />    jmp @f<br />    greaterthan&#58;<br />    mov al,0H     ;else result= 00H<br />    @@&#58;<br />    and al,dl     ;result = result AND 'a'-'A'<br />    add al,ah  ;result =result + char<br />    mov &#91;ecx&#93;,al<br />    not_capital&#58;<br />  .endw<br />  ret<br />tolower endp<br /><br />tolower2 proc<br />  mov ecx,offset str3<br />  add ecx,NCHARS<br />  xor edx,edx<br />  mov ax,'ZA'<br />  .while ecx&gt;offset str3<br />    dec ecx<br />    mov dl,&#91;ecx&#93;<br />    cmp dl,ah<br />    ja not_capital<br />    cmp dl,al<br />    jb not_capital<br />    add dl,'a'-'A'<br />    mov &#91;ecx&#93;,dl<br />    not_capital&#58;<br />  .endw<br />  ret<br />tolower2 endp</code></pre><br /><br />and these are my results(athlon 1800XP):<br />string length=72 chars<br />mmxtolower :260 cyclecs<br />tolower        :554 cycles<br />tolower2      :524 cycles</div>
+    <div class="meta">Posted on 2003-03-02 10:42:19 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-84508">
+    <div class="subject"><a href="#post-84508">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">It is dont work for Armenian strings ;)</div>
+    <div class="meta">Posted on 2003-03-02 11:19:23 by Nexo</div>
+   </div>
+   <div class="post" id="post-84509">
+    <div class="subject"><a href="#post-84509">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">Here is another way using fewer constants:<pre><code>a	dq 02020202020202020h ;convert uppercase to lowercase<br /><br />MMX_a	dq 06060606060606060h<br />MMX_z	db &quot;zzzzzzzz&quot;<br /><br /><br />.while ecx &lt; NQWORDS<br />	movq	mm0, &#91;eax+ecx*8&#93;<br />	movq	mm1, mm0<br />	pcmpgtb	mm0, QWORD PTR MMX_a<br />	pcmpgtb	mm1, QWORD PTR MMX_z<br />	pandn	mm1, mm0<br />	pand	mm1, a<br />	pxor	mm1, &#91;eax+ecx*8&#93;<br />	movq	&#91;eax+ecx*8&#93;, mm1<br />	inc ecx<br />.endw</code></pre></div>
+    <div class="meta">Posted on 2003-03-02 11:34:14 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-84513">
+    <div class="subject"><a href="#post-84513">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">xor is transitive operation (a xor b = b xor a)<br />so instead of <br />pxor   mm1, <br />movq , mm1<br />you can just:<br />pxor ,mm1</div>
+    <div class="meta">Posted on 2003-03-02 12:03:33 by The Svin</div>
+   </div>
+   <div class="post" id="post-84515">
+    <div class="subject"><a href="#post-84515">my first dabble with mmx... lower case algo</a></div>
+    <div class="body"><div class="quote"><br />xor is transitive operation (a xor b = b xor a)<br />so instead of <br />pxor   mm1, <br />movq , mm1<br />you can just:<br />pxor ,mm1 </div><br /><br />You need create thread &quot;Opcode MMX #0&quot; ;)</div>
+    <div class="meta">Posted on 2003-03-02 12:19:06 by Nexo</div>
+   </div>
+   <div class="post" id="post-84522">
+    <div class="subject"><a href="#post-84522">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">It's rather about boolean algebra than opcode<br />construction :)</div>
+    <div class="meta">Posted on 2003-03-02 13:49:32 by The Svin</div>
+   </div>
+   <div class="post" id="post-84526">
+    <div class="subject"><a href="#post-84526">my first dabble with mmx... lower case algo</a></div>
+    <div class="body"><strong>Svin</strong>, &quot;pxor ,mm1&quot; is not a valid instruction.</div>
+    <div class="meta">Posted on 2003-03-02 14:02:32 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-84534">
+    <div class="subject"><a href="#post-84534">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">Understood, bitRake, after Nexo post.<br />Just jocking :)</div>
+    <div class="meta">Posted on 2003-03-02 14:34:08 by The Svin</div>
+   </div>
+   <div class="post" id="post-84642">
+    <div class="subject"><a href="#post-84642">my first dabble with mmx... lower case algo</a></div>
+    <div class="body">Thanks all.  <br />Bitrake the code you posted converts to upper case but it should be simple to reverse it.</div>
+    <div class="meta">Posted on 2003-03-03 03:51:56 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-84687">
+    <div class="subject"><a href="#post-84687">my first dabble with mmx... lower case algo</a></div>
+    <div class="body"><div class="quote"><br />Bitrake the code you posted converts to upper case but it should be simple to reverse it. </div>Yep. :)<pre><code>MMX_a	db &quot;@@@@@@@@&quot;<br />MMX_z	db &quot;ZZZZZZZZ&quot;</code></pre></div>
+    <div class="meta">Posted on 2003-03-03 09:11:04 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to implement this in ASM - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9364" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9364">How to implement this in ASM</a></p>
+   <div class="post" id="post-69191">
+    <div class="subject"><a href="#post-69191">How to implement this in ASM</a></div>
+    <div class="body">Hi all guys.....<br />       <br />___________________________<br /><br />suppose A, B, C, and D are 32-bit number and we form two numbers N1 and N2 as under ---<br /><br />N1 = Aw + B<br />N2 = Cw + D<br /><br />where w is the base of the number system.<br /><br />now, a = A*C, b = B*D and c = (A+C) * (B+D) - a - b<br />hence when <br /> P = N1*N2<br />    = a (w^2) + c (w) + b<br /><br />Hence, inorder to multiply N1 and N2 we only required 3 multiplications, 2 additions and 2 subtraction.<br />Thus, saving 1 multiplication.. This method of multiplying is called KaratSuba- Ofman Multiplication Method.<br />_____________________________________________________<br /><br />But can somebody tell me how to achieve this multiplication through ASM because I am not getting how to get the output..<br /><br />Regards</div>
+    <div class="meta">Posted on 2002-12-05 03:50:59 by processingspeed</div>
+   </div>
+   <div class="post" id="post-69223">
+    <div class="subject"><a href="#post-69223">How to implement this in ASM</a></div>
+    <div class="body">Look for Eoin's Floating Point tut on the board...<br /><br />(Looks to me you only need a couple multiplications... I like Fp because there's no need to save any temporary results into vars)</div>
+    <div class="meta">Posted on 2002-12-05 07:31:22 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-69283">
+    <div class="subject"><a href="#post-69283">Re: How to implement this in ASM</a></div>
+    <div class="body"><div class="quote"><br />___________________________<br /><br />suppose A, B, C, and D are 32-bit number and we form two numbers N1 and N2 as under ---<br /><br />N1 = Aw + B<br />N2 = Cw + D<br /><br />where w is the base of the number system.<br /><br />now, a = A*C, b = B*D and c = (A+C) * (B+D) - a - b<br />hence when <br /> P = N1*N2<br />    = a (w^2) + c (w) + b<br /><br />Hence, inorder to multiply N1 and N2 we only required 3 multiplications, 2 additions and 2 subtraction.<br />Thus, saving 1 multiplication.. This method of multiplying is called KaratSuba- Ofman Multiplication Method.<br />________________________________________________<br /><br />But can somebody tell me how to achieve this multiplication through ASM because I am not getting how to get the output..<br /></div>Suppose A, B, C, and D are <strong>digits in base w</strong>, where numbers N1 = AB and N2 = CD.<br /><br />Arithmetically,<br /><br />N1 = A * w + B<br />N2 = C * w + D<br /><br />a = A * C and b = B * D are double digit numbers (the first digit may be 0).<br /><br />c should be (A + B) * (C + D) - a - b, because c = A*D + B*C (the multiply cross),<br /><br />Since adding two digits yields a maximum carry of 1,<br />(A + B) = RS and (C + D) = TU, where R and T are 0 or 1.<br /><br />RS * TU = (R*w + S) * (T*w + U) = (R*T)*w^2 + (R*U + S*T)*w + S*U.<br />So the first partial product is 000 or 100; the second partial product is 00, R0, T0, or their sum; the third partial product is the product of S and U; thus only one multiplication is needed to calculate c.<br /><br />The rest is just multiprecision addition and subtraction. (Use ADC and SBB, and avoid adding guaranteed 0 digits). And, of course, translating to ASM. Treat each 32-bit DWORD value as a single digit.</div>
+    <div class="meta">Posted on 2002-12-05 15:44:21 by tenkey</div>
+   </div>
+   <div class="post" id="post-69407">
+    <div class="subject"><a href="#post-69407">fast multiplication</a></div>
+    <div class="body">Thanks for answer guys.......<br /><br />         the can I have the implemention of your algorithm in assembly... because I need it desperately........<br />regards</div>
+    <div class="meta">Posted on 2002-12-05 23:16:44 by processingspeed</div>
+   </div>
+   <div class="post" id="post-69412">
+    <div class="subject"><a href="#post-69412">How to implement this in ASM</a></div>
+    <div class="body">:) Here is the 16-bit version - you extend to 32-bit:<pre><code>_DATA SEGMENT<br />	; w = 10000h<br />	;<br />	;N1 = A*w + B<br />	___B dw 0FFFFh<br />	___A dw 0FFFEh<br />	;N2 = A*w + B<br />	___D dw 0FFFDh<br />	___C dw 0FFFCh<br /><br />	___P dq 0<br />_DATA ENDS<br /><br />	movzx	eax, WORD PTR ___A<br />	movzx	ebx, WORD PTR ___B<br />	movzx	ecx, WORD PTR ___C<br />	movzx	edx, WORD PTR ___D<br /><br /><br />; a = A * C<br />	mov	esi, eax<br />	imul	esi, ecx<br /><br />; b = B * D<br />	mov	edi, ebx<br />	imul	edi, edx<br /><br />; c = &#40;A+B&#41;*&#40;C+D&#41; - a - b<br />	add	eax, ebx<br />	add	ecx, edx<br />	mul	ecx<br />	sub	eax, esi<br />	sbb	edx, 0<br />	sub	eax, edi<br />	sbb	edx, 0<br />;result&#58; P = a &#40;w^2&#41; + c &#40;w&#41; + b<br />	mov	DWORD PTR ___P + 4, esi<br />	mov	DWORD PTR ___P, edi<br />	add	DWORD PTR ___P + 2, eax<br />	adc	WORD PTR ___P + 6, dx<br />;----------Test it!-----------<br />	mov	eax, DWORD PTR ___B<br />	mul	DWORD PTR ___D<br />	<br />	cmp	DWORD PTR ___P, eax<br />	jne	ERROR<br />	cmp	DWORD PTR ___P+4, edx<br />	jne	ERROR</code></pre></div>
+    <div class="meta">Posted on 2002-12-06 00:18:21 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-69641">
+    <div class="subject"><a href="#post-69641">How to implement this in ASM</a></div>
+    <div class="body">BitRake I have tested your code my making changes but it didn't work i.e I mean to say it result is erroneous...<br /><br />can you test your code yourself for the input of ---<br /><br />A = FFFFh<br />B = FFFFh<br />C = FFFFh<br />D = FFFFh<br /><br />The answer should be FFFF FFFE 0 1 but it's not there...<br /><br />Can tell me you have taken care of carry produced after the addition of  A+B and C+D in your code....<br /><br />Moreover due to imul H.O bits get lost which I don't want to.. <br />suggest any other method.<br /><br />regards</div>
+    <div class="meta">Posted on 2002-12-06 22:32:25 by processingspeed</div>
+   </div>
+   <div class="post" id="post-69649">
+    <div class="subject"><a href="#post-69649">How to implement this in ASM</a></div>
+    <div class="body"><div class="quote"><br />{1}Can tell me you have taken care of carry produced after the addition of  A+B and C+D in your code....<br /><br />{2}Moreover due to imul H.O bits get lost which I don't want to.. <br />suggest any other method.</div>{1}Yes, carry is in high word of result.<br /><br />{2}True, this is an error.  Sorry, for the quick hack - you'll have to move the registers around and use MUL.  Maybe, when I have some spare time I'll work on the 32-bit version.<br /><br />What do you need this algo for?</div>
+    <div class="meta">Posted on 2002-12-07 00:29:34 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-69717">
+    <div class="subject"><a href="#post-69717">no correct answer</a></div>
+    <div class="body">Actually bitrake<br /><br />right now I am working on arithmetic manipulation of larger number... there is lot of source code on the net but no one has implement all these thing in assembly.. <br /><br /><br />I want to check the speed of arithmetic operation when I completely write the arithmetic  function with respect to the sources available on the net in high level language..<br /> <br />  That's it.. <br /><br />Can anyone help me out regarding my above question... <br /><br />cya</div>
+    <div class="meta">Posted on 2002-12-07 09:47:29 by processingspeed</div>
+   </div>
+   <div class="post" id="post-69730">
+    <div class="subject"><a href="#post-69730">Re: no correct answer</a></div>
+    <div class="body"><div class="quote"><br />Actually bitrake<br /><br />right now I am working on arithmetic manipulation of larger number... there is lot of source code on the net but no one has implement all these thing in assembly.. </div><br />well, i wrote a bignum library in asm (not open source, though), roy started to write one as well (you can download the source <a target="_blank" href="http://www.effervescence.com/fleur/archive/files/projects/biglib.zip">here</a>).<br />if you can't find what you're looking for, i guess you'll have to write it yourself ;)</div>
+    <div class="meta">Posted on 2002-12-07 10:23:16 by Tola</div>
+   </div>
+   <div class="post" id="post-69939">
+    <div class="subject"><a href="#post-69939">How to implement this in ASM</a></div>
+    <div class="body">Thanks tola..<br /><br />      for the source code but.. the way in which you have implemented your code is completely different from mine.<br />                   But I am going through your code may be it will help out... Also I want my library to perform fast calculations...<br /><br />Anyway Thanks alot all you guys.....<br /><br />regards</div>
+    <div class="meta">Posted on 2002-12-08 22:44:12 by processingspeed</div>
+   </div>
+   <div class="post" id="post-70015">
+    <div class="subject"><a href="#post-70015">How to implement this in ASM</a></div>
+    <div class="body">it's not my code but roy's (-&gt; in case there are any questions, don't ask me :grin: ).</div>
+    <div class="meta">Posted on 2002-12-09 06:37:58 by Tola</div>
+   </div>
+  </div>
+ </body>
+</html>

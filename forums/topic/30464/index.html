@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>(changed) Trying 64-bit hello world with NASM - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30464" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30464">(changed) Trying 64-bit hello world with NASM</a></p>
+   <div class="post" id="post-213998">
+    <div class="subject"><a href="#post-213998">(changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body"><div class="quote">In 32-bit programming i could push the offset of a variable onto stack the following way:<br /><pre><code>.data<br />variable byte ?<br />.....<br /><br />.code<br />.....<br />push offset variable</code></pre><br /><br />When i try to do that with 64-bit programming it doesn&#039;t let me do that.<br />I wonder if there is a special instruction for that in 64-bit programming.<br /><br />I am using MASM (ml64.exe). So maybe i am wondering if it has to do with the assembler.<br /></div><br />Edit: Nevermind, i found out that it was a bug in MASM. I am switching assemblers. I am trying 64-bit hello world in NASM but it crashes. The same code in MASM64 works. I wonder what i am doing wrong.<br /><br /><pre><code>global _main<br /><br />extern	GetStdHandle<br />extern	WriteFile<br />extern	ExitProcess<br /><br />section .text<br />_main:<br />	mov		rcx, -11<br />	call	GetStdHandle<br />	<br />	mov		rcx, rax<br />	mov		rdx, message<br />	mov		r8, (message_end - message)<br />	mov		r9, BytesWritten<br />	mov		qword , 0<br />	call	WriteFile<br />	<br />	mov		rcx, 0<br />	call	ExitProcess<br /><br />;variables<br />BytesWritten: dq 0<br />message: db &quot;Hello World&quot;<br />message_end:</code></pre><br />nasm -fwin64 main.asm &lt;-assembles successfully<br />link /subsystem:console /entry:_main /machine:x64 main.obj kernel64.lib &lt;- links successfully<br />main &lt;- crashes</div>
+    <div class="meta">Posted on 2011-01-31 18:58:27 by banzemanga</div>
+   </div>
+   <div class="post" id="post-214001">
+    <div class="subject"><a href="#post-214001">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body">Is your stack aligned? Check out <a target="_blank" href="http://www.godevtool.com/GoasmHelp/64bits.htm#diffwin">GoAsm&#039;s Manual</a> for a fairly detailed explanation on how to use 64-bit FASTCALL.</div>
+    <div class="meta">Posted on 2011-02-01 10:38:55 by SpooK</div>
+   </div>
+   <div class="post" id="post-214003">
+    <div class="subject"><a href="#post-214003">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body">I found that stack alignment was not the issue. I checked NASM manual and it said that NASM doesn&#039;t remember the addresses of variables unlike MASM. So, i could not do this:<br /><pre><code>mov		r9, BytesWritten</code></pre><br /><br />I found a crazy working solution somewhere else but i don&#039;t understand it:<br /><div class="quote"><br />_main:<br />;at the beginning of the code<br />mov	rbp, rsp	;So, it first sets the base-pointer as the stack-pointer. (why? and not even saving rbp first?)<br />add	rsp, 8	;Decreases the size of the stack. (again why? what if there was something on the stack beforehand?)<br />...<br />...<br />;replace {mov	r9, BytesWritten} with:<br />mov	r9, 	;Uses the empty space on top of the stack<br />...<br /></div></div>
+    <div class="meta">Posted on 2011-02-01 11:29:17 by banzemanga</div>
+   </div>
+   <div class="post" id="post-214004">
+    <div class="subject"><a href="#post-214004">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body">Ok, i found the reason why it was not working. The reason is because i had everything on a code segment (section .text). <br />NASM does actually allow to pass addresses of a labe in the code segment. What my original problem used to cause is that i had variables on the code section and Windows does not allow to modify anything on the code section making it crash.<br /><br />So the right solution was to create a separate data segment (section .data) and puts the variables there.<br /><pre><code>global _main<br /><br />extern	GetStdHandle<br />extern	WriteFile<br />extern	ExitProcess<br /><br />section .data<br />BytesWritten: dq 0<br />message: db &quot;Hello World!&quot;<br />message_end:<br /><br />section .text<br />_main:<br />	mov		rcx, -11<br />	call	GetStdHandle<br /><br />	mov		rcx, rax<br />	mov		rdx, message<br />	mov		r8, (message_end - message)<br />	mov		r9, BytesWritten<br />	mov		qword , 0<br />	call	WriteFile<br />	<br />	mov		rcx, 0<br />	call	ExitProcess</code></pre><br /><br />As for the weird solution i found, what i believe it was trying to do was to create local variables and the correct way to do it would be:<br /><pre><code>push		rbp<br />mov		rbp, rsp<br />sub		rsp, 8*1 ;8*1 because only one variable of 8 bytes</code></pre></div>
+    <div class="meta">Posted on 2011-02-01 12:24:34 by banzemanga</div>
+   </div>
+   <div class="post" id="post-214005">
+    <div class="subject"><a href="#post-214005">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body"><div class="quote"><br />I checked NASM manual and it said that NASM doesn&#039;t remember the addresses of variables unlike MASM.<br /></div><br /><br />NASM wouldn&#039;t be much of an assembler if it didn&#039;t. Variable references = labels = addresses.<br /><br />What you are referring to is the fact that NASM doesn&#039;t keep/assume the <em>type</em> or <em>value</em> related to a variable/label.</div>
+    <div class="meta">Posted on 2011-02-01 18:34:06 by SpooK</div>
+   </div>
+   <div class="post" id="post-214006">
+    <div class="subject"><a href="#post-214006">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body"><div class="quote"><br />What you are referring to is the fact that NASM doesn&#039;t keep/assume the <em>type</em> or <em>value</em> related to a variable/label.<br /></div><br />I can&#039;t no longer find what NASM&#039;s manual originally said. You are right on the part that i was wrong about the label addresses. But i don&#039;t think its what you are mentioning neither because i don&#039;t think that MASM will assume a type or value on labels neither.<br /><br />Edit: I found it and you were right. Well, reading it directly literally is rather confusing.<br />Rather than &quot;remembering the variable type&quot; is more like &quot;storing the data size&quot; of the variable for when passing a value back onto the memory.<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2011-02-01 20:01:07 by banzemanga</div>
+   </div>
+   <div class="post" id="post-214007">
+    <div class="subject"><a href="#post-214007">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body">Yes, as data types have an implicit/defined size, which is the primary consideration with regard to assembly language.</div>
+    <div class="meta">Posted on 2011-02-01 22:10:48 by SpooK</div>
+   </div>
+   <div class="post" id="post-214008">
+    <div class="subject"><a href="#post-214008">Re: (changed) Trying 64-bit hello world with NASM</a></div>
+    <div class="body"><div class="quote"><br />Ok, i found the reason why it was not working. The reason is because i had everything on a code segment (section .text). <br />NASM does actually allow to pass addresses of a labe in the code segment. What my original problem used to cause is that i had variables on the code section and Windows does not allow to modify anything on the code section making it crash.</div><br /><br />That is correct.<br />By default, the .text section is read-only. You could use some linker options to make it read-write, and use it as a data section. But under normal circumstances it&#039;s better to just use a .data section.</div>
+    <div class="meta">Posted on 2011-02-02 03:54:50 by Scali</div>
+   </div>
+  </div>
+ </body>
+</html>

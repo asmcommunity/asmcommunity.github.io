@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>OpenGL floats, not dwords? (My stack off by 10h after call t - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11545" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=11545">OpenGL floats, not dwords? (My stack off by 10h after call t</a></p>
+   <div class="post" id="post-87342">
+    <div class="subject"><a href="#post-87342">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Ok, I've been trying to do learn OpenGL programming and I've been bouncing in to this problem, after a call to gluPerspective my stack gets &quot;off&quot; by 10h (4 dwords). Below is the call (fasm syntax), and the comments contains the assembled code (opcode).<br /><pre><code>	push	100.0f	; 68 0000C842 &lt;-- push 42C80000 &#58;confused&#58; ?????<br />	push	0.1f	; 68 CDCCCC3D &lt;-- push 3CCCCCCD &#58;confused&#58; ?????<br />	push	dword &#91;_aspd&#93;	;FF35 18204000 &lt;-- push &#91;402018&#93;<br />	push	45.0f	; 68 00003442 &lt;-- push 42340000 &#58;confused&#58; ?????<br />	call	&#91;gluPerspective&#93;</code></pre><br />Can some one please explain this to me? I saw some other OGL example and it looks like this (tasm syntax I belive):<br /><pre><code><br />_45d0	equ 40468000h ;45.0<br />_45d1   equ 0	<br />_01d0	equ 1069128089<br />_01d1   equ -1717986918 ;0.1<br />_100d0	equ 1079574528<br />_100d1  equ 0		;100.0<br />....<br />	push _100d0<br />	push _100d1<br />	push _01d0<br />	push _01d1<br />	push dword ptr &#91;_aspd+4&#93;<br />	push dword ptr &#91;_aspd&#93;<br />	push _45d0<br />	push _45d1<br />	call gluPerspective</code></pre><br />This doesn't make any sence to me, I can't under stand how 40468000 00000000 can tanslate into 45.0.</div>
+    <div class="meta">Posted on 2003-03-16 05:00:42 by scientica</div>
+   </div>
+   <div class="post" id="post-87344">
+    <div class="subject"><a href="#post-87344">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Hi<br /><br />Oly real4 data type has the same lengt as a dword <br />real8 have 8 bytes == 2 dwords and real10 have 10bytes ...<br /><br />Study the IEEE floating point reprezenation of numbers in computers  and you will (after a while) understand how 40468000 00000000 can indeed translate into 45.0 for the FPU co-processor. <br /><br />Basically there is a Mantissa and an Exponent bit fields. The Mantissa keeps track of as much digits as possible for the real number while the Exponent stores a positive or negative power of 2 ...ah and the sign bit<br /><br />Numbers like 45.0 (and others) can be represented either as a real4,real8 or real10 and usually the FPU will auto recognise the format used when you load them from memory operands (like in fld or fst ) , but that dosent work when you deal with them directly via CPU (like in push,pop,mov instructions)... then you will need to know the length of the number you want to deal with.<br /><br />Why not use only real4? Well because numbers like 1.3333333333333333333333 or the Euler's constant or PI will nedd more precision to be represented and it is better (if precision is needed) to use real8 or real10 constants<br /><br /><br />Usually programmers use to store initial values of those numbers / constants used in 3D applications as real4==dword ...  because it uses up less space in .data section ...</div>
+    <div class="meta">Posted on 2003-03-16 05:18:35 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-87345">
+    <div class="subject"><a href="#post-87345">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Oh and about the error...<br /><br />it is obviousely that in the working example the programmer used real8 as we can see from the d0=dword zero and d1=dword one suffix he appended to those numbers ...<br /><br />and indded you should use<br /><br />push real8 ptr [...]<br /><br />if OpenGL expects a real8 number as a parameter</div>
+    <div class="meta">Posted on 2003-03-16 05:21:58 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-87348">
+    <div class="subject"><a href="#post-87348">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Ok, thanks :)<br />I made a search on google and found this: <a target="_blank" href="http://www.psc.edu/general/software/packages/ieee/ieee.html">http://www.psc.edu/general/software/packages/ieee/ieee.html</a><br />I'll read it a few time and I hope fully I will be able to fix the app, but that'l be later since my grand parents just arrived.</div>
+    <div class="meta">Posted on 2003-03-16 05:41:10 by scientica</div>
+   </div>
+   <div class="post" id="post-87376">
+    <div class="subject"><a href="#post-87376">&quot;Hey! The macros compiles, post 'em!&quot; - UN Owen</a></div>
+    <div class="body"><em></em><br />Ok, now I've made some macros to simplify things for me. I haven't seen if they realy work (only that the stack is ok after call), it compiles but I got lot's of calls/pushes to replace and fix before I see my OGL-window, anyway here they are:<br /><pre><code>macro glPush GLfloatVar &#123;<br />	push dword &#91;GLfloatVar+4&#93;<br />	push dword &#91;GLfloatVar&#93;<br />&#125;<br />macro glCall proc,&#91;arg&#93; &#123;<br />	reverse<br />		glPush arg<br />	common<br />		call &#91;proc&#93;<br />&#125;</code></pre><br />Here's an example of how they're used.<br />Note, you must pass the address to a real8 (dq, IEEE double precision float) not actual floats (this version of the macros doesn't suport it).<br /><pre><code><br />;data<br />	; GLdouble equ dq<br />	_100_0f GLdouble 100.0f<br />	_45_0f	GLdouble 45.0f<br />	_0_1f	GLdouble 0.1f<br />...<br />;bss<br />	_aspd		rq 1<br />....<br />;code<br />....<br />	glCall	gluPerspective,_45_0f,_aspd,_0_1f,_100_0f<br />is equal to&#58;<br />	push	dword &#91;_100_0f+4&#93;<br />	push	dword &#91;_100_0f&#93;		; push 100.0f<br />	push	dword &#91;_0_1f+4&#93;<br />	push	dword &#91;_0_1f&#93;		; push 0.1f<br />	push	dword &#91;_aspd+4&#93;<br />	push	dword &#91;_aspd&#93;		; push float<br />	push	dword &#91;_45_0f+4&#93;<br />	push	dword &#91;_45_0f&#93;		; push 45.0f<br />	call	&#91;gluPerspective&#93;<br /></code></pre> <br /><em></em><br /><br /><span style="font-size:9px>UN Owen, read &quot;And Then There Were None&quot; by Agatha Christie...</span></div>
+    <div class="meta">Posted on 2003-03-16 10:04:30 by scientica</div>
+   </div>
+   <div class="post" id="post-87522">
+    <div class="subject"><a href="#post-87522">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">You can use doubleconst macro that I've posted here: <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=11338.msg85763">http://www.asmcommunity.net/board/index.php?topic=11338.msg85763</a> and you will avoid putting the garbage in the data section.</div>
+    <div class="meta">Posted on 2003-03-17 02:47:17 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-87592">
+    <div class="subject"><a href="#post-87592">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Thanks Privalov, you are the greatest! :) :) :) (I knew it could be done smother, FASM is fantastic, sic!)<br /><br />Ok, this is the modified version of glPush, which supports pushing of floats directly.<br /><pre><code>macro glPush2 GLfloatVar &#123;<br />	local name<br />	name = GLfloatVar<br />	virtual at 0<br />		dq GLfloatVar<br />		load name.l dword from 0<br />		load name.h dword from 4<br />	end virtual<br />	push dword name.h<br />	push dword name.l<br />&#125;<br />macro glCall2 proc,&#91;arg&#93; &#123;<br />	reverse<br />		glPush2 arg<br />	common<br />		call &#91;proc&#93;<br />&#125;</code></pre><br /><br />Btw, assembly master (Privalov), is there a way to make the macro differ between floats and adresses?<br />Let's say: glInvoke function, 45.0f, floatvar<br />should use glPush2 for 45.0f and glPush for floatvar.</div>
+    <div class="meta">Posted on 2003-03-17 10:10:47 by scientica</div>
+   </div>
+   <div class="post" id="post-87653">
+    <div class="subject"><a href="#post-87653">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by scientica </em><br />Btw, assembly master (Privalov), is there a way to make the macro differ between floats and adresses?<br />Let's say: glInvoke function, 45.0f, floatvar<br />should use glPush2 for 45.0f and glPush for floatvar. </div><br /><br />Sure:<br /><pre><code><br />if arg eqtype 1.0<br />   glPush2 arg<br />else<br />   glPush arg<br />end if<br /></code></pre><br /><br />PS: you declare &quot;name&quot; as local, but not &quot;name.l&quot; and &quot;name.h&quot;, you can write &quot;name#.l&quot; and &quot;name#.h&quot; instead, but you don't need to declare it as local really - constants can be redefined (and that's why it's working anyway).<br /><br />PPS: use &quot;pushd&quot; instead of &quot;push dword&quot;, because the second one is not optimized (look in the docs - 1.2.6)</div>
+    <div class="meta">Posted on 2003-03-17 15:24:39 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-87766">
+    <div class="subject"><a href="#post-87766">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body"><div class="quote"><br />PS: you declare &quot;name&quot; as local, but not &quot;name.l&quot; and &quot;name.h&quot;, you can write &quot;name#.l&quot; and &quot;name#.h&quot; instead, but you don't need to declare it as local really - constants can be redefined (and that's why it's working anyway).<br />PPS: use &quot;pushd&quot; instead of &quot;push dword&quot;, because the second one is not optimized (look in the docs - 1.2.6) </div><br />I'll skip the local definitions, I thought I needed them so there wouldn't be &quot;already defined&quot;-errors, thanks for enligthen me.<br />Ok, I'll look in to the docs later. But I had some problems with name#.h, got some error, maybe it was related to the other text in the &quot;unposted experemental version&quot;, I'll try it again.</div>
+    <div class="meta">Posted on 2003-03-17 23:28:57 by scientica</div>
+   </div>
+   <div class="post" id="post-87924">
+    <div class="subject"><a href="#post-87924">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">This is strange, when using this:<br /><pre><code>macro glCall3 proc,&#91;arg&#93; &#123;<br />        reverse<br />                if arg eqtype 1.0f<br />                        glPush2 arg<br />                else<br />                        glPush arg<br />                end if<br />        common<br />                call &#91;proc&#93;<br />&#125;<br />...<br />glCall3 glFinish, _1_0f, _45_0f, 1.2f, 45.0f, _0_1f<br /></code></pre><br />I get this error (when using FASM):<br /><pre><code>flat assembler  version 1.45<br />opengl.asm &#91;241&#93; glPush &#91;1&#93;&#58;<br />glCall3 glFinish, _1_0f, _45_0f, 1.2f, 45.0f, _0_1f<br />error&#58; invalid name.</code></pre><br />when using FASMW I get these errors:<br /><pre><code>Error&#58; Invalid name.<br />Display&#58;<br />Instruction&#58; push dword &#91;45.0f+4&#93;<br />Source&#58; OPENGL.ASM&#91;241&#93;<br />OPENGL.ASM&#91;41&#93;<br />OPENGL.ASM&#91;10&#93;</code></pre><br />As far as I can follow, the macro fixes memmory addr _1_0f, _45_0f and &quot;immediate&quot; 1.2f but fails on 45.0f (line 41 is &quot;glPush arg&quot;). Have I made some misstake when implenting your &quot;if-eqtype-block&quot; or is the error somewhere else?<br /><br /><br />btw, heres the updated version of glPush2:<br /><pre><code>macro glPush2 GLfloatVar &#123;<br />	name = GLfloatVar<br />	virtual at 0<br />		dq GLfloatVar<br />		load name#.l dword from 0<br />		load name#.h dword from 4<br />	end virtual<br />	push dword name.h<br />	push dword name.l<br />&#125;</code></pre></div>
+    <div class="meta">Posted on 2003-03-18 11:32:48 by scientica</div>
+   </div>
+   <div class="post" id="post-87927">
+    <div class="subject"><a href="#post-87927">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Well, the parser doesn't allow floating point values in the memory addressing - I could fix that, but you can anyway go over this problem with a little trick, just replace glPush arg with:<br /><pre><code><br />addr = arg<br />glPush addr<br /></code></pre><br />BTW, as long as you don't declare name as local, there won't be difference between name.h and name#.h, they will result in exactly the same source after the preprocessing.</div>
+    <div class="meta">Posted on 2003-03-18 11:50:33 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-87930">
+    <div class="subject"><a href="#post-87930">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Maybe you missunderstood me, 1.2f and 45.0f are floats, not addresses to floats, _1_0f, _45_0f and  _0_1f are addresses to floats (they stat with &quot;_&quot; and the &quot;.&quot; is replaced with a &quot;_&quot;).<br />In my eyes there is no difference between 1.2f and 45.0f they're both &quot;immediate&quot; vars, qwords/real8. So 45.0f should be pushed with glPush2 not glPush, 1.2f is afaik pushed via glPush2.</div>
+    <div class="meta">Posted on 2003-03-18 11:56:39 by scientica</div>
+   </div>
+   <div class="post" id="post-87934">
+    <div class="subject"><a href="#post-87934">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">No, I did not missunderstood you. Out problem comes from that the if directive is processed at the assembly stage, and the error from putting floating-point value inside the square brackets emerges at the parsing stage, when everything is processed regardless of if directive. But the code I wrote above should solve your problem.</div>
+    <div class="meta">Posted on 2003-03-18 12:02:56 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-87936">
+    <div class="subject"><a href="#post-87936">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">And 1.2f is causing the same error as 45.0f, but you see the error from the second one because of the reverse directive.</div>
+    <div class="meta">Posted on 2003-03-18 12:05:01 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-87943">
+    <div class="subject"><a href="#post-87943">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Ok, it seems like it works now, I think I understand it better now. I begin to undestand how it works now, for every re-read of the post it makes more and more sense to me. :)</div>
+    <div class="meta">Posted on 2003-03-18 12:24:14 by scientica</div>
+   </div>
+   <div class="post" id="post-87964">
+    <div class="subject"><a href="#post-87964">OpenGL floats, not dwords? (My stack off by 10h after call t</a></div>
+    <div class="body">Arhg!!! :mad: :(<br />/me stupid, me very stupid, me not bashig head against screen (screen might break) ... :grin:<br />/me also tired<br /><br />As I was trying to get the OGL app to show the objects I was about to go mad, I used glColor<strong>f</strong>, glVertex3D<strong>f</strong>, and a gazillion other functions endingw with <strong>f</strong>. The thing is that those OGL functions that ends with <strong>f</strong> are GLfloat (real4) versions, not GLdouble (real8), no wonder why the macros didn't solve everything ( :rolleyes: ). Luckily there are functions that ends with <strong>d</strong>, they are GLdouble version of the calls, so now I'm using double precision floats even though I only would need single precision floats. (Since I'm not going to consider all this a waist of time (but make some use of it), and who knows maybe I'll need those extra decimals for later projects in the future (/me not so sure about the last being in the near future ;)) )<br /><br />(now I just have to fix the &quot;rotation&quot; of one of the objects that is a bit funky now :))</div>
+    <div class="meta">Posted on 2003-03-18 15:06:57 by scientica</div>
+   </div>
+  </div>
+ </body>
+</html>

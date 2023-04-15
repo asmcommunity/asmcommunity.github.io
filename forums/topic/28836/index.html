@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fastest Process Enumerator in the West - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28836" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28836">Fastest Process Enumerator in the West</a></p>
+   <div class="post" id="post-203760">
+    <div class="subject"><a href="#post-203760">Fastest Process Enumerator in the West</a></div>
+    <div class="body">Uses the UNDOCUMENTED ZwQuerySystemInformation api to enumerate Running Processes<br />Macros come from the OA32 toolset.<br /><br /><pre><code><br />UNICODE_STRING struct<br />&nbsp; &nbsp; wLength dw ?<br />&nbsp; &nbsp; MaximumLength dw ?<br />&nbsp; &nbsp; Buffer dd ?<br />UNICODE_STRING ends<br /><br />CLIENT_ID struct<br />&nbsp; &nbsp; UniqueProcess dd ?<br />&nbsp; &nbsp; UniqueThread dd ?<br />CLIENT_ID ends<br /><br />SYSTEM_THREAD_INFORMATION struct<br />&nbsp; &nbsp; KernelTime QWORD ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // time spent in kernel mode<br />&nbsp; &nbsp; UserTime QWORD ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // time spent in user mode<br />&nbsp; &nbsp; CreateTime QWORD ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // thread creation time<br />&nbsp; &nbsp; WaitTime dd ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // wait time<br />&nbsp; &nbsp; StartAddress dd ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // start address<br />&nbsp; &nbsp; ClientId CLIENT_ID &lt;&gt;;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // thread and process IDs<br />&nbsp; &nbsp; Priority dd ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // dynamic priority<br />&nbsp; &nbsp; BasePriority dd ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // base priority<br />&nbsp; &nbsp; ContextSwitchCount dd ?;&nbsp; &nbsp;  // number of context switches<br />&nbsp; &nbsp; State dd ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; // current state<br />&nbsp; &nbsp; WaitReason dd ?;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  // wait reason<br />SYSTEM_THREAD_INFORMATION ends<br /><br />SYSTEM_PROCESS_INFORMATION struct<br />&nbsp; &nbsp; NextEntryDelta dd ?<br />&nbsp; &nbsp; dThreadCount dd ?<br />&nbsp; &nbsp; dReserved01 dd ?<br />&nbsp; &nbsp; dReserved02 dd ?<br />&nbsp; &nbsp; dReserved03 dd ?<br />&nbsp; &nbsp; dReserved04 dd ?<br />&nbsp; &nbsp; dReserved05 dd ?<br />&nbsp; &nbsp; dReserved06 dd ?<br />&nbsp; &nbsp; ftCreateTime FILETIME &lt;&gt;; /* relative to 01-01-1601 */<br />&nbsp; &nbsp; ftUserTime&nbsp;  FILETIME &lt;&gt;;&nbsp; /* 100 nsec units */<br />&nbsp; &nbsp; ftKernelTime FILETIME &lt;&gt;; /* 100 nsec units */<br />&nbsp; &nbsp; ProcessName&nbsp; UNICODE_STRING &lt;&gt;<br />&nbsp; &nbsp; BasePriority dd ?<br />&nbsp; &nbsp; dUniqueProcessId dd ?<br />&nbsp; &nbsp; dParentProcessID dd ?<br />&nbsp; &nbsp; dHandleCount dd ?<br />&nbsp; &nbsp; dReserved07 dd ?<br />&nbsp; &nbsp; dReserved08 dd ?<br />&nbsp; &nbsp; VmCounters dd ?<br />&nbsp; &nbsp; dCommitCharge dd ?<br />&nbsp; &nbsp; ThreadInfos SYSTEM_THREAD_INFORMATION &lt;&gt;<br />SYSTEM_PROCESS_INFORMATION ends<br /><br />EnumProcesses proc uses esi edi<br />LOCAL pMem,BytesUsed<br />LOCAL buf[512]:BYTE<br />	invoke GetModuleHandle,$OfsCStr (&quot;ntdll&quot;)<br />	.if eax!=0<br />		invoke GetProcAddress,eax,$OfsCStr (&quot;ZwQuerySystemInformation&quot;)<br />		.if eax!=0<br />			mov edi,eax<br />			mov pMem,$MemAlloc (65536,MEM_INIT_ZERO)<br />			.if eax!=0<br />				invoke SendDlgItemMessage,hWnd,1001,LB_RESETCONTENT,0,0<br />				lea eax,BytesUsed<br />				push eax<br />				push 65536<br />				push pMem<br />				push 5<br />				call edi<br />				mov esi,pMem<br />				;We need to skip the first entry in the process list<br />				;because its the &quot;idle&quot; process<br />				add esi,.SYSTEM_PROCESS_INFORMATION.NextEntryDelta	<br />				;Now we may begin :)<br />				.repeat<br />				<br />					lea eax,buf<br />					invoke WideCharToMultiByte,CP_OEMCP, 0, .SYSTEM_PROCESS_INFORMATION.ProcessName.Buffer, -1, eax, 256, NULL, NULL 	<br />					;Add the Process Name to the listbox<br />					invoke SendDlgItemMessage,hWnd,1001,LB_ADDSTRING,0,addr buf<br />					;Associate the ProcessID with the ProcessName<br />					invoke SendDlgItemMessage,hWnd,1001,LB_SETITEMDATA,eax,	.SYSTEM_PROCESS_INFORMATION.dUniqueProcessId<br />					<br />					.break .if .SYSTEM_PROCESS_INFORMATION.NextEntryDelta==0<br />					add esi,.SYSTEM_PROCESS_INFORMATION.NextEntryDelta<br />				.until 0<br />				MemFree pMem<br />			.endif			<br />		.endif		<br />	.endif<br />	ret<br />EnumProcesses endp<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2007-11-30 09:47:41 by Homer</div>
+   </div>
+   <div class="post" id="post-203762">
+    <div class="subject"><a href="#post-203762">Re: Fastest Process Enumerator in the West</a></div>
+    <div class="body">Noticably faster than toolhelp? And whatabout psapi?</div>
+    <div class="meta">Posted on 2007-11-30 18:16:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-203764">
+    <div class="subject"><a href="#post-203764">Re: Fastest Process Enumerator in the West</a></div>
+    <div class="body"><div class="quote"><br />Uses the UNDOCUMENTED ZwQuerySystemInformation api to enumerate Running Processes<br />Macros come from the OA32 toolset.</div><br /><br />Well, not really undocumented, just one of those soon to be deprecated functions....<br /><br />http://msdn2.microsoft.com/en-us/library/ms725506.aspx</div>
+    <div class="meta">Posted on 2007-11-30 22:13:52 by donkey</div>
+   </div>
+   <div class="post" id="post-203766">
+    <div class="subject"><a href="#post-203766">Re: Fastest Process Enumerator in the West</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote"><br />Uses the UNDOCUMENTED ZwQuerySystemInformation api to enumerate Running Processes<br />Macros come from the OA32 toolset.</div><br /><br />Well, not really undocumented, just one of those soon to be deprecated functions....<br /><br />http://msdn2.microsoft.com/en-us/library/ms725506.aspx<br /></div><br />Partially documented at best - only a very few of the available zwQuerySystemInformation calls/classes are documented, and for those that <strong>are</strong> documented, only parts of the structs are filled, used (but &quot;we don&#039;t want you to know about these&quot;) fields are named &quot;reserved&quot;, etc.<br /><br />Sure, it&#039;s partially because Microsoft wants to be able to change those calls, but I bet that&#039;s not the full story...</div>
+    <div class="meta">Posted on 2007-12-01 02:59:09 by f0dder</div>
+   </div>
+   <div class="post" id="post-203783">
+    <div class="subject"><a href="#post-203783">Re: Fastest Process Enumerator in the West</a></div>
+    <div class="body">Its faster mainly because we&#039;re not going through ntdll.NTQuerySystemInformation, which seems to be acting as a filter to only show certain information as it translates the arrays from one form to another.<br /><br />Using this api with the param &quot;11&quot; instead of &quot;5&quot;, we can enumerate the Modules of the currently-enumerated Process (we do this with nested code inside the previous example).<br /><br />The results are interesting as they include all the Drivers supporting a given Process.<br />This information is not available by NTQuerySystemInformation.<br /></div>
+    <div class="meta">Posted on 2007-12-02 08:14:23 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ToolTip-style notification window - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19428" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19428">ToolTip-style notification window</a></p>
+   <div class="post" id="post-149798">
+    <div class="subject"><a href="#post-149798">ToolTip-style notification window</a></div>
+    <div class="body">Hi.<br />I want a little notification window to popup, and I want it to look just like a tooltip window.<br />But... as I understand it, tooltip windows are always associated with a window somewhere and don't allow the programmer much control over when to show them or where to place them.<br />How do I pop up a tooltip-style window and show/hide it whenever I want?<br /><br />You know, like Opera does when a download completes or you receive mail... :)</div>
+    <div class="meta">Posted on 2004-09-14 22:04:24 by Hugin</div>
+   </div>
+   <div class="post" id="post-149799">
+    <div class="subject"><a href="#post-149799">ToolTip-style notification window</a></div>
+    <div class="body">You can specify the WS_POPUP flag when calling CreateWindowEx. It can be shown/hidden by the ShowWindow function, either with parameter SW_SHOW or SW_HIDE. This does not work when processing the WM_CREATE msg in your WindowProc.<br /><br />Dominik</div>
+    <div class="meta">Posted on 2004-09-15 00:07:54 by Dom</div>
+   </div>
+   <div class="post" id="post-149874">
+    <div class="subject"><a href="#post-149874">ToolTip-style notification window</a></div>
+    <div class="body">Sorry if I'm being stupid, but I can't get it to work even in this extremely simple app: (RosAsm code)<br /><pre><code>&#91;call | push #L&gt;2 | call #1&#93;<br />&#91;push | push #1 | #+1&#93;<br /><br />Main&#58;<br /><br />    ; Register ToolTip class<br />    &#91;CC&#58; 8, &amp;ICC_WIN95_CLASSES&#93;<br />    call 'Comctl32.InitCommonControlsEx' CC<br /><br />    ; Create a tooltip<br />    &#91;TooltipClass&#58; B$ &quot;Tooltips_class32&quot;, 0&#93;<br />    call 'Kernel32.GetModuleHandleA' &amp;NULL<br />    call 'User32.CreateWindowExA' &amp;NULL,<br />                                  TooltipClass,<br />                                  &amp;NULL,<br />                                  &amp;WS_POPUP,<br />                                  0, 0,<br />                                  300, 300,<br />                                  &amp;NULL,<br />                                  &amp;NULL,<br />                                  eax,<br />                                  &amp;NULL<br /><br /><br />    ; Show it<br />    call 'User32.ShowWindow' eax, &amp;SW_SHOW<br />    call 'Kernel32.Sleep' 2000<br />    call 'Kernel32.ExitProcess' 0</code></pre></div>
+    <div class="meta">Posted on 2004-09-16 13:24:03 by Hugin</div>
+   </div>
+   <div class="post" id="post-149879">
+    <div class="subject"><a href="#post-149879">ToolTip-style notification window</a></div>
+    <div class="body">Here's my approach :)<br /><pre><code><br />	<br />.data<br />	IHelp_Visible 	dd 0<br />	IHelp_ParamNum 	dd 0<br />	IHelp_Width	dd 0<br />	IHelp_Height 	dd 18<br />	<br />.data?	<br />	IHelp_txt db 260 dup &#40;?&#41;<br />.code	<br />	<br />;=====&#91;&#91; IHelp.Tools &gt;&gt;===\<br />IHelp_Show proc txt1<br />	local pt&#58;POINT,baka<br />	.if IHelp_Visible<br />		call IHelp_Hide<br />	.endif<br />	<br />	invoke lstrcpy,addr IHelp_txt,txt1<br />	<br />	invoke GetThisTxtSize2,txt1<br />	add eax,10<br />	mov IHelp_Width,eax<br />	<br />	invoke SendMessage,hwndEdit,EM_GETSEL,addr baka,0<br />	dec baka<br />	invoke SendMessage,hwndEdit,EM_POSFROMCHAR,baka,0<br />	mov ebx,eax<br />	movsx eax,ax<br />	shr ebx,16<br />	movsx ebx,bx<br />	sub ebx,18<br />	add eax,3<br />	mov pt.x,eax<br />	invoke GetThisTxtSize,txt1<br />	sub pt.x,eax<br />	mov pt.y,ebx<br />	invoke ClientToScreen,hwndEdit,addr pt<br />	invoke SetWindowPos,IHelp_hWnd,0,pt.x,pt.y,IHelp_Width,IHelp_Height,SWP_NOOWNERZORDER or SWP_NOZORDER<br />	<br />	<br />	<br />	invoke ShowWindow,IHelp_hWnd,SW_SHOW<br />	invoke SetFocus,hwndEdit<br />	<br />	mov IHelp_Visible,1<br />	ret<br />IHelp_Show endp<br />IHelp_Hide proc <br />	invoke ShowWindow,IHelp_hWnd,SW_HIDE<br />	mov IHelp_Visible,0<br />	ret<br />IHelp_Hide endp<br />;========/<br />;=====&#91;&#91; IHelp_Paint &gt;&gt;===\<br />IHelp_Paint proc uses esi edi hdc		<br />	invoke GetStockObject,DEFAULT_GUI_FONT<br />	invoke SelectObject,hdc,eax<br />	invoke GetStockObject,HOLLOW_BRUSH<br />	invoke SelectObject,hdc,eax<br />	<br />	<br />	xor eax,eax<br />	.while IHelp_txt&#91;eax&#93;<br />		inc eax<br />	.endw<br />	invoke TextOut,hdc,4,2,addr IHelp_txt,eax<br />	<br />	<br />	ret<br />IHelp_Paint endp<br />;=======/<br />;=====&lt;&lt; IHelp_Loop &gt;&gt;===\<br />IHelp_Loop proc hWnd,msg,w,l<br />	local ps&#58;PAINTSTRUCT<br />	.if msg==WM_PAINT<br />		invoke BeginPaint,hWnd,addr ps<br />		invoke IHelp_Paint,eax<br />		invoke EndPaint,hWnd,addr ps<br />	.else<br />		invoke DefWindowProc,hWnd,msg,w,l<br />	.endif<br />	ret<br />IHelp_Loop endp<br />;=======/<br />;=====&lt;&lt; CreateIHelp &gt;&gt;===\<br />CreateIHelpWnd proc<br />	local wc&#58;WNDCLASSEX<br />	.data<br />	 IHelpClassName db &quot;UltranoIHelper&quot;,0<br />	.code<br />	lea edi,wc<br />	xor eax,eax<br />	mov ecx,sizeof WNDCLASSEX<br />	rep stosb<br />	mov   wc.cbSize,SIZEOF WNDCLASSEX<br />	mov   wc.lpfnWndProc,IHelp_Loop<br />	push  hinst<br />	pop   wc.hInstance<br />	invoke GetSysColor,COLOR_INFOBK<br />	invoke CreateSolidBrush,eax<br />	mov   wc.hbrBackground,eax<br />	mov   wc.lpszClassName,offset IHelpClassName<br />	invoke LoadIcon,hinst,1<br />	mov   wc.hIcon,eax<br />	mov   wc.hIconSm,eax<br />	invoke LoadCursor,NULL,IDC_ARROW<br />	mov   wc.hCursor,eax<br />	invoke RegisterClassEx, addr wc<br />	invoke CreateWindowEx,WS_EX_LTRREADING or WS_EX_TOPMOST or WS_EX_TOOLWINDOW,\<br />		addr IHelpClassName,0,\<br />		WS_POPUP or WS_CLIPSIBLINGS or WS_CLIPCHILDREN or WS_OVERLAPPED or WS_BORDER,<br />		200,200,170,160,hwndEdit,0,hinst,0<br />	mov IHelp_hWnd,eax<br />	<br />	ret<br />CreateIHelpWnd endp<br />;=======/<br />	<br /></code></pre></div>
+    <div class="meta">Posted on 2004-09-16 15:25:40 by Ultrano</div>
+   </div>
+   <div class="post" id="post-149922">
+    <div class="subject"><a href="#post-149922">ToolTip-style notification window</a></div>
+    <div class="body">Ultrano's code works, and works well, because it creates a custom window class.<br />If you want to reuse the tooltips_class32, have a look at Iczelion tutorial 27 (h..p://win32assembly.online.fr/files/tut27.zip)...<br /><br />Regards, bilbo</div>
+    <div class="meta">Posted on 2004-09-17 11:24:46 by bilbo</div>
+   </div>
+   <div class="post" id="post-149957">
+    <div class="subject"><a href="#post-149957">ToolTip-style notification window</a></div>
+    <div class="body">Aww taken directly out of the context of TIX (an IDE), the code lacks two  procs: <br /><br /><pre><code><br />.data<br />	GetThisTxtSizeOK db 0<br />.data?<br />	GetThisTxtSizeData dd 256 dup &#40;?&#41;<br />.code<br />GetThisTxtSize proc uses ebx ecx edx txt1<br />	local baka<br />	.if !GetThisTxtSizeOK<br />		mov GetThisTxtSizeOK,1<br />		invoke CreateCompatibleDC,0<br />		mov baka,eax<br />		invoke GetStockObject,DEFAULT_GUI_FONT<br />		invoke SelectObject,baka,eax<br />		invoke GetCharWidth,baka,0,255,addr GetThisTxtSizeData<br />		invoke DeleteDC,baka<br />	.endif<br />	.if !txt1<br />		mov eax,100<br />		ret<br />	.endif<br />	mov ecx,txt1<br />	xor edx,edx<br />	@@&#58;<br />	movzx eax,byte ptr&#91;ecx&#93;<br />	or al,al<br />	jz @F<br />	cmp al,32<br />	je @F<br />	mov eax,GetThisTxtSizeData&#91;eax*4&#93;<br />	add edx,eax<br />	inc ecx<br />	jmp @B<br />	@@&#58;<br />	mov eax,edx<br />	<br />	ret<br />GetThisTxtSize endp<br />	<br />GetThisTxtSize2 proc uses ebx ecx edx txt1 ; doesn't care about &lt;space&gt;<br />	local baka<br />	.if !GetThisTxtSizeOK<br />		mov GetThisTxtSizeOK,1<br />		invoke CreateCompatibleDC,0<br />		mov baka,eax<br />		invoke GetStockObject,DEFAULT_GUI_FONT<br />		invoke SelectObject,baka,eax<br />		invoke GetCharWidth,baka,0,255,addr GetThisTxtSizeData<br />		invoke DeleteDC,baka<br />	.endif<br />	.if !txt1<br />		mov eax,25<br />		ret<br />	.endif<br />	mov ecx,txt1<br />	xor edx,edx<br />	@@&#58;<br />	movzx eax,byte ptr&#91;ecx&#93;<br />	or al,al<br />	jz @F<br />	mov eax,GetThisTxtSizeData&#91;eax*4&#93;<br />	add edx,eax<br />	inc ecx<br />	jmp @B<br />	@@&#58;<br />	mov eax,edx<br />	<br />	ret<br />GetThisTxtSize2 endp<br /><br /></code></pre><br /><br />These two calculate the width of text, that is about to be written with DEFAULT_GUI_FONT. Otherwise you'd have to first create a DC with big bitmap and test. <br />The code is designed to put a ToolTip help while typing code in an Edit control, whose handle is hwndEdit. Can be made to show at a given x:y screen pos.</div>
+    <div class="meta">Posted on 2004-09-18 04:36:47 by Ultrano</div>
+   </div>
+   <div class="post" id="post-150030">
+    <div class="subject"><a href="#post-150030">ToolTip-style notification window</a></div>
+    <div class="body">thx for the code, Ultrano<br />bilbo</div>
+    <div class="meta">Posted on 2004-09-20 03:48:24 by bilbo</div>
+   </div>
+  </div>
+ </body>
+</html>

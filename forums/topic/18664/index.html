@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>lookup tables - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18664" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18664">lookup tables</a></p>
+   <div class="post" id="post-144583">
+    <div class="subject"><a href="#post-144583">lookup tables</a></div>
+    <div class="body">back in the 386 days, we used lookup tables for alot of things, then suddenly it seemed people didn't use it anymore because of preformance issues<br /><br />but with modern computers and fast caches can this technique be faster..<br /><br />here is my context i am going to write a fast Contrast algorithm<br /><br />for each pixel it will require a multiplication by something that is constant per frame . <br />but really there are only 256 possible outcomes based on my red,green,blues 256 different values..<br />so if rather i just do 256 multiplications in the beginning into a lookup table<br /><br />then in the inner loop just lookup from that table each pixel (so 3 lookups compared to 3 multiplications (as well as checking for saturation and all that - though it could be done well in mmx)<br /><br />given that the source, destination, and lookup table would be 3 cache lines, and the stack possibly a forth (though the inner loop should be done completely with registers easily)<br /><br />or is even level 1 cache slower than say MMX multiplications?<br /><br />Karl</div>
+    <div class="meta">Posted on 2004-06-23 00:44:03 by klumsy</div>
+   </div>
+   <div class="post" id="post-144592">
+    <div class="subject"><a href="#post-144592">lookup tables</a></div>
+    <div class="body">L1 cache has a 2 (P4) or 3 (Athlon/P3) clk latency.<br />The problem is also that you have dependent addressing. The pixel is your index. That means there will be a stall while generating the address.<br /><br />I would most probably use MMX multiply in such a situation. If the multiplier is the same for r, g and b, I would probably use a mul even without MMX. But if there are 3 separate multipliers I am not sure.</div>
+    <div class="meta">Posted on 2004-06-23 02:17:20 by Scali</div>
+   </div>
+   <div class="post" id="post-144605">
+    <div class="subject"><a href="#post-144605">lookup tables</a></div>
+    <div class="body">thanks,<br />so you would use just normal integer multiplication or floating poiint multiplication?<br /><br />what i am actually multiply is by something like 0.0 to 5.0 (so more than the 256 range (if 1.0 means 256)<br /><br />the formula is something like like<br /><br />red =  ((red - 128) * contrastamount ) - 128<br />however if the result is less than zero , then it will saturate to 0<br />and if the amount is greater than 255 then it will saturate to 255<br /><br />so really some MMX multiplicaion with saturation would be best wouldn't it? otherwise there would have to be compares and jumps and ugly things like that in the inner loop.<br /><br />as for the issue with ussing the pixel as the index in the lookup table and latencies, would that be such an issue if i unrolled the loopsome and rearranged stuff a little?</div>
+    <div class="meta">Posted on 2004-06-23 07:04:12 by klumsy</div>
+   </div>
+   <div class="post" id="post-144609">
+    <div class="subject"><a href="#post-144609">lookup tables</a></div>
+    <div class="body">I wouldn't use FPU. The FPU itself can do muls quite quickly, but there is the problem that you have int input and want int output, I suppose. The conversion-pverhead nullifies any gain you may get.<br /><br /><div class="quote">otherwise there would have to be compares and jumps and ugly things like that in the inner loop.</div><br /><br />You don't always need compares and jumps to perform a certain operation. Saturation is such a case.<br /><br /><div class="quote">as for the issue with ussing the pixel as the index in the lookup table and latencies, would that be such an issue if i unrolled the loopsome and rearranged stuff a little?</div><br /><br />That will increase throughput, but whether it is faster than another method or not is hard to say. Best way to find out is to implement both, and see which one you can make the fastest.</div>
+    <div class="meta">Posted on 2004-06-23 07:48:54 by Scali</div>
+   </div>
+   <div class="post" id="post-144657">
+    <div class="subject"><a href="#post-144657">lookup tables</a></div>
+    <div class="body">ok i follow i see if you scale it by 256, then if the multication is less than 1, then it will all resultu in the low byte and thus when you grab the high byte, it would be saturated to zero, and if the multipliation is greater than the 65535, then it will overflow though right? or will it saturate and just set the overflow flag?<br /><br />there will be only one modifer (at least this version)<br />but will one MUL work, won't have i have to mul each colour channel seperate so that bits from the different colours don't mess each other up?</div>
+    <div class="meta">Posted on 2004-06-23 17:14:22 by klumsy</div>
+   </div>
+   <div class="post" id="post-144695">
+    <div class="subject"><a href="#post-144695">lookup tables</a></div>
+    <div class="body"><div class="quote">or will it saturate and just set the overflow flag?</div><br /><br />Muls don't saturate. You need to keep enough free bits to account for the maximum possible overflow, and then saturate to your maximum value (255 I suppose). You can do this with some clever bitmasking, or use MMX's instructions (we discussed pack elsewhere already).<br /><br /><div class="quote">but will one MUL work, won't have i have to mul each colour channel seperate so that bits from the different colours don't mess each other up?</div><br /><br />You can separate ARGB pixels into -A-G and -R-B parts, and process those in parallel... But when you also want saturation, you will have a problem... You have 8 spare bits now, enough for an 8x8 multiply, which will give a 16 bit result at most.<br />You will either have to process each channel separately, or decide to use less precision, and free up some bits that way.<br />In my 3d engine I chose for 10 bit light values and 6 bit colour values (in retrospect I could also have used 8 bit light and 8 bit colour, I suppose, hard to say which looks better). 6 bit colour is hardly worse than 8 bit to the naked eye. And because of the 10 bit light values (I saturated those aswell, before the per-pixel operations) I could now have up to 4x 'overbright' light, which saturates nicely. And I still only needed 2 muls per pixel, rather than 4. And no jumps ofcourse :)<br />Since I also had bilinear filtered texturemapping, I could combine it partly with the texture fetch/filtering.</div>
+    <div class="meta">Posted on 2004-06-24 02:28:19 by Scali</div>
+   </div>
+  </div>
+ </body>
+</html>

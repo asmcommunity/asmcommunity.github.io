@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>problem aultering bitmap - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16199" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16199">problem aultering bitmap</a></p>
+   <div class="post" id="post-125648">
+    <div class="subject"><a href="#post-125648">problem aultering bitmap</a></div>
+    <div class="body">I have a bitmap created by CreateDIBSection and i'm trying to  manipulate the image by changing the values pointed to by the pointer returned to the *ppvBits argument. When I call UpdateWindow the image looks exacly the same???<br /><br />the window handles WM_PAINT like this<br /><br /><pre><code><br />IF uMsg==WM_PAINT<br />            invoke BeginPaint, hWnd, addr ps<br />            invoke BitBlt, eax, 0, 0, dwWidth, dwHeight, hdc, 0, 0, SRCCOPY<br />            invoke EndPaint, hWnd, addr ps</code></pre><br />hdc is the device context that has the bitmap selected into it.</div>
+    <div class="meta">Posted on 2003-11-26 19:33:40 by ENF</div>
+   </div>
+   <div class="post" id="post-125649">
+    <div class="subject"><a href="#post-125649">problem aultering bitmap</a></div>
+    <div class="body">I have found that the number returned in ppvBits is unreliable. Use the GetObject function to obtain a good pointer to the DIBits...<br /><br /><pre><code>LOCAL sbmp	&#58;DIBSECTION<br />invoke GetObject,hBmp,SIZEOF DIBSECTION,ADDR sbmp<br />mov eax,sbmp.dsBm.bmBits<br />mov pDIBits,eax</code></pre></div>
+    <div class="meta">Posted on 2003-11-26 19:37:14 by donkey</div>
+   </div>
+   <div class="post" id="post-125670">
+    <div class="subject"><a href="#post-125670">problem aultering bitmap</a></div>
+    <div class="body">thanx donkey but it still isn't working.<br />Is it possible that windows dosen't allow writing to a bitmap in the way while it is selected into a DC?</div>
+    <div class="meta">Posted on 2003-11-26 21:54:55 by ENF</div>
+   </div>
+   <div class="post" id="post-125671">
+    <div class="subject"><a href="#post-125671">problem aultering bitmap</a></div>
+    <div class="body">Nope, I write all of my pixels in TBPaint using the direct method and the bitmap is selected into a DC at the time. There should be no problem with that at all. This is a procedure that will set a single pixel, it is not efficient but slightly better than SetPixelV, you can try it. It assumes a 32bit DIB section (which is what I use in TBPaint internally).<br /><br /><pre><code>SetPixelD proc PixelDC&#58;DWORD, PixelX&#58;DWORD, PixelY&#58;DWORD, cPixel&#58;DWORD<br />	LOCAL sbmp			&#58;DIBSECTION<br />	LOCAL hBmp			&#58;DWORD<br />	LOCAL pDIBits			&#58;DWORD<br /><br />	; Images are always 32bpp for alpha so no aligment is necessary<br />	; Bottomup DIB - Origin for DIB is bottom left<br /><br />	invoke GetCurrentObject,PixelDC,OBJ_BITMAP<br />	mov hBmp,eax<br />	invoke GetObject,hBmp,SIZEOF DIBSECTION,ADDR sbmp<br />	mov eax,sbmp.dsBm.bmBits<br />	mov pDIBits,eax<br /><br />	; Verify the requested pixel<br />	mov eax,PixelX<br />	mov ecx,PixelY<br />	.IF eax &gt;= sbmp.dsBm.dwWidth|| ecx &gt;= sbmp.dsBm.dwHeight<br />		ret<br />	.ENDIF<br /><br />	; Find the appropriate entry in the array of bits<br />	; Calculate the offset to the first entry in scan line<br />	mov eax, imageX<br />	mov ecx,imageY<br />	sub ecx,PixelY<br />	dec ecx<br />	mul ecx<br />	shl eax,2 ; adjust for DWORD size<br />	push eax ; push the result onto the stack<br /><br />	mov eax,PixelX<br />	shl eax,2 ; adjust for DWORD size<br />	pop ecx ; pop the scan line offset off the stack<br />	add eax,ecx<br /><br />	add eax,pDIBits ; add the offset to the DIB bits<br />	mov ecx,cPixel<br />	; The dword must be reversed to set the right RGB order<br />	bswap ecx<br />	shr ecx,8<br />	mov DWORD PTR &#91;eax&#93;,ecx<br /><br />	ret<br />SetPixelD endp</code></pre><br /><br />EDIT : Just thought of this, in a DIB section with a positive height you know that you access it upside dwon right ? Pixel 0 is the bottom left pixel.</div>
+    <div class="meta">Posted on 2003-11-26 22:01:41 by donkey</div>
+   </div>
+   <div class="post" id="post-125672">
+    <div class="subject"><a href="#post-125672">problem aultering bitmap</a></div>
+    <div class="body"><div class="quote">Just thought of this, in a DIB section with a positive height you know that you access it upside dwon right ? Pixel 0 is the bottom left pixel.</div><br /><br />I never knew that</div>
+    <div class="meta">Posted on 2003-11-26 22:12:01 by ENF</div>
+   </div>
+   <div class="post" id="post-125674">
+    <div class="subject"><a href="#post-125674">problem aultering bitmap</a></div>
+    <div class="body">I fixed it.<br />The problem was that my window procedure was never receiving WM_PAINT....calling InvalidateRect before UpdateWindow has solved it. I had thought the whole point of the UpdateWinodw function was to send the WM_PAINT message.</div>
+    <div class="meta">Posted on 2003-11-26 23:01:38 by ENF</div>
+   </div>
+   <div class="post" id="post-125676">
+    <div class="subject"><a href="#post-125676">problem aultering bitmap</a></div>
+    <div class="body">UpdateWindow wll only send a WM_PAINT if there is a region marked for update with InvalidateRect.<br /><br /><div class="quote">The function sends a WM_PAINT message directly to the window procedure of the specified window, bypassing the application queue. If the update region is empty, no message is sent.</div></div>
+    <div class="meta">Posted on 2003-11-26 23:16:54 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

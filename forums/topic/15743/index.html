@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>need help with function - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15743" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15743">need help with function</a></p>
+   <div class="post" id="post-121941">
+    <div class="subject"><a href="#post-121941">need help with function</a></div>
+    <div class="body">hi everyone!<br />I want to make a function for everyone to change a icon.<br />but i have to less experience:<br /><br /><pre><code><br /><br /><br />.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include &lt;windows.inc&gt;<br />include &lt;kernel32.inc&gt;<br />include &lt;user32.inc&gt;<br />includelib &lt;user32.lib&gt;<br />includelib &lt;kernel32.lib&gt;<br /><br />.data<br />lpmsg1 DB 1024 DUP &#40;0&#41;<br />lpmsg  DD 0<br />ErrorMessage macro<br />;  DWORD lpmsg;string pointer<br />  call GetLastError<br />  mov ecx,eax<br />  invoke FormatMessage, FORMAT_MESSAGE_ALLOCATE_BUFFER or FORMAT_MESSAGE_FROM_SYSTEM, NULL, eax, LANG_NEUTRAL,ADDR lpmsg,0,NULL<br />  invoke MessageBox, NULL, lpmsg, 0, MB_OK<br />endm<br />     <br />     hRessource   DD  0<br />     hIcon        DD  0<br />     hLockRes     DD  0<br />     hExe         DD  0<br />     hOwnIcon     DD  0<br />     hInstance    DD  0<br />     Error     DB  'Super-Error', 0<br />     Buffer    DB  'c&#58;\target1.exe', 0<br /><br /><br />     <br />checkforErros macro HandleRe&#58;REQ<br />LOCAL error1<br />LOCAL noError<br />  OR EAX, EAX<br />  JZ error1<br />     MOV HandleRe, EAX<br />     JMP noError<br />  error1&#58;<br />     INVOKE MessageBox, 0, ADDR Error, ADDR Error,0<br />     JMP endesdf<br />  noError&#58;<br />ENDM<br /><br />.code<br />start&#58;<br />MOV EAX, offset lpmsg1<br />MOV lpmsg, EAX<br /><br />invoke GetModuleHandle, NULL<br />mov hInstance, eax<br /><br />INVOKE LoadLibrary, addr Buffer            ;hExe<br />   checkforErros hExe<br /><br />INVOKE LoadIcon, hExe, 1000<br />   checkforErros hIcon<br /><br />INVOKE LoadIcon, hInstance, 1000<br />   checkforErros hOwnIcon<br /><br />INVOKE LockResource, hIcon<br />INVOKE BeginUpdateResource, ADDR Buffer, 0<br />;ErrorMessage<br />   checkforErros hRessource<br />mov ecx, SUBLANG_DEFAULT<br />shl ecx, 10<br />add ecx, LANG_NEUTRAL<br />invoke SizeofResource, hRessource, hOwnIcon<br />INVOKE UpdateResource, hRessource, RT_ICON, hIcon,ECX, hOwnIcon, eax<br /><br />endesdf&#58;<br />ret<br />END start<br /></code></pre><br />I updated the source.<br /><br />Greets BBB</div>
+    <div class="meta">Posted on 2003-10-21 05:10:48 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-121943">
+    <div class="subject"><a href="#post-121943">need help with function</a></div>
+    <div class="body">I can't begin to list the misconceptions there, first the value returned by LoadIcon is not useable in update resource, you must first convert it to raw data. The proper sequence to update a resource is as follows:<br /><pre><code>; Create buffers to store the data<br />invoke GlobalAlloc,GMEM_FIXED,ResourceSize<br />mov pData,eax<br /><br />; ##################################<br />; You must copy the data into the buffer here<br />; ##################################<br /><br />invoke BeginUpdateResource,OFFSET TargetFile,FALSE<br />mov hUpdate,eax<br /><br />; Write the data to the resource section<br />invoke UpdateResource, hUpdate, RT_TYPE, ResNumber, NULL, pData, ResourceSize<br /><br />; End the update<br />invoke EndUpdateResource,hUpdate,FALSE<br /><br />; Done with the buffer<br />invoke GlobalFree,pData</code></pre></div>
+    <div class="meta">Posted on 2003-10-21 05:33:41 by donkey</div>
+   </div>
+   <div class="post" id="post-121946">
+    <div class="subject"><a href="#post-121946">need help with function</a></div>
+    <div class="body">more things about your code:<br /><pre><code>&#91;b&#93;INVOKE LoadLibrary, addr Buffer&#91;/b&#93;            ;hExe<br />   checkforErros hExe<br /><br />&#91;b&#93;INVOKE BeginUpdateResource, ADDR Buffer, 1&#91;/b&#93;<br />   checkforErros hRessource</code></pre><br />You cannot update the resources of a file that is executing, if you perform a load library the file is in effect executing at that point and you are not allowed to update the resources. The BeginUpdateResource will always fail.:<br /><div class="quote"><strong>pFileName</strong><br /> Pointer to a null-terminated string that specifies the executable file in which to update resources. An application must be able to obtain write access to this file; <strong>it cannot be currently executing</strong>. If pFileName does not specify a full path, the system searches for the file in the current directory. </div></div>
+    <div class="meta">Posted on 2003-10-21 05:45:53 by donkey</div>
+   </div>
+   <div class="post" id="post-121951">
+    <div class="subject"><a href="#post-121951">need help with function</a></div>
+    <div class="body">Maybe you should use SetClassLong.<br /><br />C example : SetClassLong(hwndDlg,GCL_HICON,(LONG)LoadIcon(hInstance,MAKEINTRESOURCE(IDC_ICONO)));<br /><br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winui/WinUI/WindowsUserInterface/Windowing/WindowClasses/WindowClassReference/WindowClassFunctions/SetClassLong.asp">MSDN SetClassLong</a> <br /><br />I hope it works for you.<br />:alright:</div>
+    <div class="meta">Posted on 2003-10-21 06:19:41 by Eternal Idol Birmingham</div>
+   </div>
+   <div class="post" id="post-121985">
+    <div class="subject"><a href="#post-121985">need help with function</a></div>
+    <div class="body">Hi donkey,<br /><br />the things wich are clear for me yoiu underlined.:tongue: <br />But how the Icon(with fails  everytime) and obtain the datasize is unclear for me.<br /><pre><code><br />; Create buffers to store the data<br />invoke GlobalAlloc,GMEM_FIXED,ResourceSize<br />mov pData,eax<br /><br />; ##################################<br />; You must copy the data into the buffer here<br />; ##################################<br /></code></pre><br />that's just the dingbat i stop at.<br /><br />Greets BBB!</div>
+    <div class="meta">Posted on 2003-10-21 11:04:11 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-122082">
+    <div class="subject"><a href="#post-122082">need help with function</a></div>
+    <div class="body">Dont let my thread die, please.<br /><br />Greets BBB</div>
+    <div class="meta">Posted on 2003-10-22 05:35:30 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-122084">
+    <div class="subject"><a href="#post-122084">need help with function</a></div>
+    <div class="body">I think I already told you how to do it...<br />:o</div>
+    <div class="meta">Posted on 2003-10-22 05:45:12 by Eternal Idol Birmingham</div>
+   </div>
+   <div class="post" id="post-122086">
+    <div class="subject"><a href="#post-122086">need help with function</a></div>
+    <div class="body">Hi, i want to change the exe-icon.<br />But I have troubles to load and convert the icon from the sourceexe.<br /><br />Greets</div>
+    <div class="meta">Posted on 2003-10-22 05:51:17 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-122089">
+    <div class="subject"><a href="#post-122089">need help with function</a></div>
+    <div class="body">If you want to change it in design time download reshacker.<br /><br />Do you want to change the icon on run-time?<br /><br />If you, then you must use the SetClassLong as I told you before.</div>
+    <div class="meta">Posted on 2003-10-22 05:56:33 by Eternal Idol Birmingham</div>
+   </div>
+   <div class="post" id="post-122092">
+    <div class="subject"><a href="#post-122092">need help with function</a></div>
+    <div class="body">thank Eternal Idol Birmingham.<br />But I dont want to change it at runtime. And the icon shuld be replaced.<br />Si I cant use your suggestion, or?<br /><br />Greets your BBB</div>
+    <div class="meta">Posted on 2003-10-22 06:10:52 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-122093">
+    <div class="subject"><a href="#post-122093">need help with function</a></div>
+    <div class="body">Read this please:<br /><br />DOWNLOAD RESHACKER : <a target="_blank" href="http://www.users.on.net/johnson/resourcehacker/">http://www.users.on.net/johnson/resourcehacker/</a><br /><br />Now I'm your babysitter ;)</div>
+    <div class="meta">Posted on 2003-10-22 06:18:44 by Eternal Idol Birmingham</div>
+   </div>
+   <div class="post" id="post-122096">
+    <div class="subject"><a href="#post-122096">need help with function</a></div>
+    <div class="body">hi Eternal Idol Birmingham<br />i want to programm that by my self.<br />I love programming.<br /><br />Greets !</div>
+    <div class="meta">Posted on 2003-10-22 06:41:31 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-122098">
+    <div class="subject"><a href="#post-122098">need help with function</a></div>
+    <div class="body">You were in right path then, you want to make a resouce editor.<br />Please  try to improve your English.<br /><br />I'll try to help you next weekend, now I'm at work and I'cant code that much.<br /><br />See you.<br /><br />:)</div>
+    <div class="meta">Posted on 2003-10-22 06:46:30 by Eternal Idol Birmingham</div>
+   </div>
+   <div class="post" id="post-122099">
+    <div class="subject"><a href="#post-122099">need help with function</a></div>
+    <div class="body">Eternal Idol Birmingham your shouldn;t code anything for me.<br />That I want programm it by my selfe should be clear cuz i startet to programm it.<br /><br />Greets ! <br />I have just problems to get the icon from a exe.<br /><pre><code><br />INVOKE LoadLibrary, addr Buffer            ;hExe<br />   checkforErros hExe<br />INVOKE LoadIcon, hExe, 100<br />;fails !!!!!! but why<br /></code></pre><br /><br />Greets your BBB</div>
+    <div class="meta">Posted on 2003-10-22 06:59:20 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-122118">
+    <div class="subject"><a href="#post-122118">need help with function</a></div>
+    <div class="body">now the source ist like this:<br /><br /><pre><code><br /><br />.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include &lt;windows.inc&gt;<br />include &lt;kernel32.inc&gt;<br />include &lt;user32.inc&gt;<br />includelib &lt;user32.lib&gt;<br />includelib &lt;kernel32.lib&gt;<br /><br />.data<br />lpmsg1 DB 1024 DUP &#40;0&#41;<br />lpmsg  DD 0<br />ErrorMessage macro<br />;  DWORD lpmsg;string pointer<br />  call GetLastError<br />  mov ecx,eax<br />  invoke FormatMessage, FORMAT_MESSAGE_ALLOCATE_BUFFER or FORMAT_MESSAGE_FROM_SYSTEM, NULL, eax, LANG_NEUTRAL,ADDR lpmsg,0,NULL<br />  invoke MessageBox, NULL, lpmsg, 0, MB_OK<br />endm<br />     <br />     hRessource   DD  0<br />     hIcon        DD  0<br />     hLockRes     DD  0<br />     hExe         DD  0<br />     hOwnIcon     DD  0<br />     hInstance    DD  0<br />     Error     DB  'Super-Error', 0<br />     Buffer    DB  'c&#58;\target1.exe', 0<br /><br /><br />     <br />checkforErros macro HandleRe&#58;REQ<br />LOCAL error1<br />LOCAL noError<br />  OR EAX, EAX<br />  JZ error1<br />     MOV HandleRe, EAX<br />     JMP noError<br />  error1&#58;<br />     INVOKE MessageBox, 0, ADDR Error, ADDR Error,0<br />     JMP endesdf<br />  noError&#58;<br />ENDM<br /><br />.code<br />start&#58;<br />MOV EAX, offset lpmsg1<br />MOV lpmsg, EAX<br /><br />invoke GetModuleHandle, NULL<br />mov hInstance, eax<br /><br />INVOKE LoadLibrary, addr Buffer            ;hExe<br />   checkforErros hExe<br /><br />INVOKE LoadIcon, hExe, 1000<br />   checkforErros hIcon<br /><br />INVOKE LoadIcon, hInstance, 1000<br />   checkforErros hOwnIcon<br /><br />INVOKE LockResource, hIcon<br />INVOKE BeginUpdateResource, ADDR Buffer, 0<br />;ErrorMessage<br />   checkforErros hRessource<br />mov ecx, SUBLANG_DEFAULT<br />shl ecx, 10<br />add ecx, LANG_NEUTRAL<br />invoke SizeofResource, hRessource, hOwnIcon<br />INVOKE UpdateResource, hRessource, RT_ICON, hIcon,ECX, hOwnIcon, eax<br /><br />endesdf&#58;<br />ret<br />END start<br /><br /><br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-10-22 09:10:05 by Bubu-Boy</div>
+   </div>
+   <div class="post" id="post-128314">
+    <div class="subject"><a href="#post-128314">?</a></div>
+    <div class="body">come on! Boby-Boy is back.<br /><br />Whats about my cute sample, who will tell me, what i have made wrong.<br /><br /><br />Thanks you in advance.<br />Your BBB</div>
+    <div class="meta">Posted on 2003-12-18 14:02:15 by Bubu-Boy</div>
+   </div>
+  </div>
+ </body>
+</html>

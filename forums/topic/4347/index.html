@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Can't get this to work :( - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4347" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=4347">Can't get this to work :(</a></p>
+   <div class="post" id="post-30153">
+    <div class="subject"><a href="#post-30153">Can't get this to work :(</a></div>
+    <div class="body">Hey folks,<br /><br />I can't seem to get this code to work. It is simply supposed to connect to a telnet server and display the first line it gets in a message box. <br />The Final Product is supposed to work like telnet, only that every line it receives is written to a listbox, and special commands are send to the telnet server.<br />PS: The progi establishes the connection but doesn't show the recv data.<br /><br /><pre><code><br />.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\masm32.inc<br />include	\masm32\include\wsock32.inc<br /><br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\masm32.lib<br />includelib \masm32\lib\wsock32.lib<br /><br />DlgProc PROTO &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD<br /><br />.data<br />sin sockaddr_in &lt;&gt;<br />wsadata WSADATA &lt;&gt;<br />host db &quot;host.domain.com&quot;,0<br />port dd 23<br />ErrorMsg        db &quot;An Error occured&quot;,0<br />ErrorCapt       db &quot;Error&quot;,0<br />DlgName db &quot;test&quot;,0<br /><br />.data?<br />hInstance  HINSTANCE ?<br />sock       dd ?<br />hMemory dd ?                <br />buffer dd ?           <br />available_data dd ?      <br />actual_data_read dd ?    <br /><br />.const<br />IDC_APPLY     equ      3001 <br />WM_SOCKET equ WM_USER+100    <br />.code<br />start&#58;<br />invoke GetModuleHandle,NULL<br />mov hInstance, eax<br />invoke DialogBoxParam,hInstance,addr DlgName,NULL,addr DlgProc,NULL <br />invoke ExitProcess,eax <br /><br />DlgProc proc hWin&#58;DWORD,uMsg&#58;DWORD,wParam&#58;DWORD,lParam&#58;DWORD<br />.IF uMsg==WM_SOCKET            <br />        mov eax,lParam <br />        .IF ax==FD_CONNECT           <br />            shr eax,16                              <br />            .IF ax==NULL <br />            .ENDIF <br />        .ELSEIF ax==FD_READ <br />            shr eax,16 <br />            .IF ax==NULL <br />              invoke ioctlsocket, socket, FIONREAD, addr available_data <br />                .IF eax==NULL<br />                 invoke GlobalAlloc, GHND, available_data <br />                 mov hMemory,eax <br />                 invoke GlobalLock, eax <br />                 mov buffer,eax <br />                 invoke recv, sock, buffer, available_data, 0 <br />                 mov actual_data_read, eax <br />                 invoke MessageBox,NULL,addr buffer,addr ErrorCapt,MB_OK or MB_ICONWARNING            <br />                 invoke GlobalUnlock, buffer <br />                 invoke GlobalFree, hMemory<br />                .ENDIF <br />            .ENDIF <br />        .ELSEIF ax==FD_CLOSE <br />            shr eax,16 <br />            .IF ax==NULL <br />            .ENDIF <br />        .ENDIF <br />.ELSEIF uMsg==WM_COMMAND <br />      mov eax,wParam <br />      mov edx,wParam <br />      shr edx,16 <br />       .IF dx==BN_CLICKED <br />          .IF ax==IDC_APPLY<br />             invoke WSAStartup,101h,addr wsadata<br />             .IF eax != NULL<br />                 invoke MessageBox,NULL,addr ErrorMsg,addr ErrorCapt,MB_OK or MB_ICONWARNING<br />             .ELSE<br />                 invoke socket,AF_INET,SOCK_STREAM,0<br />                 .IF eax != INVALID_SOCKET<br />                     mov sock,eax<br />                     mov sin.sin_family, AF_INET <br />                     invoke htons, port <br />                     mov sin.sin_port,ax                  <br />                     invoke gethostbyname,addr host<br />                     mov eax,&#91;eax+12&#93;                <br />                     mov eax,&#91;eax&#93;                      <br />                     mov eax,&#91;eax&#93;                     <br />                     mov sin.sin_addr,eax <br />                     invoke WSAAsyncSelect, sock, hWin,WM_SOCKET, FD_CONNECT+FD_READ+FD_CLOSE <br />                     invoke connect,sock,addr sin,sizeof sin <br />                 .ELSE<br />                     invoke MessageBox,NULL,addr ErrorMsg,addr ErrorCapt,MB_OK or MB_ICONWARNING<br />                 .ENDIF                         <br />              .ENDIF<br />           .ENDIF<br />        .ENDIF<br />.ELSEIF uMsg==WM_INITDIALOG<br /><br />.ELSEIF uMsg==WM_CLOSE<br />        invoke closesocket,sock<br />        invoke WSACleanup<br />        invoke EndDialog,hWin,NULL<br /><br />.ENDIF<br />ret<br />DlgProc endp<br />end start<br /></code></pre><br /><br />Thanks in advance<br />Olli</div>
+    <div class="meta">Posted on 2002-03-21 08:32:22 by Olli</div>
+   </div>
+   <div class="post" id="post-30156">
+    <div class="subject"><a href="#post-30156">Can't get this to work :(</a></div>
+    <div class="body"><pre><code><br />  invoke ioctlsocket, socket, FIONREAD, addr available_data <br /></code></pre><br /><br />You didn't call your socket handle 'socket', but 'sock'. when you use 'socket' it will probably assemble with the address of the function socket as parameter which is not what you want.<br /><br />I tried your code changing that line and it received data but got stuck on the messagebox.. Using my wshook tool I can see the data received (see screenshot below).<br /><br />Thomas<br /><br /><strong>edit:</strong>P.S. the data you receive *is* correct, I get the same using windows' telnet, but the server is waiting for your response before it shows more.</div>
+    <div class="meta">Posted on 2002-03-21 09:25:35 by Thomas</div>
+   </div>
+   <div class="post" id="post-30169">
+    <div class="subject"><a href="#post-30169">Thanks a lot</a></div>
+    <div class="body">ok, i got that done it works. Now i got another Problem and i really can't figure out how to do it. I read through a whole bunch of source code. But no way. So the problem is:<br />when i logon to my server with telnet i get this:<br /><br />---Welcome on SuSE Linux 7.3---<br /><br />login: _<br /><br />But i don't get this text over my program. So maybe u can help me to get this work and tell me how to login on my server via my program.<br />(The code for it is above)<br /><br />Thanks in Advance,<br />Olli</div>
+    <div class="meta">Posted on 2002-03-21 12:27:58 by Olli</div>
+   </div>
+   <div class="post" id="post-30171">
+    <div class="subject"><a href="#post-30171">Can't get this to work :(</a></div>
+    <div class="body">I think you should give the server a reply to those initial values showed in my first screenshot, before the server will ask your login.<br />However I don't know much about the telnet protocol so you'll have to look that up yourself. Have a look at <a target="_blank" href="www.rfc-editor.org">www.rfc-editor.org</a>.<br />When I connect to the same server using telnet (via wshook), I get the same initial values as with your program, but the telnet client also sends a lot, even though I didn't type a word:<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-03-21 12:38:36 by Thomas</div>
+   </div>
+   <div class="post" id="post-30172">
+    <div class="subject"><a href="#post-30172">Can't get this to work :(</a></div>
+    <div class="body">Pressed enter too soon, here's the screenshot:</div>
+    <div class="meta">Posted on 2002-03-21 12:39:26 by Thomas</div>
+   </div>
+   <div class="post" id="post-30182">
+    <div class="subject"><a href="#post-30182">so far</a></div>
+    <div class="body">Thanks again Thomas,<br /><br />I might not be the smartest, but I learned something about winsock and telnet. I've seen in the source code for http clients that I have to send a request by a line starting with get.<br />Ok so i checked the rfc but i'm to much a newbie to understand this. I just don't get a request together i could even try something with. I'm sorry. Maybe there is someone out there who could give me a link for a code snippet how to establish a connection with an telnet server.<br /><br />Thanks in Advance,<br />Olli</div>
+    <div class="meta">Posted on 2002-03-21 13:58:57 by Olli</div>
+   </div>
+   <div class="post" id="post-30221">
+    <div class="subject"><a href="#post-30221">Can't get this to work :(</a></div>
+    <div class="body">Done. :)<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=765&amp;highlight=telnet">Telnet Sever thread</a> <br /><br />Good example (but a little confusing) of how to setup a telnet server on a windows machine...<br /><br />If you get your code to work I'd appreciate it if you could post it :)  Never too much network code sources<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-03-21 17:54:29 by Sliver</div>
+   </div>
+   <div class="post" id="post-30257">
+    <div class="subject"><a href="#post-30257">Can't get this to work :(</a></div>
+    <div class="body">Don't forget to look into terminal emulation.<br /><br />HTTP doesn't use terminal emulation so all you have to do is send a GET request.</div>
+    <div class="meta">Posted on 2002-03-21 23:48:52 by eet_1024</div>
+   </div>
+   <div class="post" id="post-30297">
+    <div class="subject"><a href="#post-30297">grrrrr</a></div>
+    <div class="body">It's me again,<br /><br />i don't get it. I read through the rfc's that might give me some information. But i don't know how to realize them in code.<br />Actually my program is something like a telnet terminal, right ?<br />Just that it receives normal text and send commands over button clicks. I really need ur help again because i don't understand this telnet protocol.<br /><br />Edit:<br />I found this file in the internet, maybe someone could translate it so a newbie like me undestands it.<br /><a target="_blank" href="http://cs.felk.cvut.cz/~marekr2/telnet.asm">http://cs.felk.cvut.cz/~marekr2/telnet.asm</a><br /><br />I think in the beginning of the code the author assignes numeric codes to the commands like in the rfc's. But i don't understand how he establishes a telnet connection and than handles the data flow.</div>
+    <div class="meta">Posted on 2002-03-22 05:58:31 by Olli</div>
+   </div>
+   <div class="post" id="post-30464">
+    <div class="subject"><a href="#post-30464">I made it...</a></div>
+    <div class="body">Yes i made it,<br /><br />for all of us interested in it, u just have to echo the data stream u get from the server to the server. that's it. that gets the connection.</div>
+    <div class="meta">Posted on 2002-03-23 09:45:30 by Olli</div>
+   </div>
+   <div class="post" id="post-30500">
+    <div class="subject"><a href="#post-30500">SCREENSHOT</a></div>
+    <div class="body">Here is a first screenshot. I'm sending all the data streams manually yet and i'm not scanning for LF + CR yet.<br />Just so u know what it looks like. If someone wants the code mail me. The Final code is gonna be posted here once i finish the whole program. I still need some time for the terminal emulation yet.</div>
+    <div class="meta">Posted on 2002-03-23 13:25:45 by Olli</div>
+   </div>
+  </div>
+ </body>
+</html>

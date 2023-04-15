@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ASM help.. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9421" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9421">ASM help..</a></p>
+   <div class="post" id="post-69744">
+    <div class="subject"><a href="#post-69744">ASM help..</a></div>
+    <div class="body">Ok, im stumped on how Windows likes to see things:<br /><br />Here is the scenario: RSRC file has the following definition<pre><code><br />#define IRD_NAME1        123<br /><br />...<br /><br /><br />IRD_NAME1     SRGRAMMAR     DISCARDABLE   &quot;coffee.cfg&quot;</code></pre><br /><br />And it compiles fine into a .res/.obj.  Im trying to call funciton with the following params:<br /><div class="quote">HRESULT LoadCmdFromResource(<br />   HMODULE         hModule,<br />   const WCHAR    *pszResourceName,<br />   const WCHAR    *pszResourceType,<br />   WORD            wLanguage,<br />   SPLOADOPTIONS   Options<br />);</div><br /><br />The sample C++ code is this:<pre><code><br />    hr = cpRecoGrammar-&gt;LoadCmdFromResource&#40;NULL,<br />                                            MAKEINTRESOURCEW&#40;IDR_NAME1&#41;,<br />                                            L&quot;SRGRAMMAR&quot;,<br />                                            MAKELANGID&#40;LANG_NEUTRAL, SUBLANG_NEUTRAL&#41;,  // 0x0409<br />                                            SPLO_DYNAMIC&#41;;</code></pre><br /><br />And my ASM version is This:<pre><code>     mov dx, Lang_ID<br />     ole32  pIGrammar, ISpRecoGrammar_LoadCmdFromResource, NULL, offset wsGRAMERRES, offset wzGRAMMER, dx, SPLO_DYNAMIC<br />     IF_COM_ERROR 'Failed to Get Grammer From Resource File'<br /></code></pre><br /><br />With Definitions:<pre><code>        Lang_ID       dw 0409h<br />        UNICODE wsGRAMERRES, &lt;123&gt;<br />        UNICODE wzGRAMMER, &lt;SRGRAMMAR&gt;</code></pre><br /><br />I've verified that the UNICODE macro is working properly, and aligning on DWORD boundries.  NULL is allowed as a HMODULE param.  And SPLO_STATIC is being pushed properly.  Im litterally doing the same thing as the L&quot;SRGRAMMAR&quot;, so i trust this param to be correct, and the dis-assembly indicates it is pushed as an address.  So is the wsGRAMERRES, but some how, It keeps returning as a fault! That the Grammar was not loaded from resource.  The only real *unknown* here to me is the C version of MAKEINTRESOURCE.  The unicode string I've Produced was:<br /><br />wsGRAMMRES  db '1',0,'2',0,'3',0,0,0<br /><br />I really dont get it!<br />If anyone can give me direction, or see an obvious error in judgement, please let me know.  It would be appreciated!<br /><br />:confused: <br />NaN</div>
+    <div class="meta">Posted on 2002-12-07 12:05:00 by NaN</div>
+   </div>
+   <div class="post" id="post-69751">
+    <div class="subject"><a href="#post-69751">ASM help..</a></div>
+    <div class="body">Still no closer to solving this headache... However, I do have some additions to add to the Windows.inc (IMHO)<br /><br /><pre><code>;#define MAKELANGID&#40;p, s&#41;       &#40;&#40;&#40;&#40;WORD  &#41;&#40;s&#41;&#41; &lt;&lt; 10&#41; | &#40;WORD  &#41;&#40;p&#41;&#41;<br />;#define PRIMARYLANGID&#40;lgid&#41;    &#40;&#40;WORD  &#41;&#40;lgid&#41; &amp; 0x3ff&#41;<br />;#define SUBLANGID&#40;lgid&#41;        &#40;&#40;WORD  &#41;&#40;lgid&#41; &gt;&gt; 10&#41;<br />MAKELANGID MACRO pl&#58;REQ, sl&#58;REQ<br />   LOCAL aVal, aOut<br />      %aVal equ &#40;sl SHL 10&#41; or pl<br />      aOut TEXTEQU %aVal<br />      EXITM &lt;&amp;aOut&gt;<br />ENDM<br /><br />PRIMARYLANGID MACRO lgid&#58;REQ<br />   LOCAL aVal, aOut<br />   %aVal equ &#40;lgid and 03ffh&#41;<br />   aOut TEXTEQU %aVal<br />   EXITM &lt;&amp;aOut&gt;<br />ENDM<br /><br />SUBLANGID MACRO lgid&#58;REQ<br />   LOCAL aVal, aOut<br />   %aVal equ &#40;lgid SHR 10&#41;<br />   aOut TEXTEQU %aVal<br />   EXITM &lt;&amp;aOut&gt;<br />ENDM<br /></code></pre><br /><br />Enjoy<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-07 12:31:19 by NaN</div>
+   </div>
+   <div class="post" id="post-69752">
+    <div class="subject"><a href="#post-69752">ASM help..</a></div>
+    <div class="body">Ok.. I've narrowed the problem to this:<br /><br />Can anyone expain roughly how this would be casted into memory:<br /><strong>#define MAKEINTRESOURCEW(i) (LPWSTR)((ULONG_PTR)((WORD)(i)))</strong><br /><br />As i see it, I=number, trimmed to 16 bits, then refered by its address, and TOTALY unsure how the refered address turns into a string (unicode string).<br /><br />Would it be a hex number for the address like &quot;004040b8&quot; in unicode? Or would it be the number stored at that address, like&quot;123&quot; in unicode?<br /><br />Help!<br />:nan:</div>
+    <div class="meta">Posted on 2002-12-07 12:47:04 by NaN</div>
+   </div>
+   <div class="post" id="post-69755">
+    <div class="subject"><a href="#post-69755">ASM help..</a></div>
+    <div class="body"><div class="quote">Can anyone expain roughly how this would be casted into memory:<br />#define MAKEINTRESOURCEW(i) (LPWSTR)((ULONG_PTR)((WORD)(i)))</div><br /><br />The WORD cast makes a WORD from i (it should already be one though).<br />ULONG_PTR casts it to the ULONG_PTR type, a type that guarantees enough bits to store a memory pointer.<br />LPWSTR casts the ULONG_PTR type to a the LPWSTR type.<br /><br />The only thing that happens is casting of a value, nothing is referenced, the final value of the macro is the same as i, just casted to a specific type. <br /><br />I think this should work:<br /><pre><code>ole32  pIGrammar, ISpRecoGrammar_LoadCmdFromResource, NULL, 123 , offset wzGRAMMER, dx, SPLO_DYNAMIC</code></pre><br /><br />btw, if you really want you can use a unicode string for a resource ID, but you need to prefix it with the sharp-sign (L&quot;#123&quot;).<br /><br />Thomas<br /><br />P.S. PSDK on &quot;MAKEINTRESOURCE&quot;:<br /><div class="quote">....<br />Return Values<br />The return value is the specified value in the low-order word and zero in the high-order word.<br />....</div> :)</div>
+    <div class="meta">Posted on 2002-12-07 13:01:03 by Thomas</div>
+   </div>
+   <div class="post" id="post-69757">
+    <div class="subject"><a href="#post-69757">ASM help..</a></div>
+    <div class="body">Thanx!<br /><br />I finally discovered this on my own.  The :mad:*&amp;^(#:mad: documentation is very missleading in this regard.   <br /><br />(WCHAR *)  pszUnicodeString<br /><br />doesn't say ULONG to me!!<br /><br />As well, the required WORD for Language ID is also a ULONG type when calling from MASM... ((:mad:$#@#$:mad: Documentation)).... <br /><br />The working Solution is (using my above macros):<pre><code>&#91;b&#93;ole32  pIGrammar, ISpRecoGrammar_LoadCmdFromResource, NULL, 129, offset wzGRAMMER, MAKELANGID&#40;LANG_NEUTRAL, SUBLANG_NEUTRAL&#41;, SPLO_STATIC&#91;/b&#93;</code></pre><br /><br />Thanx again for confirming this Thomas!<br />:NaN:</div>
+    <div class="meta">Posted on 2002-12-07 13:36:17 by NaN</div>
+   </div>
+   <div class="post" id="post-69919">
+    <div class="subject"><a href="#post-69919">ASM help..</a></div>
+    <div class="body">NaN, this is a great place to seek <em>ASM help..</em> but a specific thread name would of been expected from a moderator ;)</div>
+    <div class="meta">Posted on 2002-12-08 20:32:10 by huh</div>
+   </div>
+   <div class="post" id="post-69931">
+    <div class="subject"><a href="#post-69931">ASM help..</a></div>
+    <div class="body"><div class="quote">#define MAKEINTRESOURCEW(i) (LPWSTR)((ULONG_PTR)((WORD)(i)))</div> <br /><br />...and bibbety babbety boo.  Put 'em together and what have you got?  DWORD!!!!!  I love ASM!</div>
+    <div class="meta">Posted on 2002-12-08 21:23:18 by drhowarddrfine</div>
+   </div>
+   <div class="post" id="post-69935">
+    <div class="subject"><a href="#post-69935">ASM help..</a></div>
+    <div class="body"><strong>drhowarddrfinedrhoward</strong>, lol :grin:<br /><br /><strong>huh</strong>, you are right.  I will admit I tend to be pretty bad for that.  But on the flipside, im not asking new questions too often :tongue: <br /><br />NaN</div>
+    <div class="meta">Posted on 2002-12-08 22:19:41 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

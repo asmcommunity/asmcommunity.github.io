@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Some pro task - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26880" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26880">Some pro task</a></p>
+   <div class="post" id="post-193439">
+    <div class="subject"><a href="#post-193439">Some pro task</a></div>
+    <div class="body">I would love to read ideas, algos or code on
+two tasks
+1. Recursive file search
+2. Implementation of vertical block selection\manipulations
+in wnd classes such edit and richedit.</div>
+    <div class="meta">Posted on 2001-02-13 13:09:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-193440">
+    <div class="subject"><a href="#post-193440">Some pro task</a></div>
+    <div class="body">Not 'Optimized' I'll leave that for you.
+Recursive file search:
+
+GLOBAL Variables:
+.data
+wfd WIN32_FIND_DATA<>
+szSearchStart db "c:\*",0
+
+invoke FindAllFiles,addr szSearchStart
+<pre><code>
+FindAllFiles proc PathStr:DWORD
+
+LOCAL DispBuffer:BYTE
+LOCAL PathBuffer:BYTE
+LOCAL CompByte:BYTE
+LOCAL Compare1:DWORD
+LOCAL Compare2:DWORD
+LOCAL hSearch:DWORD
+
+;Begin the search
+invoke FindFirstFile,PathStr,addr wfd
+.if    eax != INVALID_HANDLE_VALUE
+   mov    hSearch,eax
+   .repeat
+      mov    eax,wfd.dwFileAttributes
+      .if    (eax & FILE_ATTRIBUTE_DIRECTORY)
+;If this is a directory
+         mov    compare1,1
+         mov    compare2,1
+         invoke lstrcpy,addr CompByte,addr wfd.cFileName
+         .if    byte ptr == 02Eh ;.
+            mov    Compare1,0
+         .endif
+         .if    byte ptr == 02Eh ;..
+            mov    Compare2,0
+         .endif
+         .if    (Compare1 != 0) && (Compare2 != 0)
+;If this not '.' or '..'
+            invoke lstrcpy,addr PathBuffer,PathStr
+            invoke lstrlen,addr PathBuffer
+            dec    eax
+            mov    byte ptr,0
+            invoke lstrcat,addr PathBuffer,addr wfd.cFileName
+            invoke lstrlen,addr PathBuffer
+            mov    byte ptr,05Ch ;\
+            inc    eax
+            mov    byte ptr,02Ah ;*
+            inc    eax
+            mov    byte ptr,0
+            invoke FindAllFiles,addr PathBuffer ;The Recursion
+         .endif
+      .else
+;This is a file (do something with it here)
+         invoke lstrcpy,addr DispBuffer,PathStr
+         invoke lstrlen,addr DispBuffer
+         dec    eax
+         mov    byte ptr,0
+         invoke lstrcat,addr DispBuffer,addr wfd.cFileName
+;We just built a fully qualified path/filename
+;most file functions need this
+      .endif
+      invoke FindNextFile,hSearch,addr wfd
+      .if    eax == 0
+         invoke GetLastError
+      .endif
+   .until (eax == ERROR_NO_MORE_FILES)
+.endif
+ret
+
+FindAllFiles endp               
+</code></pre>
+
+Even though this is very fast, if you can improve it please share it with me. Also, I'm also interested in the vertical block stuff.
+
+This message was edited by anon, on 2/13/2001 4:35:28 PM</div>
+    <div class="meta">Posted on 2001-02-13 16:34:00 by anon</div>
+   </div>
+   <div class="post" id="post-193441">
+    <div class="subject"><a href="#post-193441">Some pro task</a></div>
+    <div class="body">Thanks! Well done.
+Now my part of the work begins with opt.
+Opt #1
+We replace all this:
+;If this is a directory
+;         mov    Compare1,1
+;         mov    Compare2,1
+;         invoke lstrcpy,addr CompByte,addr wfd.cFileName
+;         .if    byte ptr == 02Eh ;.
+;            mov    Compare1,0
+;         .endif
+;         .if    byte ptr == 02Eh ;..
+;            mov    Compare2,0
+;         .endif
+;         .if    (Compare1 != 0) && (Compare2 != 0)
+
+With just one line:
+          .if byte ptr wfd.cFileName !=2Eh \
+	&& byte ptr wfd.cFileName[1] !=2Eh ;!
+(it's devided by two 'cause Hiro doesn't let me make
+lenthy lines :)
+So we don't need the 4 local vars. And this part in average
+will be ~ 200 - 300 times faster :)
+Opt #2
+Not so effective as the above just 4 times faster :)
+We replace this 5 lines
+;            mov    byte ptr,05Ch ;\
+;            inc    eax
+;            mov    byte ptr,02Ah ;*
+;            inc    eax
+;            mov    byte ptr,0
+With this one:
+	mov dword ptr ,02A5Ch
+
+It's just the beginning, but I already can say -
+all ls* functions need to be replaced with faster analogs
+I'll send them for you proc by proc inside some comparing 
+test programs so you can see yourself how much it can be
+speeded up.
+All credits are yours :)
+It hardest part to find at least one first solution,
+next is much easier.
+The Svin.</div>
+    <div class="meta">Posted on 2001-02-14 06:08:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-193442">
+    <div class="subject"><a href="#post-193442">Some pro task</a></div>
+    <div class="body">No comments - but it shorter and MUCH faster!
+;If this not '.' or '..'
+	mov edx,PathStr
+	lea ecx,PathBuffer
+@@:	mov al,
+	mov ,al
+	inc edx
+	inc ecx
+	or al,al 
+	jne @B
+
+	sub ecx,2
+	lea edx,wfd.cFileName
+@@:	mov al,
+	mov ,al
+	inc edx
+	inc ecx
+	or al,al
+	jne @B			
+	mov dword ptr ,02A5Ch
+;            invoke lstrcpy,addr PathBuffer,PathStr 
+;            invoke lstrlen,addr PathBuffer		
+;            dec    eax			
+;            mov    byte ptr,0 
+;            invoke lstrcat,addr PathBuffer,addr wfd.cFileName 
+;            invoke lstrlen,addr PathBuffer		
+;            mov dword ptr ,02A5Ch  
+
+            invoke FindAllFiles,addr PathBuffer ;The Recursion
+         .endif
+      .else
+;This is a file (do something with it here)
+
+
+;         invoke lstrcpy,addr DispBuffer,PathStr
+;         invoke lstrlen,addr DispBuffer
+;         dec    eax
+;         mov    byte ptr,0
+;         invoke lstrcat,addr DispBuffer,addr wfd.cFileName
+
+	mov edx,PathStr
+	lea ecx,DispBuffer
+@@:	mov al,
+	mov ,al
+	inc edx
+	inc ecx
+	or al,al 
+	jne @B
+	sub ecx,2
+
+	lea edx,wfd.cFileName
+@@:	mov al,
+	mov ,al
+	inc edx
+	inc ecx
+	or al,al
+	jne @B</div>
+    <div class="meta">Posted on 2001-02-14 07:44:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-193443">
+    <div class="subject"><a href="#post-193443">Some pro task</a></div>
+    <div class="body">I knew you could do it :)
+You are a Hero !</div>
+    <div class="meta">Posted on 2001-02-14 09:57:00 by anon</div>
+   </div>
+   <div class="post" id="post-193444">
+    <div class="subject"><a href="#post-193444">Some pro task</a></div>
+    <div class="body">Any time :)
+We can actually make the proc even shorter
+by doing CopyCat routin as local procedure.
+It's quite simple, whole proc will now look
+like this: 
+
+FindAllFiles proc PathStr:DWORD
+LOCAL DispBuffer:BYTE
+LOCAL PathBuffer:BYTE
+LOCAL hSearch:DWORD
+
+;Begin the search
+
+invoke FindFirstFile,PathStr,addr wfd
+.if    eax != INVALID_HANDLE_VALUE
+   mov    hSearch,eax
+   .repeat
+      mov    eax,wfd.dwFileAttributes
+      .if    (eax & FILE_ATTRIBUTE_DIRECTORY)
+          .if byte ptr wfd.cFileName !=2Eh \
+           && byte ptr wfd.cFileName[1] !=2Eh ;!
+;If this not '.' or '..'
+	     lea ecx,PathBuffer
+	     all CopyCatProc
+             mov dword ptr ,02A5Ch
+            invoke FindAllFiles,addr PathBuffer ;The Recursion
+         .endif
+      .else
+;This is a file (do something with it here)
+	lea ecx,DispBuffer
+	call CopyCatProc
+
+;We just built a fully qualified path/filename
+;most file functions need this
+      .endif
+      invoke FindNextFile,hSearch,addr wfd
+      .if    eax == 0
+         invoke GetLastError
+      .endif
+   .until (eax == ERROR_NO_MORE_FILES)
+.endif
+ret
+;local proc - please note - not ret but retn at the end.
+CopyCatProc equ $
+	mov edx,PathStr
+@@:	mov al,
+	mov ,al
+	inc edx
+	inc ecx
+	or al,al 
+	jne @B
+	sub ecx,2
+	lea edx,wfd.cFileName
+@@:	mov al,
+	mov ,al
+	inc edx
+	inc ecx
+	or al,al
+	jne @B
+	retn
+
+FindAllFiles endp               
+
+BTW: And if you want to search for files with particular pattern
+(for ex.: *.dll) what algorithm whould you make?
+It's been a plesure to talk about coding.
+The Svin.</div>
+    <div class="meta">Posted on 2001-02-14 16:51:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-193445">
+    <div class="subject"><a href="#post-193445">Some pro task</a></div>
+    <div class="body">Well, This will work...
+
+At this point in the routine,
+<pre><code>
+;This is a file (do something with it here)
+invoke lstrlen,addr wfd.cFileName
+sub    eax,3
+.if    dword ptr == 6C6C64h ;lld
+   ;display the file or whatever
+.endif
+</code></pre>
+
+I'm sure you can do better ;)
+Also, very nice talking to you!</div>
+    <div class="meta">Posted on 2001-02-14 17:37:00 by anon</div>
+   </div>
+  </div>
+ </body>
+</html>

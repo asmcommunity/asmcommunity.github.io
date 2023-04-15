@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>More fun with MACROS - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26649" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26649">More fun with MACROS</a></p>
+   <div class="post" id="post-192451">
+    <div class="subject"><a href="#post-192451">More fun with MACROS</a></div>
+    <div class="body">More fun with MACROS
+
+(Remember: Angle brackets have been replaced with [] brackets)
+
+Here's some examples (and descriptions) of some of my macros. Lots of them are for COM, but just ignore that if your boat don't float there, and see what you can learn.
+
+First, COM methods return something called a hResult, a 32 bit number which packs lots of info. It uses the most sig bit as a PASS/FAIL flag.
+
+So, they can be tested with a simple:
+
+{invoke a COM method}
+test eax, eax
+.IF !SIGN?
+  ;; it passed
+.ENDIF
+
+Ugh... personally, I hate obscure code. !SIGN? means NOT the SIGN bit... now does it set that for PASS or FAIL? Ummmm...
+
+So I alias this like so:
+
+SUCCEEDED   TEXTEQU     [!!SIGN?]
+FAILED      TEXTEQU     [!!SUCCEEDED]
+
+Now the code is more readable
+
+{invoke a COM method}
+test eax, eax
+.IF SUCCEEDED
+  ;; it passed
+.ENDIF
+
+(If i can only remember how to spell SUCCEEDED that is.)
+
+
+But wait, what does "[!!SIGN?]" mean? Well, we want to make text, so we need the brackets. BUT... ! is a special character for macros. It means "treat the next character as a literal character, not it's special meaning."
+
+So, say we wanted to put a bracket inside a textequ. Well, prefix it with a !
+
+AnEqu  TEXTEQU  
+
+So... the "!!" in "[!!SIGN?]" tells the macro compiler to use the 2nd ! as a !.
+
+Hey, it undid it's own action. 
+
+
+Now that we have these primative equates, let's make a macro do more work for us:
+
+.IF_SUCCEEDED MACRO
+    test eax, eax
+    .IF SUCCEEDED
+ENDM
+
+Kewl... that uses a macro inside a macro. MASM doesn't mind that a bit. It will generate the very same text/jump as the orgional code I gave, but it's lots more readable.
+
+(BTW, to use a DOT in front of the macro name I had to specify "option dotname" up in my compiler directives) (That's the same place a ".386" and that live)
+
+So far, we have seen two types of macros: text macros (TEXTEQU) and macro procedures. There is a third kind: macro functions.
+
+A macro function is very sililar to a macro procedure, except it may be used inside another statement. Say we were very lazy when we are defining text strings, and don't wish to type 'BYTE "", 0' around out string. 
+
+Eazy enough: 
+
+szDefine MACRO text:req
+LOCAL outstr
+  outstr  CATSTR , , [", 0]
+  EXITM  outstr  ;; pass back the string
+ENDM
+
+Use it like so:
+
+MyString szDefine (some text here)
+
+And this will generate:
+
+MyString BYTE "some text here", 0
+
+Text macros require the argument list in parenthsis, and only return text.  
+
+
+About the only operator not discussed yet is &.  Here's the example from the MASM
+reference to make error messages:
+
+errgen MACRO num, msg
+  PUBLIC errnum
+  errnum BYTE  "Error num: msg",0
+ENDM
+
+Gee, what could this do?  Not much really, it errors the 2nd time it's called, because when masm sees "num" it takes the most literal interpetaion, so it takes it as text, not
+a parameter.
+
+So, here's the better version:
+
+errgen MACRO num, msg
+  PUBLIC err&num
+  err&num BYTE  "Error &num&: msg",0
+ENDM
+
+& looks for everything between itself and the 2nd & (or whitespace, which can be handy) and uses it as literal.  So, "errgen 12, " it generates:
+
+PUBLIC err5
+err5  BYTE "Unreadable disk", 0
+
+So, now you know just about everything I do about macros. For extra credit, see MY number display macro, PDrintValD.  I read this function name as "debug print value (in decimal)" (I also have a HEX version), I use it for 
+debugging to send info to either a console or a messagebox.
+
+(One hint:  "IFDEF" means "if defined")
+
+
+DPrintValD MACRO value:req, string:req
+    LOCAL szNumBuffer, szMessage, crlf
+    IFDEF DEBUGW
+        ;; do a windows version Print Message
+        .data
+        szNumBuffer     BYTE 15 DUP(?)
+        szMessage   BYTE string, ":  ",0
+        .code 
+        pushad
+        mov eax, value
+        invoke dwtoa, eax, ADDR szNumBuffer
+        invoke MessageBox, NULL, ADDR szNumBuffer, ADDR szMessage, MB_OK
+        popad
+    ENDIF</div>
+    <div class="meta">Posted on 2001-01-20 19:52:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

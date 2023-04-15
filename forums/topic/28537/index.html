@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>my WndProc crash, why? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28537" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28537">my WndProc crash, why?</a></p>
+   <div class="post" id="post-201876">
+    <div class="subject"><a href="#post-201876">my WndProc crash, why?</a></div>
+    <div class="body">Hi,
+It's best to have only one ret in your procedure. This should work :
+<pre><code>
+WndProc proc hwnd:dword, uMsg:dword, wParam:dword, lParam:dword
+  .if \
+    uMsg == WM_COMMAND
+    xor   eax, eax   ; set eax to zero when you handle a message
+  .elseif               \
+    uMsg == WM_DESTROY
+    invoke PostQuitMessage, NULL
+    xor   eax, eax
+  .else
+    invoke     DefWindowProc, hwnd, uMsg, wParam, lParam
+ .endif
+ RET
+WndProc        endp
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-26 11:50:00 by karim</div>
+   </div>
+   <div class="post" id="post-201877">
+    <div class="subject"><a href="#post-201877">my WndProc crash, why?</a></div>
+    <div class="body">Your bytes at CS:EIP
+
+Bytes at CS:EIP:
+a3 20 10 40 00 e8 49 01 00 00 a3 24 10 40 00 6a 
+
+disassembles to
+a3 20 10 40 00   mov [401020],eax
+
+that means, you are trying to write to your code section (ok, you told us not to tell you anything like that)
+
+japheth</div>
+    <div class="meta">Posted on 2001-06-26 11:55:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201878">
+    <div class="subject"><a href="#post-201878">my WndProc crash, why?</a></div>
+    <div class="body">japheth :) it's alright. 
+
+hmm. strange. i'm not sure if WndProc is the one that is halting.
+let me go over my source very carefully this time.</div>
+    <div class="meta">Posted on 2001-06-26 12:08:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201879">
+    <div class="subject"><a href="#post-201879">my WndProc crash, why?</a></div>
+    <div class="body">Make sure the section has write access.
+Given what Japheth said, EIP is <strong>very</strong> close to the data. The problem is close to the start of your app!
+Either that or you are trying self modifying code....
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-26 12:25:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201880">
+    <div class="subject"><a href="#post-201880">my WndProc crash, why?</a></div>
+    <div class="body">But cs and ds are different, are you sure the program writes in the code section ?</div>
+    <div class="meta">Posted on 2001-06-26 12:36:00 by karim</div>
+   </div>
+   <div class="post" id="post-201881">
+    <div class="subject"><a href="#post-201881">my WndProc crash, why?</a></div>
+    <div class="body">Mirno, you're right. after what japheth said, i set to explore
+and try to find out what halt my program. I use Delphi debugger,
+but that didn't do the job, so i open up w32dasm and foudn out,
+that GetModuleHandleA is the problem.
+
+<pre><code>
+:00401020 00000000000000000000  BYTE 8 DUP(0)  <--- GHandle
+
+
+//************** Program Entry Point ******************
+:00401028 6A00                  push 0000000000
+
+* Reference To: KERNEL32.GetModuleHandleA, Ord:0111h
+
+:0040102A E85F010000            Call 0040118E <------ call GetModuleHandle
+:0040102F A320104000            mov dword ptr [00401020], eax <----- mov GHandle, eax
+   ^
+   |
+   +------that's the address
+
+
+
+-----what window gave me:
+015f:0040102F <-- address that caused an invalid page fault.
+
+Bytes at CS:EIP:
+a3 20 10 40 00 e8 4f 01 00 00 a3 24 10 40 00 6a 
+^
+|
++----corresond to move. :)
+
+</code></pre>
+
+  the question now is, how do i set READ to code segment?
+
+ by the way, i have both DATA and CODE in one segment...
+---------------------------------------------------------------------
+
+ Karim, it's my fault, i think i'll have to think twice next time.
+ however, i have a general question for you.
+<pre><code>
+
+.elseif uMsg == WM_CREATE
+        szText font1,"Times New Roman"
+        invoke CreateFont,16,8,0,0,500,0,0,0, \
+                          DEFAULT_CHARSET,0,0,0,\
+                          DEFAULT_PITCH,ADDR font1
+        mov hFont, eax
+
+        szText adrTxt,0
+
+        szText lbl1," Text Box 1"
+        invoke Static,ADDR lbl1,hWin,50,30,200,17,0
+        szText lbl2," Text Box 2"
+        invoke Static,ADDR lbl2,hWin,50,80,200,17,0
+        szText lbl3," Text Box 3"
+        invoke Static,ADDR lbl3,hWin,50,130,200,17,0
+
+        invoke EditSl,ADDR adrTxt,50,50,250,23,hWin,700
+        mov hEdit1, eax
+        invoke EditSl,ADDR adrTxt,50,100,250,23,hWin,701
+        mov hEdit2, eax
+        invoke EditSl,ADDR adrTxt,50,150,250,23,hWin,702
+        mov hEdit3, eax
+
+        szText ButnTxt,"Register"
+        invoke PushButton,ADDR ButnTxt,hWin,125,215,100,25,500
+        mov hButn1, eax
+
+    .elseif uMsg == WM_PAINT
+        invoke BeginPaint,hWin,ADDR Ps
+          mov hDC, eax
+          invoke Paint_Proc,hWin,hDC
+        invoke EndPaint,hWin,ADDR Ps
+        return 0
+
+    .elseif uMsg == WM_CLOSE
+        invoke DeleteObject,hFont
+
+    .elseif uMsg == WM_DESTROY
+        invoke PostQuitMessage,NULL
+        return 0 
+    .endif
+</code></pre>
+
+ why is that WM_PAINT and WM_DESTORY always have return 0 at the
+ end? why not every other messages? this is something i'm not
+ very clear.
+
+This message was edited by disease_2000, on 6/26/2001 12:43:53 PM
+
+This message was edited by disease_2000, on 6/26/2001 12:45:22 PM</div>
+    <div class="meta">Posted on 2001-06-26 12:39:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201882">
+    <div class="subject"><a href="#post-201882">my WndProc crash, why?</a></div>
+    <div class="body">hold on. let me make it more clearer...
+<pre><code>
+_TEXT segment para '_TEXT' public
+
+ ;;;;;
+ ;;;;;this is where all of my data reside...
+ ;;;;;
+
+ code:
+      ;;;;code
+
+_TEXT ends
+      end  code
+</code></pre>
+
+ 10 minute ago, i use IDA to view my exe and here's what i get:
+<pre><code>
+
+.text:00401028                 push    0               ; lpModuleName
+.text:0040102A                 call    GetModuleHandleA
+.text:0040102F                 mov     ds:hInstance, eax
+</code></pre>
+
+ mov ds:hInstance, eax
+
+ ds:hInstancce ??? strange...
+-----------------------------------------------------------------
+
+ now the problem becoems abit clearer to me. in the past, i've
+ never had problem like this, that's because i have two sectioin.
+ one for data and one for code.
+
+ _DATA segment...
+ _DATA ends
+
+ _TEXT segment
+       assume cs:_TEXT, ds:_DATA
+ _TEXT ends
+
+ which works. but now, this is my first time grouping data
+ and code into one section this way.
+
+ but then again, IDA tells me that i'm not trying to write
+ into Code Segment which prove Karim  point that CS and DS
+ are two different things.
+
+ or could it be that my code confused IDA?
+
+This message was edited by disease_2000, on 6/26/2001 1:29:15 PM</div>
+    <div class="meta">Posted on 2001-06-26 13:24:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201883">
+    <div class="subject"><a href="#post-201883">my WndProc crash, why?</a></div>
+    <div class="body">Disease2000, eax must be set to zero when an application process a message. It's documented in the MSDN. The other problem is that your code section is not writeable. Try to link it with /SECTION:_TEXT,ERW</div>
+    <div class="meta">Posted on 2001-06-27 02:57:00 by karim</div>
+   </div>
+   <div class="post" id="post-201884">
+    <div class="subject"><a href="#post-201884">my WndProc crash, why?</a></div>
+    <div class="body">thanx alot karim!! i got it working now. :)
+
+link /SECTION:.text,ERW</div>
+    <div class="meta">Posted on 2001-06-27 05:33:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201885">
+    <div class="subject"><a href="#post-201885">my WndProc crash, why?</a></div>
+    <div class="body">hey, i just found another solution myself. :D
+
+/MERGE:.text=.data
+
+IDA shows: mov ds:GHandle <--- that mean it's trying to access data segment
+when in fact, it's located in Code segment. so i sat and think with
+Karim's solution and asked myself: "Why enable write access to
+Code segment when all i wanted was to group text into data?"
+
+so, what i did was group _text into _data. the reason i'm doing this
+is because i want to protect my exe against w32dasm and it works
+just fine. i alone discovered that w32dasm will not list info on
+exe that has no code segment. the reason i'm coding in this style
+is because i want full control of the system.
+
+anyway, that's about it. take care. and try it out yourself.
+
+doesn't matter how you code your app. LINK it with:
+
+/MERGE:.text=.data
+and w32dasm will not be able to load your app (it will load, but
+code are not shown).</div>
+    <div class="meta">Posted on 2001-06-27 08:18:00 by disease_2000</div>
+   </div>
+  </div>
+ </body>
+</html>

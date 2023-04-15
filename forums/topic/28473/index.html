@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Question: Why coding Win32 Apps in ASM? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28473" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28473">Question: Why coding Win32 Apps in ASM?</a></p>
+   <div class="post" id="post-201404">
+    <div class="subject"><a href="#post-201404">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">Hello,
+
+the following small apps in C and ASM do the same thing and show some interesting facts.
+
+First the code
+
+The C source:
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+#include <windows.h>
+
+int main(int argc, char * argv[])
+{
+	MessageBox(0,"test message",0,MB_OK);
+	return 0;
+}
+
+void mainCRTStartup()
+{
+	ExitProcess(main(0,0));
+}
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+The ASM Source:
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    .386
+    .model flat
+
+
+    .data
+
+str1 db "test message",0
+
+    .code
+
+MessageBoxA proto stdcall a1:dword,a2:dword,a3:dword,a4:dword
+ExitProcess proto stdcall a1:dword
+
+MB_OK   equ 0
+
+main proc c a1:dword,a2:dword
+
+    invoke MessageBoxA,0,addr str1,0,MB_OK
+    ret
+
+main endp
+
+mainCRTStartup proc c
+    invoke main,0,0
+    invoke ExitProcess,eax
+mainCRTStartup endp
+
+    end mainCRTStartup
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+the generated EXE from the C source is smaller and faster than the generated EXE from the ASM source. This is because
+
+- the function mainCRTStartup (entry from OS) is defined
+- in link step of the C source there is "no default lib processing", so the C runtime is not included
+- some optimizations in C (frame pointer omission) reduce generated code size
+- the calls of external functions (MessageBox,...) is more efficient in C, for the generated code is:
+
+     call dword ptr [_imp__MessageBoxA@16]
+
+while the generated code of INVOKE in ASM is:
+
+     call MessageBoxA@16
+MessageBoxA@16:
+     jmp dword ptr [_imp__MessageBoxA@16]
+
+So the question is:
+
+why coding WIN32 apps in ASM?</div>
+    <div class="meta">Posted on 2001-06-20 06:05:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201405">
+    <div class="subject"><a href="#post-201405">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">You've missed the point of doing things in ASM....
+You have to code in a certain way in C, and C will then convert that into a particular piece of source code, ASM you are more free to do things the way you want. The example you gave, I would code as follows:
+
+<pre><code>
+include ....
+;All my includes so I don't define it!
+
+.code
+MsgText    db "Test Message",0
+
+start:
+     invoke MessageBox, NULL, ADDR MsgText, 0, MB_OK
+     invoke ExitProcess, 0
+end start
+</code></pre>
+
+It performs exactly the same function as the C program you gave, and is 1.5k as an exe.
+
+If you argue that the programs are not identical, I would argue that I am performing the function of an optimising compiler (which is probably what your C compiler does, given that the code size is so small it will probably inline it)!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-20 06:28:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201406">
+    <div class="subject"><a href="#post-201406">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">In fact, if you are being pedantic, you can always use this code:
+<pre><code>
+.386
+.model flat, stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\user32.inc
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\user32.lib
+
+.code
+MsgText    db "Test Message",0
+
+start:
+     xor eax, eax
+     push eax
+     push MB_OK
+     push eax
+     push Offset MsgText
+     push eax
+     call MessageBox
+     call ExitProcess
+end start
+</code></pre>
+
+I'll save a byte of code, but cost you an extra instruction! Not that you'll see the extra byte as it is absorbed into the section size of a PE file, but it is technically smaller!
+
+You can of course make the thing even smaller if you REALLY want to play around with MLs switches, and the linker (there is a discussion on the board that got an exe down to 760 bytes or there abouts, but it won't definitely run on all versions of windows).
+
+Mirno
+
+This message was edited by Mirno, on 6/20/2001 6:46:08 AM</div>
+    <div class="meta">Posted on 2001-06-20 06:45:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201408">
+    <div class="subject"><a href="#post-201408">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">hello mirno,
+
+one thing I want to know with my somewhat provocational question is:
+
+1. the generated code of the INVOKE directive is not optimal. For every function the linker? adds this extra 6 bytes "JMP dword ptr [_imp__Win32Func] to your code. Is there a simple method to make the assembler generate the faster and smaller code VC does (with "CALL dword ptr [_imp__Win32Func]"), without need of defining for every function:
+
+externdef _imp__Win32Func:dword
+
+and changing all the prototypes in your include files?</div>
+    <div class="meta">Posted on 2001-06-20 07:16:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201407">
+    <div class="subject"><a href="#post-201407">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">Also, there is a technique that you can use in Asm to call the mangled name directly, avoiding that extra JMP to MessageBox in your example. G. Adam Stanislav uses it in his RAND examples:
+
+<pre><code>
+extrn __imp__MessageBoxA@16:DWORD
+
+call __imp__MessageBoxA@16
+</code></pre>
+
+:)
+
+This message was edited by S/390, on 6/20/2001 7:25:04 AM</div>
+    <div class="meta">Posted on 2001-06-20 07:16:00 by S/390</div>
+   </div>
+   <div class="post" id="post-201409">
+    <div class="subject"><a href="#post-201409">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">A smarter linker could avoid these two-step jumps,
+it is true. "Invoke" is not too bright either, but
+you can code around it, whereas in C you are stuck
+with the rigid format of function calls. And there
+are many, many other ways to save bytes and mips
+in asm that are quite impossible in C.
+For a 691-byte PE "hello-world" written in asm, see
+www.hammick.com/hcs/hello.exe.
+512 of those bytes are the PE header, which, if it
+is to run on Win95, cannot be reduced.</div>
+    <div class="meta">Posted on 2001-06-20 08:56:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201410">
+    <div class="subject"><a href="#post-201410">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">Here is the code section for a 1k EXE in MASM.
+
+<pre><code>
+    .code
+
+start:
+
+    jmp @F
+      szDlgTitle    db "Minimum MASM",0
+      szMsg         db "  --- Assembler Pure and Simple ---  ",0
+    @@:
+
+    push MB_OK
+    push offset szDlgTitle
+    push offset szMsg
+    push 0
+    call MessageBox
+
+    push 0
+    call ExitProcess
+
+end start
+</code></pre>
+This is the batch file that builds it,
+<pre><code>
+\masm32\bin\ml /c /coff /nologo minimum.asm
+\masm32\bin\Link /SUBSYSTEM:WINDOWS /MERGE:.rdata=.text minimum.obj > nul
+</code></pre>
+
+Where you will se the difference is when you start adding the C runtime
+functions, its gets a lot bigger faster and you don't have much control
+with it. With MASM, you either use library function like the MASM32 ones
+or write them yourself and the end result is smaller.
+
+I chuckle at the notion of the code efficiency in trying to avoid
+the API jump table in a MASM file, API calls are slow, the extra jump simply
+does not matter, what happens in the guts of a system DLL would probably
+make you laugh, saving a jump is trivial in comparison.
+
+The choice of using INVOKE or doing manual stack pushes and call
+depends what you are doing, sometimes there is a little more flexibility
+in doing the manual call but in most instances, its just more typing
+but without the error checking.
+
+One of the assumptions in chasing size at the opcode selection level
+is that it produces some form of optimised code but it assumes the old DOS
+BYTE aligned mentality which is very out of date in 32 bit windows
+where the only real form of optimisation is speed and that is only
+if it matters in the actual algorithm.
+
+I opt for clear maintainable code over obscure optimisation any time
+but where speed matters, I will chase the odd cycle here and there,
+it really depends what you are doing.
+
+If optimisation is only in the mind of the coder and not in either
+byte size or additional speed where it matters, then it is a vacuous 
+idea.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-06-20 10:00:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-201411">
+    <div class="subject"><a href="#post-201411">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">I completely agree Hutch! The only reason I gave the second example that I did was to show how you can get the extra byte, even though its hidden in the PE file.
+
+The only thing I would say is when placing data in the code section, why not put it before the entry point, and save a jump at no expense (even readability, if you put in a couple of comments). :P
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-20 10:08:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201412">
+    <div class="subject"><a href="#post-201412">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">This question has been asked over and over. The most important is not the langage you use, but what you do with it. You can program in C, ASM, DELPHI, or whatever language you like, as long as you make something useful and innovative.</div>
+    <div class="meta">Posted on 2001-06-20 10:36:00 by karim</div>
+   </div>
+   <div class="post" id="post-201413">
+    <div class="subject"><a href="#post-201413">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">For me the matter rests on knowing how the machine prefers data.  The hardware proforms better in some ways than others, and assembly allows you to use that to your advantage.  Other languages assume very little about the machine and claim to be able to automatically produce optimal code.
+
+Why not program windows in JAVA, Python, Perl?  There is certainly nothing wrong with doing so, but don't kid yourself that those several layers of abstraction aren't going to effect proformance.
+
+Languages have their pluses and minuses, know them, and code on... :)</div>
+    <div class="meta">Posted on 2001-06-20 11:27:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201414">
+    <div class="subject"><a href="#post-201414">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">hello hutch,
+
+i get a 1k exe in C as well. Just have to ensure strings will be located in the code section. My code is now:
+
+
+#include <windows.h>
+
+#pragma data_seg(".text")
+const char * pMsg1 = "test message";
+#pragma data_seg(".data")
+
+int main(int argc, char * argv[])
+{
+	MessageBox(0,pMsg1,0,MB_OK);
+	return 0;
+}
+
+void mainCRTStartup()
+{
+	ExitProcess(main(0,0));
+}
+
+And I 've also added the line /MERGE:.rdata=.text to my linker.
+
+the map file looks now:
+
+ testmin
+
+ Timestamp is 3b30d17d (Wed Jun 20 18:38:21 2001)
+
+ Preferred load address is 00400000
+
+ Start         Length     Name                   Class
+ 0001:00000000 00000010H .idata$5                CODE
+ 0001:00000010 00000044H .text                   CODE
+ 0001:00000054 00000028H .idata$2                CODE
+ 0001:0000007c 00000014H .idata$3                CODE
+ 0001:00000090 00000010H .idata$4                CODE
+ 0001:000000a0 00000036H .idata$6                CODE
+ 0001:000000d6 00000000H .edata                  CODE
+
+  Address         Publics by Value              Rva+Base     Lib:Object
+
+ 0001:00000000       __imp__ExitProcess@4       00401000     kernel32:KERNEL32.dll
+ 0001:00000004       \177KERNEL32_NULL_THUNK_DATA 00401004     kernel32:KERNEL32.dll
+ 0001:00000008       __imp__MessageBoxA@16      00401008     user32:USER32.dll
+ 0001:0000000c       \177USER32_NULL_THUNK_DATA 0040100c     user32:USER32.dll
+ 0001:00000010       ?pMsg1@@3PBDB              00401010     testmin.obj
+ 0001:00000020       ??_C@_0N@FEOE@test?5message?$AA@ 00401020     testmin.obj
+ 0001:0000002d       _main                      0040102d f   testmin.obj
+ 0001:00000041       ?mainCRTStartup@@YAXXZ     00401041 f   testmin.obj
+ 0001:00000054       __IMPORT_DESCRIPTOR_KERNEL32 00401054     kernel32:KERNEL32.dll
+ 0001:00000068       __IMPORT_DESCRIPTOR_USER32 00401068     user32:USER32.dll
+ 0001:0000007c       __NULL_IMPORT_DESCRIPTOR   0040107c     kernel32:KERNEL32.dll
+
+ entry point at        0000:00000000
+
+ Static symbols
+
+
+japheth</div>
+    <div class="meta">Posted on 2001-06-20 12:41:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201415">
+    <div class="subject"><a href="#post-201415">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">Huh.. It's me :)
+
+Well.. I just post to add what I think has been forgotten here:
+
+It is fun! I love juggling with registers.
+
+And besides... I think that:
+
+<pre><code>invoke ExitProcess,0</code></pre>
+
+is much more readable (and less typing) than:
+
+<pre><code>void mainCRTStartup()
+{
+ExitProcess(main(0,0));
+}</code></pre>
+
+Puh.. what else? Size? Erm.. asm doesn't save much size while 
+calling API functions, I guess... It's doing it's magic in the 
+heart of the proggy... 
+
+These are my ramblings..
+JC</div>
+    <div class="meta">Posted on 2001-06-20 19:45:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-201416">
+    <div class="subject"><a href="#post-201416">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">japheth,
+
+My post assumed that you can get the minimum EXE size of 1k in C, its
+related to the size of 2 sections. I have floating around on my box,
+a test piece that I used to test MASM32 library functions written
+in M$ C (not C++) and with a window, Icon and menu, it is 6144 bytes.
+
+The problem is when you start extending the application written in C,
+to strip a C program down to the size of a MASM EXE, you lose things
+like the runtime library support, UNICODE support and all of the other
+add in stuff.
+
+When writing minimum size code without the frills, MASM starts to show
+its advantage over a C compiler, it is more flexible in its layout, it
+does API calls with the minimum overhead to run it and adding code to do
+specific things gives you size increases proportional to the amount of
+code that you write.
+
+Fundamentally C is a higher level language and it is better suited for
+writing higher level code, if it is well written you can get some very
+good results from it but a compiler is a different animal to an
+assembler, I guess its why Microsoft still build MASM and why it is
+compatible with C/C++, so you can add the size and performance advantage
+of assembler to your C/C++ programs if it is needed.
+
+I am like most of the programers who are members here, I write in
+high level languages where it suits what I am doing and my current
+favourite is a hybrid compiler that does assembler, basic and C style
+programming. Its a paid for PowerBASIC compiler that was originally
+designed for writing DLLs.
+
+I am an old C jockey as well although getting a bit rusty now as I tend
+to think in assembler terms but with the advent of C++ and C being more
+or less at a standstill, I use the PowerBASIC compiler because I can do
+a lot more with it, especially the dynamic strings and arrays.
+
+The general drift is that there are horses for courses, you don't
+write HTML in MASM, you don't write assembler in Visual Basic etc ...
+Effectively you dial up the capacity you want and write what you
+need in it.
+
+Where there are overlaps in capacity with different languages, you
+have some choice in which one you write but if its minimum size
+binary files that you need without being restricted to the layout
+of any particular language, an assembler is a good choice to write
+that code with.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-06-20 20:53:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-201417">
+    <div class="subject"><a href="#post-201417">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">Here is my account.
+Many ppl may be shocked when they hear the reason I prefer asm over other languages. I can also code in C/C++/VB/FoxPro, with varying profiency.
+I choose asm as my primary language not because it's fast/small: but because it suits my mentality. You can examine my code and realize immediately that I don't try to optimize it. My thinking process closely matches that of the CPU ;)
+The major difference between asm and other high-level languages is the <strong> potential </strong>. You have much much more potential to do things in asm (and inherently more freedom) than in other HLLs. You can unleash the full power of your computer with asm (provided you have enough knowledge) but you can hardly do so with HLLs. Those "smallest prog contests" are not sufficient to express the differences/advantages: small size is but a facet of asm.</div>
+    <div class="meta">Posted on 2001-06-21 02:04:00 by Iczelion</div>
+   </div>
+   <div class="post" id="post-201418">
+    <div class="subject"><a href="#post-201418">Question: Why coding Win32 Apps in ASM?</a></div>
+    <div class="body">I really agree with you on the mentallity deal.  Though I do
+like the smaller is better paradigm also.  I keep telling my
+self that I'll use objects when there is an 80x86 instruction to
+create them.</div>
+    <div class="meta">Posted on 2001-06-21 02:28:00 by eet_1024</div>
+   </div>
+  </div>
+ </body>
+</html>

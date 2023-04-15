@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Dynamic array lookup problem? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11865" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=11865">Dynamic array lookup problem?</a></p>
+   <div class="post" id="post-90778">
+    <div class="subject"><a href="#post-90778">Dynamic array lookup problem?</a></div>
+    <div class="body">I have an array of structures that are freed and allocated many times.  I'm using a bit lookup table to quickly find the first free structure (faster than a free list and uses less memory than pointer table).  Each array also has a free count - so I can quickly skip the array if there are no free structures.  My question is one of optimization - I'd like to find the fastest and smallest way to use the bit lookup table to retreive the structure index in the array.<pre><code>; EDX is the start of the bit array<br />	xor	eax, eax<br />	lea	ecx, &#91;edx - 4&#93;<br />@@&#58;<br />; NOTE&#58; exit is forced, bit is always set<br />	or	eax, &#91;edx&#93;<br />	lea	edx, &#91;edx + 4&#93;<br />	je	@B<br /><br />	lea	ebx, &#91;edx - 4&#93;<br /><br />	sub	edx, ecx	; byte offset<br />	bsf	ecx, eax	; first bit set<br />	shl	edx, 3		; bit offset<br />	btr	eax, ecx	; clear bit = structure is used<br />	or	edx, ecx<br />	mov	&#91;ebx&#93;, eax<br />; EDX in the index number into the structure array</code></pre>Before this code executes a test has already been made to insure one free structure exists (one bit in the array is set).  Hope this explains what I'm after.  I just thought it would be a good problem for people to grind their teeth on. :)<br /><br />Thank you for the help!<br /><br />p.s. I am aware that the bit index &lt;&gt; index into structure array due to the lower three bits being reversed.  The important thing is just to have a one to one corespondents between the bit flag and the availiblity of a structure.<br /><br />:) Smallest code might be:<pre><code>	xor	eax, eax<br />@@&#58;	bt	&#91;edx&#93;, eax<br />	inc	eax<br />	jnc	@B<br />	dec	eax<br />	btr	&#91;edx&#93;, eax	; structure array index</code></pre>But what about the smallest code checking 32 bits at once?</div>
+    <div class="meta">Posted on 2003-03-26 22:58:17 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-90819">
+    <div class="subject"><a href="#post-90819">Dynamic array lookup problem?</a></div>
+    <div class="body">I don't mind to grind my teeth on this. Maybe I get it wrong, but is all you need is to find first bit setted? Then maybe rotate it<br /><pre><code>	mov eax, &#91;edx&#93;<br />@@&#58;	rcr eax, 1<br />	inc ecx<br />	jnc @B<br />; ecx here contain 1-based position<br /></code></pre><br /><br />If I do get wrong, please, could you explain it in detail. How long will be the bit field, or it's length may vary</div>
+    <div class="meta">Posted on 2003-03-27 02:27:42 by masquer</div>
+   </div>
+   <div class="post" id="post-90904">
+    <div class="subject"><a href="#post-90904">Dynamic array lookup problem?</a></div>
+    <div class="body">The problem can be thought of in three pieces:<br /><br />1. Find first set bit in array of bytes.<br />2. Clear set bit found in 1.<br />3. Get index value of bit<br /><br /><strong>masquer</strong>, your code is a solution to part one only if the array is four bytes long.  It is not that small.  Let me compose a better example with some fake data:<br /><br /><pre><code>BitArray DWORD \<br />	00000000000000000000000000000000y, \<br />	00000000000000000000001000000000y, \<br />	00001000010001000000010010100000y, \<br />	00001000001000100000001000000000y<br /><br />StrucArray MySTRUCT \<br />	&#40;8 * SIZEOF BitArray&#41; dup &lt;&gt;<br /></code></pre>Each bit in the BitArray represents a structure in the StrucArray -- if the bit is set then the structure is not in use.  The following code completes all three goals:<pre><code>	lea	edx, BitArray<br />	xor	eax, eax<br />@@&#58;	; find set bit in array<br />	bt	&#91;edx&#93;, eax<br />	; INC doesn't effect carry flag<br />	inc	eax<br />	jnc	@B<br />	dec	eax<br /><br />	; clear bit because structure now in use<br />	btr	&#91;edx&#93;, eax<br /><br />	; offset into structure array<br />	imul	eax, SIZEOF MySTRUCT<br />	; can now use &#91;eax + StrucArray&#93; to access structure</code></pre>Hope the example makes the problem clearer.  The code should find a free structure, mark it as unavailible, and provide the address to the structure for use.  There will also be a complementary algorithm to free a structure by setting the bit.</div>
+    <div class="meta">Posted on 2003-03-27 10:34:02 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-90911">
+    <div class="subject"><a href="#post-90911">Dynamic array lookup problem?</a></div>
+    <div class="body">Have you thought about this : every time you free a structure, you move the last allocated structure in place of the freed structure. This way there is no hole in your array and the index of the next free structure is equal to the number of allocated structures.</div>
+    <div class="meta">Posted on 2003-03-27 10:58:48 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-90916">
+    <div class="subject"><a href="#post-90916">Dynamic array lookup problem?</a></div>
+    <div class="body"><strong>Dr. Manhattan</strong>, I can't move the structures around as there are pointers to them in other structures, but that is a good idea!  Wouldn't the allocation have to equal the number of freed items?</div>
+    <div class="meta">Posted on 2003-03-27 11:07:28 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-90940">
+    <div class="subject"><a href="#post-90940">Dynamic array lookup problem?</a></div>
+    <div class="body"><strong>bitRAKE</strong>, what about a divide and conquer approach using some kind of binary tree lookup for finding free nodes?<br />For example, say you got 8 dwords with each bit identifying the availability of a structure (8x32=256 bits). Finding a free spot would mean searching on average 8/2=4 dwords and then scanning one of them for the free bit index.<br />You could add a tree with a number of leaves equal to the number of dwords (depth log(n)+1):<br /><pre><code><br />              a<br />             / \<br />            /   \<br />           /     \<br />          /       \<br />         /         \<br />        b           c<br />       / \         / \<br />      /   \       /   \<br />     d     e     f     g<br />    / \   / \   / \   / \<br />    h i   j k   l m   n o<br />&#91;size=9&#93;ph33r my ascii art sk1llz &#58;&#41;&#91;/SIZE&#93;<br /></code></pre><br />Each node in the tree holds a value, either true or false (could be stored in one bit). They tell whether a 0 bit in a specific part of the dword array is present:<br /><pre><code><br />a = 1 if a 0 bit is present in any of the 8 dwords  &#40;0..7&#41;<br />b = 1 if a 0 bit is present in the first half of the dwords &#40;0..3&#41;<br />c = 1 if a 0 bit is present in the second half of the dwords &#40;4..7&#41;<br />d = 1 if 0 bit .. in &#40;0..1&#41;<br />e = 1 if 0 bit .. in &#40;2..3&#41;<br />f = 1 if 0 bit .. in &#40;4..5&#41;<br />g = 1 if 0 bit .. in &#40;6..7&#41;<br />h = 1 if 0 bit .. in &#40;0&#41;<br />i = 1 if 0 bit .. in &#40;1&#41;<br />j = 1 if 0 bit .. in &#40;2&#41;<br />k = 1 if 0 bit .. in &#40;3&#41;<br />l = 1 if 0 bit .. in &#40;4&#41;<br />m = 1 if 0 bit .. in &#40;5&#41;<br />n = 1 if 0 bit .. in &#40;6&#41;<br />o = 1 if 0 bit .. in &#40;7&#41;<br /></code></pre><br /><br />The nodes could be stored in a heap-like manner:<br /><pre><code><br />       0         1<br />index&#58; 012345678901234<br />value&#58; abcdefghijklmno<br /><br />child1_index = parent_index * 2 + 1<br />child2_index = parent_index * 2 + 2<br /></code></pre><br />Now you can find the first dword with a 0-bit in 2*log(number_of_dwords) steps (both childs need to be checked, although on average only one). Naturally it's more efficient with more dwords.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-03-27 12:45:52 by Thomas</div>
+   </div>
+   <div class="post" id="post-90943">
+    <div class="subject"><a href="#post-90943">Dynamic array lookup problem?</a></div>
+    <div class="body">Sweet idea <strong>Thomas</strong>! :alright:  Wonder if it can be coded with one branch? ...and what the overhead of managing the bit-tree can be minimized to?</div>
+    <div class="meta">Posted on 2003-03-27 13:33:31 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-90944">
+    <div class="subject"><a href="#post-90944">Dynamic array lookup problem?</a></div>
+    <div class="body"><pre><code><br />  mov ecx, -4<br />@@&#58;<br />  add ecx, 4<br />  bsf eax, &#91;edx + ecx&#93;<br />  jnz @B<br /><br />  btr &#91;edx + ecx&#93;, eax<br />  lea ecx, &#91;ecx*8 + eax&#93;<br /></code></pre><br /><br />Probably not the smallest, or the fastest, but a good combination of the two I think.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-03-27 13:35:25 by Mirno</div>
+   </div>
+   <div class="post" id="post-90948">
+    <div class="subject"><a href="#post-90948">Dynamic array lookup problem?</a></div>
+    <div class="body"><div class="quote"><br />Sweet idea <strong>Thomas</strong>! :alright:  Wonder if it can be coded with one branch? ...and what the overhead of managing the bit-tree can be minimized to? </div><br /><br />I think the algorithm can be optimized pretty well, a couple of cmov instructions can reduce the number of branches but I don't know if one will be enough.<br />The overhead for managing the tree is not much but a bit more than looking up. However it only needs to be updated when a dword gets full, so on average only once in 32 allocations (that's not bad :) )<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-03-27 13:51:05 by Thomas</div>
+   </div>
+   <div class="post" id="post-90954">
+    <div class="subject"><a href="#post-90954">Dynamic array lookup problem?</a></div>
+    <div class="body">The pseudo code for looking up is:<br /><pre><code><br />bool table&#91;15&#93;;<br />// Searches the tree starting at node root,<br />// assuming a free entry is present!<br />int getFreeEntry&#40;int root, int level&#41;<br />&#123;<br />    if &#40;level&gt;2&#41; return root - 7;<br />    int child1 = root * 2 + 1;<br />    int child2 = root * 2 + 2;<br />    return getFreeEntry&#40;table&#91;child1&#93; ? child1 &#58; child2, level+1&#41;;<br />&#125;<br /></code></pre><br />This is a recursive version but its end-recursive so it could be converted to an iterative version and then unrolled to speed things up. I'll think a bit about it and post my findings here.<br /><br />Thomas<br /><br /><strong>edit:</strong> there is another property of the tree that we can exploit since we assume the subtree currently working on *always* contains at least 1 free bit.<br /><pre><code><br />              a<br />             / \<br />            /   \<br />           /     \<br />          /       \<br />         /         \<br />        b           c<br />       / \         / \<br />      /   \       /   \<br />     d     e     f     g<br />    / \   / \   / \   / \<br />    h i   j k   l m   n o</code></pre><br />For example, working on a, you need to check both b and c to see in which part the empty bit is. However if you find that b is false, c *must* be true because the free bit has to be somewhere. Therefore we can skip the check for c and immediately proceed to f (and then g).<br /><br />Thinking about this, the tree could be simplified. Assuming at least one bit is free, we can give each node a new meaning:<br />false: at least one free bit is present in the left subtree (possibly in the right tree too but we don't know that)<br />true: at least one free bit is present in the right subtree (but not in the left subtree).<br /><br />This leads to a tree with one layer less, but one that is harder to manage.</div>
+    <div class="meta">Posted on 2003-03-27 14:10:04 by Thomas</div>
+   </div>
+   <div class="post" id="post-90956">
+    <div class="subject"><a href="#post-90956">Dynamic array lookup problem?</a></div>
+    <div class="body"><pre><code>	xor	eax, eax<br />	mov	ecx, depth<br />@@&#58;	bt	&#91;edx&#93;, eax<br />	rcl	eax, 1<br />	inc	eax<br />	dec	ecx<br />	jne	@B<br /><br />;; ??<br />	btr	&#91;edx&#93;, eax</code></pre>Certainly becomes O(log n/32) taking two bits per structure!</div>
+    <div class="meta">Posted on 2003-03-27 14:16:40 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-90958">
+    <div class="subject"><a href="#post-90958">Dynamic array lookup problem?</a></div>
+    <div class="body"><div class="quote"><br /><pre><code>	xor	eax, eax<br />	mov	ecx, depth<br />@@&#58;	bt	&#91;edx&#93;, eax<br />	rcl	eax, 1<br />	inc	eax<br />	dec	ecx<br />	jne	@B<br /><br />;; ??<br />	btr	&#91;edx&#93;, eax</code></pre>Certainly becomes O(log n/32) taking two bits per structure! </div><br />Very nice trick :alright:. Could be unrolled pretty well too. I think the more simple version of the tree won't be any faster since it takes more to maintain it.. So this is probably better.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-03-27 14:27:38 by Thomas</div>
+   </div>
+   <div class="post" id="post-90960">
+    <div class="subject"><a href="#post-90960">Dynamic array lookup problem?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by Thomas </em><br />there is another property of the tree that we can exploit since we assume the subtree currently working on *always* contains at least 1 free bit.<br />[...]<br />For example, working on a, you need to check both b and c to see in which part the empty bit is. However if you find that b is false, c *must* be true because the free bit has to be somewhere. Therefore we can skip the check for c and immediately proceed to f (and then g).</div><br />Hmm, actually this also holds for the left subtree, it's just doing stuff that would have been done in the next iteration otherwise so this isn't an optimization (I was thinking wrongly).<br /><br />What about the updating of the tree? Having a dword at index i that gets full, the full path to that bit needs to be updated, starting by setting the leaf node for index i to 0, then propagating the value to the top of the tree, setting each node to 1 if at least one of its childs is 1 (0 otherwise).</div>
+    <div class="meta">Posted on 2003-03-27 14:37:08 by Thomas</div>
+   </div>
+   <div class="post" id="post-91028">
+    <div class="subject"><a href="#post-91028">Dynamic array lookup problem?</a></div>
+    <div class="body"><div class="quote"><br />What about the updating of the tree? Having a dword at index i that gets full, the full path to that bit needs to be updated, starting by setting the leaf node for index i to 0, then propagating the value to the top of the tree, setting each node to 1 if at least one of its childs is 1 (0 otherwise). </div>I thought about this a little - best I could think of is O(n-m).  (m) being the full block -- maybe less in practice?<br /><br />Using a free list - similar to <strong>Dr. Manhattan</strong>'s suggestion seems very quick, but uses a dword of memory for each structure -- not very practicle for small structures.  Could combine the two methods: a free list pointing to dwords in the bit array.  This means two bits per structure - allocating and freeing structs should be fast.<br /><br />Building a test is in order... :)</div>
+    <div class="meta">Posted on 2003-03-27 21:32:26 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-91192">
+    <div class="subject"><a href="#post-91192">Dynamic array lookup problem?</a></div>
+    <div class="body">Just in case of speed (bt and similar are very slow) here is my solution. It is rather straightforward but it do the job :)<br /><br /><pre><code>	lea edi, BitArray<br />	xor eax, eax<br />	xor ecx, ecx<br />	dec ecx ; or length of bitfiled<br />	repe scasd<br />	mov eax, &#91;edi&#93;<br />	not ecx<br />	shl ecx, 5 ; multiply by 5<br />	mov edx, ecx ; save them<br />	xor ecx, ecx<br />@@&#58;	rcr eax, 1<br />	inc ecx<br />	jnc @B<br />	shl eax, cl ; restore with unset bit<br />	mov &#91;edi&#93;, eax ; save bitfield<br />	add edx, ecx ; edx holds 1-based index</code></pre></div>
+    <div class="meta">Posted on 2003-03-28 09:20:49 by masquer</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ErrorShow - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27250" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27250">ErrorShow</a></p>
+   <div class="post" id="post-195273">
+    <div class="subject"><a href="#post-195273">ErrorShow</a></div>
+    <div class="body">Some people asked me via e-mail if I have some demo progs.
+I'd gladly shared them but I've never had any for several
+reasons.
+So today I took first text book from bookshelf and rewrote first
+example in asm.
+I tried to use common to people here "Iczelion" style, so it's not
+optimized but clear to understand.
+I don't have any website, and even Inet I have ocasionly from time to time,
+I hope Hiro doesn't mind posting the code here.
+It's J.Richter first example from his new book ErrorShow.
+My version 23 times shorter, and I can make it even twice shorter but
+it would be quite a task for beginners to understand the code.
+If something unclear I can post Jheffry comments.
+BTW I could rewrite all examples from his book if anybody is interested.
+
+Here is code and rc script:
+<pre><code>
+(c)The Svin
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\user32.inc
+include C:\masm32\include\kernel32.inc
+include C:\masm32\include\masm32.inc
+includelib kernel32.lib
+includelib user32.lib
+includelib masm32.lib
+DlgProc proto :DWORD,:DWORD,:DWORD,:DWORD
+ESM_POKECODEANDLOOKUP equ WM_USER+100
+IDC_STATIC equ 1
+IDC_ERRORCODE equ 2
+ID_OK equ 3
+IDC_ALWAYSONTOP  equ 4
+IDC_ERRORTEXT equ 5
+
+.data
+ClassName db '#32770',0
+AppName db 'Error Show',0
+NotFound db 'ErrorCode not found',0
+.data?
+;buffer db 1254 dup (?)
+CmdLine db 10 dup (?) 
+NumToLook dd ?
+.code
+start:	
+	invoke GetCL,1,addr CmdLine
+	.IF eax == 1
+	mov edi,offset CmdLine
+	mov al,
+	.WHILE al !=0
+	  .IF al >= '1' && al <= '9'
+	   inc edi
+	   mov al,
+	  .ELSE
+	  jmp notnum
+	 .ENDIF
+	.ENDW
+	invoke atodw,addr CmdLine
+	mov NumToLook,eax
+	.ELSE
+notnum:	mov NumToLook,0
+	.ENDIF
+
+	invoke FindWindow,addr ClassName,addr AppName
+	.IF eax !=0
+	invoke SendMessage,eax, ESM_POKECODEANDLOOKUP,NumToLook, 0
+	jmp outproc
+	.ENDIF
+	invoke DialogBoxParam,400000h,6,0,addr DlgProc,NumToLook
+outproc:	call ExitProcess
+DlgProc proc hWnd,uMsg,wParam,lParam
+LOCAL hwndOK:DWORD
+LOCAL ErrCodeText[8]:BYTE
+LOCAL buffer[256]:BYTE
+.IF uMsg==WM_CLOSE
+	invoke EndDialog,hWnd,0
+.ELSEIF uMsg== WM_INITDIALOG
+	invoke GetDlgItem,hWnd,2
+	invoke SendMessage,eax,EM_LIMITTEXT,4,0
+	invoke LoadIcon,400000h,7
+	invoke SetClassLong,hWnd,GCL_HICON,eax
+	invoke SendMessage,hWnd, ESM_POKECODEANDLOOKUP, lParam, 0
+.ELSEIF uMsg==ESM_POKECODEANDLOOKUP
+	invoke SetDlgItemInt,hWnd,IDC_ERRORCODE,wParam,FALSE
+	invoke GetDlgItem,hWnd,ID_OK
+IDANDNOT equ BN_CLICKED * 10000h + ID_OK
+	invoke SendMessage,hWnd,WM_COMMAND,IDANDNOT,eax
+	invoke SetForegroundWindow,hWnd
+.ELSEIF	uMsg==WM_COMMAND
+	mov eax,wParam
+	.IF al==IDC_ALWAYSONTOP
+	invoke IsDlgButtonChecked,hWnd, IDC_ALWAYSONTOP
+	sub eax,2
+	invoke  SetWindowPos,hWnd, eax, 0, 0, 0, 0, SWP_NOMOVE or SWP_NOSIZE
+	.ELSEIF al==IDC_ERRORCODE
+	invoke GetDlgItem,hWnd,ID_OK
+	mov hwndOK,eax
+	invoke GetDlgItemText,hWnd,IDC_ERRORCODE,addr ErrCodeText,6
+	invoke EnableWindow,hwndOK,eax 
+	.ELSEIF al==ID_OK
+	invoke GetDlgItemInt,hWnd, IDC_ERRORCODE, NULL, FALSE
+	lea ecx,buffer
+	invoke FormatMessage,FORMAT_MESSAGE_FROM_SYSTEM,0,\
+	eax,0,ecx,256,0
+	.IF eax ==0
+	mov eax,offset NotFound
+	.ELSE
+	lea eax,buffer
+	.ENDIF
+	invoke SetDlgItemText,hWnd,IDC_ERRORTEXT,eax
+	.ENDIF
+.ELSE
+	xor eax,eax
+	ret
+.ENDIF
+	mov eax,1
+	ret
+DlgProc endp
+	end start
+rsrc.rc
+-----------------------------------------
+#include "c:\masm32\include\resource.h"
+#define IDC_STATIC 1
+#define IDC_ERRORCODE 2
+#define ID_OK 3
+#define IDC_ALWAYSONTOP 4
+#define IDC_ERRORTEXT 5
+7 ICON "ErrorShow.ico"
+6 DIALOGEX 0, 0, 182, 42
+STYLE DS_SETFOREGROUND | DS_3DLOOK | DS_CENTER | WS_MINIMIZEBOX | WS_VISIBLE | 
+    WS_CAPTION | WS_SYSMENU
+CAPTION "Error Show"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "Error:",IDC_STATIC,4,4,19,8
+    EDITTEXT        IDC_ERRORCODE,24,2,24,14,ES_AUTOHSCROLL | ES_NUMBER
+    DEFPUSHBUTTON   "Look up",ID_OK,56,2,36,14
+    CONTROL         "&On top",IDC_ALWAYSONTOP,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,104,4,38,10
+    EDITTEXT</div>
+    <div class="meta">Posted on 2001-03-15 16:07:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

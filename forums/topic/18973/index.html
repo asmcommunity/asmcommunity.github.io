@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Function optimization help ... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18973" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18973">Function optimization help ...</a></p>
+   <div class="post" id="post-146801">
+    <div class="subject"><a href="#post-146801">Function optimization help ...</a></div>
+    <div class="body">Hi mates !<br /><br />I'm workin' on a project that uses several time critical functions that i tried as much as possible to optimize. I will put one of them here just in case more optimizations can be done. Maybe also some good book reffering at optimizations someone can recommend !?<br /><br />Here is the function:<br /><br />    push       eax<br />    push       edx<br />    lea esi,buffer<br />    movzx eax,<br />    shl eax,1<br />    test  ah, ah<br /><br />    jz  __cont<br />    xor eax,0x0163<br /><br />    __cont:<br />    xor eax,         <br />    xor eax,<br />    mov edx, <br />    mov ,edx<br />    mov edx,<br />    mov ,edx<br />    movzx edx, word ptr <br />    xor al,dl<br />    mov ,al<br />    pop edx<br />    pop eax<br /><br />Hope someone can take some time and help me ...<br /><br />Br;)</div>
+    <div class="meta">Posted on 2004-07-25 16:58:18 by shenqiang</div>
+   </div>
+   <div class="post" id="post-146807">
+    <div class="subject"><a href="#post-146807">Function optimization help ...</a></div>
+    <div class="body"><a target="_blank" href="www.agner.org">www.agner.org</a> is pretty good - and if you want the full gory details, with no friendly interpretation, there's the pentium documentation at <a target="_blank" href="http://developer.intel.com/design/Pentium4/documentation.htm">http://developer.intel.com/design/Pentium4/documentation.htm</a> (there's PDFs for a couple earlier models as well). Also, AMD has some docs.<br /><br />Your code looks pretty bad from a quick glimpse :) (partial register usage, non-aligned data reference, conditional jmp) - oh, and you should perhaps give a short description of the code rather than just the code itself. Not too bad in this example since it's so short, but it's always helpful...</div>
+    <div class="meta">Posted on 2004-07-25 19:28:18 by f0dder</div>
+   </div>
+   <div class="post" id="post-146812">
+    <div class="subject"><a href="#post-146812">Function optimization help ...</a></div>
+    <div class="body">DANNY<br />1- Which assembler syntax are you using, MASM?<br />2- Have you tried assembling the code you posted?<br /><br />For example, the <strong>movzx eax,</strong> should get rejected by most assemblers as incomplete, the size of the memory operand not being specified.<br /><br />Numerous instructions give the impression you are trying to work with memory BYTES although the instruction itself would actually use memory DWORDS (i.e. xor eax,).<br /><br />f0dder's suggestion of providing a short description of what you are trying to achieve would certainly be to your advantage.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-07-25 22:28:21 by Raymond</div>
+   </div>
+   <div class="post" id="post-146826">
+    <div class="subject"><a href="#post-146826">...</a></div>
+    <div class="body">Hi !<br /><br />I used that function as inline asm on BCB 6.0 and indeed buffer pointed by esi is an byte array. Function does an alteration to a buffer and in c will be like <br /><br />void SUB_24B77A(unsigned char buffer[7], unsigned short crypt)<br />{<br />unsigned short 	r14;<br />short i;<br />	r14 = buffer[7]*2;<br />	if ( (r14 &gt;&gt; 8) ) r14 = r14 ^ 0x0163;<br />	r14 = (buffer[5] ^ r14) ^ buffer[2];<br />	for(i=6;i&gt;=0;i--) buffer<em> = buffer<em>;<br />	buffer[0] = (unsigned char) (crypt ^ r14);<br />}<br /><br />Br;)</div>
+    <div class="meta">Posted on 2004-07-26 01:41:00 by shenqiang</div>
+   </div>
+   <div class="post" id="post-146879">
+    <div class="subject"><a href="#post-146879">Function optimization help ...</a></div>
+    <div class="body">Firstly you should notice that all operations are done in byte sized portions, and in fact if you use the carry bit you can avoid the need for the 16 bit accesses altogether.<br /><br />As you are only shifting by 1, I'd advise you to use add instead of the shift, on the Pentium 4 architecture this will execute on the double pumped ALU effectively taking only half a clock.<br /><pre><code>  mov al, &#91;esi + 7&#93;<br />  add al, al</code></pre><br /><br />Now the conditional XOR can be done using &quot;jnc&quot; instead. Or alternatively you can do this:<br /><pre><code>  sbb ah, ah<br />  and ah, 063h<br />  xor al, ah</code></pre><br /><br />Then continue xoring as before, except only using a byte at a time.<br /><br />Once you've done all that, take your code and shuffle it about a bit to make it difficult to read (remember not to comment it) :<br /><pre><code>  mov al, &#91;esi + 7&#93;<br />  mov cl, &#91;esi + 5&#93;<br />  mov ch, &#91;esi + 2&#93;<br />  add al, al<br />  mov edx, &#91;esi + 3&#93;<br />  sbb ah, ah<br />  xor al, cl<br />  mov &#91;esi + 4&#93;, edx<br />  and ah, 63h<br />  xor al, ch<br />  mov edx, &#91;esi&#93;<br />  xor al, ah<br />  mov &#91;esi + 1&#93;, edx<br />  xor al, crypt<br />  mov &#91;esi&#93;, al</code></pre><br /><br />You can of course make it smaller by removing the mov's to CL &amp; CH, but they remove the dependancy on AL, so should make it a bit quicker (in theory).<br /><br />Mirno</div>
+    <div class="meta">Posted on 2004-07-26 12:12:32 by Mirno</div>
+   </div>
+   <div class="post" id="post-146881">
+    <div class="subject"><a href="#post-146881">Function optimization help ...</a></div>
+    <div class="body">Hrm, &quot;SUB_24B77A&quot; ...</div>
+    <div class="meta">Posted on 2004-07-26 12:42:59 by f0dder</div>
+   </div>
+   <div class="post" id="post-146886">
+    <div class="subject"><a href="#post-146886">...</a></div>
+    <div class="body"><div class="quote"><br />Hrm, &quot;SUB_24B77A&quot; ... </div><br /><br />I'm workin on emulatin' some gsm device part and i reversed the functions but troubles is they are too slow for my needs.<br /><br />@Mirno:<br /><br />Thank you very much for taking time and explain me some things.<br /><br />Br;)</div>
+    <div class="meta">Posted on 2004-07-26 15:39:27 by shenqiang</div>
+   </div>
+   <div class="post" id="post-146887">
+    <div class="subject"><a href="#post-146887">Re: Function optimization help ...</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by DANNY </em><br /></div><br /><br />  I also have an assembler optimization tips page you might find useful.  It has more tips than agner's.<br /><br /><a target="_blank" href="http://www.visionx.com/markl/optimization_tips.htm">http://www.visionx.com/markl/optimization_tips.htm</a></div>
+    <div class="meta">Posted on 2004-07-26 15:42:59 by mark_larson</div>
+   </div>
+   <div class="post" id="post-146892">
+    <div class="subject"><a href="#post-146892">Re: Re: Function optimization help ...</a></div>
+    <div class="body"><div class="quote"><br /><br /><br />  I also have an assembler optimization tips page you might find useful.  It has more tips than agner's.<br /><br /><a target="_blank" href="http://www.visionx.com/markl/optimization_tips.htm">http://www.visionx.com/markl/optimization_tips.htm</a> </div><br /><br />Thank you !<br /><br />I really appreciate you generaous help even for newer members like me ! <br /><br />Br;)</div>
+    <div class="meta">Posted on 2004-07-26 16:23:58 by shenqiang</div>
+   </div>
+   <div class="post" id="post-146893">
+    <div class="subject"><a href="#post-146893">Re: Function optimization help ...</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by DANNY </em><br /></div><br /><br />  I also have an assembler optimization tips page you might find useful.  It has more tips than agner's.<br /><br /><a target="_blank" href="http://www.visionx.com/markl/optimization_tips.htm">http://www.visionx.com/markl/optimization_tips.htm</a></div>
+    <div class="meta">Posted on 2004-07-26 16:33:05 by mark_larson</div>
+   </div>
+  </div>
+ </body>
+</html>

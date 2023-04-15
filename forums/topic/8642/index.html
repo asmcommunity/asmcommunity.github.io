@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>floor( real4 ) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8642" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=8642">floor( real4 )</a></p>
+   <div class="post" id="post-63496">
+    <div class="subject"><a href="#post-63496">floor( real4 )</a></div>
+    <div class="body">Hi. :)<br /><br />I tried to come up with a way to convert a real4 to (int)floor(x), that is, I want to remove the fractional component from a floating point number (I do NOT want to round it up, in other words)<br /><br />I've seen floor() done by changing the rounding mode in the FPU's control word.  I'm almost a total FPU newbie, so that doesn't help me much.  I haven't found any good documentation on the rounding modes and other modes, so I'm trying it this way.<br /><br />I looked at an 32bit IEEE format reference, and used it to come up with this algo, which seems to work for small numbers, but past a certain point it ceases to function properly.<br /><br /><pre><code>&#91;size=12&#93;floorR4 proc uses ecx edx, fpnumber&#58;REAL4<br />; floorR4<br />; returns &#40;int&#41;floor&#40;float n&#41;<br /><br />        xor   eax,   eax<br />        xor   ecx,   ecx<br />        mov   edx,   REAL4 PTR &#91;fpnumber&#93;<br />        shld  ecx,   edx, 9                 ;ch = sign bit<br />        sub   cl,    126                    ;cl = exponent + 1<br />        jc    @done<br />        shl   edx,   8<br />        or    edx,   80000000h              ;edx = decimal part<br />        shld  eax,   edx, cl                ;eax = edx*2^cl<br />        shr   ecx,   8<br />        neg   ecx<br />        add   eax,   ecx<br />        xor   eax,   ecx                    ;reapply sign<br />@done&#58;<br />        ret<br /><br />floorR4 endp&#91;/size&#93;</code></pre><br /><br />If anybody here might want to help me understand these things a little better, I will be highly appreciative.  Thanks.  ;)</div>
+    <div class="meta">Posted on 2002-10-25 22:52:09 by iblis</div>
+   </div>
+   <div class="post" id="post-63505">
+    <div class="subject"><a href="#post-63505">floor( real4 )</a></div>
+    <div class="body">You want to truncate the fractional part but you don't want a round off? Try this one, maybe it'll work. Where x is a floating data type to truncate and y is equal to 0.5<br /><pre><code>fld x<br />fsub y<br />frndint<br />fstp x</code></pre></div>
+    <div class="meta">Posted on 2002-10-26 00:00:22 by stryker</div>
+   </div>
+   <div class="post" id="post-63514">
+    <div class="subject"><a href="#post-63514">floor( real4 )</a></div>
+    <div class="body">Stryker, thanks.<br /><br />I tried that, but for some reason it messes up on every odd whole number.  1.0, 3.0, 5.0, 7.0, etc.  It gives me x - 1 as the answer.  For example  floor( 1.0 ) returns 0.0, which is wrong.<br /><br />:(</div>
+    <div class="meta">Posted on 2002-10-26 01:37:32 by iblis</div>
+   </div>
+   <div class="post" id="post-63524">
+    <div class="subject"><a href="#post-63524">floor( real4 )</a></div>
+    <div class="body"><pre><code>int controlword;<br />int controltruncate = 0xFFF;<br />float x = -5.9;<br />_asm<br />&#123;<br />    fstcw controlword<br />    fldcw controltruncate<br />    fld x<br />    frndint<br />    fstp x<br />    fldcw controlword<br />&#125;</code></pre>x now contains the truncated float, sign bit is still retained only the mantissa bits were chopped off :) - sorry for tainting this in C, I just need a quick solution.</div>
+    <div class="meta">Posted on 2002-10-26 03:09:14 by stryker</div>
+   </div>
+   <div class="post" id="post-63533">
+    <div class="subject"><a href="#post-63533">floor( real4 )</a></div>
+    <div class="body">Agner Fog's optimizations help file that is included in masm32 has a chapter about rounding floating point numbers (chapter 27.5). It shows a method not using the FPU control word since the fstcw &amp; fldcw are slow instructions.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-10-26 04:40:45 by Thomas</div>
+   </div>
+   <div class="post" id="post-63554">
+    <div class="subject"><a href="#post-63554">floor( real4 )</a></div>
+    <div class="body">Thanks all.<br /><br />I checked out Agner Fog's code for rounding towards 0 but it seemed rather long and clunky. <strong> f</strong>xx<strong>cw</strong> can't be that slow can it?<br /><br />I really liked Stryker's idea of subtracting 0.5 before doing the rounding, but for some reason it didn't work.  <strong>But</strong>, on a hunch I decided to instead sub 0.49999 and so far it's 100% spot-on when compared with C Library's floor().   The program I'm using to test it generates random floating point numbers in an endless loop, comparing C's floor() with this new one.   If floor1 != floor2 then it stops, prints the number, and beeps.  It's been hours and the thing hasn't beeped yet.  :alright:<br /><br /><pre><code>&#91;size=12&#93;floor proc fpnum&#58;dword<br /><br />  finit<br />  mov      eax, dword ptr &#91;fpnum&#93;  ;eax = float<br />  and      eax, 80000000h          ;save sign bit<br />  push     3EFFFFECh               ;push 0.49999<br />  fld      dword ptr &#91;esp&#93;         ;load it<br />  fld      dword ptr &#91;fpnum&#93;       ;load float<br />  fabs                             ;remove sign<br />  fsub     st, st&#40;1&#41;               ;adjust<br />  frndint                          ;round<br />  fst      dword ptr &#91;esp&#93;         ;store in temp<br />  or       eax, dword ptr &#91;esp&#93;    ;replace sign<br />  add      esp, 4<br />  ret<br /><br />floor endp&#91;/size&#93;</code></pre><br /><br />Excuse my FPU code.  I barely have any idea what I'm doing when it comes to the FPU.  Any suggestions would be appreciated.</div>
+    <div class="meta">Posted on 2002-10-26 08:12:06 by iblis</div>
+   </div>
+   <div class="post" id="post-63579">
+    <div class="subject"><a href="#post-63579">floor( real4 )</a></div>
+    <div class="body">Sorry to burst your bubble, but if you try 403FFFFFh (2.9999998) your function will exploit :-) The well-known trick of adding 0.5 (to round) or substract 0.5 (to truncate) works flawlessly if you change the order of magnitude like this:<br /><br />v100   real4  100.0<br />v05    real4   0.5<br />num   real4  3.0<br /><br />fld num<br />fmul v100<br />fadd v05<br />frndint<br />fdiv v100<br /><br />but then you have to perform the division which isn't as fast as you would like.<br /><br />I really believe that changing the CW is the best option...</div>
+    <div class="meta">Posted on 2002-10-26 13:24:27 by micmic</div>
+   </div>
+   <div class="post" id="post-63608">
+    <div class="subject"><a href="#post-63608">floor( real4 )</a></div>
+    <div class="body">If the rounding mode is known the problem reduces to a couple instructions, else use Agner's algorithm.</div>
+    <div class="meta">Posted on 2002-10-26 19:17:59 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-63617">
+    <div class="subject"><a href="#post-63617">floor( real4 )</a></div>
+    <div class="body">Thanks everybody.  You've been a lot of help.<br /><br />I think changing the rounding mode is the best solution for my purposes.  However, I can't in good conscience just go ahead and fool around with the FPU's control word without knowing what I'm doing.   At least not until I find some info on the control word, which I haven't been able to locate.  FPU info seems to be scarce these days.  (yes I've searched the boards extensively, didn't find anything on the cw)<br /><br />Does anybody know of some reference material that details the control word and the different modes?  Thanks!<br /><br />Edit: Also, regarding F(N)INIT, I read somewhere on these boards while searching for CW info that FINIT isn't necessary.  Yet if I don't include it my FPU code seems to stop functioning after awhile.  Can anybody clear this issue up for me?  Thanks.</div>
+    <div class="meta">Posted on 2002-10-26 19:35:51 by iblis</div>
+   </div>
+   <div class="post" id="post-63620">
+    <div class="subject"><a href="#post-63620">floor( real4 )</a></div>
+    <div class="body">I think that is because you have to clean up the FPU stack (e.g mark the tag bits for each register as empty). You can do this using the F/EMMS instruction but I don't think it is a good idea. Probably better to use FINIT.</div>
+    <div class="meta">Posted on 2002-10-26 19:45:57 by x86asm</div>
+   </div>
+   <div class="post" id="post-63624">
+    <div class="subject"><a href="#post-63624">floor( real4 )</a></div>
+    <div class="body"><div class="quote">However, I can't in good conscience just go ahead and fool around with the FPU's control word without knowing what I'm doing.</div><br /><br />It's not so terrible, you are not going to overheat the processor or something like that :) The code that Stryker posted is all that you have to do. For more info read the FP chapter of Hyde's book, you won't need anything more: <a target="_blank" href="http://webster.cs.ucr.edu/Page_asm/ArtofAssembly/ch14/CH14-1.html">http://webster.cs.ucr.edu/Page_asm/ArtofAssembly/ch14/CH14-1.html</a></div>
+    <div class="meta">Posted on 2002-10-26 20:07:59 by micmic</div>
+   </div>
+   <div class="post" id="post-63626">
+    <div class="subject"><a href="#post-63626">floor( real4 )</a></div>
+    <div class="body"><strong>iblis</strong>, is it a sin to read the Intel manuals - really no better source - Volume 1 has all you need. :)</div>
+    <div class="meta">Posted on 2002-10-26 20:40:32 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-63641">
+    <div class="subject"><a href="#post-63641">floor( real4 )</a></div>
+    <div class="body">What I meant was that I don't want to just use any ol' line of code unless I know what's going on behind the scenes.  I know the CPU isn't going to explode or anything of that sort.  I'm not <strong>that</strong> stupid.  Give me some credit here.  ;)<br /><br />Setting the control word to 0FFFh apparently works like a charm, but I still want to know what flags I'm fiddling with.  I'm not the type of person to say &quot;Hey gimme some code to do X.&quot;  I don't want that, I want to learn without just accepting things on faith.<br /><br />I'm going to take Bitrake's suggestion and have a look at the intel manuals, wherever they are.  I'm just trying to break out of my 486 cocoon and learn about the FPU and then eventually I'll tackle MMX.<br /><br />Thanks again.</div>
+    <div class="meta">Posted on 2002-10-26 22:17:28 by iblis</div>
+   </div>
+  </div>
+ </body>
+</html>

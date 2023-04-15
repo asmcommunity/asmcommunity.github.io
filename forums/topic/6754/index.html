@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>how to detect when another app opens/closes - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6754" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6754">how to detect when another app opens/closes</a></p>
+   <div class="post" id="post-48830">
+    <div class="subject"><a href="#post-48830">how to detect when another app opens/closes</a></div>
+    <div class="body">g'day,<br />i need some help with this problem. i need my program to receive a message or something when another app opens and closes, so that I can grab some information from it before it closes. what i tried doing was using a WH_FOREGROUNDIDLE hook, and did an enum_windows inside the hook, so I knew whether or not the other application was open, but I discovered that enum_windows doesn't work properly from inside a hook. also I tried other hooks (WH_CBT, WH_CALLWNDPROC...) but they didn't work because the window I want to hook is a child window i think. how do I do this?? Here is the code for my hook dll:<br /><pre><code><br />.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br />includelib \masm32\lib\kernel32.lib<br />include \masm32\include\user32.inc<br />includelib \masm32\lib\user32.lib<br />include \masm32\include\masm32.inc<br />includelib \masm32\lib\masm32.lib<br /><br /><br />include \masm32\include\debug.inc<br />includelib \masm32\lib\debug.lib<br /><br />EnumWinsProc PROTO &#58;DWORD,&#58;DWORD<br />EnumChildWinsProc PROTO &#58;DWORD,&#58;DWORD<br /><br />.const<br />WM_MOUSEHOOK equ WM_USER+6<br /><br />.data?<br />hHook dd ?<br />hWnd dd ?<br /><br />.data<br /><br />hInstance dd 0<br />hWindow dd 0<br />hThreader dd 0<br />statez dd 0<br /><br />hWndWordPad dd 0<br />sztextstring db 65 dup &#40;0&#41;<br />szWordPad db &quot;#32771&quot;,0<br />szUnicode dw 30abh,51fah,51fah,0<br />szWordPadEdit db &quot;Button&quot;,0<br />statics dd 0<br /><br />.code<br />DllEntry proc hInst&#58;HINSTANCE, reason&#58;DWORD, reserved1&#58;DWORD<br />	push hInst<br />	pop hInstance<br />     <br />      mov  eax,TRUE<br />      ret<br />DllEntry Endp<br /><br />MouseProc proc nCode&#58;DWORD,wParam&#58;DWORD,lParam&#58;DWORD<br />	pushad<br /><br />      ;invoke CallNextHookEx,hHook,nCode,wParam,lParam<br />	;mov edx,lParam<br />	;assume edx&#58;PTR CWPSTRUCT<br />	;mov eax, &#91;edx&#93;.hwnd<br />      ;.if eax==hWndWordPad<br />	;  PrintHex &#91;edx&#93;.message<br />      ;.endif<br />      ;invoke PostMessage,hWnd,WM_MOUSEHOOK,eax,0<br />      .if statez==0<br />        call CallEnum<br />        <br />        ;PrintDec hWndWordPad<br />        ;.if hWndWordPad!=0<br />        ;  ;invoke EnumChildWindows, hWndWordPad, addr EnumChildWinsProc, 0 <br />          PrintText &quot;Enternet Loaded&quot;<br />          mov statez, 1<br />	  ;.endif<br />      .endif<br />      <br />      ;.if statez==1<br />      ;.endif<br />	assume edx&#58;nothing<br /><br />      popad<br /><br />	xor eax,eax<br />	ret<br />MouseProc endp<br /><br />CallEnum&#58; <br />      invoke EnumWindows, addr EnumWinsProc, 0<br />      ret<br /><br />InstallHook proc<br />      pushad<br />      invoke SetWindowsHookEx, WH_FOREGROUNDIDLE, addr MouseProc, hInstance, NULL<br />      mov hHook,eax<br />      popad<br />	ret <br />InstallHook endp<br /><br />UninstallHook proc<br />      pushad<br />	invoke UnhookWindowsHookEx,hHook<br />      popad<br />	ret<br />UninstallHook endp<br /><br /><br /><br />EnumWinsProc proc haWnd &#58;DWORD, lParam &#58;DWORD<br />	pushad<br /><br />      invoke GetClassName, haWnd, offset sztextstring, 64 <br />	PrintString sztextstring<br />      mov edx, offset sztextstring <br />	mov ebx, offset szWordPad <br />	mov ecx, 64 <br />	<br />comparestring&#58; <br />	mov al, &#91;edx&#93; <br />	mov ah, &#91;ebx&#93; <br />	cmp al, ah <br />	jne notstring <br />	cmp al, 0 <br />	jne notyet <br />	cmp ah, 0 <br />	je stringisequal <br />	notyet&#58; inc edx <br />	inc ebx <br />	dec ecx <br />	jne comparestring <br />	<br />notstring&#58; <br />	popad<br />	mov eax, 1 <br />	ret <br />	<br />stringisequal&#58;<br />	mov eax, haWnd<br />      mov hWndWordPad,eax<br />      popad<br />	xor eax, eax  <br />ret <br /><br />EnumWinsProc endp<br /><br />EnumChildWinsProc proc uses ebx hWnnd &#58;DWORD, lParam &#58;DWORD<br />	invoke GetClassName, hWnnd, offset sztextstring, 64 <br />      PrintString sztextstring<br /><br />	mov edx, offset sztextstring <br />	mov ebx, offset szWordPadEdit <br />	mov ecx, 64 <br />	<br />acomparestring&#58; <br />	mov al, &#91;edx&#93; <br />	mov ah, &#91;ebx&#93; <br />	cmp al, ah <br />	jne anotstring <br />	cmp al, 0 <br />	jne anotyet <br />	cmp ah, 0 <br />	je astringisequal <br />	anotyet&#58; inc edx <br />	inc ebx <br />	dec ecx <br />	jne acomparestring <br />	<br />anotstring&#58; <br />	xor ebx, ebx <br />	xor ecx, ecx <br />	xor edx, edx <br />	mov eax, 1 <br />	ret <br />	<br />astringisequal&#58; <br />      inc statics<br />      .if statics==3<br />  	  invoke GetWindowText, hWnnd, offset sztextstring, 64<br />        PrintString sztextstring<br />      .endif<br />	xor ebx, ebx <br />	xor ecx, ecx <br />	xor edx, edx<br />	mov eax, 1<br />      ret <br /><br />EnumChildWinsProc endp<br /><br /><br />End DllEntry<br /></code></pre><br /><br /><span style="font-size:9px><em>[ code ] tags added by bAZiK</em></span></div>
+    <div class="meta">Posted on 2002-07-19 09:47:09 by Spider</div>
+   </div>
+   <div class="post" id="post-48893">
+    <div class="subject"><a href="#post-48893">Enumerate ....</a></div>
+    <div class="body">If you can find the main (top level) window of the app you are watching, then use the window enumeration functions of the winapi to find the child window of interest. I think it is GetWindowParent/Child or FindWindow with some flag to say it is a child.<br /><br />Regs,</div>
+    <div class="meta">Posted on 2002-07-19 19:26:42 by James_Ladd</div>
+   </div>
+   <div class="post" id="post-48906">
+    <div class="subject"><a href="#post-48906">how to detect when another app opens/closes</a></div>
+    <div class="body">You could code a VxD under Win9x then you could receive system messages when a process is about to be created or closed. (look at sysinternal's filemon for more info).<br /><br />You can also patch both CreateProcess and ExitProcess...</div>
+    <div class="meta">Posted on 2002-07-19 21:58:40 by Axial</div>
+   </div>
+   <div class="post" id="post-48912">
+    <div class="subject"><a href="#post-48912">how to detect when another app opens/closes</a></div>
+    <div class="body">List all processes with toolhelp/whatever, then waitformultipleobjects? ;P<br />Or install a correct r0 hook or sth.</div>
+    <div class="meta">Posted on 2002-07-20 00:36:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-48988">
+    <div class="subject"><a href="#post-48988">how to detect when another app opens/closes</a></div>
+    <div class="body">If you're using NT/2K you might want to check out the article at<br /><a target="_blank" href="http://www.codeproject.com/threads/procmon.asp">http://www.codeproject.com/threads/procmon.asp</a><br /><br />Detecting Windows NT/2K process execution<br />By Ivo Ivanov<br /><br />NT/2K provides a set of APIs, known as &quot;Process Structure Routines&quot; exported by NTOSKRNL. One of these APIs PsSetCreateProcessNotifyRoutine() offers the ability to register system-wide callback function which is called by OS each time when a new process starts, exits or is terminated. <br /><br /><br />Else in Win9x, hooking one of the APIs suggested or some appropriate service in a vxd (using VMMCall Hook_Device_Service) might work for you.<br /><br />Kayaker</div>
+    <div class="meta">Posted on 2002-07-20 10:24:59 by Kayaker</div>
+   </div>
+   <div class="post" id="post-49377">
+    <div class="subject"><a href="#post-49377">how to detect when another app opens/closes</a></div>
+    <div class="body">Hi, <br /><br />if you're looking for a solution which works under NT and 9x as well <br />maybe this is what you want.<br /><br />Register your application as the default &quot;viewer&quot; for exe files via registry.<br />HKLM\Software\Classes\exefile\shell\open\command\<br />orHCR\.exe\shell\open\command<br /><br />Each time an exe-file is to be started you'll be called.<br /><br />Bye Miracle</div>
+    <div class="meta">Posted on 2002-07-22 12:28:06 by miracle</div>
+   </div>
+   <div class="post" id="post-49470">
+    <div class="subject"><a href="#post-49470">how to detect when another app opens/closes</a></div>
+    <div class="body"><div class="quote"><br /><br /><br />Each time an exe-file is to be started you'll be called.<br /><br />Bye Miracle </div><br /><br />Wrong. <br />You will only catch ShellExecute like api!</div>
+    <div class="meta">Posted on 2002-07-22 22:13:23 by Axial</div>
+   </div>
+   <div class="post" id="post-49525">
+    <div class="subject"><a href="#post-49525">how to detect when another app opens/closes</a></div>
+    <div class="body">oh interesting ..<br /><br />surely you can point me to a solution to start an exe file <br />without this kind of &quot;notification&quot; <br /><br />Waiting for reply <br /><br />:) <br /><br />Bye Miracle</div>
+    <div class="meta">Posted on 2002-07-23 04:03:35 by miracle</div>
+   </div>
+   <div class="post" id="post-49526">
+    <div class="subject"><a href="#post-49526">how to detect when another app opens/closes</a></div>
+    <div class="body"><div class="quote"><br />oh interesting ..<br /><br />surely you can point me to a solution to start an exe file <br />without this kind of &quot;notification&quot; <br /><br />Waiting for reply <br /><br />:) <br /><br />Bye Miracle </div><br /><br />You 'll catch all processes originally called by WinExec and ShellExecute (as they both use the shell).<br />Theses &quot;notifications&quot; are implemented as calls to CreateProcess. <br />CreateProcess simply *doesn't* care about the shell.<br /><br />Here is a lame example I wrote in order to make you understand (Use with care  : It may have unpredictable bugs :) )</div>
+    <div class="meta">Posted on 2002-07-23 04:39:07 by Axial</div>
+   </div>
+   <div class="post" id="post-49529">
+    <div class="subject"><a href="#post-49529">how to detect when another app opens/closes</a></div>
+    <div class="body">I have written a programm wich overwrites the address of &quot;MessageBoxA&quot; in the memory of user32.dll ages ago.<br />It writes the address of its own function there, so all calls come to my dll instead of shell32.dll.<br />When my computer is ready again, I will dig it up and rewrite it for ShellExecute :)<br /><br />Regards,<br />bAZiK</div>
+    <div class="meta">Posted on 2002-07-23 04:52:46 by bazik</div>
+   </div>
+   <div class="post" id="post-49543">
+    <div class="subject"><a href="#post-49543">how to detect when another app opens/closes</a></div>
+    <div class="body"><div class="quote"><br />I have written a programm wich overwrites the address of &quot;MessageBoxA&quot; in the memory of user32.dll ages ago.<br /></div><br />this sounds like a LOCAL hook, writing a GLOBAL one (and in this case we need<br />a global hook...) is much more harder i think. but it is possible... on this board i<br />found dozens of posts that decribe how to bypass write-protection (file in use).<br />the pe manipulations should be plain simple.<br /><br />but it would be much cleaner to work with the toolhelp (w9x) AND psapi (nt) <br />functions which allow you to create snapshots of all applications that are <br />currently running. you can parse your results easily and do what you want<br />then.<br /><br />i found some good tutes about that stuff on google... check out <a target="_blank" href="http://www.google.de/search?q=EXPLORER+*in-memory*+infection&amp;ie=UTF-8&amp;oe=UTF-8&amp;hl=de&amp;meta=">this</a> one</div>
+    <div class="meta">Posted on 2002-07-23 06:25:41 by mob</div>
+   </div>
+   <div class="post" id="post-49582">
+    <div class="subject"><a href="#post-49582">how to detect when another app opens/closes</a></div>
+    <div class="body">It should be rather easy doing a global hook in 9x, as DLLs are located<br />in the <strong>shared</strong> memory region - which NT fortunately doesn't have.<br />Under NT redirecting stuff globally to your code isn't exactly easy...</div>
+    <div class="meta">Posted on 2002-07-23 11:38:05 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

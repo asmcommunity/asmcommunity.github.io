@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>register calling convention - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14254" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=14254">register calling convention</a></p>
+   <div class="post" id="post-110262">
+    <div class="subject"><a href="#post-110262">register calling convention</a></div>
+    <div class="body">Delphi uses the register calling convention which uses the eax, edx, ecx registers and the stack (left to right) (callee-routine cleans the stack)<br /><br />what is the equivalent to the register convention that delphi uses in masm ?<br />thanks</div>
+    <div class="meta">Posted on 2003-07-13 01:55:32 by Jnrz</div>
+   </div>
+   <div class="post" id="post-110275">
+    <div class="subject"><a href="#post-110275">register calling convention</a></div>
+    <div class="body">If you mean something that can be used with INVOKE, then the answer is 'there is no such thing in MASM'.  AFAIK, none of MS compiler products uses such convention.  So, it is only natural that MASM does not support it.<br />(Before your post, I did not know Borland adopted it.  I thought Watcom was the only company using it.)</div>
+    <div class="meta">Posted on 2003-07-13 05:18:35 by Starless</div>
+   </div>
+   <div class="post" id="post-110276">
+    <div class="subject"><a href="#post-110276">register calling convention</a></div>
+    <div class="body">You can always write your own macro for it, after all INVOKE is just a macro.</div>
+    <div class="meta">Posted on 2003-07-13 05:24:34 by donkey</div>
+   </div>
+   <div class="post" id="post-110278">
+    <div class="subject"><a href="#post-110278">register calling convention</a></div>
+    <div class="body">masm doesn't support register calling conventions.<br />It doesn't support such thing as __fastcall calling conventions used by kernel mode routines.<br />In my KmdKit i use fastcall macro for __fastcall functions.<br /><br /><em>__fastcall<br />First two DWORD arguments are passed in ECX and EDX, the rest are passed right to left.<br />Called function pops its own arguments from the stack.</em><br /><br /><pre><code><br />&#91;size=9&#93;<br />;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;<br /><br />IFNDEF @ArgRev<br />@ArgRev MACRO arglist<br />    LOCAL txt, arg<br />    txt TEXTEQU &lt;&gt;<br />%   FOR arg, &lt;arglist&gt;<br />        txt CATSTR &lt;arg&gt;, &lt;!,&gt;, txt<br />    ENDM<br />    txt SUBSTR  txt, 1, @SizeStr&#40;%txt&#41; - 1<br />    txt CATSTR  &lt;!&lt;&gt;, txt, &lt;!&gt;&gt;<br />    EXITM txt<br />ENDM<br />ENDIF<br /><br />;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;<br />;<br />; Added for supporting fastcall calling convention<br />;<br />; Usage Example&#58;<br />;       fastcall IofCompleteRequest, pIrp, IO_NO_INCREMENT<br />;<br />; addr is not supported<br />; offset is not supported for first and second param<br />; May be next time<br />;<br />;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;&#58;<br /><br />fastcall MACRO api&#58;REQ, p1, p2, px&#58;VARARG<br /><br />local arg, line, recx<br /><br />    recx = 0        <br /><br />    IFNB &lt;px&gt;<br />        % FOR arg, @ArgRev&#40; &lt;px&gt; &#41;<br />            push arg<br />        ENDM<br />    ENDIF<br /><br />    IFNB &lt;p1&gt;<br />        IF &#40;OPATTR &#40;p1&#41;&#41; AND 00010000y            ;; Is a register value<br />            IFDIFI &lt;p1&gt;, &lt;ecx&gt;                    ;; do not move ecx onto itself<br />                mov ecx, p1<br />                recx = 1                          ;; no more ecx<br />            ENDIF<br />        ELSEIF &#40;OPATTR &#40;p1&#41;&#41; AND 00000100y        ;; Is an immediate value<br />            IF p1 EQ 0<br />                xor ecx, ecx<br />            ELSEIF p1 EQ 1<br />                xor ecx, ecx<br />                inc ecx<br />            ELSEIF p1 EQ -1<br />                or ecx, -1<br />            ELSE<br />                mov ecx, p1<br />                recx = 1                          ;; no more ecx<br />            ENDIF<br />        ELSE<br />            mov ecx, p1<br />            recx = 1                              ;; no more ecx<br />        ENDIF<br /><br />        IFNB &lt;p2&gt;<br />            IF &#40;OPATTR &#40;p2&#41;&#41; AND 00010000y        ;; Is a register value<br />                IFIDNI &lt;p2&gt;, &lt;ecx&gt;<br />                    IF recx                       ;; if ecx was used report error<br />                        line TEXTEQU %@Line<br />                        % ECHO @FileCur&#40;line&#41; &#58; ERROR! ECX register value overwritten by fastcall macro.<br />                        .ERR<br />                    ENDIF<br />                ENDIF<br /><br />                IFDIFI &lt;p2&gt;, &lt;edx&gt;                ;; do not move edx onto itself<br />                    mov edx, p2<br />                ENDIF<br />            ELSEIF &#40;OPATTR &#40;p2&#41;&#41; AND 00000100y    ;; Is an immediate value<br />                IF p2 EQ 0<br />                    xor edx, edx<br />                ELSEIF p2 EQ 1<br />                    xor edx, edx<br />                    inc edx<br />                ELSEIF p2 EQ -1<br />                    or edx, -1<br />                ELSE<br />                    mov edx, p2<br />                ENDIF<br />            ELSE<br />                mov edx, p2<br />            ENDIF<br />        ENDIF<br />    ENDIF<br />    call api<br />ENDM<br />&#91;/size&#93;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-07-13 05:40:31 by Four-F</div>
+   </div>
+  </div>
+ </body>
+</html>

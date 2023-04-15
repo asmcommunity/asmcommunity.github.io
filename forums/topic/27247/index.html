@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Flat pushbuttons - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27247" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27247">Flat pushbuttons</a></p>
+   <div class="post" id="post-195263">
+    <div class="subject"><a href="#post-195263">Flat pushbuttons</a></div>
+    <div class="body">I just saw the source code for the flat edit controls at Iczelion's site, does anyone have source code for flat push buttons (not the ones on the toolbars), or the best method to do this? The buttons should just have a thinner edge, they don't need to show a raisen edge when the mouse is over them. Here's an example (first when not pressed, second when pressed).
+<img src=" http://www.thomasbleeker.nl/exagone/Image3.gif
+
+Thomas</div>
+    <div class="meta">Posted on 2001-03-15 09:10:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-195264">
+    <div class="subject"><a href="#post-195264">Flat pushbuttons</a></div>
+    <div class="body">fairly easy, you just subclass the normal button control, i made some hover buttons a while ago, not exactly what u wanted, but close enough to be useable ;)
+
+source code follows ...
+
+<pre><code>
+;=================================================================================
+;				VAHOVER
+;=================================================================================
+
+.DATA
+	szClass_Hover			db		"VAHOVER",0
+	szButtonClass			db		"BUTTON",0
+
+.DATA?
+
+	OldProc_Hover		dd		?
+
+.CODE
+
+;=================================================================================
+
+Init_Hover	PROC
+	LOCAL HoverClass:WNDCLASSEX
+
+	mov HoverClass.cbSize, SIZEOF WNDCLASSEX
+	INVOKE GetClassInfoEx, NULL, ADDR szButtonClass, ADDR  HoverClass
+
+	mov HoverClass.lpszClassName, OFFSET szClass_Hover
+	m2m OldProc_Hover, HoverClass.lpfnWndProc
+	m2m HoverClass.lpfnWndProc, OFFSET Proc_Hover
+	INVOKE RegisterClassEx, ADDR  HoverClass
+
+	ret
+Init_Hover	ENDP
+
+;=================================================================================
+
+OverSet	MACRO	val
+	INVOKE GetWindowLong, hWnd, GWL_USERDATA
+	push eax
+	INVOKE GlobalLock, eax
+	push esi
+	mov esi, eax
+	assume esi:PTR HoverData
+	mov eax, .Over
+	.IF eax != val
+		mov .Over, val
+		mov .Pressed, FALSE
+		assume esi:nothing
+		pop esi
+		pop eax
+		INVOKE GlobalUnlock, eax
+		INVOKE SendMessage, hWnd, WM_PAINT, 0, 0
+	.ELSE
+		assume esi:nothing
+		pop esi
+		pop eax
+		INVOKE GlobalUnlock, eax
+	.ENDIF	
+ENDM
+
+;=================================================================================
+
+.DATA
+
+HoverFontName			db			"system",0
+
+sTextSize	STRUCT
+	tsx	DWORD	?
+	tsy	DWORD	?
+sTextSize	ENDS
+
+.CODE
+
+;=================================================================================
+
+Proc_Hover 	PROC hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	LOCAL hDC	:	DWORD
+	LOCAL szTextBuffer[1024]: BYTE
+	LOCAL r		:	RECT
+	LOCAL x		:	DWORD
+	LOCAL y		:	DWORD
+	LOCAL txtS	:	sTextSize
+	LOCAL lensz	:	DWORD
+	
+	.IF uMsg == WM_CREATE
+		INVOKE GlobalAlloc, GMEM_MOVEABLE, SIZEOF HoverData
+		push eax
+		INVOKE SetWindowLong, hWnd, GWL_USERDATA, eax
+		pop eax
+		push eax
+		INVOKE GlobalLock, eax
+		push esi
+		mov esi, eax
+		assume esi:PTR HoverData
+		mov .Over, FALSE
+		mov .Pressed, FALSE
+		mov .OffColour, 0000000h
+		mov .OnColour , 0800000h
+		INVOKE CreateFont,16,8,0,0,FW_NORMAL,0,TRUE,0,DEFAULT_CHARSET,\
+                            OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,\
+                            DEFAULT_QUALITY,DEFAULT_PITCH ,\
+                            ADDR HoverFontName
+	    mov .hFont, eax
+		assume esi:nothing
+		pop esi
+		pop eax
+		INVOKE GlobalUnlock, eax
+	.ELSEIF uMsg == WM_DESTROY
+		INVOKE GetWindowLong, hWnd, GWL_USERDATA
+		push eax
+		INVOKE GlobalLock, eax
+
+		push esi
+		mov esi, eax
+		assume esi:PTR HoverData
+		INVOKE DeleteObject, .hFont
+		pop esi
+		assume esi:nothing
+		pop eax
+		INVOKE GlobalFree, eax
+	.ELSEIF uMsg == WM_MOUSEMOVE
+		.IF bMouseCaptured
+			m2m x, lParam
+			m2m y, lParam
+			and x, 0FFFFh
+			shr y, 16
+			INVOKE WindowFromPoint,x,y
+			.IF eax != hWnd
+				INVOKE ReleaseCapture
+				mov bMouseCaptured, FALSE
+				OverSet FALSE
+			.ENDIF	
+		.ELSE 
+			INVOKE SetCapture, hWnd
+			mov bMouseCaptured, TRUE
+			OverSet TRUE
+		.ENDIF
+	.ELSEIF uMsg == WM_HOVER_SETFONT
+		INVOKE GetWindowLong, hWnd, GWL_USERDATA
+		push eax
+		INVOKE GlobalLock, eax
+
+		push esi
+		mov esi, eax
+		assume esi:PTR HoverData
+		.IF lParam
+			INVOKE DeleteObject, .hFont
+		.ENDIF	
+	    m2m .hFont, wParam
+		pop esi
+		assume esi:nothing
+		pop eax
+		INVOKE GlobalUnlock, eax
+		INVOKE SendMessage, hWnd, WM_PAINT, 0, 0
+	.ELSEIF uMsg == WM_HOVER_SETCOLOURS
+		
+		INVOKE GetWindowLong, hWnd, GWL_USERDATA
+		push eax
+		INVOKE GlobalLock, eax
+
+		push esi
+		mov esi, eax
+		assume esi:PTR HoverData
+		m2m .OffColour, wParam
+		m2m .OnColour, lParam
+		assume esi:nothing
+		pop esi
+		
+		pop eax
+		INVOKE GlobalUnlock, eax
+		
+		INVOKE SendMessage, hWnd,</div>
+    <div class="meta">Posted on 2001-03-15 12:30:00 by Entro-P</div>
+   </div>
+   <div class="post" id="post-195265">
+    <div class="subject"><a href="#post-195265">Flat pushbuttons</a></div>
+    <div class="body">Thanks for your code Entro-P, I decided to create an ownerdrawn button and draw it like you do in your code. This seems easier for me as I don't need all the hover-stuff. 
+But now I've got another question. Take a look at my source code or exe (download here). It's a window with a normal button and a flat button. But the flat button seems to respond slower than the normal button. Try to click as fast as you can on both buttons, and watch the difference. The normal button responds immediately on the clicks, but the flat button sometimes skips one. Any ideas?
+Thomas
+
+
+This message was edited by Thomas, on 3/16/2001 8:35:16 AM</div>
+    <div class="meta">Posted on 2001-03-16 07:32:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-195266">
+    <div class="subject"><a href="#post-195266">Flat pushbuttons</a></div>
+    <div class="body">The flat buttons in this example will run just as fast as the normal button.
+
+The BS_OWNERDRAW style seems to always run slower.
+
+<pre><code>
+         title   Buttons
+
+         .586
+         .model flat, stdcall
+         option casemap:none
+
+            include  \Masm32V1\include\windows.inc
+            include  \Masm32V1\include\user32.inc
+            include  \Masm32V1\include\GDI32.inc
+            include  \Masm32V1\include\kernel32.inc
+            include  \Masm32V1\include\comdlg32.inc
+            include  \Masm32V1\include\COMCTL32.inc
+;   include  \MASM32V1\include\DSPMACRO.asm
+
+         includelib  \Masm32V1\lib\user32.lib
+         includelib  \Masm32V1\lib\GDI32.lib
+         includelib  \Masm32V1\lib\kernel32.lib
+         includelib  \Masm32V1\lib\comdlg32.lib
+         includelib  \Masm32V1\lib\COMCTL32.lib
+
+WinMain         PROTO  :DWORD, :DWORD, :DWORD, :DWORD
+ControlButt     PROTO :DWORD, :DWORD, :DWORD, :DWORD
+ButtonType      PROTO :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
+
+.const
+EditID     equ 1
+
+.data
+ClassName   db  'Buttons',0
+AppName     db  'Buttons',0
+ButtClass   db  'BUTTON',0
+szNormal    db  'Normal',0
+szFlat      db  'Flat',0
+szRaised    db  'Cancel',0
+FontName    db  'MS Sans Serif',0  ;'Tahoma',0 ;'Arial',0
+
+.data?
+hInst       dd  ?
+CommandLine dd  ?
+
+hWnd        dd  ? 
+hButt1      dd  ?
+hButt2      dd  ?
+hButt3      dd  ?
+SubControl  dd  ?
+aFont       dd  ?
+
+lf       LOGFONT         <>
+
+.code
+
+;________________________________________________________________________________
+start:
+      INVOKE     GetModuleHandle, NULL
+         mov     hInst, eax
+      INVOKE     GetCommandLine
+         mov     CommandLine, eax
+
+        call     InitCommonControls          ; Initialize the common ctrl lib
+
+      INVOKE     WinMain, hInst ,NULL, CommandLine, SW_SHOWDEFAULT
+
+      INVOKE     ExitProcess, eax
+
+;________________________________________________________________________________
+WinMain proc  uses ebx  hinst:HINSTANCE, hPrevInst:HINSTANCE, CmdLine:LPSTR, CmdShow:DWORD
+LOCAL    wc:WNDCLASSEX
+LOCAL    msg:MSG
+
+         mov     wc.cbSize, sizeof WNDCLASSEX
+         mov     wc.style, CS_HREDRAW or CS_VREDRAW
+         mov     wc.lpfnWndProc, offset WndProc
+         mov     wc.cbClsExtra, NULL
+         mov     wc.cbWndExtra, NULL
+        push     hInst
+         pop     wc.hInstance
+         mov     wc.hbrBackground, COLOR_BTNFACE+1 ;COLOR_WINDOW+1
+         mov     wc.lpszMenuName, 0
+         mov     wc.lpszClassName, offset ClassName
+      INVOKE     LoadIcon, NULL, IDI_APPLICATION
+         mov     wc.hIcon, eax
+         mov     wc.hIconSm, eax
+      INVOKE     LoadCursor, NULL, IDC_ARROW
+         mov     wc.hCursor, eax
+      INVOKE     RegisterClassEx, addr wc
+
+;---------- <span class="text-center"> ----------
+      INVOKE     GetSystemMetrics, SM_CXSCREEN
+         sub     eax, 130
+         shr     eax, 1
+        push     eax
+      INVOKE     GetSystemMetrics, SM_CYSCREEN
+         sub     eax, 175
+         shr     eax, 1
+         pop     ebx
+
+      INVOKE     CreateWindowEx, 0, addr ClassName,\
+                 addr AppName, WS_OVERLAPPEDWINDOW,\
+                 ebx, eax, 130, 175, NULL, NULL, hInst, NULL
+         mov     hWnd, eax
+
+      INVOKE     ShowWindow, hWnd, SW_SHOWNORMAL
+      INVOKE     UpdateWindow, hWnd
+      .while TRUE
+         INVOKE     GetMessage, addr msg, NULL, 0, 0
+            .BREAK .IF (!eax)
+            INVOKE     TranslateMessage, addr msg
+            INVOKE     DispatchMessage, addr msg
+      .endw
+         mov     eax, msg.wParam
+         ret
+WinMain endp
+
+;________________________________________________________________________________
+WndProc proc  uses edx  hwnd:HWND, wmsg:UINT, wParam:WPARAM, lParam:LPARAM
+
+      .if wmsg == WM_CREATE
+         INVOKE     CreateWindowEx, NULL, addr ButtClass, addr szNormal,
+                    WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON,
+                    20, 20, 80, 30, hwnd, 84, hInst, 0
+            mov     hButt1, eax</div>
+    <div class="meta">Posted on 2001-03-16 11:17:00 by Ewayne</div>
+   </div>
+  </div>
+ </body>
+</html>

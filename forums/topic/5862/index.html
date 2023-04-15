@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Problem with Image.lib by Ernie - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5862" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5862">Problem with Image.lib by Ernie</a></p>
+   <div class="post" id="post-41999">
+    <div class="subject"><a href="#post-41999">Problem with Image.lib by Ernie</a></div>
+    <div class="body">Hi,<br /><br />I'm really fascinated by the image.lib made by ernie. it can load GIFs, JPEGs, BMPs..and other formats!! it's really great! but I've some problems with it. I changed BmpButton from m32lib a bit to load gifs instead of bitmaps. the part i changed is:<br /><br />original:<br /><pre><code><br />invoke LoadBitmap,hModule,rnum1<br />    mov hBmpU, eax<br />    invoke LoadBitmap,hModule,rnum2<br />    mov hBmpD, eax<br /></code></pre><br /><br />changed:<br /><pre><code><br />invoke BitmapFromResource, hModule, rnum1<br />    mov hBmpU, eax<br />    invoke BitmapFromResource,hModule,rnum2<br />    mov hBmpD, eax<br /></code></pre><br /><br />the whole thing works great. i call:<br /><pre><code><br />invoke GifButton,hWin,350,479,10001,10002,4000<br /></code></pre><br /><br />and have a working gifbutton there. but after this call i try to load a jpeg file from file (not from resource). <br /><pre><code><br />invoke BitmapFromFile, ADDR mappath<br />      .if eax==0<br />        invoke GetLastError<br />        invoke FormatMessage,FORMAT_MESSAGE_FROM_SYSTEM,0,eax,0,addr errormessage,50,0<br />        invoke MessageBox,hWin,addr errormessage,addr szDisplayName,0<br />      .endif<br /></code></pre><br /><br />i'm 100% sure, that the mappath is correct, because the call works without calling the gifbutton procedure earlier. but BitmapFromFile returns, that the file could not be found! if i call gifbutton AFTER loading this jpeg, everything works fine. but using the gifbutton first and the loading the jpeg returns the error i mentioned some lines above. <br /><br />this is the complete code that does not work:<br /><pre><code><br />invoke GifButton,hWin,350,479,10001,10002,4000<br />      mov hgo,eax<br /> INVOKE GetDC,hWin<br />	mov myDC,eax<br />	INVOKE CreateSolidBrush,000000h<br />	mov blackbrush,eax<br />      INVOKE CreateSolidBrush,00FFFFFFh<br />      mov whitebrush,eax<br />      RGB 50h,50h,50h<br />      INVOKE CreateSolidBrush,eax<br />      mov greybrush,eax<br />	INVOKE CreateCompatibleDC,myDC<br />	mov backbuffer,eax		<br />	INVOKE CreateCompatibleBitmap,myDC,screenrect.right,screenrect.bottom<br />	mov backbitmap,eax		<br />	INVOKE SelectObject,backbuffer,backbitmap<br />	mov oldbit,eax<br />	INVOKE FillRect, backbuffer, ADDR screenrect, whitebrush	;fill invis screen with black <br />	invoke CreatePen,PS_SOLID,1,00FFFFFFh<br />	mov whitepen,eax<br />	invoke CreatePen,PS_SOLID,1,00FF0000h<br />	mov bluepen,eax<br />      RGB 080h,080h,080h<br />      invoke CreatePen,PS_SOLID,1,eax<br />      mov greypen,eax<br />      RGB 0FFh,0,0<br />      invoke CreatePen,PS_SOLID,1,eax<br />      mov redpen,eax<br />      RGB 0FFh,0FFh,0<br />      invoke CreatePen,PS_SOLID,1,eax<br />      mov yellowpen,eax<br />     <br />      invoke BitmapFromFile, ADDR mappath<br />      .if eax==0<br />        invoke GetLastError<br />        invoke FormatMessage,FORMAT_MESSAGE_FROM_SYSTEM,0,eax,0,addr errormessage,50,0<br />        invoke MessageBox,hWin,addr errormessage,addr szDisplayName,0<br />      .endif<br />      mov mapbit,eax<br />      invoke CreateCompatibleDC,myDC<br />    	mov mapbitdc,eax<br />    	invoke SelectObject,mapbitdc,mapbit<br />      invoke BitBlt,backbuffer,0,0,screenrect.right,screenrect.bottom,mapbitdc,0,0,SRCCOPY<br /></code></pre><br /><br />and this is the code that works:<br /><pre><code><br />invoke BitmapFromFile, ADDR mappath<br />      .if eax==0<br />        invoke GetLastError<br />        invoke FormatMessage,FORMAT_MESSAGE_FROM_SYSTEM,0,eax,0,addr errormessage,50,0<br />        invoke MessageBox,hWin,addr errormessage,addr szDisplayName,0<br />      .endif<br />      mov mapbit,eax<br />      invoke CreateCompatibleDC,myDC<br />    	mov mapbitdc,eax<br />    	invoke SelectObject,mapbitdc,mapbit<br />      invoke GifButton,hWin,350,479,10001,10002,4000<br />      mov hgo,eax<br /><br />      invoke BitBlt,backbuffer,0,0,screenrect.right,screenrect.bottom,mapbitdc,0,0,SRCCOPY<br /></code></pre><br /><br />the only thing that i see that could be wrong is, that the code between gifbutton and loading the jpeg causes the problems, or loading the gif doesn't clean up something...i just don't know.<br /><br />can you help me?<br /><br />thanks..<br />  NOP</div>
+    <div class="meta">Posted on 2002-06-08 08:45:06 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42017">
+    <div class="subject"><a href="#post-42017">ok, i know the problem now</a></div>
+    <div class="body">hi guys,<br /><br />no reply yet....hmmm...<br /><br />i tried debugging the whole thing, and acutally found out what the problem is: <br />this is a part from Ernie's BitmapFromFile code:<br /><pre><code><br />invoke MultiByteToWideChar, CP_ACP, 0, pszFileName, -1, pwszFileName, dwLength<br />    ; now we can create out picture object<br />    invoke OleLoadPicturePath, pwszFileName, NULL, NULL, NULL, ADDR IID_IPicture, ADDR pPicture<br />    .IF  eax &gt; 80000000H  ; hresult failed<br />        ; we didn't get the file to open, assume bad filename<br />        invoke SetLastError, ERROR_FILE_NOT_FOUND<br />        mov eax, NULL<br />        ret<br />    .ENDIF<br /></code></pre><br />while debugging, i saw that in the working version, my filepath is <br />&quot;C&quot;,00,&quot;:&quot;,00,&quot;\&quot;,00,&quot;m&quot;,00,&quot;a&quot;,00,&quot;p&quot;,00,&quot;.&quot;,00,&quot;j&quot;,00,&quot;p&quot;,00,&quot;g&quot;,00,00,00<br />in memory, after calling &quot;MultiByteToWideChar&quot;. <br />but in the not working version it is:<br />&quot;C&quot;,00,&quot;:&quot;,00,&quot;\&quot;,00,&quot;m&quot;,00,&quot;a&quot;,00,&quot;p&quot;,00,&quot;.&quot;,00,&quot;j&quot;,00,&quot;p&quot;,00,&quot;g&quot;,00,&quot;y&quot;,00, etc. and some other crap...<br /><br />in my opinion that means, that the &quot;OleLoadPicturePath&quot; appends this &quot;crap&quot; after the actual filepath and, of course, can't find the file then. and that means, that the string has to be &quot;double-zero-terminated&quot; after MultiByteToWideChar like in the path where the program works. <br />but how to make the filepath double-zero-terminated? just appending a second ,0 after the filepath in the .data section doesn't help... <br /><br />thanks in advance...<br /><br />bye</div>
+    <div class="meta">Posted on 2002-06-08 13:26:53 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42020">
+    <div class="subject"><a href="#post-42020">Problem with Image.lib by Ernie</a></div>
+    <div class="body">The strting looks strange with all those extra zero pads in there cause its a Unicode string to keep OleLoadPic happy (this is a COM type of functioon, and COM only speaks Unicode).<br /><br />My guess is it is another bug in the MultiByteToWideCharacter API call.... it has been trouble in the past. All I can suggest right now is to try adding a few extra bytes to the string size you pass it for the translation.<br /><br />Sorry... I'm getting married next week and we're busy as all hell here.</div>
+    <div class="meta">Posted on 2002-06-08 14:14:11 by Ernie</div>
+   </div>
+   <div class="post" id="post-42022">
+    <div class="subject"><a href="#post-42022">k</a></div>
+    <div class="body">erm, but doesn't MultiByteToWideChar append a zero after every character? i mean, the original string is &quot;C:\map.jpg&quot;, and after calling MultiByteToWideChar it turns to &quot;C&quot;,00,&quot;:&quot; ...etc..<br />i've checked that with softice..if i display the memory location of the formated string by multibytetowidechar. and as i said, the difference is, that in the working version, the string is at least double zero terminated after multibytetowidechar. but it is just one zero terminated in the not working version..so how should the function recognize the end of the string when there is one zero after every character? this seems to be the problem...<br /><br />just using<br /><pre><code><br />.data<br />   filepath db &quot;C&#58;\map.jpg&quot;,10 dup&#40;0&#41;<br /></code></pre><br />doesn't help too...<br /><br />best wishes for your marriage (i don't know what to wish in english :tongue: )<br /><br />bye..</div>
+    <div class="meta">Posted on 2002-06-08 14:42:07 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42033">
+    <div class="subject"><a href="#post-42033">Problem with Image.lib by Ernie</a></div>
+    <div class="body"><div class="quote"><br />I'm getting married next week and we're busy as all hell here. </div>My congratulations and best wishes for that. :)</div>
+    <div class="meta">Posted on 2002-06-08 16:07:25 by Maverick</div>
+   </div>
+   <div class="post" id="post-42056">
+    <div class="subject"><a href="#post-42056">Problem with Image.lib by Ernie</a></div>
+    <div class="body">NOP &amp; Mav: Thanks for your warm wishes.<br /><br />NOP:  I just noticed you have the old, orgional versioon of this routine (the one people already reported is buggy). I re-did the string length for Unicode trranslation, it seemed pretty good after that. Please try downloading my lib again from <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4239&amp;highlight=picture">here.</a> <br /><br /><div class="quote">..so how should the function recognize the end of the string when there is one zero after every character? this seems to be the problem... </div> <br /><br />Not really... Unicode defines a word (not a byte) for eacxh character, so the function is looking for both zeros.<br /><br />The problem is MultiByteToWide, which isn't giving us those characters correctly.</div>
+    <div class="meta">Posted on 2002-06-08 20:56:16 by Ernie</div>
+   </div>
+   <div class="post" id="post-42099">
+    <div class="subject"><a href="#post-42099">straaaaange...</a></div>
+    <div class="body">hey ernie,<br /><br />I already had the latest version of the image.lib, but there was something else. nevertheless, i downloaded it again, and replaced the &quot;old&quot; with the new. i tried to run my program, but i had the same error. <br />so i just built in the two lines <br /><pre><code><br />MessageBoxW PROTO &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD <br />invoke MessageBoxW, 0, pwszFileName, 0, 0 <br /></code></pre><br />in your BitmapFromFile procedure like you told someone in the other thread, recompiled the whole thing...and......it worked!!!!!!!!!! the path was correct!! the image was shown...everything was fine...<br />it was really strange to me and i removed the two lines again and recompiled...it still worked..so it seems Ernie, that you just forgot to recompile your lib after changing the code????!!!!<br /><br />anyways...thanks!!!!!! great work!!!<br /><br />bye,<br />  NOP</div>
+    <div class="meta">Posted on 2002-06-09 03:34:39 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42123">
+    <div class="subject"><a href="#post-42123">Problem with Image.lib by Ernie</a></div>
+    <div class="body">hehehehe.. of COURSE that's possible. But more likely, I forgot to replace the .lib itself in the package, and just updated the .asm.<br /><br />Funny you're the first to notice that. I'll fix the download (somday soon, I'm off to Atlantic City for my bachlor party in 2 minuits) and re-post it.<br /><br /><br />Glad you got it working, sorry for the problem.</div>
+    <div class="meta">Posted on 2002-06-09 07:59:24 by Ernie</div>
+   </div>
+   <div class="post" id="post-42175">
+    <div class="subject"><a href="#post-42175">hehe</a></div>
+    <div class="body">k, thx! np!<br /><br />NOP</div>
+    <div class="meta">Posted on 2002-06-09 13:44:55 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-42283">
+    <div class="subject"><a href="#post-42283">Problem with Image.lib by Ernie</a></div>
+    <div class="body">Hey Ernie, i wanna know if u coded all the algos to unpack jpg's in image.lib, if it's affirmative, can u tell me the book/reference u use to code it?. Im interesed in image processing.<br /><br />Greets and thanks.</div>
+    <div class="meta">Posted on 2002-06-10 01:52:40 by r00t</div>
+   </div>
+   <div class="post" id="post-42287">
+    <div class="subject"><a href="#post-42287">Problem with Image.lib by Ernie</a></div>
+    <div class="body">I'm not Ernie, but I know the imagelib relies on some COM stuff provided by Windows to load various fileformats... so he hasn't coded the decompression algorithms (it is not a bad thing, as you don't have to worry about patents... especially when dealing with gif images...)<br /><br />PS : Ernie, Happy Marriage ! :grin:</div>
+    <div class="meta">Posted on 2002-06-10 03:15:48 by JCP</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Calling C functions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30352" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30352">Calling C functions</a></p>
+   <div class="post" id="post-213603">
+    <div class="subject"><a href="#post-213603">Calling C functions</a></div>
+    <div class="body">how would i make my C++ functions callable in Assembly? i tried<br /><pre><code><br /><br />#include &lt;iostream&gt;<br /><br />using namespace std;<br /><br />int sum(int ,int )__attribute__((CDECL));<br /><br /><br />int a;<br />int b;<br /><br />int main()<br />{<br />&nbsp; &nbsp; &nbsp;  a=10;<br />&nbsp; &nbsp; &nbsp;  b=40;<br /><br />&nbsp; &nbsp; asm(&quot;.intel_syntax noprefix&quot;);<br />&nbsp; &nbsp; asm(&quot;push _a&quot;);<br />&nbsp; &nbsp; asm(&quot;push _b&quot;);<br />&nbsp; &nbsp; asm(&quot;call _sum&quot;);<br />&nbsp; &nbsp; asm(&quot;add esp,8&quot;);<br />&nbsp; &nbsp; asm(&quot;mov _a,eax&quot;);<br />&nbsp; &nbsp; asm(&quot;.att_syntax noprefix&quot;);<br />&nbsp; &nbsp; cout&lt;&lt;&quot;\n The sum of a + b is now &quot;&lt;&lt;a;<br />&nbsp; &nbsp; return 0;<br />}<br />int sum(int x,int y)<br />{<br /><br />&nbsp; &nbsp; return x+y;<br />}<br /><br /></code></pre><br /><br />but i get the error undefined reference to sum.<br /><br />also in ASM, C global variable names are prefixed with an underscore what about local variables how would i reference them ?</div>
+    <div class="meta">Posted on 2010-12-07 03:21:43 by ashken</div>
+   </div>
+   <div class="post" id="post-213604">
+    <div class="subject"><a href="#post-213604">Re: Calling C functions</a></div>
+    <div class="body">Try using the following:<br /><br />extern &quot;C&quot; {<br /> &nbsp;int sum(int, int);<br />}<br /><br />Depending on your compiler and OS the underscore may (or may not) get prepended. &nbsp;Trying to interface with C++ name-mangling is notoriously difficult, which is why most routines are defined using cdecl ( and the fact that when writing shared libraries you must use cdecl if you expect your library to be sharable among users of different compilers!).<br /><br />You can generate an assembly listing of your code when compiling to see the exact name being created.<br /><br />As far as your local variables, they are referenced from the stack, unlike the global variables you define in your data section which you can reference by name in assembly code. &nbsp;In other words, you can&#039;t make variables of local scope visible to external functions or methods by name. &nbsp;The only way to get access to them is to pass on the stack either the value or the address in order for the called function to work on it.<br /><br />Hope that helps.<br /></div>
+    <div class="meta">Posted on 2010-12-07 08:41:18 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213607">
+    <div class="subject"><a href="#post-213607">Re: Calling C functions</a></div>
+    <div class="body">thanx @p1ranha the extern key word does the trick!</div>
+    <div class="meta">Posted on 2010-12-07 15:34:07 by ashken</div>
+   </div>
+   <div class="post" id="post-213623">
+    <div class="subject"><a href="#post-213623">Re: Calling C functions</a></div>
+    <div class="body">ok if i have a fucntion like <br /><br /><pre><code><br />int stuff()<br />{<br />&nbsp; &nbsp; int x;<br />&nbsp; <br />&nbsp; &nbsp; return x;<br />}<br /></code></pre><br /><br />what will be the address of x on the stack??  ,&nbsp;  ??<br />i have tried accessing x using inline assembly but it ends up an epic fail<br /><br /></div>
+    <div class="meta">Posted on 2010-12-10 16:33:08 by ashken</div>
+   </div>
+   <div class="post" id="post-213625">
+    <div class="subject"><a href="#post-213625">Re: Calling C functions</a></div>
+    <div class="body"><div class="quote"><br />ok if i have a fucntion like <br /><br /><pre><code><br />int stuff()<br />{<br />&nbsp; &nbsp; int x;<br />&nbsp; <br />&nbsp; &nbsp; return x;<br />}<br /></code></pre><br /><br /><br />what will be the address of x on the stack??  ,&nbsp;  ??<br />i have tried accessing x using inline assembly but it ends up an epic fail<br /><br /></div><br /><br />in 32-bit world would become something like this in assembly:<br /><br /><pre><code><br /><br />; offsets of function locals are negative values from ebp<br />%define x ebp - 4<br /><br />extern _stuff&nbsp;  ; don&#039;t forget this when calling from another language<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; I&#039;ve assumed C language based upon your example<br />_stuff:&nbsp; &nbsp; &nbsp; &nbsp;  ; Thus the prepended underscore<br />&nbsp;  push ebp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; set up the function prologue<br />&nbsp;  mov ebp, esp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;<br />&nbsp;  sub&nbsp; esp, 4&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; make room for your local var<br /><br />; my little insertion to demonstrate initializing your local var<br />&nbsp;  xor eax, eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; set eax to 0<br />&nbsp;  mov dword, eax&nbsp; <br /><br />; code that does other stuff<br />&nbsp;  .<br />&nbsp;  .<br />&nbsp;  .<br />&nbsp;  <br />&nbsp;  mov eax, dword&nbsp; &nbsp;  ; store the return value in eax<br /><br />&nbsp;  add esp, 4&nbsp; &nbsp; &nbsp; &nbsp; ; function epilogue ( properly clean up the stack )<br />&nbsp;  pop ebp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; restore original value of ebp<br />&nbsp;  ret&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; exit function with eax containing the return value<br /></code></pre><br /><br />Note: The function prologue/epilogue can be optimized further but I don&#039;t want to confuse<br />the issue for you yet.&nbsp; Stick with the above and you&#039;ll be safe&nbsp; ;)<br /><br />Also, make sure you add<br /><br />#ifdef __cplusplus<br />&nbsp; &nbsp; extern &quot;C&quot; {<br />&nbsp; &nbsp; &nbsp; &nbsp; int stuff();&nbsp; &nbsp; // &lt;- your functions here<br />&nbsp; &nbsp; }<br />#endif<br /><br />to your header if compiling C++ source code to properly link to your assembler routine.<br />hope that helps!<br /></div>
+    <div class="meta">Posted on 2010-12-10 18:16:58 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213628">
+    <div class="subject"><a href="#post-213628">Re: Calling C functions</a></div>
+    <div class="body"><div class="quote"><br /><pre><code><br /><br />; offsets of function locals are negative values from ebp<br />%define x ebp - 4<br /><br />extern _stuff&nbsp; &nbsp;; don&#039;t forget this when calling from another language<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; I&#039;ve assumed C language based upon your example<br />_stuff:&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;; Thus the prepended underscore<br />&nbsp; &nbsp;push ebp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;; set up the function prologue<br />&nbsp; &nbsp;mov ebp, esp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;<br />&nbsp; &nbsp;sub&nbsp; esp, 4&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; make room for your local var<br /><br />; my little insertion to demonstrate initializing your local var<br />&nbsp; &nbsp;xor eax, eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;; set eax to 0<br />&nbsp; &nbsp;mov dword, eax&nbsp; <br /><br />; code that does other stuff<br />&nbsp; &nbsp;.<br />&nbsp; &nbsp;.<br />&nbsp; &nbsp;.<br />&nbsp; &nbsp;<br />&nbsp; &nbsp;mov eax, dword&nbsp; &nbsp; &nbsp;; store the return value in eax<br /><br />&nbsp; &nbsp;add esp, 4&nbsp; &nbsp; &nbsp; &nbsp; ; function epilogue ( properly clean up the stack )<br />&nbsp; &nbsp;pop ebp&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;; restore original value of ebp<br />&nbsp; &nbsp;ret&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;; exit function with eax containing the return value<br /></code></pre><br /></div><br /><br />One correction, use global for exporting and extern for importing.&nbsp; &#039;extern _stuff&#039; is supposed to be &#039;global _stuff&#039;</div>
+    <div class="meta">Posted on 2010-12-10 19:37:08 by Synfire</div>
+   </div>
+   <div class="post" id="post-213639">
+    <div class="subject"><a href="#post-213639">Re: Calling C functions</a></div>
+    <div class="body">Good catch, Bryant.&nbsp; I&#039;ve been bitten by &quot;idea&quot; code again.&nbsp; :D<br /></div>
+    <div class="meta">Posted on 2010-12-12 09:03:00 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213662">
+    <div class="subject"><a href="#post-213662">Re: Calling C functions</a></div>
+    <div class="body"><div class="quote"><br />ok if i have a fucntion like <br /><pre><code><br />int stuff()<br />{<br />&nbsp; &nbsp; int x;<br />&nbsp; &nbsp; return x;<br />}<br /></code></pre><br /><br />what will be the address of x on the stack??  ,&nbsp;  ??<br />i have tried accessing x using inline assembly but it ends up an epic fail<br /></div><br /><br />That Depends. ;)<br /><br /><strong>int</strong> can even be 8-bit value, for a selected compilers. For a big one (I mean 64-bit and forth), several issues are in force. Keywords: &quot;Agner Fog&quot;. He tooks a hassle to combine those calling conventions in one convenient document.</div>
+    <div class="meta">Posted on 2010-12-14 14:37:35 by baldr</div>
+   </div>
+  </div>
+ </body>
+</html>

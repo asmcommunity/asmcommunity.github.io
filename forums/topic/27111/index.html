@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Is this possible? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27111" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27111">Is this possible?</a></p>
+   <div class="post" id="post-194627">
+    <div class="subject"><a href="#post-194627">Is this possible?</a></div>
+    <div class="body">Basically, if I had a load of variables which I specifically knew what they did but were lets say spread out over memory at irregular intervals, the best way I can think to do acces them is to create an array of pointers to the various variables and then I could access them mathamatically.
+
+Ok thats going off the point, but I'm just giving an example of how this applies to variables, is the same possible of lables. After all they are memory address just like variables.</div>
+    <div class="meta">Posted on 2001-03-05 15:08:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-194628">
+    <div class="subject"><a href="#post-194628">Is this possible?</a></div>
+    <div class="body">Yes, one example is a jump/call table:
+<pre><code>; Copyright 2000 Wayne J. Radburn
+;;
+;;	MAIN WINDOW MESSAGES
+;;
+       	.CONST
+MainMsg	DWORD	WM_COMMAND,
+		WM_WINDOWPOSCHANGED,
+		WM_PAINT,
+		WM_CREATE, WM_CLOSE, WM_DESTROY
+	DWORD	MainWM_COMMAND,
+		MainWM_WINDOWPOSCHANGED,
+		MainWM_PAINT,
+		MainWM_CREATE, MainWM_CLOSE, MainWM_DESTROY
+
+;Equates used to simplify references to window procedure parameters
+lParam 	TEXTEQU	<ebp+14h>
+wParam 	TEXTEQU	<ebp+10h>
+uMsg   	TEXTEQU	<ebp+0Ch>
+hWnd   	TEXTEQU	<ebp+08h>
+
+	.CODE
+MainWND	PROC
+	push	ebp
+	mov	ebp,esp	;hWnd=EBP+08h, uMsg=EBP+0Ch, wParam=EBP+10h, lParam=EBP+14h
+
+	push	ebx
+	push	esi
+	push	edi
+
+;IF message is not found
+	mov	eax,
+	mov	edi,OFFSET MainMsg
+	mov	ecx,LENGTHOF MainMsg
+	repne scasd
+	je	Process
+
+;THEN let DefWindowProc handle this message
+Default:
+	push			;lParam
+	push			;wParam
+	push				;Msg
+	push				;hWnd
+	call			;USER
+
+	jmp	Return
+
+;ELSE process this message possibly setting carry flag for default processing
+	ALIGN 4
+Process:
+	call	DWORD PTR 
+	jc	Default
+Return:
+	pop	edi
+	pop	esi
+	pop	ebx
+
+	mov	esp,ebp
+	pop	ebp
+	ret	10h
+MainWND	ENDP
+</code></pre>
+Thanks to Wayne for the example :)
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-05 16:02:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-194629">
+    <div class="subject"><a href="#post-194629">Is this possible?</a></div>
+    <div class="body">Hrmmmm, a table of procedure lables. Kinda like a table of function pointers like a COM interface uses?
+
+Sure, very possible.
+
+In fact, you may wish to stuff em all into a structure to make accessing them easier.
+
+<pre><code>
+; define the members
+; default values set here to the procedures
+FunctionTable_  STRUCT
+  FunctionA    proto2 FunctionA_Impl 
+  FunctionB    proto3 FunctionB_Impl
+  FunctionC    proto8 FunctionC_Impl
+FunctionTable_  ENDS
+
+;make an instance of this struct
+FunctionTable FunctionTable_ { }
+</code></pre>
+
+Then, later in your code you can invoke these functions:
+
+<pre><code>
+invoke FunctionTable.FunctionA, p1, p2
+...
+invoke FunctionTable.FunctionB, p1, p2, p3
+...
+invoke FunctionTable.FunctionC, p1, p2, p3, p4, p5, p6, p7, p8
+</code></pre>
+
+Now, I left a kinda importaint set-up detail out. You need to prototype the functions. Since we do loose type checking in masm32, the protos will only do a count of parameters. Since they are also all pointers, they need be defined in two steps:
+
+<pre><code>
+Proto2Impl      typedef proto :DWORD, :DWORD
+Proto3Impl      typedef proto :DWORD, :DWORD, :DWORD
+
+Proto8Impl      typedef proto :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
+
+
+proto2           typedef ptr Proto2Impl
+proto3           typedef ptr Proto3Impl
+
+proto8           typedef ptr Proto8Impl
+</code></pre>
+
+When I defined such a table, I did it once, for 1 to 15 parameters, stuck it into an .inc file, and re-use it all the time.
+
+Finally, you need to somehow change the function names, one name for the table member, 2nd for the actual proc. I'll preface the proc name with the table name (which in COM means it preface with the interface name). So the stubs for these procs look like this:
+
+<pre><code>
+FunctionA_Impl PROC  p1, p2
+	ret
+FunctionA_Impl ENDP
+
+
+FunctionB_Impl PROC   p1, p2, p3
+	ret
+FunctionB_Impl ENDP
+
+
+FunctionC_Impl PROC  p1, p2, p3, p4, p5, p6, p7, p8
+	ret
+FunctionC_Impl ENDP
+</code></pre></div>
+    <div class="meta">Posted on 2001-03-05 19:24:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-194630">
+    <div class="subject"><a href="#post-194630">Is this possible?</a></div>
+    <div class="body">Here is my example of message crackers (plus a few other things)
+
+Please comment. While I did a bit of asm work in the past I'm real rusty.
+
+James
+
+www.jcfuller.com/RTDASM.ZIP
+
+
+This message was edited by jcfuller, on 3/6/2001 9:42:31 AM
+
+This message was edited by jcfuller, on 3/6/2001 9:45:06 AM
+
+This message was edited by jcfuller, on 3/6/2001 9:45:58 AM</div>
+    <div class="meta">Posted on 2001-03-06 09:40:00 by jcfuller</div>
+   </div>
+   <div class="post" id="post-194631">
+    <div class="subject"><a href="#post-194631">Is this possible?</a></div>
+    <div class="body">Thanks everyone who replied, that should work perfectly.</div>
+    <div class="meta">Posted on 2001-03-06 16:34:00 by Zadkiel</div>
+   </div>
+  </div>
+ </body>
+</html>

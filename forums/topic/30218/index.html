@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Binary Trees - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30218" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=30218">Binary Trees</a></p>
+   <div class="post" id="post-213045">
+    <div class="subject"><a href="#post-213045">Binary Trees</a></div>
+    <div class="body"><br />While developing h2incn I needed a way to insert and search for defined values quickly. Using my recently developed FNV-1 hash algorithm I&#039;ve created a hash map (basically an array of pointers indexed by the hash value) with collisions now handled by a Binary Tree.<br /><br />The files can be found at:<br /><a target="_blank" href="http://sourceforge.net/projects/h2incn/">http://sourceforge.net/projects/h2incn/</a><br /><br />The Binary Tree assembles in both 32-bit and 64-bit Linux and Windows.&nbsp; It is not a balanced tree nor does it permit duplicates but it&#039;s perfect for this application. Node deletion is not completed yet but will be in the next few days.&nbsp; All assembly files use Nasm syntax, of course ;)<br /><br />Download the files bintree.asm and bintree.inc for the implementation.&nbsp; Download hashmap.c and hashmap.h which shows it&#039;s usage.<br /><br />This project relates well with the NASMX project. And yes, you can now download the tarball and compile and execute h2incn as it&#039;s slightly more stable although not feature complete yet.&nbsp; I&#039;m still trucking along with development...<br /><br /></div>
+    <div class="meta">Posted on 2010-09-05 23:31:10 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213051">
+    <div class="subject"><a href="#post-213051">Re: Binary Trees</a></div>
+    <div class="body">Is it worthwhile using a binary tree instead of a simple linked-list data structure? The purpose of the H(x) is to reduce collisions as much as possible; how many collisions are you getting?</div>
+    <div class="meta">Posted on 2010-09-06 13:30:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-213053">
+    <div class="subject"><a href="#post-213053">Re: Binary Trees</a></div>
+    <div class="body"><br />My goal was simply to provide a Nasm syntax assembly implementation of a Binary Tree for myself and anybody else that might benefit from it.&nbsp; It is implemented using recursion but is quite fast.&nbsp; I&#039;m not overly concerned with shaving micro-seconds off execution time at this point.<br /><br />With regard to collisions I&#039;ve noticed that the hash algorithm I&#039;m currently using is not providing the proper spread across the hash map.&nbsp; I have created a 32K pointer array hash map with each slot potentially holding a root pointer to a binary tree.&nbsp; After testing I noticed that collisions are occuring almost 50% of the time, thus a file containing 1000 defines has approximately 500 collisions occuring. A 32K map provides plenty of potential space and collisions at such a low watermark irks my &#039;taters a bit!&nbsp; :shock:<br /><br />So I&#039;m pondering either the possibility that a) The hash algorithm is truly not designed for 16-bit hashs; b) My conversion from 32-bit to 16-bit is flawed, or c) I need a better algorithm more suitable for 16-bit hashing.<br /><br />I originally ruled out CRC16 as too heavy for my requirements but may reconsider.&nbsp; If anyone has suggestions regarding any of the above I&#039;d appreciate your input.<br /></div>
+    <div class="meta">Posted on 2010-09-06 15:45:28 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213055">
+    <div class="subject"><a href="#post-213055">Re: Binary Trees</a></div>
+    <div class="body">No wonder your hashing algorithm produces 50 percent collisions when trying to map 32K unique entries using 16 bit resolution - notice that you only have 64K possible one-to-one mappings!<br />I don&#039;t think *any* hashing algorithm will get around the fact that your keyspace is&nbsp; inadequate for the number of entries you are trying to map. Is there some reason that you insist on 16 bit keys? If you had stuck with the original 32bit keyspace you would have a 1 in 4.3 billion chance of colliding (regardless of the complexity of the hashing algo).. is the cost of storing an extra 2 bytes per entry really that bad?<br /></div>
+    <div class="meta">Posted on 2010-09-06 18:44:05 by Homer</div>
+   </div>
+   <div class="post" id="post-213056">
+    <div class="subject"><a href="#post-213056">Re: Binary Trees</a></div>
+    <div class="body"><div class="quote"><br />No wonder your hashing algorithm produces 50 percent collisions when trying to map 32K unique entries using 16 bit resolution - notice that you only have 64K possible one-to-one mappings!<br /></div><br /><br />Yes, which is more than enough for my purposes. &nbsp;However, I think you misunderstood the problem domain (or I didn&#039;t describe it in enough detail). &nbsp;For parsing a C header I&#039;m not expecting to find 32 thousand defines and typedefs in a header file to hash even when recursing included headers. However, the system itself is quite capable of maintaining billions of tokens (restricted only by available memory). &nbsp;Each define is initially hashed and inserted into the hashmap for future lookup. The hash map itself is preallocated to allow 32K ptrs to root tree tokens. The purpose of the Binary Tree is to handle any hash collisions occurring from use of the hash algorithm. &nbsp;Using a binary tree for searching previously inserted entries will always be faster than iterating through a linked list, unless of course the entries are added in sequential order in which case the performance would be identical. &nbsp;Again this should not be occurring in any &quot;normal&quot; C header file.<br /><br />The concept is as follows:<br /><pre><code><br /> &nbsp; &nbsp;Hash Map &nbsp; &nbsp; &nbsp; Root Tree Pointer<br /> &nbsp; &nbsp;0x0000 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x00000000 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TOKEN_C<br /> &nbsp; &nbsp;0x0001 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x00000000 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;/<br /> &nbsp; &nbsp;0x0002 &nbsp; ---&gt; &nbsp; 0x004A1234 &nbsp; ---&gt; &nbsp; &nbsp;TOKEN_B<br /> &nbsp; &nbsp;0x0003 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;\<br /> &nbsp; &nbsp;. &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;TOKEN_A<br /> &nbsp; &nbsp;.<br /> &nbsp; &nbsp;.<br /> &nbsp; &nbsp;0x7FFD &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x00000000<br /> &nbsp; &nbsp;0x7FFE &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x00000000<br /> &nbsp; &nbsp;0x7FFF &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x00000000<br /></code></pre><br /><br />The crux of the issue is that the hashing algorithm, when run against a file containing only 1000 defines, was generating hashes that collide almost 50% of the time. &nbsp;I would expect that only a 3% utilization of available hash space would not be incurring such a high rate of collisions, even when using &quot;only&quot; 15 bit hashes. &nbsp;Would you consider this an unrealistic expectation?<br /></div>
+    <div class="meta">Posted on 2010-09-06 20:58:07 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213057">
+    <div class="subject"><a href="#post-213057">Re: Binary Trees</a></div>
+    <div class="body">No, the probability for collisions grows proportionally to the consumption of the keyspace, so at 100% utility we have 100% chance of a collision .. and regardless of the hashing algo employed, we would expect around 3% collisions when the keyspace has been 3% consumed... your expectations are quite reasonable.<br />It must be said that a more complex hashing algo simply provides a better distribution of the hashes over the keyspace - it has no effect on the PROBABILITY of a collision, given RANDOM input. However if there is any linearity between the input data and the hashing algorithm, this will indeed increase the probability.<br />There must be something seriously wrong with your hash implementation - even an additive CRC (which is PURELY linear) would be less prone to collisions than this - I would take a CLOSE look at the implementation, line by line. If you can&#039;t solve it, i would point you toward any one of the pseudo-RNG algorithms as a good way to delineate (or even replace!) your hashing algo.<br />I actually did quite a bit of research into probability distribution analyses of RNG&#039;s a couple of years back, and developed a custom RNG based on MTB and ParkMiller for the purpose of encrypting data. Basically I needed to create an algo which generated a very well-distributed hash based on input data which I then used in subsequent steps as a cypher key - it would be suitable for this problem domain.<br /></div>
+    <div class="meta">Posted on 2010-09-07 01:42:19 by Homer</div>
+   </div>
+   <div class="post" id="post-213059">
+    <div class="subject"><a href="#post-213059">Re: Binary Trees</a></div>
+    <div class="body"><div class="quote"><br />Is it worthwhile using a binary tree instead of a simple linked-list data structure? The purpose of the H(x) is to reduce collisions as much as possible; how many collisions are you getting?<br /></div><br /><br />You won&#039;t even need that. You can also use what is known as a &#039;probing hashtable&#039;.<br />For example, I use a linear probing hashtable in my 3D Engine for various caches. It generates a table index from the hash, and then checks if that spot is already occupied. If it is, it will increase the index by 1 and repeat. It will continue to search linearly until it finds an empty spot. Retrieving an item works the same way. You search until you either find the item, or find an empty spot in the table. For deletion, you use a special deleted pointer value, so that searching will not break.<br /><br />A variation on that is the quadratic probing table. Instead of increasing the pointer by 1 everytime, it will take index*index and generate a new index from that.<br /><br />I prefer to use the probing approach over linked lists. It has slightly less overhead.</div>
+    <div class="meta">Posted on 2010-09-07 02:16:55 by Scali</div>
+   </div>
+   <div class="post" id="post-213060">
+    <div class="subject"><a href="#post-213060">Re: Binary Trees</a></div>
+    <div class="body">We also have a version of this in ObjAsm, I call it the &quot;holey array method&quot; - it&#039;s not the best solution for all cases either but yeah, in this situation it probably deserves visiting.<br />Pure linked lists are crap for sorted arrays, we appreciate this... and so too for BINARY trees, where we can clearly separate the subspaces we should aim higher than 2... why should we NOT apply , say, QuadTree, or any other NARY tree approach to hashing, if we can?<br /></div>
+    <div class="meta">Posted on 2010-09-07 06:14:33 by Homer</div>
+   </div>
+   <div class="post" id="post-213064">
+    <div class="subject"><a href="#post-213064">Re: Binary Trees</a></div>
+    <div class="body">Scali, I&#039;m aware of the probing approach - but what do you do if all the slots are filled? Also, the probing can end up pretty slow when you have an almost-full table.<br /><br />As it often is, the more you know about your data the better algorithms you can choose - probing isn&#039;t bad if you have good H(x) that gives a sparsely populated table.</div>
+    <div class="meta">Posted on 2010-09-07 10:22:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-213066">
+    <div class="subject"><a href="#post-213066">Re: Binary Trees</a></div>
+    <div class="body">If you can afford a single bit you could indicate if the slot overflowed once*, and hence, even if the array is full you would be able to stop before N steps. On non large-address-aware programs you could use the highest bit of the pointer to string for this.<br /><br />*The bit could be cleared if when deleting you scan the table for the last key whose hash value matches the released slot and move the key to it or clear the bit if none was found.<br /><br />PS: Scali, your algo use circular scan or just scans up to bottom?</div>
+    <div class="meta">Posted on 2010-09-07 11:42:08 by LocoDelAssembly</div>
+   </div>
+   <div class="post" id="post-213067">
+    <div class="subject"><a href="#post-213067">Re: Binary Trees</a></div>
+    <div class="body"><div class="quote"><br />Scali, I&#039;m aware of the probing approach - but what do you do if all the slots are filled? Also, the probing can end up pretty slow when you have an almost-full table.</div><br /><br />Well, you almost provided the answer yourself already: Don&#039;t let the table become almost-full.<br />Performance of a hashtable will always degrade as it gets fuller. A linked list is no different. You&#039;ll lose the O(1) advantage that caused you to use a hashtable in the first place.<br /><br />At each insert, I check the number of entries, and double the size of the table when I insert the N/2nd element, where N is the size of the table. I also try to choose an initial table size that avoids resizing, whenever possible.</div>
+    <div class="meta">Posted on 2010-09-07 12:59:45 by Scali</div>
+   </div>
+   <div class="post" id="post-213068">
+    <div class="subject"><a href="#post-213068">Re: Binary Trees</a></div>
+    <div class="body"><div class="quote"><br />PS: Scali, your algo use circular scan or just scans up to bottom?<br /></div><br /><br />It starts at the index generated by the hash, then wraps around if it passes the end of the table. So that would be circular. Since the table can never be full (see post above), it will always find an empty spot eventually.</div>
+    <div class="meta">Posted on 2010-09-07 13:02:12 by Scali</div>
+   </div>
+   <div class="post" id="post-213075">
+    <div class="subject"><a href="#post-213075">Re: Binary Trees</a></div>
+    <div class="body">The collision problem is much worse than one might think. According to the <a target="_blank" href="http://en.wikipedia.org/wiki/Birthday_paradox">Birthday Paradox</a>, a hash table only 16% full will have a 99% chance of a collision. A hash table 55% full will have a 99.9999999999999999999999999998% chance of a collision. This is assuming you&#039;re using a perfect hashing method.</div>
+    <div class="meta">Posted on 2010-09-07 22:35:28 by Wolfshook</div>
+   </div>
+   <div class="post" id="post-213076">
+    <div class="subject"><a href="#post-213076">Re: Binary Trees</a></div>
+    <div class="body">Wolfshook, but what is the change of that happening many times? (i.e. after finding a pair/collision, what are the odds of finding, say, log(N) pairs that collide in the whole set)<br /><br />I&#039;m expecting it to be less but I&#039;m not sure how to calculate, though...</div>
+    <div class="meta">Posted on 2010-09-08 00:12:07 by LocoDelAssembly</div>
+   </div>
+   <div class="post" id="post-213084">
+    <div class="subject"><a href="#post-213084">Re: Binary Trees</a></div>
+    <div class="body"><div class="quote"><br />Wolfshook, but what is the change of that happening many times? (i.e. after finding a pair/collision, what are the odds of finding, say, log(N) pairs that collide in the whole set)<br /><br />I&#039;m expecting it to be less but I&#039;m not sure how to calculate, though...<br /></div><br /><br />I see what you&#039;re getting at.<br /><br />You want to look at <a target="_blank" href="http://en.wikipedia.org/wiki/Birthday_paradox#Collision_counting">Collision Counting</a>. But I gotta be honest, math isn&#039;t my strong point.<br /><br />50% chance of a collision when hash table is 6% utilised.<br />50% chance of 2-way collision when hash table is 24% utilised (not including entries in the collision resolution subset.)<br />50% chance of 3-way collision when hash table is 85% utilised.<br /><br />I agree with what you&#039;re alluding to. I was just getting at that collision resolution <em>does</em> need to be efficient.<br /><br />Now, apparently, it should be something lightweight and cheap. Maybe a BSR is bit heavy handed, depending on what you&#039;re working on? Although linked lists are susceptible to &quot;Algorithmic Complexity&quot; denial of service attacks.</div>
+    <div class="meta">Posted on 2010-09-08 19:57:42 by Wolfshook</div>
+   </div>
+   <div class="post" id="post-213126">
+    <div class="subject"><a href="#post-213126">Re: Binary Trees</a></div>
+    <div class="body">There is an update available to the Binary Tree routines in file bintree.asm available at:<br /><br /><a target="_blank" href="http://sourceforge.net/projects/h2incn/"><br />http://sourceforge.net/projects/h2incn/<br /></a><br /><br />A bug fix to the binarytree_insert_node function fixes a parent-child pointer issue and I&#039;ve added the code for binarytree_delete_node() for 32 and 64-bit platforms.&nbsp; So basically that particular subpackage is now complete.&nbsp; You can read the usage and assembling instructions as they are documented within the source file itself.<br /><br />Don&#039;t be alarmed by the size of the actual source file itself (56KB).&nbsp; Although there are over 2000 lines of code and comments remember that there are 3 different implementations within the same file: one for 32-bit using the C calling convention applicable to both Linux and Windows, one for Linux 64-bit fastcall, and one for Windows 64-bit fastcall.&nbsp; Only the actual code for the target platform will be assembled.&nbsp; For instance, the actual binary size of the assembled routines is only 877 bytes for a 32bit implementation using Nasm with optimizations enabled.<br /><br />There are a few optimizations that can be made to the package such as iteration rather than recursion or shrinking the size of the _bst_node_t structure knowing that the key/ value pairs immediately follow it but I leave those exercises to the reader.&nbsp; The source code itself provides a working x86 and x64 implementation compatible with Linux and Windows that is well documented, fast, and provides students of assembly an excellent example of programming without using more advanced techniques.&nbsp; Of course, for a few pints of Guinness I can be persuaded to write a more optimized version ;)<br /><br />One technique I do use that you may find appealing is the single allocation of memory that contains both the node structure itself as well as the variable length data that a node may contain. This enables the entire node to be fetched into the CPU cache during memory reads and, provided the lengths of the key/value pair are small enough, reduces thrashing.</div>
+    <div class="meta">Posted on 2010-09-13 19:59:44 by p1ranha</div>
+   </div>
+  </div>
+ </body>
+</html>

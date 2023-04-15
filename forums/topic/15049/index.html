@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Something wrong .w this? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15049" />
+    <link rel="next" href="../?id=15049&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=15049">Something wrong .w this?</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=15049&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=15049&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="15049" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=15049&amp;page=2">&gt;</a><a href="../?id=15049&amp;page=2">&raquo;</a></form>   <div class="post" id="post-116803">
+    <div class="subject"><a href="#post-116803">Something wrong .w this?</a></div>
+    <div class="body">The following code crashes.  Am I missing something here?<br /><br /> <pre><code><br />.data<br />pishl               dd 0<br />CLSID_ShellLink     GUID &#123;00021401h, 0, 0, 0C0h,0,0,0,0,0,0,46h&#125;<br />IID_IShellLink      GUID &#123;000214EEh, 0, 0, 0C0h,0,0,0,0,0,0,46h&#125;<br /><br />.code<br />    invoke CoInitialize, 0<br />    invoke CoCreateInstance,    <br />        @ CLSID_ShellLink,      \ ; class identifier<br />        0,                      \ ; not part of aggregate <br />        CLSCTX_INPROC_SERVER,   \ ; context<br />        @ IID_IShellLink,       \ ; Interface identifier<br />        @ pishl                   ; ptr to storage of interface ptr<br />    .if eax == S_OK<br />        mov edx, pishl<br />        mov edx, &#91;edx&#93;<br />        call .d&#91;edx+8&#93;            ; .Release<br />    .endif<br />    invoke CoUninitialize<br /></code></pre></div>
+    <div class="meta">Posted on 2003-09-03 16:02:38 by gfalen</div>
+   </div>
+   <div class="post" id="post-116857">
+    <div class="subject"><a href="#post-116857">Something wrong .w this?</a></div>
+    <div class="body">No, looks good (if macros @ and .d are correct). At least no reason to &quot;crash&quot;.<br /><br />Possibly have a look at the assembly listing.</div>
+    <div class="meta">Posted on 2003-09-04 02:21:51 by japheth</div>
+   </div>
+   <div class="post" id="post-116860">
+    <div class="subject"><a href="#post-116860">Something wrong .w this?</a></div>
+    <div class="body"><div class="quote"><br />No, looks good (if macros @ and .d are correct). At least no reason to &quot;crash&quot;.<br /><br />Possibly have a look at the assembly listing. </div><br /><br />Hmmmm, there should be a &quot;push edx&quot; before the call to Release</div>
+    <div class="meta">Posted on 2003-09-04 02:28:17 by Morris</div>
+   </div>
+   <div class="post" id="post-116861">
+    <div class="subject"><a href="#post-116861">Something wrong .w this?</a></div>
+    <div class="body">After reviewing my docs I found out what's wrong.  I have seen several tutes which state that the proper way to call a COM interface is:<br /><br />mov edx, ppv<br />push edx           ; &lt;=== this is WRONG<br />mov edx, <br />invoke INTERFACE ptr .function, args...<br /><br />This is incorrect.  The 'THIS' pointer should be the first argument in the invoke command. Also you may need ()'s around the ptr reference.  <br />This works:<br /><br />mov edx, ppv<br />mov edx, <br />invoke ppv, (INTERFACE ptr ).function, args...</div>
+    <div class="meta">Posted on 2003-09-04 02:35:33 by gfalen</div>
+   </div>
+   <div class="post" id="post-116863">
+    <div class="subject"><a href="#post-116863">Something wrong .w this?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by gfalen </em><br />After reviewing my docs I found out what's wrong.  I have seen several tutes which state that the proper way to call a COM interface is:<br /><br />mov edx, ppv<br />push edx           ; &lt;=== this is WRONG<br />mov edx, <br />invoke INTERFACE ptr .function, args...<br /></div><br /><br />But this should be OK<br /><br />    .if eax == S_OK<br />        mov edx, pishl<br />        mov edx, <br />        push edx                   ; &lt;=== place a &quot;push&quot; here<br />        call .d            ; .Release<br />    .endif</div>
+    <div class="meta">Posted on 2003-09-04 02:45:46 by Morris</div>
+   </div>
+   <div class="post" id="post-116865">
+    <div class="subject"><a href="#post-116865">Something wrong .w this?</a></div>
+    <div class="body">NO - the THIS ptr must be the first arg in the invoke (just check your C++ source) which means it's the LAST arg pushed (STDCALL)!<br /><br />That's why I changed it to<br /><br />invoke ppv, (INTERFACE ptr ).function, args...<br /><br />ppv is the THIS ptr.</div>
+    <div class="meta">Posted on 2003-09-04 02:49:11 by gfalen</div>
+   </div>
+   <div class="post" id="post-116866">
+    <div class="subject"><a href="#post-116866">Something wrong .w this?</a></div>
+    <div class="body">Check this out.  This program actually assembles and runs on my system - you need my macros to compile it.<br /><br /><pre><code><br /><br />include app32.inc<br />include com.inc<br /><br />.data<br />CLSID_ShellLink     GUID &#123;00021401h, 0, 0, 0C0h,0,0,0,0,0,0,46h&#125;<br />IID_IShellLink      GUID &#123;000214EEh, 0, 0, 0C0h,0,0,0,0,0,0,46h&#125;<br />IID_IPersistFile    GUID &#123;00000010h, 0, 0, 0C0h, 0, 0, 0, 0, 0, 0, 46H&#125;<br /><br />.code<br />main proc<br />  local sr&#58;WIN32_FIND_DATA, des&#91;260&#93;&#58;byte<br />  <br />  IShellLink ishl<br /><br />    ishl@getinst @ CLSID_ShellLink, @ IID_IShellLink<br />    .if eax == S_OK<br />        ishl@SetPath &quot;%windir%\explorer.exe&quot;<br />        ishl@SetDescription &quot;my description&quot;<br />        ishl@GetPath dll$, 260, @ sr, 0<br />        ishl@GetDescription @ des, 260<br />        ishl@Release<br />        msgbox @ des, dll$<br />    .endif<br />    ret<br />main endp<br /><br />.end<br /></code></pre></div>
+    <div class="meta">Posted on 2003-09-04 02:54:16 by gfalen</div>
+   </div>
+   <div class="post" id="post-116867">
+    <div class="subject"><a href="#post-116867">Something wrong .w this?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by gfalen </em><br />NO - the THIS ptr must be the first arg in the invoke (just check your C++ source) which means it's the LAST arg pushed (STDCALL)!</div><br /><br />Tell me, how many arguments does the Release method expect?</div>
+    <div class="meta">Posted on 2003-09-04 02:55:05 by Morris</div>
+   </div>
+   <div class="post" id="post-116868">
+    <div class="subject"><a href="#post-116868">Something wrong .w this?</a></div>
+    <div class="body">1 the THIS ptr</div>
+    <div class="meta">Posted on 2003-09-04 02:55:47 by gfalen</div>
+   </div>
+   <div class="post" id="post-116870">
+    <div class="subject"><a href="#post-116870">Something wrong .w this?</a></div>
+    <div class="body"><div class="quote"><br />1 the THIS ptr </div><br /><br />So, does it matter if you push it as the first or the last argument?</div>
+    <div class="meta">Posted on 2003-09-04 02:57:54 by Morris</div>
+   </div>
+   <div class="post" id="post-116871">
+    <div class="subject"><a href="#post-116871">Something wrong .w this?</a></div>
+    <div class="body">No of course, not with the 'Release' method.  But if you try &amp; call a function with args, the proposed method will always fail - this was my problem.<br /><br />BTW Did u see the source file I posted above?</div>
+    <div class="meta">Posted on 2003-09-04 03:01:22 by gfalen</div>
+   </div>
+   <div class="post" id="post-116873">
+    <div class="subject"><a href="#post-116873">Something wrong .w this?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by gfalen </em><br />No of course, not with the 'Release' method.  But if you try &amp; call a function with args, the proposed method will always fail - this was my problem.</div><br /><br />All the time I was referring to your original post - I noticed a problem with calling the Release method and gave you a hint.<br /><br />Of course I know how to call CoMethods.<br /><br /><br /><div class="quote">BTW Did u see the source file I posted above? </div><br />The first or the second one?</div>
+    <div class="meta">Posted on 2003-09-04 03:06:30 by Morris</div>
+   </div>
+   <div class="post" id="post-116874">
+    <div class="subject"><a href="#post-116874">Something wrong .w this?</a></div>
+    <div class="body">Scroll back &amp; look for it.  I posted some source code i'm workin on.  I think i finally have it workin now - ready to post my .inc files for COM.</div>
+    <div class="meta">Posted on 2003-09-04 03:09:01 by gfalen</div>
+   </div>
+   <div class="post" id="post-116875">
+    <div class="subject"><a href="#post-116875">Something wrong .w this?</a></div>
+    <div class="body">Here's some files for u to play with.  I think everything u need is there.  The Interfaces are defined in Com.inc but it makes use of some existing macros so i put the other files in there with it.  Comtest.asm is a llittle demo.  Let me know if u can/can't assemblle it.</div>
+    <div class="meta">Posted on 2003-09-04 03:21:36 by gfalen</div>
+   </div>
+   <div class="post" id="post-116876">
+    <div class="subject"><a href="#post-116876">Something wrong .w this?</a></div>
+    <div class="body">I must be blind, 'cause I can't see no files that I &quot;can/can't assemblle&quot;.</div>
+    <div class="meta">Posted on 2003-09-04 03:26:26 by Morris</div>
+   </div>
+   <div class="post" id="post-116877">
+    <div class="subject"><a href="#post-116877">Something wrong .w this?</a></div>
+    <div class="body">The previous attach failed.  Ill try again.  Oh it was a .rar/</div>
+    <div class="meta">Posted on 2003-09-04 03:32:55 by gfalen</div>
+   </div>
+   <div class="post" id="post-116878">
+    <div class="subject"><a href="#post-116878">Something wrong .w this?</a></div>
+    <div class="body">Delete that 'include app32.inc' in comtest.asm &amp; replace with your own include/includelib's<br /><br />Edit:<br />You might need to add this macro to the top of com.inc<br /><br />; Create pr0..pr24, and ptr's (ppr0..ppr24) and equates of the form<br />;  &quot;proto0 equ proto :dword&quot;<br /><br />makeproto MACRO _count<br />    $args EQU &lt;PROTO&gt;<br />    REPEAT _count<br />        $args CATSTR $args, &lt;, :DWORD&gt;<br />    ENDM<br />    cnt@ TEXTEQU %_count<br />    % pr&amp;cnt@ TYPEDEF $args         ; pr0, pr1...       lower case<br />    % ppr&amp;cnt@ TYPEDEF ptr pr&amp;cnt@  ; ppr0, ppr1...<br />    % proto&amp;cnt@ EQU $args          ; proto0, proto1...<br />    % PR&amp;cnt@ TYPEDEF $args         ; PR0, PR1...       UPPER case<br />    % PPR&amp;cnt@ TYPEDEF ptr pr&amp;cnt@  ; PPR0, ppr1...<br />    % PROTO&amp;cnt@ EQU $args          ; PROTO0, PROTO1...<br />ENDM<br /><br />i@ = 0<br />WHILE i@ lt 25<br />    makeproto i@<br />    i@ = i@ + 1<br />ENDM</div>
+    <div class="meta">Posted on 2003-09-04 03:35:26 by gfalen</div>
+   </div>
+   <div class="post" id="post-116879">
+    <div class="subject"><a href="#post-116879">Something wrong .w this?</a></div>
+    <div class="body">I have a very custumized compile environment.  I'm trying to figure out the minimum files needed.  You might also need this guy.</div>
+    <div class="meta">Posted on 2003-09-04 03:43:45 by gfalen</div>
+   </div>
+   <div class="post" id="post-116880">
+    <div class="subject"><a href="#post-116880">Something wrong .w this?</a></div>
+    <div class="body">I couldn't make it assemble, sorry. <br /><br />I do not have those includes<br /><br />wintypes.inc<br />classes.inc<br />crtdll.inc<br /><br />and that may be the source of the problem.<br /><br />Anyway, what you're trying to prove with the code you sent?</div>
+    <div class="meta">Posted on 2003-09-04 03:49:23 by Morris</div>
+   </div>
+   <div class="post" id="post-116881">
+    <div class="subject"><a href="#post-116881">Something wrong .w this?</a></div>
+    <div class="body">A new upload<br /><br />Edit:<br />Comment out the crtdll.inc &amp; dialogs.inc references from lib32.inc</div>
+    <div class="meta">Posted on 2003-09-04 03:55:37 by gfalen</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=15049&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=15049&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="15049" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=15049&amp;page=2">&gt;</a><a href="../?id=15049&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

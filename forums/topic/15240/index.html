@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>quick call - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15240" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=15240">quick call</a></p>
+   <div class="post" id="post-118391">
+    <div class="subject"><a href="#post-118391">quick call</a></div>
+    <div class="body">Hello, all!<br /><br />Somewhere I use a Call in a loop.<br />Since Call and Ret are vector path instruction (thermin from AMD)<br />I decided to do some speed optimization for this purpose:<br />Let's say I have some:<br /><pre><code><br />DrawStringRep&#58;	mov	EBX, CharClass.Execute&#91;EAX&#93;<br />			and	EBX, NOT BDO_NONACTIVE	;reset flag to get real address<br />			mov	EDI, &#91;ESP&#93;	;  CharString Object<br />			call	EBX <br />			jnc	DrawStringRep  ; loop until CARRY is set<br /></code></pre><br />Here I see some operations I can place outside of loop.<br />Each Call pushes return address to the stack and Ret then pops it.<br />So I considered to use some quicker instruction instead of them<br /><br /><pre><code>			push	@F<br />DrawStringRep&#58;	mov	EBX, CharClass.Execute&#91;EAX&#93;<br />			and	EBX, NOT BDO_NONACTIVE	;reset flag to get real address<br />			mov	EDI, &#91;ESP+DWORD&#93;	;  CharString Object<br />			jmp	EBX  ; for example Char_Draw<br />@@&#58;			jnc	DrawStringRep<br />			pop	ebx		; restore stack<br />.....<br />&#91;edit&#93;<br />qret	macro	; quick return, don't clear stack<br />     jmp DWORD PTR &#91;ESP&#93;<br />endm<br />&#91;/edit&#93;<br /><br />Char_Draw	proc<br />....<br />Char_Draw_Exit&#58;	qret<br />Char_Draw	endp	<br /></code></pre></div>
+    <div class="meta">Posted on 2003-09-16 20:11:02 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-118445">
+    <div class="subject"><a href="#post-118445">quick call</a></div>
+    <div class="body">The idea is great, but the code may be difficult to understand in six months time. Wouldn't it be easier to move the loop into the called procedure, e.g. like this:<br /><br /><pre><code><br />                mov     EBX, CharClass.Execute&#91;EAX&#93;<br />                and     EBX, NOT BDO_NONACTIVE<br />                mov     EDI, &#91;ESP&#93;<br />DrawString&#58;     call    DWORD PTR &#91;EBX&#93;<br />                ; ...<br /><br /><br />Char_Draw proc<br /><br />@@&#58;             ; ...<br />                jnc     @B<br />                ret<br /><br />Char_Draw endp<br /></code></pre><br />CALL and RET are executed only once, so they shouldn't hurt very much.<br /><br />Regards, Frank</div>
+    <div class="meta">Posted on 2003-09-17 09:48:56 by Frank</div>
+   </div>
+   <div class="post" id="post-118488">
+    <div class="subject"><a href="#post-118488">quick call</a></div>
+    <div class="body"><div class="quote"><br />CALL and RET are executed only once, so they shouldn't hurt very much.<br />Regards, Frank </div><br />Hi, <strong>Frank</strong>!<br />I know that.<br />In the case you're talking about, I'd use inlined proc instead of your example :)<br /><br />I'm not able to move that: &quot;and     EBX, NOT BDO_NONACTIVE&quot; outside loop.<br />Also I don't use &quot;<strong>call  DWORD PTR  </strong>&quot;, I use &quot;<strong>call EBX </strong>&quot; instead.<br /><br />In my case I have some objects: scrolling, menus, console. Each of them is drawing chars on the screen (DX).<br />Also, each of them is using one common method (that loop) to draw these chars. <br />But chars are different objects, so in this loop I call <strong>different</strong> metods to draw them.<br />And I call them quicker that casual call (because I use &quot;Direct path&quot; instructions that are pairable, instead of Call and Ret). Moreover, I use my procs without EBP stack frame, so I don't use enter/leave stuff, and avoid useless stack overhead as well.<br /><br />And I'm not talking about optimizing my loop :)<br />I'm talking about quick call of some procs.<br />Or may be I'm developing a wooden bicycle  :stupid:</div>
+    <div class="meta">Posted on 2003-09-17 19:26:04 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-118492">
+    <div class="subject"><a href="#post-118492">quick call</a></div>
+    <div class="body"><strong>S.T.A.S.</strong>, I think I have rode that wooden bicycle a time or four and this seems familar. ;)  How about making <em>BDO_NONACTIVE</em> be bit one, and then putting a NOP a the start of each proceedure!?  That reduces the code to:<pre><code>DrawStringRep&#58;	mov	EDI, &#91;ESP&#93;	;  CharString Object<br />			call	CharClass.Execute&#91;EAX&#93; <br />			jnc	DrawStringRep  ; loop until CARRY is set</code></pre></div>
+    <div class="meta">Posted on 2003-09-17 20:06:54 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-118499">
+    <div class="subject"><a href="#post-118499">quick call</a></div>
+    <div class="body">Hi,<strong> bitRAKE</strong>!<br />Are you talking about placing a <strong>ret</strong> in the beginning of my procs, then replace it with a <strong>nop</strong> when I need it?<br />It's good a idea, I thought that the time of such tricks is gone :)<br /><br />I'm just trying to avoid any modification of .CODE segment<br />So I considered to set 31bit of method's address (BDO_NONACTIVE), <br />then code can be executed from one part of my program, <br />but can't be executed in another cases without any modification <br />(this may cause data/instruction cahe conflicts sometimes. I think)<br /><br />I understand that I can just save a few tackts of CPU (in the best case), and not sure could it give me some effect on Intel CPU, but I considered it's better than save a few bytes.<br />Any way &quot;jmp EBX&quot; should be faster than a call. And wooden bicycle can't drown :)</div>
+    <div class="meta">Posted on 2003-09-17 21:04:26 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-118502">
+    <div class="subject"><a href="#post-118502">quick call</a></div>
+    <div class="body"><strong>S.T.A.S.</strong>, let me get off the bike and spin some code...<pre><code>	ALIGN 4 ; magic ;&#41;<br />CharacterPROC1 PROC someParam&#58;DWORD<br />	nop ; voodoo ;&#41;<br />	push ebp<br />	mov ebp, esp<br />	sub esp, -4<br />...</code></pre>You see the NOP makes the least significant bit of the address insignificant. :)<br /><br />jmp CharacterPROC1 <strong>==</strong> jmp CharacterPROC1 <strong>+ 1</strong><br />; And least significant bit of CharacterPROC1 is zero.</div>
+    <div class="meta">Posted on 2003-09-17 21:26:05 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-118518">
+    <div class="subject"><a href="#post-118518">quick call</a></div>
+    <div class="body">Hi, <strong>bitRAKE</strong>!<br />May be I can't catch your idea :(<br /><br />In my case CharClass.Execute contains address of some method.<br />When I need to mark this &quot;not to execute in some cases&quot;, I use &quot;or CharClass.Execute,40000000H&quot;,<br />then to get real address I use &quot;and BFFFFFFFh&quot;. / &lt;- typo error removed<br /><br />But you give me another idea. (May be you have already told that me  :confused: )<br />I may consider that my all procs are starting with:<pre><code>align 4 <br />nop </code></pre> So one more bit of method's address is free for use :)<br />(Before now I've got 2 of them)<br /><br />And yes, in this case I can remove &quot;and	EBX, NOT BDO_NONACTIVE&quot;<br />just equate BDO_NONACTIVE to 1 :)<br /><br /><pre><code>			push	@F<br />DrawStringRep&#58;		mov	EDI, &#91;ESP+DWORD&#93;	;  CharString Object<br />			jmp	CharClass.Execute&#91;EAX&#93;<br />@@&#58;			jnc	DrawStringRep<br />			pop	ebx		; restore stack</code></pre><br /><br />Some more post and I'll able to remove all the loop :grin: <br />But I'm afraid other parts of my code don't allow me to do so</div>
+    <div class="meta">Posted on 2003-09-17 23:52:29 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-118610">
+    <div class="subject"><a href="#post-118610">quick call</a></div>
+    <div class="body">Yeah, <strong>bitRAKE </strong>. I must say you're genious :alright: <br /><br />In my case your solution will not work because I have to use sometimes other flag &quot;BDO_INEEDDESTRUCTOR equ 80000000h&quot;<br />(but I can use 3 NOPs at the start of prog :) )<br /><br />And idea is great!<br />A DWORD contains more data than 2^32  :)<br />It's really cool  :cool: <br />Now I have at least 4 bites free to use in a dword address.<br /><br />How many such clever trics do you know? ;)</div>
+    <div class="meta">Posted on 2003-09-18 18:23:31 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-118616">
+    <div class="subject"><a href="#post-118616">quick call</a></div>
+    <div class="body"><div class="quote"><br />How many such clever trics do you know? ;)</div>'Luck' is the term used to describe the skill of people you don't like. :)<br /><br />No cleaver tricks - just skillz, baby. :grin:</div>
+    <div class="meta">Posted on 2003-09-18 20:20:26 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-118617">
+    <div class="subject"><a href="#post-118617">quick call</a></div>
+    <div class="body"><div class="quote"><br />No cleaver tricks - just skillz, baby. :grin: </div><br />Ok, any advices? :rolleyes:</div>
+    <div class="meta">Posted on 2003-09-18 20:31:00 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-118619">
+    <div class="subject"><a href="#post-118619">quick call</a></div>
+    <div class="body"><div class="quote"><br />Ok, any advices? :rolleyes: </div>I was just playing. :)<br /><br />I would advise to try the code speed and size optimization challenges!<br />After that experience you will think about code differently.<br /><br />No playing - the truth.<br /><br />Learn to read and understand some of this code: <a target="_blank" href="http://www.cybertrails.com/~fys/hugi/hcompo.htm">http://www.cybertrails.com/~fys/hugi/hcompo.htm</a><br /><br />Search this board and read the algorithms that are here.</div>
+    <div class="meta">Posted on 2003-09-18 20:51:45 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-118621">
+    <div class="subject"><a href="#post-118621">quick call</a></div>
+    <div class="body">Thanks, for the info <strong>bitRAKE</strong>!</div>
+    <div class="meta">Posted on 2003-09-18 21:18:24 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-120767">
+    <div class="subject"><a href="#post-120767">quick call</a></div>
+    <div class="body">it is said that JMP is harmful to the performance of a processor. Maybe CALL isn't, or maybe not?</div>
+    <div class="meta">Posted on 2003-10-08 05:28:22 by optimus</div>
+   </div>
+   <div class="post" id="post-122914">
+    <div class="subject"><a href="#post-122914">quick call</a></div>
+    <div class="body"><div class="quote">it is said that JMP is harmful to the performance of a processor</div>Yes, if CPU JUMPs to the code that is not in the instruction cache.<br />(So we should write a programm without any JMP at all :grin:  )<br /><br />If code is cached, then JMP is able to execute <strong>in parallel</strong> with some other instructions<br />because it is simple (direct path) instruction, that just loads a new value into EIP.<br /> <br />CALL is NOT able to do so. <br />this instruction does two things: push EIP and changes EIP.<br />This is always slower :(<br /><br />Is there some one who think he is programming x86 assembly?..<br />OR <br />programming some kind of HLL, that inside of CPU is translating to some microOOPS (native asm of RISC core). :-|<br /><br />Intel says: asm is dead, use our super-optimising C compiler to get REALLY quick code.<br />(Else the code that runs quick on Celeron 1200MHz (P3 core) will slow down new Celeron 2GHz (P4 core))<br />This is NOT developing the BEST CPUs.<br />This is DEVELOPING the BEST marketing model.<br />&quot;We will sell, you will pay&quot;<br /><br />There are really not so many people who CAN write REALLY cool code.<br />They are looking at my code and smiling ;)<br />They never show us all their secrets.<br /><br />That is not bad nor good -- that is life.<br />The white side of this is: everything can be improved.<br /><br />Also, I'm able to use this smile :stupid:<br /><br />PS. no offence to anyone<br /><br />PPS. every instruction is harmful to the performance of a processor :tongue:</div>
+    <div class="meta">Posted on 2003-10-30 08:12:21 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-122917">
+    <div class="subject"><a href="#post-122917">quick call</a></div>
+    <div class="body"><div class="quote"><br />The white side of this is: everything can be improved.</div>If one were to build a brute force code generator they would be able to produce the best code for their needs given sufficient time - so this statement is not true in general, but for all practical purposes - it is true. :)  All I mean to say is that the instruction and data bit streams the CPU uses are finite and much can be done to reduce the number of execution cycles needed.<br /><br /><span style="font-size:9px>(I ignore self-modifying code and external I/O because it makes my statement false :^)</span></div>
+    <div class="meta">Posted on 2003-10-30 08:38:29 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-122928">
+    <div class="subject"><a href="#post-122928">quick call</a></div>
+    <div class="body"><div class="quote">the instruction and data bit streams the CPU uses are finite</div>I am some times expecting (&quot;slower&quot; and &quot;smaler&quot;) instructions are faster than (&quot;faster&quot; and &quot;bigger&quot;) :)<br /><br /><br /><div class="quote">much can be done to reduce the number of execution cycles needed.</div>taking into account the number of CPU modification I'm afraid we'll need a JIT profiler/compiler for critical code parts :eek: <br /><br /><br /><div class="quote">I ignore self-modifying code</div> hmm... may be 02:40 is not a good time to understand &quot;brute force code generator&quot; :o   :^<br /><br /><strong>bitRAKE</strong>, as always one your post and one half of my mind is blocked :grin: (I'm not sure right now left or right  :confused: )</div>
+    <div class="meta">Posted on 2003-10-30 10:46:33 by S.T.A.S.</div>
+   </div>
+   <div class="post" id="post-122986">
+    <div class="subject"><a href="#post-122986">quick call</a></div>
+    <div class="body"><div class="quote"><br />hmm... may be 02:40 is not a good time to understand &quot;brute force code generator&quot;</div>The most simple version would consist of a code space that gets incremented until all solutions below a threshold are reached.  The code space would be initialized to all zeroes.  Then each itteration an attempt would be made to execute the code space and a test would be done to check if the desired output is reached.  If the code is a solution then it is logged.  Then the code space is incremented by one.  Ad infinum...<br /><br />A better idea is to prune the code space as much as possible - this requires a feedback function setup on the exceptions.  I also prune Plain_x86/FPU/MMX/SSE instructions depending on the algorithm.  The code space can be HUGE for only a few bytes.  I am improving my heuristics though. :)  My goal is to brute force anything under 1K within a day.  Currently, it doesn't really work. :(</div>
+    <div class="meta">Posted on 2003-10-30 20:04:06 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-122990">
+    <div class="subject"><a href="#post-122990">quick call</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by bitRAKE </em><br />Currently, it doesn't really work. </div><br />You need a better CPU :)<br /><br />Ask AMD/Intel to replace mOOPs ROM with RAM :)</div>
+    <div class="meta">Posted on 2003-10-30 21:03:21 by S.T.A.S.</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Put a pointer to code, right before the code? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6386" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6386">Put a pointer to code, right before the code?</a></p>
+   <div class="post" id="post-45932">
+    <div class="subject"><a href="#post-45932">Put a pointer to code, right before the code?</a></div>
+    <div class="body">Yes, I'm trying to do something crazy again:<br /><br /><pre><code><br />.code<br />foopointer label dword<br />dd 00,00,00,00;***works, but it does not<br />@foo&#58;<br />	pop esi<br /><br />	mov eax, 255<br /><br />	push esi<br />	ret<br /></code></pre><br /><br />I can reserve space,but cannot write to that space because it is in the code section.  Trying to results in a protection error.  So fixing at run time will not work.  The pointer is basically it's own address +4.  Then I can use the indirect form of call.<br /><br />Only thing I can think of is self-modifying code.  I dont know how to do that(I searched, but 'code' and 'modify' are very popular words here).  Or a opertaor that I do not understan '$'.  '$' has something to do with the present IP counter. '$' is probably my best bet, but I have seen no example code for even the systax of its use.  Any other idea?<br /> <br />Thanks.</div>
+    <div class="meta">Posted on 2002-07-01 05:21:54 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-45934">
+    <div class="subject"><a href="#post-45934">Put a pointer to code, right before the code?</a></div>
+    <div class="body">Masm32 has a self modifying code example in one of the examples folder. It's called SMC. You can also get the linker settings to make the code section writable from there.</div>
+    <div class="meta">Posted on 2002-07-01 05:32:41 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-45938">
+    <div class="subject"><a href="#post-45938">Put a pointer to code, right before the code?</a></div>
+    <div class="body">Yeah I just found a suggestion from f0dder in another thread to use VirtualAlloc.<br /><br />Congradulations to all the board for their correct use of hypenated word forms.  Searching for 'self-modifying' gave good results :alright: <br /><br />So now my question is about VirtualAlloc:<br /><br /><pre><code><br />BOOL VirtualProtect&#40;<br />  LPVOID lpAddress,       // region of committed pages<br />  SIZE_T dwSize,          // size of the region<br />  DWORD flNewProtect,     // desired access protection<br />  PDWORD lpflOldProtect   // old protection<br />&#41;;<br /></code></pre><br /><br />Alright, I know that hinstance is 4000000h and that the code section I will want to write to will start at 4001000h.(too many 0's?)<br /><br />So lpAddress should be 4001000h?<br /><br />dwSize - is this by 4096 byte increments? ie 4096,8192?<br /><br />flNewProtect -  PAGE_READWRITE?<br /><br />lpflOldProtect - pointer to variable to restore once I'm done.<br /><br />(Now to seach the board for VirtualAlloc.)<br /><br />Thanks  Qweerdy for the MASM32 tip.</div>
+    <div class="meta">Posted on 2002-07-01 06:00:11 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-45941">
+    <div class="subject"><a href="#post-45941">Put a pointer to code, right before the code?</a></div>
+    <div class="body">I once wrote this, to allow access to a section of my code.<br /><br /><pre><code><br />    lea edx, &#91;esp -4&#93;<br />    push NULL<br />    mov eax, offset start - offset data<br />    invoke VirtualProtect, addr data, eax, PAGE_READWRITE, edx<br />    pop edx<br /></code></pre><br /><br />It creates some space on the stack for the pointer to the lpflOldProtect value, and pops it into edx at the end of the call.<br /><br />So the result of the function is in eax, and the old protection value is in edx.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-07-01 06:09:03 by Mirno</div>
+   </div>
+   <div class="post" id="post-45946">
+    <div class="subject"><a href="#post-45946">Put a pointer to code, right before the code?</a></div>
+    <div class="body"><strong>ThoughtCriminal</strong>, Maybe, this will work?<pre><code>foopointer dd offset @foo<br />; or&#58; foopointer dd $ + 4<br />@foo&#58;<br />	pop esi<br /><br />	mov eax, 255<br /><br />	push esi<br />	ret</code></pre><strong>Mirno</strong>,<pre><code>    push NULL<br />    invoke VirtualProtect,<br />        offset data,<br />        offset start - offset data, ; constant number<br />        PAGE_READWRITE,<br />        ; only works because it is last parameter<br />        ; i.e. first put on stack<br />        &#91;b&#93;esp&#91;/b&#93;<br />    pop edx</code></pre>:)</div>
+    <div class="meta">Posted on 2002-07-01 07:05:35 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-45951">
+    <div class="subject"><a href="#post-45951">Put a pointer to code, right before the code?</a></div>
+    <div class="body">Thanks Bitrake!!<br /><br />I had no idea how $ worked. Thanks for syntax example. <br /><br />Thanks for VirtualAlloc sample too.:grin:</div>
+    <div class="meta">Posted on 2002-07-01 08:21:37 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-46019">
+    <div class="subject"><a href="#post-46019">Put a pointer to code, right before the code?</a></div>
+    <div class="body">VirtualAlloc when generating code or reading in from external sources.<br />VirtualProtect when you need to change something temporarily.<br />Linker flags if you either don't care, or need to patch code around<br />all the time.</div>
+    <div class="meta">Posted on 2002-07-01 17:53:41 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

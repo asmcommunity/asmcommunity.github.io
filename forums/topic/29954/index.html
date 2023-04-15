@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Hex String to QWORD - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29954" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=29954">Hex String to QWORD</a></p>
+   <div class="post" id="post-211505">
+    <div class="subject"><a href="#post-211505">Hex String to QWORD</a></div>
+    <div class="body">Today, I needed this one.<br />Again, OA32 was missing this function.<br />So again, I kludged one together.<br />It&#039;s a little prettier than the previous Dec2Qword function was.. and I expect to use it more often, so that&#039;s good.<br /><br />This function looks for hex strings in C&#039;s 0xFF format, and MASM&#039;s 0FFh format - but does not expect them.<br />This algorithm is a lot easier to implement, each hex character represents 4 bits of the answer.<br /><br /><pre><code><br /><br /><br />hex2qword proc uses esi edi pHexString:LPSTR<br />LOCAL toggle:byte<br />LOCAL lowbits:byte<br />LOCAL Val:qword<br />	mov toggle,0	<br />	lea edi,Val<br />	qdmov ,0<br />	<br />	mov eax,pHexString<br />	.if word ptr==&quot;x0&quot;<br />		add pHexString,2 &nbsp; ;skip prefix<br />	.endif<br />	invoke lstrlen,pHexString<br />	DbgDec eax<br />	add eax,pHexString<br />	mov esi,eax	<br /><br />	.while esi&gt;pHexString<br />		dec esi<br />		mov al,byte ptr<br />		.if al!=&quot;h&quot; &nbsp; &nbsp;;ignore prefix<br />			.if al&gt;=30h &amp;&amp; al&lt;=39h<br />				sub al,30h<br />			.elseif al&gt;=&quot;A&quot; &amp;&amp; al&lt;=&quot;F&quot;<br />				sub al,&quot;A&quot;-10&nbsp;  ;corrected - thx baldr<br />			.elseif al&gt;=&quot;a&quot; &amp;&amp; al&lt;=&quot;f&quot;<br />				sub al,&quot;a&quot;-10&nbsp;  ;corrected - thx baldr<br />			.else<br />				;ignoring non hex, we&#039;ll do our best...<br />				.continue<br />			.endif<br />			.if toggle==0<br />				mov lowbits,al<br />				mov toggle,1<br />			.elseif toggle==1<br />				shl al,4<br />				or al,lowbits<br />				mov toggle,0<br />				mov byte ptr,al<br />				inc edi<br />			.endif<br />			<br />		.endif<br />	.endw<br />	;check for orphaned nybble<br />	.if toggle==1<br />		shr al,4<br />		or al,lowbits<br />		mov byte ptr,al<br />	.endif<br />	<br />	lea edx,Val<br />	mov eax,.QuadWord.LoDWord<br />	mov edx,.QuadWord.HiDWord<br />	ret<br />hex2qword endp<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2010-04-29 07:06:25 by Homer</div>
+   </div>
+   <div class="post" id="post-211506">
+    <div class="subject"><a href="#post-211506">Re: Hex String to QWORD</a></div>
+    <div class="body"><strong>Homer</strong>,<br /><br />Check for trailing &quot;h&quot; seems to be misplaced: it can occur at any position. Also, &quot;0x&quot; prefix and &quot;h&quot; are not mutually exclusive (probably you did this on purpose?).<br /><br /><strong>sub al, &quot;A&quot;</strong> (or &quot;a&quot; thereupon) converts &quot;A&quot; to 0, not 10 as expected by following code.</div>
+    <div class="meta">Posted on 2010-04-29 09:13:53 by baldr</div>
+   </div>
+   <div class="post" id="post-211507">
+    <div class="subject"><a href="#post-211507">Re: Hex String to QWORD</a></div>
+    <div class="body">What you could do is this:<br />or each character with 0x20.<br />This turns on the bit that distinguishes between upper- and lowercase, so everything becomes lowercase. Decimals can be considered &#039;lowercase&#039; aswell, and are not affected.<br />This means you don&#039;t need a separate check for &#039;h&#039; or &#039;H&#039;, and for &#039;a..f&#039; and &#039;A..F&#039;, just checking for &#039;h&#039; and &#039;a..f&#039; is enough, and just one sub is required to handle all cases.</div>
+    <div class="meta">Posted on 2010-04-29 09:51:08 by Scali</div>
+   </div>
+   <div class="post" id="post-211508">
+    <div class="subject"><a href="#post-211508">Re: Hex String to QWORD</a></div>
+    <div class="body">Scali - Yeah I&#039;ll modify this function to use case flattening tomorrow, just for the warm fuzzy feeling :P<br />baldr - Nice catch, modified to correct this.<br /><br />These are not examples of fine coding, by any means - but they might prove useful to someone at some point, if only as a learning tool.<br /><br />Yeah baldr, I know they&#039;re not mutually exclusive - I&#039;m using this for my Parser / interpreter project.. I wanted one piece of code to handle all cases, and saw no reason to implement any exclusion, given that exclusion was already enforced by the lexer stage according to my grammar rules... but even if it wasn&#039;t this code would still work (now that I&#039;ve modified it to correct that bug - would you believe I was using 256 = 100h as test data? Not my best day! Hehe :) )<br /></div>
+    <div class="meta">Posted on 2010-04-29 09:57:25 by Homer</div>
+   </div>
+   <div class="post" id="post-211512">
+    <div class="subject"><a href="#post-211512">Re: Hex String to QWORD</a></div>
+    <div class="body"><div class="quote">Scali</strong>&quot;]or each character with 0x20.<br />This turns on the bit that distinguishes between upper- and lowercase, so everything becomes lowercase. Decimals can be considered &#039;lowercase&#039; aswell, and are not affected.</div><br /><br />This should be done cautiously, for it can introduce funny &quot;digits&quot;, namely DLE, DC1 and so on to EM (^P to ^Y, ASCII codes 10h...19h) if done too early. ;-)</div>
+    <div class="meta">Posted on 2010-04-29 14:08:54 by baldr</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Read/Write from/to another processes memory - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20676" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20676">Read/Write from/to another processes memory</a></p>
+   <div class="post" id="post-157542">
+    <div class="subject"><a href="#post-157542">Read/Write from/to another processes memory</a></div>
+    <div class="body">After spending hours searching the board for help on this i cant find a strait answer.  :? <br /><br />I dont need to execute my own code or anything flash like that, i just need to read/write some bytes of memory inside an allready running process that does not belong to my process.<br /><br />If anybody can point my in the right direction i would be very greatfull</div>
+    <div class="meta">Posted on 2005-02-27 23:01:06 by Lennon</div>
+   </div>
+   <div class="post" id="post-157543">
+    <div class="subject"><a href="#post-157543">Read/Write from/to another processes memory</a></div>
+    <div class="body">For NT/2K/XP...<br /><br /><pre><code>; Get the ID of the process<br />invoke GetWindowThreadProcessId,&#91;hwnd&#93;,OFFSET PID<br /><br />; Open the process with Virtual memory priviledges<br />invoke OpenProcess,PROCESS_VM_OPERATION \<br />	+ PROCESS_VM_READ + PROCESS_VM_WRITE,0,&#91;PID&#93;<br />mov &#91;hProcess&#93;,eax<br /><br />; Create a buffer inside the process space<br />invoke VirtualAllocEx,eax,0,&#91;cbData&#93;,MEM_COMMIT,PAGE_READWRITE<br />mov &#91;pMem&#93;,eax<br /><br />; Write to the remote process buffer<br />invoke WriteProcessMemory,&#91;hProcess&#93;,&#91;pMem&#93;,\<br />	&#91;pData&#93;,&#91;cbData&#93;,OFFSET cbWritten<br /><br /><br />; Copy from the remote buffer<br />invoke ReadProcessMemory,&#91;hProcess&#93;,&#91;pMem&#93;,&#91;pData&#93;,\<br />	&#91;cbData&#93;,OFFSET cbWritten<br /><br />; Free the memory and close the remote process<br />invoke VirtualFreeEx,&#91;hProcess&#93;,&#91;pMem&#93;,0,MEM_RELEASE<br />invoke CloseHandle,&#91;hProcess&#93;</code></pre><br /><br />For 9x/ME you need to use ordinal values, in GoAsm you can define them as follows, in MASM it is more complicated. Since I use GoAsm, you have to figure out the MASM way yourself...<br /><br /><pre><code>Alloc = COMCTL32.DLL&#58;71<br />ReAlloc = COMCTL32.DLL&#58;72<br />Free = COMCTL32.DLL&#58;73<br />GetSize = COMCTL32.DLL&#58;74</code></pre><br /><br /><pre><code>; Allocate memory on the shared heap<br />invoke Alloc,&#91;cbData&#93;<br />mov &#91;pMem&#93;,eax<br /><br />; Write to the shared buffer<br />invoke MemCopy,&#91;pData&#93;,&#91;pMem&#93;,&#91;cbData&#93;<br /><br />; Copy the shared buffer to our local buffer<br />invoke MemCopy,&#91;pMem&#93;,&#91;pData&#93;,&#91;cbData&#93;<br /><br />invoke Free,&#91;pMem&#93;</code></pre><br /><br />The MemCopy function for the 9x version:<br /><br /><pre><code>MemCopy FRAME lpSource,lpDest,nBytes<br />	uses edi,esi,ecx<br />	cld<br />	mov edi,&#91;lpDest&#93;<br />	mov esi,&#91;lpSource&#93;<br />	mov ecx,&#91;nBytes&#93;<br /><br />	; do the evenly divisible ones<br />	shr ecx,2<br />	rep movsd<br /><br />	; do the remainder<br />	mov ecx,&#91;nBytes&#93;<br />	and ecx,3<br />	rep movsb<br /><br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2005-02-27 23:50:17 by donkey</div>
+   </div>
+   <div class="post" id="post-157544">
+    <div class="subject"><a href="#post-157544">Read/Write from/to another processes memory</a></div>
+    <div class="body">niceeee!!!<br /><br />secret ordinals huh? never knew about them, always used the 8000000h trick, and the file mapping trick. are you absolutely sure that those ordinals are like, generally avaliable on all of 9x?</div>
+    <div class="meta">Posted on 2005-02-28 00:11:25 by Drocon</div>
+   </div>
+   <div class="post" id="post-157545">
+    <div class="subject"><a href="#post-157545">Read/Write from/to another processes memory</a></div>
+    <div class="body">Yes, my Desktop listview demo uses them to extract information from the desktop process in all versions of 9x. I have tested them on all OSR releases of 95 and 98.</div>
+    <div class="meta">Posted on 2005-02-28 00:14:47 by donkey</div>
+   </div>
+   <div class="post" id="post-157546">
+    <div class="subject"><a href="#post-157546">Read/Write from/to another processes memory</a></div>
+    <div class="body">wow, thank you for the perfect reply Donkey  :) <br /><br />im a bit confused about the need to create a buffer inside the process space, do i need to do this if i want to read/write to existing memory inside the process?<br /><br />I just tried the follow code and it works perfect<br /><br /><pre><code><br />LOCAL	lpdwProcessId&#58;DWORD<br />LOCAL	Buffer&#58;BYTE<br /><br />	INVOKE	FindWindow,OFFSET szClassName,NULL<br />	mov		ecx,eax<br />	INVOKE	GetWindowThreadProcessId,ecx,ADDR lpdwProcessId<br />	INVOKE	OpenProcess,PROCESS_VM_READ,NULL,lpdwProcessId<br />	mov		lpdwProcessId,eax<br />	INVOKE	ReadProcessMemory,lpdwProcessId,0aa69aah,ADDR Buffer,1,NULL<br /><br />	INVOKE	CloseHandle,lpdwProcessId<br /></code></pre></div>
+    <div class="meta">Posted on 2005-02-28 00:19:01 by Lennon</div>
+   </div>
+   <div class="post" id="post-157547">
+    <div class="subject"><a href="#post-157547">Read/Write from/to another processes memory</a></div>
+    <div class="body">I wasn't sure if you needed to read existing memory or not so I assumed that you did not, after all the rest is not too difficult to figure out. I should note that the 9x method I posted will not allow you to read/write existing memory, it is using the shared heap and can only allocate memory there.</div>
+    <div class="meta">Posted on 2005-02-28 00:21:58 by donkey</div>
+   </div>
+   <div class="post" id="post-157548">
+    <div class="subject"><a href="#post-157548">Read/Write from/to another processes memory</a></div>
+    <div class="body">ah ok, i was expecting it to be a very involved process, not a few lines of code! i was looking to deep...<br /><br />I'm also surprised its the 9x versions that are going to be complicated, would the above method not work on windows 9x for reading existing memory?</div>
+    <div class="meta">Posted on 2005-02-28 00:32:19 by Lennon</div>
+   </div>
+  </div>
+ </body>
+</html>

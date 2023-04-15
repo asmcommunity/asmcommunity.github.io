@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Optimization surprise - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16638" />
+    <link rel="next" href="../?id=16638&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=16638">Optimization surprise</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=16638&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=16638&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="16638" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=16638&amp;page=2">&gt;</a><a href="../?id=16638&amp;page=2">&raquo;</a></form>   <div class="post" id="post-129283">
+    <div class="subject"><a href="#post-129283">Optimization surprise</a></div>
+    <div class="body">Just by curiosity, I attempted recently to write a small program to generate the Mandelbrot fractal (using extended precision floating point math). For those not familiar with the subject, it consists in iterating the formula z=z*z+C until it exceeds a bailout value, z being a complex number. The number of iterations required is then converted to a color value for display. A maximum number of iterations is also specified and a fixed color value (usually black) is displayed if it is reached.<br /><br />I then attempted to optimize the main computation loop. To my surprise, the main factor affecting speed was the memory location of the TBYTE variables used by the FPU. The time required for a given set of parameters was almost <strong><u>doubled</u></strong> when those variables were in consecutive memory locations!!!<br /><br />Another surprise was that incrementing a global memory dword variable as a counter for the number of iterations was some 10-15% faster than using one of the CPU registers for that purpose (I tried EAX and EDX with no significant difference). And that instruction is a very small part of the loop! Furthermore, moving that counter instruction within the FPU instructions made a difference of up to 25% in the time required.<br /><br />Following is the code of that main loop, MASM syntax (zr, zi, pixelX and pixelY being TBYTE global variables):<br /><pre><code>nextiter&#58;<br />      fld   zr<br />      fmul  st,st<br />      inc   count        ;optimized location<br />      fld   zi<br />      fmul  st,st<br />      fld   st<br />      fadd  st,st&#40;2&#41;<br />      fld   bailout<br />      fcomip st,st&#40;1&#41;<br />      fstp  st<br />      ja    @F<br />      fcompp<br />      jmp   lastiter<br />   @@&#58;<br />      fsub<br />      fld   pixelX<br />      fadd<br /><br />      fld   zr<br />      fld   zi<br />      fmul<br />      dec   ecx         ;also better location than before the jnz<br />      fadd  st,st<br />      fld   pixelY<br />      fadd<br />      fstp  zi<br />      fstp  zr<br />      jnz   nextiter<br />      jmp   @F          ;maximum iterations reached<br /><br />lastiter&#58;</code></pre><br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-12-29 15:13:37 by Raymond</div>
+   </div>
+   <div class="post" id="post-129286">
+    <div class="subject"><a href="#post-129286">Optimization surprise</a></div>
+    <div class="body">AMD, right? :grin: <br />same at my K6-2, I think AMD had documented this. It's in fact not a slow-down, but a speed-up when you access memory +-8 bytes not consecutively :). <br />I use this speedup :alright:</div>
+    <div class="meta">Posted on 2003-12-29 16:47:23 by Ultrano</div>
+   </div>
+   <div class="post" id="post-129318">
+    <div class="subject"><a href="#post-129318">Optimization surprise</a></div>
+    <div class="body">:) Here is a nice inner loop:<pre><code><br />	fld	Real<br />	fld	Imaginary<br />	fld	st&#40;1&#41;<br />	fld	st&#40;1&#41;<br /><br /><br />;*** NOTE&#58; This runs through atleast three times &#40;who cares&#41;<br />;ecx is max loop count, fp stack=&#40;a,b&#41; &#40;r,i&#41;  &#40;ie Z&#91;1&#93; is done&#41;<br />brot2&#58;	;Inner loop by Thomas Jentzsch '98 &#40;What a guy!&#41;<br />	mov	edx,0x40800000	;IEEE float four compare<br />	mov	eax,edx		;set up for this pass through<br />	mov	ftmp,edx	;and next time through<br />	fld	ftmp		;R	a	b	r	i<br />.1	fstp	ftmp		;a	b	r	i<br />	fld	st&#40;0&#41;		;a	a	b	r	i<br />	fxch	st&#40;2&#41;		;b	a	a	r	i<br />	fmul	st&#40;2&#41;,st&#40;0&#41;	;b	a	ab	r	i<br />	cmp	edx,eax		;test for exit condition<br />	mov	eax,ftmp	;get &#40;aa+bb&#41; from last loop<br />	fmul	st&#40;0&#41;,st&#40;0&#41;	;bb	a	ab	r	i<br />	fxch	st&#40;2&#41;		;ab	a	bb	r	i<br />	fadd	st&#40;0&#41;,st&#40;0&#41;	;2ab	a	bb	r	i<br />	fxch	st&#40;1&#41;		;a	2ab	bb	r	i<br />	fmul	st&#40;0&#41;,st&#40;0&#41;	;aa	2ab	bb	r	i<br />	fxch	st&#40;1&#41;		;2ab	aa	bb	r	i<br />	fld	st&#40;2&#41;		;bb	2ab	aa	bb	r	i<br />	fsub	st&#40;0&#41;,st&#40;4&#41;	;bb-r	2ab	aa	bb	r	i<br />	fxch	st&#40;3&#41;		;bb	2ab	aa	bb-r	r	i<br />	fadd	st&#40;0&#41;,st&#40;2&#41;	;aa+bb	2ab	aa	bb-r	r	i<br />	fxch	st&#40;1&#41;		;2ab	aa+bb	aa	bb-r	r	i<br />	fadd	st&#40;0&#41;,st&#40;5&#41;	;2ab+i	aa+bb	aa	bb-r	r	i<br />	fxch	st&#40;3&#41;		;bb-r	aa+bb	aa	2ab+i	r	i<br />	fsubp	st&#40;2&#41;,st&#40;0&#41;	;aa+bb	aa-bb+r	2ab+i	r	i<br />	dec	ecx		;one down, many to go...<br />	ja	.1		;both exit conditions&#58; 'cmp' above<br />	jnc	.2		;this point just won't go away<br />	add	ecx,2		;that 'cmp' is for two loops back!<br />.2	fstp	st&#40;0&#41;<br />	fcompp<br />	fcompp<br />;ecx contains max loop count minus loops preformed on point</code></pre></div>
+    <div class="meta">Posted on 2003-12-29 22:03:41 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-129333">
+    <div class="subject"><a href="#post-129333">Optimization surprise</a></div>
+    <div class="body">Thanks bitRake<br /><br />Although I can't use the integer comparison of REAL4 numbers (I'm using extended precision math to get maximum zooming power up to about 10^16), I'll try to modify my code to avoid memory access in the main loop as in your suggested algo.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-12-29 23:38:48 by Raymond</div>
+   </div>
+   <div class="post" id="post-129335">
+    <div class="subject"><a href="#post-129335">Optimization surprise</a></div>
+    <div class="body"><div class="quote"><br />Although I can't use the integer comparison of REAL4 numbers (I'm using extended precision math to get maximum zooming power up to about 10^16).</div>It should not be a problem using only REAL4 precision for the exit value as we are only concerned if the value goes to infinity.  I really enjoy playing with fractal generators.  After reading Benoit B. Mandelbrot's <a target="_blank" href="http://froogle.google.com/froogle?q=Fractal+Geometry+of+Nature&amp;btnG=Search+Froogle">Fractal Geometry of Nature</a>, I wrote my first generator about 18 years ago.  It is one of the first things I write in each new programming language learnt.  It was the primary reason for learning assembler. :)</div>
+    <div class="meta">Posted on 2003-12-30 00:05:44 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-129336">
+    <div class="subject"><a href="#post-129336">Optimization surprise</a></div>
+    <div class="body">Thanks once more bitRake,<br /><br />A few minutes after I posted that reply, I suddenly realized that there is no need for high precision regarding that comparison. Since I provide the option to modify the bailout value which I then keep as a REAL4 anyway, I only have to load EDX with that value instead of the suggested constant in your algo. <br /><br />I'm working on the modification but I think I'll go and get a bit of sleep before continuing.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-12-30 00:13:22 by Raymond</div>
+   </div>
+   <div class="post" id="post-129639">
+    <div class="subject"><a href="#post-129639">Optimization surprise</a></div>
+    <div class="body">Just an update to previous posts.<br /><br />The complete removal of memory accesses from the inner loop as suggested by bitRake reduced the time required to generate the fractal by more than 60%.<br /><br />This optimization was possible because only 6 of the 8 FPU registers were required to hold intermediate results and perform the computations.<br /><br />This may not be feasible in other types of applications. The specific location of memory variables used by the FPU may then have a significant effect on the overall performance and be worth investigating.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-02 22:03:08 by Raymond</div>
+   </div>
+   <div class="post" id="post-129682">
+    <div class="subject"><a href="#post-129682">Optimization surprise</a></div>
+    <div class="body"><strong>Raymond</strong>, did you also try doing the comparison with the FPU verses interger instructions?</div>
+    <div class="meta">Posted on 2004-01-03 18:32:45 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-129695">
+    <div class="subject"><a href="#post-129695">Optimization surprise</a></div>
+    <div class="body">bitRake,<br /><br />No I have not tried that.<br /><br />Although the comparison with the CPU can be performed in parallel with one of the FPU instructions, the aa+bb value has to be stored in memory. On the other hand, doing the comparison with the FPU involves loading the bailout value.<br /><br />However, since I still have 2 unused registers, I will try to load that bailout value before the loop and see if using the FPU for the comparison has any benefit. Will advise.<br /><br />(BTW, if you care to have a quick glance at the program still in its infancy, it's currently available on the other forum.)<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-03 22:30:52 by Raymond</div>
+   </div>
+   <div class="post" id="post-129699">
+    <div class="subject"><a href="#post-129699">Optimization surprise</a></div>
+    <div class="body">Using the <strong>fcomip</strong> for a comparison with the FPU is slower than storing a REAL4 to memory. The overall speed of the program was about 10% slower.<br /><br />Using the <strong>fcomp</strong> which requires storing the status word for eventual transfer to the flag register was even slower.<br /><br />Alighment of the start of the loop on a page boundry seems to make a 4-8% difference.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-03 23:40:31 by Raymond</div>
+   </div>
+   <div class="post" id="post-129731">
+    <div class="subject"><a href="#post-129731">Optimization surprise</a></div>
+    <div class="body">Raymond, page as in 4k? Any difference if aligning to 32 bytes?</div>
+    <div class="meta">Posted on 2004-01-04 07:34:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-129748">
+    <div class="subject"><a href="#post-129748">Optimization surprise</a></div>
+    <div class="body">Sorry. It was very late last night and I should have written paragraph (16 bytes). My apology for the misinformation.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-04 11:04:24 by Raymond</div>
+   </div>
+   <div class="post" id="post-129751">
+    <div class="subject"><a href="#post-129751">Optimization surprise</a></div>
+    <div class="body"><strong>Raymond</strong>, the program worked well, but the centering became unaligned.  I would have to click a couple of inches below where I wanted the center to be when zooming in -- where I clicked seemed like the lower edge of the screen on the zoomed image.  It was very fast even at 5000 itterations and I enjoyed playing with it for about an hour, thank you. <span style="font-size:9px>(My middle name is Raymond.)</span></div>
+    <div class="meta">Posted on 2004-01-04 11:52:43 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-129755">
+    <div class="subject"><a href="#post-129755">Optimization surprise</a></div>
+    <div class="body">Raymond, got an executable available that I can play with? I enjoy fractals :) (spent quite some time playing with fractint and xaos :))</div>
+    <div class="meta">Posted on 2004-01-04 12:03:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-129787">
+    <div class="subject"><a href="#post-129787">Optimization surprise</a></div>
+    <div class="body">Here it is. As mentioned, it is still in its infancy.<br /><br />I have also played a lot with fractint.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-04 20:53:14 by Raymond</div>
+   </div>
+   <div class="post" id="post-129820">
+    <div class="subject"><a href="#post-129820">Optimization surprise</a></div>
+    <div class="body">You should have a look at xaos - it's a realtime fractal zoomer, pretty neat.</div>
+    <div class="meta">Posted on 2004-01-05 09:28:12 by f0dder</div>
+   </div>
+   <div class="post" id="post-129839">
+    <div class="subject"><a href="#post-129839">Optimization surprise</a></div>
+    <div class="body">bitRake,<br /><br />Sorry for delay in answer. I wanted to have another look at my code processing the mouse input (WM_LBUTTONUP and WM_RBUTTONUP messages). I also wanted to hear from f0dder if he might have observed a similar problem.<br /><br />I also tried to switch my video mode to the highest resolution shown by Windows for my system (1600x1200x32bits) to see how the program worked in that mode. However, as I learned today, my monitor may not have been designed to handle that mode and all I got was a <strong>totally black screen</strong> with no way of communicating with the computer. I though at first that my monitor had suddenly failed.<br /><br />I finally got some info today on how to get back to normal (i.e. press F8 during Windows startup and choose &quot;Safe Mode&quot; to eventually reset the video mode to basics).<br /><br />The only time which I have seen the program not centering properly was when the magnification was increased above approx. 10^16. Could you expand a bit more on when the problem was observed and what type of system you have.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-05 15:28:16 by Raymond</div>
+   </div>
+   <div class="post" id="post-129841">
+    <div class="subject"><a href="#post-129841">Optimization surprise</a></div>
+    <div class="body">Hm Raymond, windows ought to hide resolutions your monitor doesn't support :/ - really sucks having to boot to safe mode, but at least you got it working again - nice.<br /><br />Humm, I do think the zooming seemed a bit weird, but it's probably because it zoomed more than I expected, and that I sometimes accidentally clicked twice because the update speed isn't *that* fast.<br /><br />Still looks pretty nice though - and this is probably one of the fields where you can do a lot of work on both algorithm design and code optimization. Nice.</div>
+    <div class="meta">Posted on 2004-01-05 15:36:53 by f0dder</div>
+   </div>
+   <div class="post" id="post-129845">
+    <div class="subject"><a href="#post-129845">Optimization surprise</a></div>
+    <div class="body">f0dder<br /><br />The program starts with the zooming factor set at 10. This can be changed from the dlg box opening with the TAB key (without any recomputing) or from the dlg box opening with the &quot;Z&quot; key (everything recomputed).<br /><br />The update of the window starts immediately after a mouse click, but the &quot;video memory&quot; is not rezeroed; it's only written over with the new data. The screen is updated only line-by-line (updating each pixel as it is computed would definitely slow down the entire process without any benefit to the visual effect).<br /><br />Have you had any experience similar to what was reported by bitRake?<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-05 15:57:51 by Raymond</div>
+   </div>
+   <div class="post" id="post-129863">
+    <div class="subject"><a href="#post-129863">Optimization surprise</a></div>
+    <div class="body">That xaos is quite amazing. Hard to compete against that.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2004-01-05 20:30:36 by Raymond</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=16638&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=16638&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="16638" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=16638&amp;page=2">&gt;</a><a href="../?id=16638&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Something about GetProcAddress - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20034" />
+  <link rel="prev" href="../?id=20034&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20034">Something about GetProcAddress</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=20034&amp;page=1" style="">&laquo;</a><a href="../?id=20034&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="20034" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-153859">
+    <div class="subject"><a href="#post-153859">Something about GetProcAddress</a></div>
+    <div class="body">For those who might be interested (sidebar about GetProcAddress and shellcode):<br /><br />Most shellcode for Windows uses a bastardized version of GetProcAddress that locates symbols in DLLs based on a 4 byte ror13 hash of their symbol name.  This is Dino Dai Zovi's approach from LSD, as someone referred to earlier in this thread.   The advantage to this approach is that it saves a significant amount of space due to the ability to use a 4 byte hash in place of what would have to otherwise be a static string.  The use of ordinals in the context of shellcode is only possible if the symbols are exported with static ordinals (assuming you want the code to be portable), which just so happens to be the case in some useful DLLs.  The use of static ordinals when writing shellcode was pointed out by Oded Horovitz.<br /><br />For those who are curious about seeing the ror13 GetProcAddress implementation you can take a look at <a target="_blank" href="http://www.metasploit.com/sc/win32_univ_loader_src.c">http://www.metasploit.com/sc/win32_univ_loader_src.c</a>.</div>
+    <div class="meta">Posted on 2004-12-07 10:44:41 by nohaven</div>
+   </div>
+   <div class="post" id="post-153882">
+    <div class="subject"><a href="#post-153882">Something about GetProcAddress</a></div>
+    <div class="body">the LSD paper is nothing but a recap of billy b's first vx guide -  quite the pity. their hashing technique is nothing spectacular, crc32 is more efficient. the metasploit loader merely patches LoadLibrary() to accept pointers in memory, not disk. Though i don't have time to look at it, my jest would be to simply patch the mapped address/ read buffer. a simply peloader (fix reloc, imports, ep) would be efficient by tenfold. <br /><br />my crc32 api-search engine, small+efficient, though i haven't added support for forwarded exports yet (shouldn't be difficult, just don't have the time), so if you try to get the address of redirected APIs (like the wsock32 ones), you'll get a ASCIIZ ptr to a string of something like &quot;ws2_32.connect&quot;, so darn for now:<br /><br />http://angrypanda.net/~sfeng1/apicrc.zip  - src <br /><br />get_crc32 is used to obtain the crc32, and apicrc is a demonstration of the quasi-engine/format, namely,<br /><br /><pre><code><br />module_api&#58;<br />db 'module.dll',0<br />__api1 dd hash1<br />__api2 dd hash2<br />           dd 0<br /></code></pre><br /><br />the hashes will be replaced by the addresses of the APIs (which means that particular section should be read/write, or VirtualProtect'ed), so they can be called directly, for time's sake, i've required a DWORD null terminator to end the array, but i'll change it to a byte, to save some space.<br /><br />enjoy.</div>
+    <div class="meta">Posted on 2004-12-07 23:58:32 by Drocon</div>
+   </div>
+   <div class="post" id="post-153883">
+    <div class="subject"><a href="#post-153883">Something about GetProcAddress</a></div>
+    <div class="body">Realize that the intention of the GetProcAddress implementations provided by LSD and the one included in metasploit are not meant to be efficient in terms of execution time or accuracy but rather in terms of size since their primary usage is in exploitation (where size matters).  I completely agree that CRC32 is what should be used if you are looking for accurate and efficient symbol resolution, though it will most likely not be smaller than a simple ror13 hash (as is evidenced by the code you referenced).<br /><br />The metasploit code I referenced is not a replacement to LoadLibrary, but is rather intended to be an inline replacement to GetProcAddress.  There is, however, other code in metasploit which does load a library from memory instead of from disk if that's what you're referring to (this was discussed in another thread).  While you can indeed write an efficient implementation that manually does the relocation corrections and import calculations it becomes a question of whether or not it is more of a burden than is necessary considering you have to do many more things to make it so the library can be referenced and imported from by other modules (considering you're emulating the loading of the library outside of the scope of NTDLL).  By doing it the way that metasploit does you have the implicit advantage of getting all the benefits provided from using the native loader.  Anyway, enough of that tangent. =)</div>
+    <div class="meta">Posted on 2004-12-08 00:20:59 by nohaven</div>
+   </div>
+   <div class="post" id="post-153884">
+    <div class="subject"><a href="#post-153884">Something about GetProcAddress</a></div>
+    <div class="body"><div class="quote"><br />would be efficient by tenfold. <br /></div><br />In what way, size or speed? Remember that GetProcAddress uses a binary search when looking for exports, which cuts down the amount of searches tremendously - the only assembly implementation I've seen that did this was, iirc, from lingo. Almost all other implementations uses a linear search, and don't handle forwarded exports.<br /><br />To handle forwarded exports: once you have the address (whether by ordinal or name), rather than returning the address do this check:<br /><pre><code><br />expRVA = peh-&gt;directory&#91;PE_DIRENT_EXPORT&#93;.rva;<br />expLen = peh-&gt;directory&#91;PE_DIRENT_EXPORT&#93;.size;<br />if&#40;&#40;addr &gt;= expRVA&#41; &amp;&amp; &#40;addr &lt; &#40;expRVA+expLen&#41;&#41;&#41; &#123; /* forwarded export, handle */ &#125;<br /></code></pre></div>
+    <div class="meta">Posted on 2004-12-08 00:25:04 by f0dder</div>
+   </div>
+   <div class="post" id="post-153902">
+    <div class="subject"><a href="#post-153902">Something about GetProcAddress</a></div>
+    <div class="body">heh, batsu me for not looking at the source, but only the name :(, all i remember was talking to hdm about the loader, for the VNC thing, which - don't get me wrong - is very interesting.<br /><br /><div class="quote">In what way, size or speed?</div><br />i was comparing metasploit's technique, with a simple peloader, being much more portable, and efficient. :)</div>
+    <div class="meta">Posted on 2004-12-08 10:13:03 by Drocon</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=20034&amp;page=1" style="">&laquo;</a><a href="../?id=20034&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="20034" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

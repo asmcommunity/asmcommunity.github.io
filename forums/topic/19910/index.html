@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GetFileVersionInfo problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19910" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19910">GetFileVersionInfo problem</a></p>
+   <div class="post" id="post-152838">
+    <div class="subject"><a href="#post-152838">GetFileVersionInfo problem</a></div>
+    <div class="body">Since a couple of days I have contend with difficulties to retrieve file information. Reading and testing but no success. This is last attempt.<pre><code>invoke GetFileVersionInfoSize,addr szComToolExe,addr lpdwHandle<br />.if eax!=0<br />	mov nbytes,eax<br />	invoke GetFileVersionInfo,addr szComToolExe,0,sizeof buffer,addr buffer<br />	.if eax!=0<br />		.data<br />		szLang	db &quot;\VarFileInfo\Translation&quot;,0<br />		szInfo	db &quot;\StringFileInfo\%04x%04x\CompanyName&quot;,0<br />		.code<br />		invoke VerQueryValue,addr buffer,addr szLang,addr lang,addr dwChar<br />		.if eax!=0 &amp;&amp; dwChar!=0<br />			invoke wsprintf,addr buffer2,addr szInfo,lang.wLanguage,lang.wCodepage<br />			add esp,4<br />			invoke VerQueryValue,addr buffer,addr buffer2,addr InfoOut,addr dwChar<br />			.if eax!=0 &amp;&amp; dwChar!=0<br />				invoke MessageBox,0,addr InfoOut,0,MB_OK<br />			.endif<br />		.endif<br />	.endif<br />.endif</code></pre> The second &quot;VerQueryValue&quot; returns zero and the dwChar is also zero. The info is retrieved and hold in buffer but I can't get it to messagebox. Any suggestions?<br /><br />Best regards</div>
+    <div class="meta">Posted on 2004-11-13 09:17:23 by minor28</div>
+   </div>
+   <div class="post" id="post-152841">
+    <div class="subject"><a href="#post-152841">Re: GetFileVersionInfo problem</a></div>
+    <div class="body"><div class="quote"><br /><pre><code>invoke wsprintf,addr buffer2,addr szInfo,lang.wLanguage,lang.wCodepage<br />add esp,4<br /></code></pre><br /></div><br />1. WORD paremeters passed to wsprintf() (wLanguage and wCodepage) need to be passed as DWORDs.<br />2. Remove the 'add esp, 4' line.</div>
+    <div class="meta">Posted on 2004-11-13 09:46:40 by death</div>
+   </div>
+   <div class="post" id="post-152842">
+    <div class="subject"><a href="#post-152842">GetFileVersionInfo problem</a></div>
+    <div class="body">Thanks death,<br /><br />New code.<pre><code>LANGANDCODEPAGE STRUCT <br />	wLanguage	word ? <br />	wCodepage	word ? <br />LANGANDCODEPAGE ends <br /><br />invoke GetFileVersionInfoSize,addr szComToolExe,addr lpdwHandle<br />.if eax!=0<br />	mov nbytes,eax<br />	invoke GetFileVersionInfo,addr szComToolExe,0,sizeof buffer,addr buffer<br />	.if eax!=0<br />		.data<br />		szLang	db &quot;\VarFileInfo\Translation&quot;,0<br />		szInfo	db &quot;\StringFileInfo\%04x%04x\CompanyName&quot;,0<br />		.code<br />		invoke VerQueryValue,addr buffer,addr szLang,addr lang,addr dwChar<br />		.if eax!=0 &amp;&amp; dwChar!=0<br />			movzx ecx,lang.wLanguage<br />			movzx edx,lang.wCodepage<br />			invoke wsprintf,addr buffer2,addr szInfo,ecx,edx<br />			invoke VerQueryValue,addr buffer,addr buffer2,addr InfoOut,addr dwChar<br />			.if eax!=0 &amp;&amp; dwChar!=0<br />				invoke MessageBox,0,addr InfoOut,0,MB_OK<br />			.endif<br />		.endif<br />	.endif<br />.endif</code></pre><br /><br />Same resut.</div>
+    <div class="meta">Posted on 2004-11-13 09:55:05 by minor28</div>
+   </div>
+   <div class="post" id="post-152843">
+    <div class="subject"><a href="#post-152843">GetFileVersionInfo problem</a></div>
+    <div class="body">third parameter of VarQueryValue is a pointer to a pointer.<br /><br />Possibly it must be done this way:<br /><br /><pre><code><br />     invoke VerQueryValue,addr buffer,addr szLang,addr pVoid,addr dwChar<br />     .if eax!=0 &amp;&amp; dwChar!=0<br />         mov eax, pVoid<br />         movzx ecx,&#91;eax&#93;.LANGANDCODEPAGE.wLanguage<br />         movzx edx,&#91;eax&#93;.LANGANDCODEPAGE.wCodepage<br /></code></pre><br /><br />Just a guess</div>
+    <div class="meta">Posted on 2004-11-13 10:37:54 by japheth</div>
+   </div>
+   <div class="post" id="post-152845">
+    <div class="subject"><a href="#post-152845">GetFileVersionInfo problem</a></div>
+    <div class="body">Here's a correct version:<br /><pre><code>ShowCompanyName PROC filename&#58;LPSTR<br />    LOCAL handle&#58;DWORD<br />    LOCAL infoSize&#58;DWORD<br />    LOCAL heap&#58;HANDLE<br />    LOCAL infoBlock&#58;LPVOID<br />    LOCAL lang&#58;DWORD<br />    LOCAL len&#58;DWORD<br />    LOCAL infoSubBlock&#91;256&#93;&#58;BYTE<br />    LOCAL companyName&#58;DWORD<br /><br />    invoke GetFileVersionInfoSize, filename, ADDR handle<br />    .IF eax != 0<br />        mov infoSize, eax<br />        invoke GetProcessHeap<br />        .IF eax != 0<br />            mov heap, eax<br />            invoke HeapAlloc, eax, 0, infoSize<br />            .IF eax != 0<br />                mov infoBlock, eax<br />                invoke GetFileVersionInfo, filename, handle, infoSize, infoBlock<br />                .IF eax != 0<br />                    .const<br />                        langSubBlock db '\VarFileInfo\Translation', 0<br />                        infoSubBlockFmt db '\StringFileInfo\%04x%04x\CompanyName', 0<br />                    .code<br />                    invoke VerQueryValue, infoBlock, ADDR langSubBlock, ADDR lang, ADDR len<br />                    .IF eax != 0 &amp;&amp; len != 0<br />                        mov eax, lang<br />                        movzx ecx, word ptr &#91;eax&#93;.LANGANDCODEPAGE.language<br />                        movzx edx, word ptr &#91;eax&#93;.LANGANDCODEPAGE.codepage<br />                        invoke wsprintf, ADDR infoSubBlock, ADDR infoSubBlockFmt, ecx, edx<br />                        invoke VerQueryValue, infoBlock, ADDR infoSubBlock, ADDR companyName, ADDR len<br />                        .IF eax != 0 &amp;&amp; len != 0<br />                            invoke MessageBox, 0, companyName, 0, MB_OK<br />                        .ENDIF<br />                    .ENDIF<br />                .ENDIF<br />                invoke HeapFree, heap, 0, infoBlock<br />            .ENDIF<br />        .ENDIF<br />    .ENDIF<br /><br />    ret<br />ShowCompanyName ENDP</code></pre></div>
+    <div class="meta">Posted on 2004-11-13 11:10:38 by death</div>
+   </div>
+   <div class="post" id="post-152855">
+    <div class="subject"><a href="#post-152855">GetFileVersionInfo problem</a></div>
+    <div class="body">Thanks death and japheth,<br /><br />Now it works. It only works if you allocate memory. A question though. Do you have to allocate memory because of the fact that version info is wide character string format?<br /><br />This is the code:<pre><code>invoke GetFileVersionInfoSize,addr szComToolExe,addr lpdwHandle<br />.if eax!=0<br />	mov nbytes,eax<br />    invoke GetProcessHeap <br />    .if eax!=0 <br />        mov hHeap,eax <br />        invoke HeapAlloc,eax,0,nbytes <br />        .if eax!=0 <br />        	mov pMem,eax<br />			invoke GetFileVersionInfo,addr szComToolExe,0,nbytes,pMem<br />			.if eax!=0<br />				.data<br />				szLang	db &quot;\VarFileInfo\Translation&quot;,0<br />				szInfo	db &quot;\StringFileInfo\%04x%04x\CompanyName&quot;,0<br />				.code<br />				invoke VerQueryValue,pMem,addr szLang,addr pLang,addr dwChar<br />				.if eax!=0 &amp;&amp; dwChar!=0<br />					mov eax,pLang<br />	         		movzx ecx,&#91;eax.LANGANDCODEPAGE&#93;.wLanguage <br />	         		movzx edx,&#91;eax.LANGANDCODEPAGE&#93;.wCodepage <br />					invoke wsprintf,addr buffer,addr szInfo,ecx,edx<br />					invoke VerQueryValue,pMem,addr buffer,addr InfoOut,addr dwChar<br />					.if eax!=0 &amp;&amp; dwChar!=0<br />						invoke MessageBox,0,InfoOut,0,MB_OK<br />					.endif<br />				.endif<br />			.endif<br />			invoke HeapFree,hHeap,0,pMem<br />		.endif<br />	.endif<br />.endif</code></pre><br />Best regards</div>
+    <div class="meta">Posted on 2004-11-13 15:09:23 by minor28</div>
+   </div>
+   <div class="post" id="post-152856">
+    <div class="subject"><a href="#post-152856">GetFileVersionInfo problem</a></div>
+    <div class="body">I dynamically allocate memory because the file version information block size isn't known at assemble-time.<br /><br />It didn't work because of the reason japheth described, and also, perhaps the buffer wasn't big enough to include the company name information.</div>
+    <div class="meta">Posted on 2004-11-13 15:28:37 by death</div>
+   </div>
+  </div>
+ </body>
+</html>

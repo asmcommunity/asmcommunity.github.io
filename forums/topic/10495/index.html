@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Determining CPU speed... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10495" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=10495">Determining CPU speed...</a></p>
+   <div class="post" id="post-78810">
+    <div class="subject"><a href="#post-78810">Determining CPU speed...</a></div>
+    <div class="body">Hi<br /><br />I've made this function that determines the cpu speed (*somewhat* by myself :tongue: ) But the problem is that it always reports different speeds. It hangs around ~1696.49 mhz. But it's always slightly different. sometimes .48, sometimes .5 <br /><br />And if I have it returning the value in hz then Its always different...<br /><br />1696494180, 1696497854, 1696493265 etc... just mild differences.<br /><br />Is there anyway to get a 100% accurate solid result everytime? The code Im using to determine speed is in C++ (I'm just starting with ASM and I cant make the whole thing in ASM yet). <br /><pre><code><br />union ticksInt<br />&#123;<br />	__int32 i32&#91;2&#93;;<br />	__int64 i64;<br />&#125;;<br />inline __int64 GetTicks&#40;&#41;<br />&#123;<br />	ticksInt a;<br />	__asm<br />	&#123;<br />		rdtsc<br />		mov a.i32&#91;0&#93;, eax<br />		mov a.i32&#91;4&#93;, edx<br />	&#125;<br />	return a.i64;<br />&#125;<br />unsigned int CPUSpeed&#40;&#41;	<br />&#123;	<br />	__int64 timeStart, timeStop;<br />	__int64 startTick, endTick;<br /><br />	__int64 overhead = GetTicks&#40;&#41;-GetTicks&#40;&#41;;<br /><br /><br />	timeStart = timeGetTime&#40;&#41;;<br />	while&#40; timeGetTime&#40;&#41; == timeStart &#41; timeStart = timeGetTime&#40;&#41;;	<br /><br />	while&#40;1&#41;<br />	&#123;<br />		timeStop = timeGetTime&#40;&#41;;<br />		if &#40; &#40;timeStop-timeStart&#41; &gt;= 1 &#41;	<br />		&#123;<br />			startTick = GetTicks&#40;&#41;;<br />			break;<br />		&#125;<br />	&#125;<br />	timeStart = timeStop;<br />	while&#40;1&#41;<br />	&#123;<br />		timeStop = timeGetTime&#40;&#41;;<br />		if &#40; &#40;timeStop-timeStart&#41; &gt; 1000 &#41;	<br />		&#123;<br />			endTick = GetTicks&#40;&#41;;<br />			break;<br />		&#125;<br />	&#125;<br /><br />	return &#40;unsigned int&#41;&#40;&#40;endTick - startTick&#41;+overhead&#41;;<br />&#125;<br /></code></pre><br /><br />Oh and I call this function from a real time high priority thread. so that chances of this function getting bothered is low.<br /><br />thanks</div>
+    <div class="meta">Posted on 2003-01-28 14:25:56 by IFooBar</div>
+   </div>
+   <div class="post" id="post-78813">
+    <div class="subject"><a href="#post-78813">Determining CPU speed...</a></div>
+    <div class="body">It's probably due to an inaccuracy in the timing, I doubt you'll ever be able to get 100% perfect results.</div>
+    <div class="meta">Posted on 2003-01-28 15:00:22 by Eóin</div>
+   </div>
+   <div class="post" id="post-79388">
+    <div class="subject"><a href="#post-79388">Determining CPU speed...</a></div>
+    <div class="body">of course there is a way:<br /><br />the larger the interval of measuring, the more accurate it will be. If you use 1000ms interval, you will get 0.1% inaccuracy. If you use 10sec interval, you'll get 0.01% inaccuracy, and so on... Make it 100 sec :P . And you must not rely that the interval of measuring was exactly 1000ms! instead, it could be 1002ms, so you should do this:<br /><pre><code><br />TestCPU proc<br />local eax2,edx2<br />local timetaken,Result<br /><br />call GetTickCount<br />mov timetaken,eax<br />RDTSC<br />mov eax2,eax<br />mov edx2,edx<br />push 10000 ; milliseconds<br />call Sleep<br />call GetTickCount<br />sub eax,timetaken<br />mov timetaken,eax<br />RDTSC<br /><br />sub eax,eax2<br />sub edx,edx2<br />mov ecx,timetaken<br />div ecx  ; divide 64-bit with 32-bit, result is in eax<br />;mov Result,eax<br /><br />ret<br />TestCPU endp<br /><br /></code></pre><br /><br />The  result is in kiloherz<br />if you want in herz, then multiply the 64-bit integer of eax&amp;edx with 1000<br />This is the best way to test cpu speed.</div>
+    <div class="meta">Posted on 2003-01-31 22:25:30 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79389">
+    <div class="subject"><a href="#post-79389">Determining CPU speed...</a></div>
+    <div class="body">(created on the fly)<br /><pre><code><br />multiply 64-bit integer with 1000&#58;<br />edx-high dword<br />eax-low  dword<br /><br />mov edx2,edx<br />mov ecx,1000<br />mul ecx<br />push eax<br />push edx<br />mov edx,edx2<br />mul ecx<br />pop edx<br />add edx,eax<br />pop eax<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-31 22:35:40 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79514">
+    <div class="subject"><a href="#post-79514">Determining CPU speed...</a></div>
+    <div class="body">just a note, generally your clock speed should be your bus speed * your clock multiplier, my mul is 10.5, and bus speed of 133mhz. so 1396.5 this is what it should be 1396500000hz exactly, but not everything is perfect, minute defects could effectivly speed it up or slow it down a few hertz. and there is really know way on pcs to measure a second to millions of digits of accuracy. but experiment with QueryPerformanceCounter and QueryPerformanceFrequency, these measure to a double of a precision  of a length of time so while Sleep() may show 1000 an that api 1002 you can calculate off the diff, but as I said nothing is perfect.</div>
+    <div class="meta">Posted on 2003-02-01 21:29:18 by Qages</div>
+   </div>
+   <div class="post" id="post-79535">
+    <div class="subject"><a href="#post-79535">Determining CPU speed...</a></div>
+    <div class="body">So in other words you guys are saying that its basically not possible to get 100% accurate results :( , because of many different factors. peh....I was kinda hoping that it is possible. So then is it ok to time the whole app using something like<br /><pre><code><br />#pragma warning&#40;push&#41;<br />__int64 gettick&#40;&#41;<br />&#123;<br />    __asm rdtsc<br />&#125;<br />#pragma warning&#40;pop&#41;<br /><br />__int64 elapsedSecs = gettick&#40;&#41; / cpuSpeed;<br /></code></pre><br /><br />Or will using rdtsc with the ~cpu speed cause a lot of innacuracies eventually?<br /><br />thanks for your replies so far</div>
+    <div class="meta">Posted on 2003-02-02 03:33:52 by IFooBar</div>
+   </div>
+   <div class="post" id="post-79839">
+    <div class="subject"><a href="#post-79839">What about 'mobility' processors?</a></div>
+    <div class="body">Wont these methods for cpu speed detection fail completly in 'mobility' processors?<br /><br />I mean a 1.7 ghz processor running at 1.2ghz would return 1.2ghz. So wont your program fail if it wants to know the 'actual' speed of the cpu?</div>
+    <div class="meta">Posted on 2003-02-04 01:27:06 by clippy</div>
+   </div>
+   <div class="post" id="post-150673">
+    <div class="subject"><a href="#post-150673">CPU SPEED TEST</a></div>
+    <div class="body">Hy, whould you test/correct any errors in my code?<br />i'm not sure if the fractionals are all right, and didn't got time for it<br /><br />i have made it as an attachement<br /><br />MATRIX</div>
+    <div class="meta">Posted on 2004-09-29 19:21:24 by &gt;Matrix&lt;</div>
+   </div>
+   <div class="post" id="post-150706">
+    <div class="subject"><a href="#post-150706">Determining CPU speed...</a></div>
+    <div class="body">The CLI and STI instructions do not affect interrupts in any way when in V86 mode. They only cause a flag to be changed which tells the operating system whether it is to lead the program into an interrupt handler or not upon receiving interrupts that have been enabled by the running program.</div>
+    <div class="meta">Posted on 2004-09-30 11:56:14 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-150708">
+    <div class="subject"><a href="#post-150708">Re:</a></div>
+    <div class="body">Hy, thank you for making it clear<br /><br />MATRIX</div>
+    <div class="meta">Posted on 2004-09-30 12:03:29 by &gt;Matrix&lt;</div>
+   </div>
+   <div class="post" id="post-150709">
+    <div class="subject"><a href="#post-150709">Determining CPU speed...</a></div>
+    <div class="body">Perhaps <a target="_blank" href="http://www.masmforum.com/viewtopic.php?t=3418">this discussion</a> about measuring CPU speed could be of interest.</div>
+    <div class="meta">Posted on 2004-09-30 12:17:55 by Jibz</div>
+   </div>
+   <div class="post" id="post-150711">
+    <div class="subject"><a href="#post-150711">CPU FREQUENCY MEASUREMENT WITH PIT</a></div>
+    <div class="body">Sorry, no,<br />i need extreme accurate timings in some hardware related delays,<br />1 Hz @ 927MHz is enough for me for CPU frequency Measurement.<br />i will not call any windos functions to get the cpu frequency<br /><br />MATRIX</div>
+    <div class="meta">Posted on 2004-09-30 12:32:35 by &gt;Matrix&lt;</div>
+   </div>
+   <div class="post" id="post-150712">
+    <div class="subject"><a href="#post-150712">Determining CPU speed...</a></div>
+    <div class="body">Ah, sorry. I didn't realize you woke up some thread from half a year ago in order to post a question. I read the initial post and replied to that.</div>
+    <div class="meta">Posted on 2004-09-30 12:52:53 by Jibz</div>
+   </div>
+   <div class="post" id="post-150713">
+    <div class="subject"><a href="#post-150713">Topics, Codes</a></div>
+    <div class="body">Well exactly it wasn't a question,<br />but it might had been a question which then i whould have answered. :)<br />But i wanted to post a cpu frequency measurement routine to a topic related to this, and i didn't wanted to create a topic again for my code.<br /><br />MATRIX</div>
+    <div class="meta">Posted on 2004-09-30 13:03:43 by &gt;Matrix&lt;</div>
+   </div>
+   <div class="post" id="post-150787">
+    <div class="subject"><a href="#post-150787">Determining CPU speed...</a></div>
+    <div class="body">heh, that goal is a bit optimistic, seeing as the crystal that drives the CPU clock is not gonna be any better than 20 ppm ;)<br />Just doing one long measurement will reduce errors, but they're still there. You also either waste time during init, or do it 'overlapped' and require the app to call your startup function early on (thus leaking implementation details). Why not take several smaller samples and choose from among those?<br />Here's my code to do so (in C++):<pre><code><br /><br />static void measure_cpu_freq&#40;&#41;<br />&#123;<br />	// set max priority, to reduce interference while measuring.<br />	int old_policy; static sched_param old_param;	// &#40;static =&gt; 0-init&#41;<br />	pthread_getschedparam&#40;pthread_self&#40;&#41;, &amp;old_policy, &amp;old_param&#41;;<br />	static sched_param max_param;<br />	max_param.sched_priority = sched_get_priority_max&#40;SCHED_RR&#41;;<br />	pthread_setschedparam&#40;pthread_self&#40;&#41;, SCHED_RR, &amp;max_param&#41;;<br /><br />	if&#40;ia32_cap&#40;TSC&#41;&#41;<br />		// make sure the TSC is available, because we're going to<br />		// measure actual CPU clocks per known time interval.<br />		// counting loop iterations &#40;&quot;bogomips&quot;&#41; is unreliable.<br />	&#123;<br />		// note&#58; no need to &quot;warm up&quot; cpuid - it will already have been<br />		// called several times by the time this code is reached.<br />		// &#40;background&#58; it's used in rdtsc&#40;&#41; to serialize instruction flow;<br />		// the first call is documented to be slower on Intel CPUs&#41;<br /><br />		int num_samples = 16;<br />		// if clock is low-res, do less samples so it doesn't take too long.<br />		// balance measuring time &#40;~ 10 ms&#41; and accuracy &#40;&lt; 1 0/00 error -<br />		// ok for using the TSC as a time reference&#41;<br />		if&#40;timer_res&#40;&#41; &gt;= 1e-3&#41;<br />			num_samples = 8;<br />		std&#58;&#58;vector&lt;double&gt; samples&#40;num_samples&#41;;<br /><br />		int i;<br />		for&#40;i = 0; i &lt; num_samples; i++&#41;<br />		&#123;<br />			double dt;<br />			i64 dc;<br />				// i64 because VC6 can't convert u64 -&gt; double,<br />				// and we don't need all 64 bits.<br /><br />			// count # of clocks in max&#123;1 tick, 1 ms&#125;&#58;<br />			// .. wait for start of tick.<br />			const double t0 = get_time&#40;&#41;;<br />			u64 c1; double t1;<br />			do<br />			&#123;<br />				// note&#58; get_time effectively has a long delay &#40;up to 5 ?s&#41;<br />				// before returning the time. we call it before rdtsc to<br />				// minimize the delay between actually sampling time / TSC,<br />				// thus decreasing the chance for interference.<br />				// &#40;if unavoidable background activity, e.g. interrupts,<br />				// delays the second reading, inaccuracy is introduced&#41;.<br />				t1 = get_time&#40;&#41;;<br />				c1 = rdtsc&#40;&#41;;<br />			&#125;<br />			while&#40;t1 == t0&#41;;<br />			// .. wait until start of next tick and at least 1 ms elapsed.<br />			do<br />			&#123;<br />				const double t2 = get_time&#40;&#41;;<br />				const u64 c2 = rdtsc&#40;&#41;;<br />				dc = &#40;i64&#41;&#40;c2 - c1&#41;;<br />				dt = t2 - t1;<br />			&#125;<br />			while&#40;dt &lt; 1e-3&#41;;<br /><br />			// .. freq = &#40;delta_clocks&#41; / &#40;delta_seconds&#41;;<br />			//    cpuid/rdtsc/timer overhead is negligible.<br />			const double freq = dc / dt;<br />			samples&#91;i&#93; = freq;<br />		&#125;<br /><br />		std&#58;&#58;sort&#40;samples.begin&#40;&#41;, samples.end&#40;&#41;&#41;;<br /><br />		// median filter &#40;remove upper and lower 25% and average the rest&#41;.<br />		// note&#58; don't just take the lowest value! it could conceivably be<br />		// too low, if background processing delays reading c1 &#40;see above&#41;.<br />		double sum = 0.0;<br />		const int lo = num_samples/4, hi = 3*num_samples/4;<br />		for&#40;i = lo; i &lt; hi; i++&#41;<br />			sum += samples&#91;i&#93;;<br />		cpu_freq = sum / &#40;hi-lo&#41;;<br /><br />	&#125;<br />	// else&#58; TSC not available, can't measure; cpu_freq remains unchanged.<br /><br />	// restore previous policy and priority.<br />	pthread_setschedparam&#40;pthread_self&#40;&#41;, old_policy, &amp;old_param&#41;;<br />&#125;<br /></code></pre><br /><br />HTH+HAND</div>
+    <div class="meta">Posted on 2004-10-01 22:15:04 by Jan Wassenberg</div>
+   </div>
+   <div class="post" id="post-150799">
+    <div class="subject"><a href="#post-150799">NO subject</a></div>
+    <div class="body">Hy, have you tested this code?<br /><br />if yu do this you won't miss the zero?<br />while(t1 == t0); <br /><br />no comment, 20ppm must be enough for me if not i will make external hardware.<br />so you think measureing tsc with pit is not a good idea?<br />it is working quite good under dos, and it misses 1 of 25 under windows with 72 ticks measurement time. It tells me HZ.<br /><br />MATRIX</div>
+    <div class="meta">Posted on 2004-10-02 07:14:22 by &gt;Matrix&lt;</div>
+   </div>
+   <div class="post" id="post-150801">
+    <div class="subject"><a href="#post-150801">Determining CPU speed...</a></div>
+    <div class="body"><div class="quote">if yu do this you won't miss the zero? <br />while(t1 == t0);</div><br />What do you mean by zero? The purpose of that is to wait for the start of a time tick, since get_time may only be running at 10ms resolution (depending on timer hardware available). Otherwise, we might catch it right at the end of a tick, reporting 10ms elapsed when it's only say 1ms.<br /><br /><div class="quote">no comment, 20ppm must be enough for me if not i will make external hardware.</div><br />whoa, hard-core :) What's the application that requires so much precision?<br /><br /><div class="quote">so you think measureing tsc with pit is not a good idea? <br />it is working quite good under dos, and it misses 1 of 25 under windows with 72 ticks measurement time. It tells me HZ.</div><br />ah, I thought you were running Windows only? It's fine on DOS, where cli actually works and you can prevent just about all interference. On Windows, you may be able to access a better timer, which runs at 3x PIT freq (ACPI aka PM timer; maybe check Linux how to access it). You also need to somehow detect those 1 in 25 bad samples.<br />BTW, due to jittering (differs with temperature, e.g. if the computer has just been powered up - fun), you have a frequency of say 980..1020 MHz. It's pointless to try to measure down to 1 Hz ;) If you manage to get a stable value, it's because all errors and fluctuations are being averaged.</div>
+    <div class="meta">Posted on 2004-10-02 08:08:30 by Jan Wassenberg</div>
+   </div>
+   <div class="post" id="post-150805">
+    <div class="subject"><a href="#post-150805">Why That accurate?</a></div>
+    <div class="body">An example: undersampling oscilloscope's time base is critical<br />less strict but also critical application:<br />some microcontroller's programming also needs to be accurate +-10% @ 100 us delay<br />another application:<br />vertical horizontal deflection of a laser beam to draw curves also need accurate timings ( and fast computer )<br /><br />what if i can't do it on windows? nothing i'll buy another computer for that application and it will run under dos - or boot as an os.<br /><br />MATRIX</div>
+    <div class="meta">Posted on 2004-10-02 09:41:03 by &gt;Matrix&lt;</div>
+   </div>
+   <div class="post" id="post-150813">
+    <div class="subject"><a href="#post-150813">Determining CPU speed...</a></div>
+    <div class="body">ah, ok, for hard-realtime apps, definitely go for DOS.<br />Again, though, the last of your worries should be nailing CPU freq down to 0.001 ppm ;)</div>
+    <div class="meta">Posted on 2004-10-02 12:09:20 by Jan Wassenberg</div>
+   </div>
+  </div>
+ </body>
+</html>

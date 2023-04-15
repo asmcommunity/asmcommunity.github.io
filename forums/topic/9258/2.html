@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>High speed message dispatcher - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9258" />
+  <link rel="prev" href="../?id=9258&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=9258">High speed message dispatcher</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=9258&amp;page=1" style="">&laquo;</a><a href="../?id=9258&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="9258" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-68684">
+    <div class="subject"><a href="#post-68684">High speed message dispatcher</a></div>
+    <div class="body">Sloat,<br /><br />In the second example, you only need to pass the 4 parameters so that you have the right set of values for the default windows procedure, otherwise you would only pass the three parameters, hWnd, wParam and lParam.<br /><br />gladiator,<br /><br />I think your suggestion could be done but you will have the problem of not knowing what the user defined message is until runtime so you would have to create the second array dynamically and do the appropriate offset adjustments to it to get it to work. With the original array, you can in fact load it in a static table and fill out the values yourself for each message that is processed and fill the rest with the default processing address. This is possible because MASM knows the offset of each label at assemble time so if you put the label names into the table, you will get the correct results at runtime.<br /><br />Its just that a 1024 loop of DWORD writes is fast enough anyway alongside the normal loading speed of a program so there is little point of doing the extra work. It will make the disk file larger by 4k as well by using a static table in the initialised data section.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-12-02 16:48:20 by hutch--</div>
+   </div>
+   <div class="post" id="post-68803">
+    <div class="subject"><a href="#post-68803">High speed message dispatcher</a></div>
+    <div class="body">hutch,<br />  maybe you are not getting me completly or it is the other way around(ie, i am not getting you completly)<br /><br />The array size of the usermsg array will be known at compile time. <br />Actually that size will be about the only thing the user will have to set.<br />As my asm is not that gooso d i am posting a bit of code in C to explain what i mean-<br /><pre><code><br />&#91;COLOR=green&#93;//the user msg array &#91;/COLOR&#93;<br />LRESULT &#40;*usermsg&#91;maxmsgs&#93;&#41; &#40;WPARAM,LPARAM&#41;;<br /><br />&#91;COLOR=green&#93;//the windows msgs array &#91;/COLOR&#93;<br />LRESULT &#40;*winmsg &#91;WM_USER-1&#93;&#41; &#40;HWND,UMSG,WPARAM,LPARAM&#41;;;<br /><br />&#91;COLOR=red&#93;typedef&#91;/COLOR&#93; LRESULT &#40;*pFunc&#41; &#40;WPARAM,LPARAM&#41;;<br /><br />&#91;COLOR=blue&#93;#define&#91;/COLOR&#93; DeclareUsrMsg&#40;msgname,no&#41;\<br />const int msgname = WM_USER+no<br /><br />&#91;COLOR=blue&#93;inline void&#91;/COLOR&#93; SetUsrMsg&#40;int msgname,pfunc func&#41;<br />&#123;<br />	&#91;COLOR=green&#93;//if msg=WM_USER+1, then index=0 &#91;/COLOR&#93;<br />	int index=msgname-WM_USER-1; 	<br />	usermsg&#91;index&#93;=pfunc 		<br /><br />&#125;<br /><br />&#91;COLOR=blue&#93;inline&#91;/COLOR&#93;  LRESULT DispatchMsg&#40;HWND hwnd,UINT uMsg,WPARAM wp,LPARAM lp&#41;<br />&#123;<br />	if&#40;uMsg&gt;WM_USER&#41;<br />	 &#123;<br />	 	int index=uMsg-WM_USER-1;<br />	 	return usermsg&#91;index&#93;&#40;wp,lp&#41;;<br />	 &#125;<br />	else<br />	 return winmsg&#91;uMsg&#93;&#40;hwnd,uMsg,wp,lp&#41;;<br />&#125;<br /></code></pre><br /><br />Both the arrays will of course have to be initialized with <br />To use this in your code it will be something like this-<br /><pre><code><br />DeclareUsrMsg&#40;mymsg,1&#41;;<br /><br />&#91;COLOR=green&#93;//event handler func&#91;/COLOR&#93; <br />LRESULT mymsgfnc&#40;HWND hwnd,UINT uMsg,WPARAM wp,LPARAM lp&#41;<br />&#123;<br />&#91;COLOR=green&#93;  //handler code &#91;/COLOR&#93;<br />&#125;<br />&#91;COLOR=green&#93;//somewhere in your code put this&#91;/COLOR&#93; <br />SetUsrMsg&#40;mymsg,mymsgfunc&#41;<br /></code></pre><br /><br />All the user has to take care of is to define this variable in his<br />code somewhere-<br />const int maxmsgs;<br />which in the above case would be -<br /><pre><code><br />&#91;COLOR=blue&#93;const int&#91;/COLOR&#93; maxmsgs=1;<br /></code></pre><br /><br /><span style="font-size:9px>P.S.- The above code may not syntactically 100% correct.<br />I just posted it to explain myself.</span></div>
+    <div class="meta">Posted on 2002-12-03 07:42:24 by clippy</div>
+   </div>
+   <div class="post" id="post-68884">
+    <div class="subject"><a href="#post-68884">High speed message dispatcher</a></div>
+    <div class="body">gladiator,<br /><br />I chewed over your idea yesterday and put it together something like this.<br /><pre><code><br />WndProc proc etc ....<br /><br />    cmp DWORD PTR uMsg, 1023<br />    je @F<br /><br />    DispatchMsg<br />    jmp wpOut<br /><br />  @@&#58;<br />  ; -- ------------------------------------------<br />  ; process messages with value about 1023 here<br />  ; --------------------------------------------<br /><br />  wpOut&#58;<br /><br />    ret<br /><br />WndProc endp<br /></code></pre><br /><br />This solves the problem of needing a far larger array and only adds 2 instructions to the dispatching code for applications that process messages about 1023.<br /><br />Compliments on a good idea.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-12-03 16:13:57 by hutch--</div>
+   </div>
+   <div class="post" id="post-68919">
+    <div class="subject"><a href="#post-68919">High speed message dispatcher</a></div>
+    <div class="body">umm Hutch,<br />        Maybe i am bit confused(yet again), but isnt that the same thing that i have done in my post above?<br /><pre><code>&#91;COLOR=blue&#93;if&#91;/COLOR&#93; &#40;uMsg&gt;WM_USER&#41;<br />&#123;<br />	 	int index=uMsg-WM_USER-1;<br />	 	return usermsg&#91;index&#93;&#40;wp,lp&#41;;<br /> &#125;<br /> &#91;COLOR=blue&#93;else&#91;/COLOR&#93; <br /> return winmsg&#91;uMsg&#93;&#40;hwnd,uMsg,wp,lp&#41;;<br /></code></pre> <br />Also what about custom user msgs in your code?<br /><br /><div class="quote">Compliments on a good idea.</div> Thanks :)</div>
+    <div class="meta">Posted on 2002-12-03 22:31:27 by clippy</div>
+   </div>
+   <div class="post" id="post-68968">
+    <div class="subject"><a href="#post-68968">High speed message dispatcher</a></div>
+    <div class="body">My testing with return values from the API &quot;RegisterWindowMessage&quot; have values high up in the range, &gt; 50k and WM_USER starts at 1024 so all you need to do is trap the messages higher than 1023 in a normal cmp / je block and do the main range below with the dispatcher.<br /><br />It of course depends on if the app uses any messages above 1023 which most don't. Most small apps have a very short sequence of compares anyway in the WndProc but a big pig with many messages to process could probably benefit from the dispatcher.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-12-04 03:42:21 by hutch--</div>
+   </div>
+   <div class="post" id="post-69075">
+    <div class="subject"><a href="#post-69075">High speed message dispatcher</a></div>
+    <div class="body">Don't see why you need the compare, as the two ranges are contiguous. Different window classes usually have different sets of handler routines - e.g., the standard window message WM_COMMAND.<br /><br />If you had used WM_APP, which was mistakenly recommended at one time, then the compare makes sense, as there is a gap between WM_USER (0400h) and WM_APP (0800h).</div>
+    <div class="meta">Posted on 2002-12-04 12:38:28 by tenkey</div>
+   </div>
+   <div class="post" id="post-69079">
+    <div class="subject"><a href="#post-69079">High speed message dispatcher</a></div>
+    <div class="body">Hutch,<br />Thats exacly what i was thinking. You algo is gonna be perfect for a window thats highly used , ie, probably the applications main window or something, or maybe inside WM_COMMAND msgs,but the dispatcher is gonna be overkill if provided for each and and every dialog box.<br />Also <strong>a more general use of your algo</strong> would be to apply it in any place where switch/case statements are needed and the constants being compared to are not very large. It can make that portion of the code which was previously using switch/case to go extremly fast.</div>
+    <div class="meta">Posted on 2002-12-04 13:00:24 by clippy</div>
+   </div>
+   <div class="post" id="post-76005">
+    <div class="subject"><a href="#post-76005">High speed message dispatcher</a></div>
+    <div class="body">humm... isn't this a bit overkill for wndproc style stuff?<br />I can see the advantages if you have an enormous amount of<br />messages to process, with equal/random probability, where<br />you'd end up going through too many Jcc's.<br /><br />For a wndproc, does any of this matter at all? Obivously not<br />for the typical small win32asm-style programs or on fast CPUs,<br />so let's say... something sorta large, lots of messages, running<br />on a, say, 200mhz pentium/mmx. Would you be able to *feel* any<br />difference, like user interface responsiveness? Just wondering.<br /><br />Personally, for gui coding, I'm using a dispatch scheme where<br />all messages go to separate procedures. It's probably somewhat<br />less wasteful then the Big Table(TM) approach, although slower<br />(either scanning a table, or using a switch statement). And it's<br />probably slower than linked Jcc's. But it's easy to maintain,<br />easy to debug, and... for simple message dispatching, does it matter?<br /><br />Please don't take this as a flame/insult, I'm just wondering<br />whether there's any visible gains from optimizing something like<br />wndproc, even when targetting relatively low-end machines.</div>
+    <div class="meta">Posted on 2003-01-13 06:25:58 by f0dder</div>
+   </div>
+   <div class="post" id="post-76013">
+    <div class="subject"><a href="#post-76013">High speed message dispatcher</a></div>
+    <div class="body">hi f0dder,<br />  You are right actually this can be a bit of overkill if used for each and every window. <br />I personally find a much better use for it as a replacement for switch/case statements.</div>
+    <div class="meta">Posted on 2003-01-13 06:58:10 by clippy</div>
+   </div>
+   <div class="post" id="post-76173">
+    <div class="subject"><a href="#post-76173">High speed message dispatcher</a></div>
+    <div class="body">There are a lot of apps where it would not make any difference but it does have another advantage, where I have converted applications from a normal Switch block style WndProc to a dispatcher of this style, you end up with smaller code, for the overhead of loading the addresses which is no big deal, you lose all of the CMP/JMP code in the WndProc.<br /><br />I have seen in my time very large applications that had massive sized WndProcs and its here where this dispatching technique would be useful in speed terms as I have used applications that were very sluggish because of their size, even while they were not doing anything.<br /><br />The actual technique has its real advantages in areas where you must handle massive ranges of branching at high speed, character based branching is one area, number based arrays is an obvious choice or anywhere else that wide choice is necessary.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-01-13 23:54:40 by hutch--</div>
+   </div>
+   <div class="post" id="post-76179">
+    <div class="subject"><a href="#post-76179">High speed message dispatcher</a></div>
+    <div class="body">hutch, how were those &quot;massive wndprocs&quot; done? lots of cmp/Jcc?<br />While I agree that this &quot;massive table&quot; :) approach is probably good<br />for high-speed stuff where you have a huge amount of cases, couldn't<br />a &quot;massive wndproc&quot; be handled efficiently with a smaller table of<br />{umsg,handlerproc} pairs? sure, you'd have to do a searchloop which<br />would take more time than a single indirect jump, but it'd take less<br />space (until you have &quot;a lot&quot; of messages, where the two-item table<br />would obviously end up taking more space). The table could of course<br />be pre-sorted for faster searching.<br /><br />Again, no doubt the table based searching will be slower than a single<br />indirect jump, but question is: will you be able to feel it?</div>
+    <div class="meta">Posted on 2003-01-14 01:19:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-76193">
+    <div class="subject"><a href="#post-76193">High speed message dispatcher</a></div>
+    <div class="body">f0dder,<br /><br />most of the stuff I saw were traditional Switch/Case systems for WndProc style procedures and while this is a reasonable performer it can start to get a bit slow when the number of items processed becomes large. In things like menus and command buttons, it probably does not matter but with GDI screen graphics you can start to see the lag if the app is big enough.<br /><br />With the modification that handles anything over 1024 by a normal Switch/Case, an array of 4k is no big deal as it will probably fit onto an existing memory page but there is no doubt that an address based branching system has a smaller overhead in repeated loop terms than any search based system so if speed matters, it will outperform sequential searching in branching performance.<br /><br />I am not sure exactly what you mean by a {umsg,handlerproc} system. I did post an example that had a seperate procedure for every message that was branched in much the same way, the table was filed with procedure addresses for each message processed and it worked OK. It ends up being a bit larger because of the extra parameters to do it but for people who like coding with seperate procedures for each message, it probably does the job OK.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-01-14 02:29:31 by hutch--</div>
+   </div>
+   <div class="post" id="post-87537">
+    <div class="subject"><a href="#post-87537">High speed message dispatcher</a></div>
+    <div class="body">This is from the 'case insensitive char match' thread.<br /><br /><div class="quote">on modern CPUs, look up tables can be (in a real situation) very slow, because if the cache hasn't yet be filled with the table, access to main memory will be extremely slow. </div> <br /><br />So can it be that this method of using wndproc makes it even slower as the array wont be cached?<br /><br />Or am i just talking utter rubbish?</div>
+    <div class="meta">Posted on 2003-03-17 05:12:34 by clippy</div>
+   </div>
+   <div class="post" id="post-87719">
+    <div class="subject"><a href="#post-87719">High speed message dispatcher</a></div>
+    <div class="body">TITZ?!?! WHERE!?!? =P</div>
+    <div class="meta">Posted on 2003-03-17 20:43:50 by x86asm</div>
+   </div>
+   <div class="post" id="post-88350">
+    <div class="subject"><a href="#post-88350">High speed message dispatcher</a></div>
+    <div class="body">gladiator,<br /><br />Interesting question but once the memory has been accessed a few times it is in cache anyway. Empirical testing shows the technique is a lot faster in algos where it matters, particularly byte based algos with 256 combinations.<br /><br />The bigger the range being handled, the more advantage it has.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-03-20 03:23:48 by hutch--</div>
+   </div>
+   <div class="post" id="post-90456">
+    <div class="subject"><a href="#post-90456">High speed message dispatcher</a></div>
+    <div class="body">As an example-<br /><br />Lets say in the you have a handler for WM_LBUTTONDOWN which generates numbers from 1 to 10million on each mouse click.<br /><br />Of course this is an absured situation but what i mean to point out it is that if say for a particular handler you do a lot of job.<br />So after the handling is complete and the next msg is passesd to wndproc, wont the cache would have completly changed by then? <br />Thus wont it then make wndproc even slower as according to whats mentioned above, we will have to wait again for the table to be loaded in the array???</div>
+    <div class="meta">Posted on 2003-03-26 01:52:04 by clippy</div>
+   </div>
+   <div class="post" id="post-90458">
+    <div class="subject"><a href="#post-90458">High speed message dispatcher</a></div>
+    <div class="body">and do the handlers even have to do a lot of work for this scenario to be true? with other processes and threads, other messages being handled (etc), won't the cache almost automatically be filled with other stuff? how much code/data will normally be used on a round-trip through the system?<br /><br />I can see the direct-jump-table-thingy could be nice for a loop where you process a lot of symbols (but having few enough symbols that the table wont be thrown totally out of cache by other processing etc), but for something like a message pump, where you don't really know what happens from one message to the next, I have my doubts performance-wise. But then again, imho a GUI message pump isn't too performance critical, and I'm considering a silly table of message,proc (ie, search through table instead of direct jump), as typically there wont be too many messages to handle per window. The speed decrease probably cannot be felt even on older hardware, and the table-based approach can make life quite some easier for me if done right.</div>
+    <div class="meta">Posted on 2003-03-26 01:59:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-90814">
+    <div class="subject"><a href="#post-90814">High speed message dispatcher</a></div>
+    <div class="body">Where I tend to use this technique is where I have a line of hack branching that can be calculated once as an array of addresses and then replaced with a single jump to an address. With things like branching on character choice, the speed gain is considerable and in most instances, the extra code to set it up is smaller than a standard list of comparisons and jumps.<br /><br />The win is the normal one, calculate the set of label offsets at either assemble time or even partly at run time once, then keep using them without any further overhead with high speed branching.<br /><br />egards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-03-27 01:26:08 by hutch--</div>
+   </div>
+   <div class="post" id="post-108448">
+    <div class="subject"><a href="#post-108448">Hi</a></div>
+    <div class="body">Hi<br /><br />Please correct me if I am wrong, but I think there's a bug in this message dispatching routine. It expects messages &lt; 1024, but this is not an assumption we can make...<br /><br />Some apps use registered messages for interprocess communication, and for global notification of events, b broadcasting with <strong>PostMessage,HWND_BROADCAST,uMsg,wParam,lParam</strong>. Since window messages registered with <strong>RegisterWindowMessage</strong> are &gt; 1024, if our app receives one of these it will cause an illegal memory access, or worse, a jump to arbitrary code.<br /><br />So, I think there should be code to check for messages &gt; 1024 and call <strong>DefWindowProc</strong> in that case.</div>
+    <div class="meta">Posted on 2003-06-27 11:46:40 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-108559">
+    <div class="subject"><a href="#post-108559">High speed message dispatcher</a></div>
+    <div class="body">Hello?...<br /><br />echo...                                                              ...echo<br /><br />:grin:</div>
+    <div class="meta">Posted on 2003-06-28 15:05:53 by QvasiModo</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=9258&amp;page=1" style="">&laquo;</a><a href="../?id=9258&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="9258" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

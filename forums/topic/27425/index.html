@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. ex. #4 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27425" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27425">Basics of Asm32 in opt. ex. #4</a></p>
+   <div class="post" id="post-196230">
+    <div class="subject"><a href="#post-196230">Basics of Asm32 in opt. ex. #4</a></div>
+    <div class="body">Passing parameters to invoke
+----------------------------
+If you are on the way of size and speed optimization
+(wich is actually easier then in any HLL)
+first thing you need to set easy methods to
+culculate speed and size.
+Without it all you do will be something close to
+speculations.
+If it will not easy way - then your work will be hard and
+uneffective.
+But with easy methods it becomes most fun and exciting game.
+
+-------------
+One of common mistakes in the writing HLL imitation in asm
+is to use local variables to pass parameters in invoke
+though those parameters are already in some regs and may be
+pushed in memory for it.
+To get clear picture of what the difference is let's recall
+simple and wellknown things.
+invoke SomeFunc,LocalVariable
+will result in
+	push 
+	call SomeFunc.
+push  is 3 bytes size and 2 clocks speed and NP!
+push reg is 1 byte size 1 byte speed and UVP! (thats mean if
+code in pipes you can perform additional operation whithin one clock
+if two operations are pareble)
+-----------------------------
+To illustrate it let's have a look at the FrameWindow proc from M32LIB
+<pre><code>
+FrameWindow proc hndle:DWORD, step:DWORD, wid:DWORD, direction:DWORD
+
+  ; -------------------------------------------------------------
+  ; This proc is used for framing the client area of a window.
+  ; Parameters.
+  ; 1. The handle of the window.
+  ; 2. step, the distance from the inside edge of the client area
+  ;    in pixels to draw the frame
+  ; 3. wid, the width of the frame in pixels.
+  ; 4. direction, 0 = sunken frame, 1 = raised frame.
+  ; -------------------------------------------------------------
+
+    LOCAL btn_hi    :DWORD ;it's local variable
+    LOCAL btn_lo    :DWORD ;it's not bad thing actually to create them
+    LOCAL hDC       :DWORD ;To get space for them we need just one oneclock
+    LOCAL Rct       :RECT ;instruction no matter how many of them we need
+
+    invoke GetDC,hndle ;push hndle 3 bytes, 2 clocks
+    mov hDC, eax
+
+    invoke GetClientRect,hndle,ADDR Rct
+			;lea eax, - 3bytes 1 clock
+			;push eax - 1 byte 1 clock
+			;push hndle - 3 bytes ,2 clocks
+			;and so on.....
+    mov eax, step
+    mov edx, wid
+
+    add eax, edx
+
+    add Rct.left,   eax
+    add Rct.top,    eax
+    inc eax
+    sub Rct.right,  eax
+    sub Rct.bottom, eax
+
+    invoke GetSysColor,COLOR_BTNHIGHLIGHT
+    mov btn_hi, eax
+
+    invoke GetSysColor,COLOR_BTNSHADOW
+    mov btn_lo, eax
+
+    .if direction == 1
+      mov eax, btn_lo
+      mov ecx, btn_hi
+      mov btn_lo, ecx
+      mov btn_hi, eax
+    .endif
+
+    invoke Frame3D,hDC,btn_lo,btn_hi,
+                   Rct.left,
+                   Rct.top,Rct.right,Rct.bottom,wid
+
+    invoke ReleaseDC,hndle,hDC
+
+    ret
+
+FrameWindow endp
+
+; #########################################################################</code></pre>
+Lets see if we can decrease number of locals pushes using values
+in regs.
+(Mind we get 1(+1) clock speed and 2 clocks size decrise for each of
+those replacements + we for instructions we need to put values in the
+locals)
+A little bit optimized version of FrameWindow
+<pre><code>
+FrameWindow proc hndle:DWORD, step:DWORD, wid:DWORD, direction:DWORD
+
+  ; -------------------------------------------------------------
+  ; This proc is used for framing the client area of a window.
+  ; Parameters.
+  ; 1. The handle of the window.
+  ; 2. step, the distance from the inside edge of the client area
+  ;    in pixels to draw the frame
+  ; 3. wid, the width of the frame in pixels.
+  ; 4. direction, 0 = sunken frame, 1 = raised frame.
+  ; -------------------------------------------------------------
+
+;    LOCAL btn_hi    :DWORD
+;    LOCAL btn_lo    :DWORD
+    LOCAL hDC       :DWORD
+    LOCAL Rct       :RECT
+
+    invoke GetDC,hndle
+    mov hDC, eax
+
+    invoke GetClientRect,hndle,ADDR Rct
+
+    mov eax, step
+    mov edx, wid
+
+    add eax, edx
+
+    add Rct.left,   eax
+    add Rct.top,    eax
+    inc eax
+    sub Rct.right,  eax
+    sub Rct.bottom, eax</div>
+    <div class="meta">Posted on 2001-03-28 08:04:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196231">
+    <div class="subject"><a href="#post-196231">Basics of Asm32 in opt. ex. #4</a></div>
+    <div class="body">This is one of the main reasons I don't like PROC/INVOKE and the local varible mechanism that exists.  I will be using MACROs as much as I can to rename the registers - this makes the code very readable (see my QuickSort PROC for an example of this).  Also there are many times when I don't want to give up the <strong>EBP</strong> register.  MASM builds a stack frame even if I don't have local varibles: it must reference local and passed varibles through <strong>EBP</strong> - I don't like this. :(
+
+I do understand why this is so, but there should be more fexiblity, don't you think?
+
+Svin, great comments here and on the other threads.  I always enjoy reading your posts/code.</div>
+    <div class="meta">Posted on 2001-03-28 10:28:00 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CLSID Question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9643" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=9643">CLSID Question</a></p>
+   <div class="post" id="post-71496">
+    <div class="subject"><a href="#post-71496">CLSID Question</a></div>
+    <div class="body">I have a question to those who are better informed than I.. (ie, most of you :grin: )<br /><br />Im building an &quot;autocad-bot&quot; masm program at the moment.  I was basically following some VB examples to create an instance of autocad, and when i came across this:<div class="quote">Set acadApp = CreateObject(&quot;Autocad.Application&quot;)<br />'open AutoCAD</div><br />I decided to look up the &quot;Autocad.Application&quot; Registry key, and found the CLSID. (Since the SDK didnt provide this CLSID ~ The SDK assumes im writing ARX programs which are Add-ons to Autocad, thus assumes Acad is already running, and hence didnt give me this CLSID). <br /><br />Getting back on track, i used this CLSID, with the provided IID_IAcadApplication in the SDK, and wrote a working source to insanciate Autocad, and Release it.  The program works, however, under one condition:  I place the MASM exe in the &quot;Common Files\Autocad Sharred\&quot; directory.  This is where all the COM server objects resides.  If i run it from any other dir, i get missing DLL errors.<br /><br />Why is it that VB can compile the same thing i just did, and not have this problem.  I assume there is more &quot;hidden&quot; code VB is placing to look up a registry key and set the path pointer, or something??  <strong>Does anyone have any suggestions, or code fragments, that would allow the program to run anywhere in the OS??</strong><br /><br />Here is the code i have written:<pre><code><br />.data<br />   IID_IAcadApplication GUID     sIID_IAcadApplication<br />   CLSID_Application    GUID     sCLSID_Application<br /><br />.code<br /><br />.elseif uMsg == WM_CREATE<br />   <br />   xor eax, eax<br />   mov pIAcadDocument, eax<br />   <br />   invoke CoInitialize, NULL     <br />   invoke CoCreateInstance, ADDR CLSID_Application, NULL, CLSCTX_ALL,\<br />                            addr IID_IAcadApplication, addr pIAcadDocument<br /><br />   .if !&#40;EAX&#41;<br />      coinvoke pIAcadDocument, IAcadApplication,put_Visible, TRUE<br />   .endif<br /><br />   <br />   ...<br />   ...<br />   ...<br /><br />   <br />.elseif uMsg == WM_DESTROY<br />    <br />      .if&#40; pIAcadDocument &#41;<br />        coinvoke pIAcadDocument, IAcadApplication, Quit<br />      .endif<br />    <br />        invoke CoUninitialize<br />        invoke PostQuitMessage,NULL<br />        return 0 <br />    .endif<br /></code></pre><br />Thanx alot!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-17 18:34:55 by NaN</div>
+   </div>
+   <div class="post" id="post-71513">
+    <div class="subject"><a href="#post-71513">A solution...</a></div>
+    <div class="body">I found one solution that works, but its a back door approach:<br /><pre><code>InitCad PROC hWindow&#58;DWORD<br />   LOCAL dirbuf&#91;512&#93;   &#58;BYTE<br />   <br />   .data<br />      szDir db &quot;C&#58;\Program Files\Common Files\Autodesk Shared\&quot;,0<br />   .code<br />   <br />&#91;b&#93;   invoke GetCurrentDirectory, 512, addr dirbuf<br />   invoke SetCurrentDirectory, addr szDir&#91;/b&#93;<br /><br />   xor eax, eax<br />   mov pIAcadDocument, eax<br />   <br />   invoke CoInitialize, NULL     <br />   invoke CoCreateInstance, ADDR CLSID_Application, NULL, CLSCTX_ALL,\<br />                            addr IID_IAcadApplication, addr pIAcadDocument<br /><br />   .if !&#40;EAX&#41;<br />      coinvoke pIAcadDocument, IAcadApplication,put_Visible, TRUE<br />   .endif<br />&#91;b&#93;   invoke SetCurrentDirectory, addr dirbuf&#91;/b&#93;<br />   <br />   ret<br />InitCad ENDP</code></pre><br />This works, but its not the best solution cause im hard coding in the required path.  I did a search thru the registry for &quot;Autodesk Shared&quot; but didnt pull up any keys that i can directly use.  Is there a shell registry key or something to get the OS path to &quot;\Program Files\Common Files\&quot;?? If so i can simply concatenate on the subdirectory....<br /><br />Thanx!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-17 20:37:49 by NaN</div>
+   </div>
+   <div class="post" id="post-71562">
+    <div class="subject"><a href="#post-71562">CLSID Question</a></div>
+    <div class="body">Hi NaN,<br /><br />that entry should be in HKEY_LOCAL_MACHINE\Software\Microsoft\CurrentVersion.<br /><br />I also wonder why the code works in VB. Maybe VB loads the TypeLib/TypeInfo first and uses entry in HELPDIR there?</div>
+    <div class="meta">Posted on 2002-12-18 03:17:40 by japheth</div>
+   </div>
+   <div class="post" id="post-71678">
+    <div class="subject"><a href="#post-71678">CLSID Question</a></div>
+    <div class="body">Thanx for the Key location, i will give it a try ;)<br /><br />As for the VB thing, ya its wierd.  Till now with other COM servers, i have never run into this problem.  I suspect that Acad wants me to use the ACAD.EXE file and not instanciate it like im doing (CLSID_Application).  Like i said it was the one GUID that was not given to me in the .tlb file.  Looking in the registry it shows the local32 key to be:<br /><br />&quot;C:\Program Files\Autocad2000\Acad.exe /Automation&quot;<br /><br />And being a com fan, i would like to avoid shell executing Acad, if i can ;) (which appears to be no problem so far, only this one bump..)<br /><br />Thanx again for the help!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-18 17:01:28 by NaN</div>
+   </div>
+   <div class="post" id="post-71707">
+    <div class="subject"><a href="#post-71707">CLSID Question</a></div>
+    <div class="body">I never found the key you suggested, however, it did lead me to this:<br /><pre><code>HKEY_LOCAL_MACHINE\Software\Autodesk\ ObjectDBX\R15.0\Applications\ISM\Loader<br /><br />Which has a key&#58;<br /><br />MODULE = C&#58;\Program Files\Common Files\Autodesk Shared\acIsmObj15.dbx</code></pre>All i have to do is get it, and cut off the file name... :grin:<br /><br />I feel pretty sure this will exist on all installations... <br /><br />Thanx again!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-18 21:54:51 by NaN</div>
+   </div>
+   <div class="post" id="post-71712">
+    <div class="subject"><a href="#post-71712">CLSID Question</a></div>
+    <div class="body">Heya NAN, Fire up your PSDK or MSDN and look into &quot;SHGetSpecialFolderLocation&quot; (shell32.dll version 4.7 or later) and or &quot;SHGetFolderLocation&quot; (shell32.dll version 5.0 or later) and for the nFolder parameter pass the function:  CSIDL_PROGRAM_FILES_COMMON  and the ppidl parameter will contain PIDL to the &quot;Common Files&quot; directory.  :grin: BUT this will only work on Windows NT, Windows 2000, and Windows XP systems. Not valid for Windows Millennium Edition (Windows Me). so maybe pass it CSIDL_PROGRAM_FILES and get the PIDL to the program files directory and add on \Common Files\Autodesk Shared\? Dunno never played with this in ASM only in VB.<br /><br /><br />Ooops almost forgotten, once you have the PIDL to the Common file directory or the program files directory, pass the PIDL to SHGetPathFromIDList and it will fill in pszPath with the system path of that directory so you can append &quot;Autodesk Shared\&quot; and then maybe you can do your thing or use SetCurrentDirectory with your path to common files.<br /><br />Hope this helps ya!:cool:</div>
+    <div class="meta">Posted on 2002-12-18 22:11:43 by Gunner</div>
+   </div>
+   <div class="post" id="post-71869">
+    <div class="subject"><a href="#post-71869">CLSID Question</a></div>
+    <div class="body">Thanks for the info Gunner, its appreciated!<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-19 18:27:43 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

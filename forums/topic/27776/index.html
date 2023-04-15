@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>microsoft checksum algo - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27776" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27776">microsoft checksum algo</a></p>
+   <div class="post" id="post-197954">
+    <div class="subject"><a href="#post-197954">microsoft checksum algo</a></div>
+    <div class="body">I recently, ah...tripped over :) the checksum algorithm
+microsoft uses for their PE files. To use this to set the
+correct checksum on a PE file, you need to first zero out
+the old checksum, then call this function on *the entire file*,
+and store the new checksum value in the header.
+
+Optimizations (Svin?) gladly accepted.
+
+<pre><code>
+MicrosoftCheckSum       PROC C uses esi, buf:dword, len:dword
+   mov      ecx,         ; buffer length
+   shr      ecx, 1            ; we're summing WORDs, not bytes
+
+   mov      esi,         ; esi is pointer to our buffer base
+
+   xor      edx, edx          ; high word must be zero
+   xor      eax, eax          ; EAX holds the checksum
+
+@@theloop:
+   mov      dx,    ; get word
+   add      eax, edx          ; add to sum
+
+   ; add high and low parts of EAX together
+   mov      edx, eax
+   and      eax, 0FFFFh
+   shr      edx, 16           ; this clears the high part (needed in "add eax, edx" in the beginning of the loop)
+   add      eax, edx
+
+   dec      ecx
+   jnz      @@theloop
+
+   ; add high and low parts of EAX together, restrain to 16 bits.
+   mov      edx, eax
+   shr      edx, 16
+   add      eax, edx
+   and      eax, 0FFFFh
+
+   ; and finally, add the length. Presto, that was it.
+   add      eax, 
+   ret
+MicrosoftCheckSum   ENDP
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-24 07:51:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-197955">
+    <div class="subject"><a href="#post-197955">microsoft checksum algo</a></div>
+    <div class="body">Here is two procs, the first only needs to be called once, to initlize the Crc tables. The second works much faster because it uses previously definded varibles. If someone (The Svin) can optimize this one it should be much faster. I have tried, but I aint no expert.
+
+(This code can be assmebled directly into a .lib file)
+<pre><code>
+.386
+.model flat,stdcall
+
+.data?
+ crctab DWORD 256 dup(?)
+.code
+
+; Precomputes a 256*4 CRC array
+InitCrc32Tbl proc uses ebx esi edi
+
+lea edi,crctab + (255*4)
+xor edx,edx ;mov edx,-1
+dec edx
+std 
+
+
+CalcTblValues:
+mov eax,edx
+mov ebx,0edb88320h  ; winzip polynominal
+ 
+push 8 
+pop ecx
+ 
+ReflectBitsCompute_Loop:
+shr eax,1   
+sbb esi,esi
+and esi,ebx
+xor eax,esi  
+dec ecx
+jz ReflectBitsCompute_Loop
+
+stosd
+ 
+dec edx
+jns CalcTblValues
+
+cld
+ret
+InitCrc32Tbl endp
+
+
+
+; Calculates a 32 Bit Cyclic Redundancy Code
+; over a buffer with length SIZEOF(buffer),
+; using a precomputed CRC table. InitCRC
+; must be called *once* before.
+; Speed: ~7 MB/s on a Intel PII 300
+Crc32 proc uses esi edi lpData:DWORD,bLen:DWORD
+
+mov esi,lpData  
+lea edi,crctab  
+mov ecx,bLen 
+xor eax,eax 
+dec eax
+
+CalcCRC:
+xor edx,edx
+mov dl,byte ptr 
+inc esi
+xor dl,al
+
+shr eax,8 
+xor eax,dword ptr 
+
+dec ecx
+jnz CalcCRC
+
+not eax 
+ret
+Crc32 endp
+
+end
+</code></pre>
+
+This message was edited by George, on 4/24/2001 8:13:17 PM</div>
+    <div class="meta">Posted on 2001-04-24 08:25:00 by George</div>
+   </div>
+   <div class="post" id="post-197956">
+    <div class="subject"><a href="#post-197956">microsoft checksum algo</a></div>
+    <div class="body">Until you add the length at the end, the result at the end of each itteration of the loop must be 16 bits long:
+worst case:
+
+say word read in (dx) = 0FFFFh
+checksum (eax) = 0
+eax = dx + eax = 0FFFFh
+hi + lo eax = 0FFFFh
+***(next itteration)***
+word read in = 0FFFFh (again)
+checksum = 0FFFFh
+eax = 0FFFFh + 0FFFFh = 1FFFEh
+hi + lo = 1 + 0FFFEh = 0FFFFh
+
+So the result is guaranteed to be 16bit!
+This means we can get rid of the 
+<pre><code>   ; add high and low parts of EAX together, restrain to 16 bits.
+   mov      edx, eax
+   shr      edx, 16
+   add      eax, edx
+   and      eax, 0FFFFh</code></pre>
+Well it saves a few clocks!
+
+It also gives the possibiltiy of just using the following code for the checksum:
+<pre><code>
+  mov ecx, len    ; buffer length
+  shr ecx, 1      ; we're summing WORDs, not bytes
+
+  mov edx, buf    ; edx is pointer to our buffer base
+  xor eax, eax    ; EAX holds the checksum
+
+@@:
+  add ax, 
+  adc ax, 0
+  dec ecx
+  jnz @B
+  add eax, 
+</code></pre>
+Of course Svin will kill me for using ax, but I don't care :P
+And given I wrote this, it could be COMPLETELY wrong, so someone better check :P I am at work, so I cannot really do any real testing... :(
+
+Well thats enough of my jibber-jabbering,
+I AM THE WEAKEST LINK. GOODBYE!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-04-24 08:34:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-197957">
+    <div class="subject"><a href="#post-197957">microsoft checksum algo</a></div>
+    <div class="body">This inner-loop is surely faster, but I wonder about my logic.  <em>Haven't test, at work, yadda, yadda, yadda...</em>
+<pre><code>@@:
+  adc ax,   ;ESI is pointer to buffer
+  adc dx, 0
+  dec ecx ;this doesn't effect the carry flag
+  jnz @B
+
+  adc ax, dx
+
+  add eax, </code></pre>
+
+This message was edited by bitRAKE, on 4/25/2001 4:53:09 PM</div>
+    <div class="meta">Posted on 2001-04-25 16:34:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-197958">
+    <div class="subject"><a href="#post-197958">microsoft checksum algo</a></div>
+    <div class="body">As "dec" doesn't affect the carry flag, so you can do this:
+<pre><code>
+  mov ecx, len    ; buffer length
+  mov edx, buf    ; edx is pointer to our buffer base
+  shr ecx, 1      ; we're summing WORDs, not bytes
+  xor eax, eax    ; EAX holds the checksum
+  clc             ; Clear the carry flag ready for later...
+
+; The above have been re-arranged for pairing!
+
+@@:
+  adc ax, 
+  dec ecx
+  jnz @B
+
+  adc eax, len
+</code></pre>
+
+Kind of using Bitrake's adc in one go, but delaying the carry until the <strong>next</strong> loop in order to remove one instruction (at the expense of the "clc" and changing the "add eax, len" to "adc eax, len" outside the loop).
+
+Again no testing here, work <em>yadda</em> shouldn't even be doing this <strong>yadda</strong>, not what I get paid for <u>yadda</u> :P
+
+*** Corrected code a little, plus removed one instruction
+*** As I made a REALLY STUPID mistake!
+*** DOH!
+*** Who would have thought that the code could be so optimised?
+
+Mirno
+
+This message was edited by Mirno, on 5/15/2001 7:15:12 AM</div>
+    <div class="meta">Posted on 2001-05-15 06:14:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-197959">
+    <div class="subject"><a href="#post-197959">microsoft checksum algo</a></div>
+    <div class="body"><strong>Mirno</strong>, nice work - even without the pay. :)  I thought of that too, but I was worried about all the carries rolling over and didn't work out the math to prove they were equivalent - I just couldn't see it without thinking it was going to create problems in unique situations.  I wish they'd just let me install a few things here on the harddrive. :)  They watch my every move like a hawk! :(
+
+<em>XOR</em> clears the carry flag.</div>
+    <div class="meta">Posted on 2001-05-15 18:39:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-197960">
+    <div class="subject"><a href="#post-197960">microsoft checksum algo</a></div>
+    <div class="body">Hey guys, good job on optimizing the routine. Can't believe that I stared
+myself so blind at the original microsoft umm...source ;)...that I forgot
+to think about the algorithm itself, and failed to realize that the result
+would always be 16bit. I deserve a good old slapping. I've included some
+timings that I've run on my athlon700, checksumming MSHTML.DLL , the largest
+DLL file I could find in my windows\system directory. "calcCheckSum" is the
+C version of the algorithm (converted directly from the asm version I posted
+here), MicrosoftCheckSum is the version posted here, and number two is mirno's
+version. Ok, speed might not matter all that much on a specialized checksum
+algorithm like this (it's *not* suitable for anything but PE checksums, imho),
+but it's alway fun to see how fast one can go. I'm still pondering whether
+there's any "awfully smart" way to do it, but I really like mirno's version,
+it's so wonderfully short and elegant. Thumbs up.
+
+`calcCheckSum      ': 34934ms (34.934sec) -- 2000 checks, 58 checks/second
+`MicrosoftCheckSum ': 29998ms (29.998sec) -- 2000 checks, 68 checks/second
+`MicrosoftCheckSum2': 21012ms (21.12sec) -- 2000 checks, 95 checks/second</div>
+    <div class="meta">Posted on 2001-05-16 06:49:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-197961">
+    <div class="subject"><a href="#post-197961">microsoft checksum algo</a></div>
+    <div class="body">I think you could sum DWORDS and then add the two WORD halves outside the loop, but this algo really should be optimized for size, IMHO.</div>
+    <div class="meta">Posted on 2001-05-16 10:32:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-197962">
+    <div class="subject"><a href="#post-197962">microsoft checksum algo</a></div>
+    <div class="body">I was thinking exactly the same thing :D !
+You can modify the code pretty easily, just do the following:
+<pre><code>
+  mov ecx, len    ; buffer length
+  shr ecx, 2      ; we're summing DWORDs, not bytes
+
+  mov edx, buf    ; edx is pointer to our buffer base
+  xor eax, eax    ; EAX holds the checksum
+
+@@:
+  adc eax, 
+  dec ecx
+  jnz @B
+
+  mov ecx, eax
+  and eax, 0FFFFh
+  shr ecx, 16
+  add eax, ecx
+
+  adc eax, len
+</code></pre>
+
+I was also trying to think of a way to use "len" only once at the begining of the file, so it wouldn't need to mess around with the stack pointers (size & 1 or 2 clocks :) ). If I come up with a way to do that I'll post that too.
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-16 10:44:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-197963">
+    <div class="subject"><a href="#post-197963">microsoft checksum algo</a></div>
+    <div class="body">Ok, if this is going in a proc, then this could be slightly shorter, as it manually deals with the stack, and never "creates the varaibles as locals" so to speak!
+
+The main reason this can be done is because the "length" variable is dealt with at the begining, and so we can simply pop "length" and "buffer" off the stack! This should save a couple of bytes. This is done at the expense of a couple of extra instructions to deal with this "pre addition".
+
+I haven't checked the code, and it may be wrong, but here it is anyway....
+<pre><code>
+ChkSum PROTO length:DWORD, buffer:DWORD
+
+ChkSum PROC
+  pop ecx       ; Length
+  pop edx       ; Buffer
+
+  mov eax, ecx
+
+  shr ecx, 1
+  dec ecx
+  clc
+
+@@:
+  adc ax, 
+  dec ecx
+  jnz @B
+
+  adc ax, 
+  rcr ecx, 16
+
+  add eax, ecx
+
+  ret
+ChkSum endp
+</code></pre>
+
+F0dder, could you post the code you used to test these algos?
+Or email it to me at "mirno@fsmail.net". I would like to try to fiddle with my algo a little more, and I'm too lazy to write my own code :)
+
+Thanks
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-16 11:29:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-197964">
+    <div class="subject"><a href="#post-197964">microsoft checksum algo</a></div>
+    <div class="body">Me too <strong>f0dder</strong>, <em>bitRAKE@home.com</em>.  I haven't got around to coding an algo speed tester, but I should be getting an Athlon 1.333Ghz in a couple days. :)  I can't afford any memory right now, though.</div>
+    <div class="meta">Posted on 2001-05-16 11:49:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-197965">
+    <div class="subject"><a href="#post-197965">microsoft checksum algo</a></div>
+    <div class="body">Mmmm, 1.33ghz :-]. Anyway, my speed testing is REALLY REALLY REALLY
+simple. Two time GetTickCount, and a large amount of loops. No
+use of those fancy performance MSRs or anything like that. My
+testing code is a real-world PE checksum fixer, with the speed
+testing worked in, so it's a bit lengthy to post here. I could
+write up a little asm thing to do it, though; it doesn't *really*
+matter what data you're testing the algo on :).</div>
+    <div class="meta">Posted on 2001-05-17 02:25:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-197966">
+    <div class="subject"><a href="#post-197966">microsoft checksum algo</a></div>
+    <div class="body">Hi f0dder,
+It is my faster variant....
+
+
+<pre><code>
+
+buliaNaza proto			
+				
+;USAGE: push lenBuffer          ;
+;       push offset Buffer      ;
+;       call buliaNaza          ;
+
+buliaNaza    proc              
+	pop  eax                ;u return  address
+	pop  edx                ;v a pointer to our buffer base
+	pop  ecx                ;u buffer length
+	push eax                ;v return  address
+	push esi                ;u save some registers
+	push edi                ;v 
+	push ebx                ;u
+	push ecx                ;v save buffer length
+	xor  edi,edi            ;u carry flag counter & clear carry flag (clc)
+	mov  esi,edx            ;v esi is pointer to our buffer base
+	shr  ecx,2              ;u we're summing DWORDs, not bytes   
+	mov  eax,0FFFF0000h     ;v EAX holds the checksum
+bNaza:				
+	adc  edi,0              ;u inc carry flag counter	
+	mov  edx,  ;v get dword
+	mov  ebx,edx            ;u copy it in ebx
+	and  edx,0FFFF0000h     ;v low word must be zero
+	shl  ebx,16             ;u low word must be zero
+	add  eax,edx            ;v add to sum
+	adc  edi,0              ;u inc carry flag counter
+	add  eax,ebx            ;v add to sum
+	dec  ecx                ;u buffer length / 4
+	jne  bNaza              ;v if ecx > 0 loop again
+			        
+	adc  edi,0              ;u inc carry flag counter for last op
+	pop  edx                ;v restore buffer length
+	shr  eax,16             ;u EAX holds the checksum 
+	add  edi,edx            ;v add buffer length
+	add  eax,edi            ;u add to sum
+	pop  ebx                ;v restore some registers
+	pop  edi                ;u speed in cycles: 14 + 3*N
+	pop  esi                ;v N = word ; 14 -> const. cycles
+	ret                     ;  3*N -> 3 cycles per word 
+buliaNaza    endp          ;  tested for Pentium200 MMX and Buffer is
+                           ;  aligned to 4
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-01 03:48:00 by buliaNaza</div>
+   </div>
+   <div class="post" id="post-197967">
+    <div class="subject"><a href="#post-197967">microsoft checksum algo</a></div>
+    <div class="body">The method above can be converted to operate on DWORDs (indeed in a later post it was :P ). This uses a very small loop where the two "work" instructions pair, and should only therefore take 2 clocks, plus the length of the jnz...
+
+The main problem with all of these algos is more to do with memory speed, than any design of the algo (unless you do some REALLY stupid design :D ).
+Create a small app that opens a file, and computes the checksum on it. Then modify the app to do it several (hundred) times, then divide the clocks accordingly... This will remove the "disk" accessing speeds, but your still left with the caching problems!
+This will show that the disk speed cripples any "efficiency" you'll gain from code design, so the "best" use of the assembly in this case I would argue would be in terms of size.
+
+One point to note is that you could form the wrong answer due to your addition of the carries to the length, rather than adding carries to the 16bit checksum, adding the carry to that, then adding the length.
+
+For example:
+<pre><code>
+;eax = FFFF0000h
+;edi = 1
+;edx = 1FFFFh (length)
+
+shr eax, 16  ; eax = 0FFFFh
+add edi, edx ; edi = 20000h
+add eax, edi ; eax = 2FFFFh
+
+;Result cannot be this! Add any 16bit number to 1FFFFh and the
+;maximum it can be is 2FFF<strong>E</strong>h
+;In this case the result should be 20000h
+</code></pre>
+
+But its nearly right!
+
+**** Extra! ****
+I also note that you shr ecx AFTER you use your xor edi, edi.. This can set the carry bit again (if the length is not divisible by 2), this is only technically a problem, as if the length is not divisible by 4, then the result is wrong anyway!!!
+
+Mirno
+
+This message was edited by Mirno, on 6/1/2001 7:03:04 AM</div>
+    <div class="meta">Posted on 2001-06-01 06:55:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-197968">
+    <div class="subject"><a href="#post-197968">microsoft checksum algo</a></div>
+    <div class="body">Thanks Mirno for fast replay,
+Plz note I use the rules from the f0dder's post
+and the fact that the length of every .DLL or .EXE file is divisible by 4.
+Plz f0dder, could you test the progi and post the results? Thanks..</div>
+    <div class="meta">Posted on 2001-06-01 17:42:00 by buliaNaza</div>
+   </div>
+  </div>
+ </body>
+</html>

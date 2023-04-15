@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>send email - unknown problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28382" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28382">send email - unknown problem</a></p>
+   <div class="post" id="post-200846">
+    <div class="subject"><a href="#post-200846">send email - unknown problem</a></div>
+    <div class="body">Hi!
+
+My quest against winsock continues! When I finished this i thought i had written a fully working "email sender thing". I always think that when im finished tho :) I have no idea what the problem is here. It assembles ok and when run it gets to the end and displays the message box. I put the sleeps in cos that seems to solve send / recv problems sometimes but not in this case :( If anyone has any ideas I would be pleased to hear them.
+
+All response greatly appreciated.
+skud.
+
+.386
+.model flat, stdcall
+option casemap:none
+
+include C:\masm32\include\windows.inc
+include C:\masm32\include\kernel32.inc
+include C:\masm32\include\user32.inc
+include C:\masm32\include\wsock32.inc
+include C:\masm32\include\masm32.inc
+
+includelib C:\masm32\lib\user32.lib
+includelib C:\masm32\lib\kernel32.lib
+includelib C:\masm32\lib\wsock32.lib
+includelib C:\masm32\lib\masm32.lib
+
+.data
+
+server       db "smtp.btinternet.com",0
+hello        db "HELO smtp.btinternet.com",13,10,0
+from         db "MAIL FROM:<skudular@eidosnet.co.uk>",13,10,0
+toaddr       db "From: <skudular@eidosnet.co.uk>",13,10,0
+data_msg     db "DATA",13,10,0
+content      db "This is the content of the email",13,10,".",13,10,13,10,0
+quit_msg     db "QUIT",13,10,0
+mailsent     db "E-mail Sent!",0
+
+.data?
+
+sock	     dd ?
+wsadata      WSADATA <?>
+sin          sockaddr_in <?>
+
+.Code
+
+Main:
+
+	invoke WSAStartup, 101h, offset wsadata
+	cmp eax, 0
+	jne Main
+
+	invoke socket, PF_INET, SOCK_STREAM, 0
+	cmp eax, INVALID_SOCKET
+	je Main
+
+	mov sock, eax
+	mov sin.sin_family, PF_INET
+
+	invoke htons, 25
+	mov sin.sin_port, ax
+
+	invoke gethostbyname, ADDR server
+        mov eax,
+        mov eax,
+        mov eax,
+	mov sin.sin_addr, eax
+
+	invoke connect, sock, addr sin, sizeof sin
+	cmp eax, SOCKET_ERROR
+	je Main
+
+	invoke lstrlen, addr hello
+	invoke send, sock, addr hello, eax, 0
+
+invoke Sleep, 250
+
+	invoke lstrlen, addr from
+	invoke send, sock, addr from, eax, 0
+
+invoke Sleep, 250
+
+	invoke lstrlen, addr toaddr
+	invoke send, sock, addr toaddr, eax, 0
+
+invoke Sleep, 250
+
+	invoke lstrlen, addr data_msg
+	invoke send, sock, addr data_msg, eax, 0
+
+invoke Sleep, 250
+
+	invoke lstrlen, addr content
+	invoke send, sock, addr content, eax, 0
+
+invoke Sleep, 250
+
+	invoke lstrlen, addr quit_msg
+	invoke send, sock, addr quit_msg, eax, 0
+
+	invoke MessageBox,0, addr mailsent, addr mailsent, MB_OK
+
+Exit:
+
+	invoke closesocket,sock
+	invoke WSACleanup
+	invoke Beep,0,0
+	invoke ExitProcess,0
+
+End Main</div>
+    <div class="meta">Posted on 2001-06-12 19:17:00 by skud</div>
+   </div>
+   <div class="post" id="post-200847">
+    <div class="subject"><a href="#post-200847">send email - unknown problem</a></div>
+    <div class="body">Instead of :
+<pre><code>
+.data
+hello db "HELO smtp.btinternet.com",13,10,0
+.code
+invoke lstrlen, addr hello
+invoke send, sock, addr hello, eax, 0
+</code></pre>
+
+you could do :
+<pre><code>
+.data
+hello db "HELO smtp.btinternet.com",13,10
+.code
+invoke send,sock,addr hello,sizeof hello,0
+</code></pre>
+
+Also i think the toaddr should be RCPT TO: xxx@yyy.zzz</div>
+    <div class="meta">Posted on 2001-06-13 02:44:00 by BJZ</div>
+   </div>
+   <div class="post" id="post-200848">
+    <div class="subject"><a href="#post-200848">send email - unknown problem</a></div>
+    <div class="body">BJZ is right about the RCPT TO, here are the correct strings:
+<pre><code>
+from      db "MAIL FROM: skudular@eidosnet.co.uk",13,10,0 ;don't use < and > here
+toaddr    db "RCPT TO: skudular@eidosnet.co.uk",13,10,0 ;neither here, and should be RCPT TO:
+data_msg  db "DATA",13,10,0
+ ; I added some extra header so I could receive the mail correctly with my mail program:
+content   db 'From: "someone" <bla@blah.com>',13,10
+          db 'To: "someone else" <someoneelse@blah.com' ,13,10
+          db "Subject: Nothing",13,10,13,10 ;the extra 13,10 is a blank line indicating 
+                                            ;that the headers are done
+          db "This is the content of the email", 13,10
+          db ".",13,10,0 ;remove the extra 13,10 at the end of the data. 
+                         ;it shouldn't be there
+</code></pre>
+
+Also, the sleeps are not very reliable, you should wait for the server to reply with a reply code, then send new data or stop if it gave an error. 
+
+Thomas
+
+
+This message was edited by Thomas, on 6/13/2001 4:30:58 AM</div>
+    <div class="meta">Posted on 2001-06-13 04:30:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-200849">
+    <div class="subject"><a href="#post-200849">send email - unknown problem</a></div>
+    <div class="body">top stuff guys. working perfect now :)
+
+thomas-
+are the reply codes different for each server?
+do you just mean wait till the server sends something back - anything - and then when the socket closes carry on with the next send?
+
+thx. skud.</div>
+    <div class="meta">Posted on 2001-06-13 10:53:00 by skud</div>
+   </div>
+   <div class="post" id="post-200850">
+    <div class="subject"><a href="#post-200850">send email - unknown problem</a></div>
+    <div class="body">No the reply codes are the same for every server, as they are part of the smtp standard (find it somewhere here). But there are codes that indicate success and failure, so you should also check if anything goes wrong (although it will work most of the time). For example, you can't be sure the message is sent after you've got the right code returned as response to the actual data.
+Also, some servers don't like it when you send data before you read the reply. instead of the sleeps, add some code that reads socket data to a buffer (each read adds to the buffer), and whenever a full line appears in the buffer (CRLF terminated), you can check the line for the response code. See the SMTP standard for more info (at rfc-editor.org). With the sleeps, you can't be sure the server has processed everything. Sometimes it can take 30 seconds before it even shows the welcome message, if your program has shut down the socket after 4 seconds or so (with the sleeps), the server only showed a welcome message and did nothing.
+
+Thomas
+
+Thomas</div>
+    <div class="meta">Posted on 2001-06-13 11:22:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-200851">
+    <div class="subject"><a href="#post-200851">send email - unknown problem</a></div>
+    <div class="body">Hi skud!
+
+As Thomas said you should set a timeout. You can do this with
+select:
+
+timeout dd 5,0
+
+ebx=0
+
+read_write_fds:
+socket_count dd 1
+smtp_sock dd 0
+
+
+;checking for readable sock
+
+push offset timeout
+push ebx
+push ebx
+push offset read_write_fds ; now waiting until socket
+push ebx                   
+call select                ; 
+
+test eax,eax
+jz err_exit 
+
+; socket is readable!!
+
+
+;checking for writable sock
+
+push offset timeout
+push ebx
+push offset read_write_fds
+push ebx
+push ebx
+call select
+
+;sock is writable
+
+Then you can do a main loop, which does the following things:
+
+1) wait if socket can be read
+2) read from socket
+3) check correct reply
+4) wait if socket can be written
+5) write your data (COMMANDS); (e.g. db 'QUIT',13,10)
+   the length you store in a table 
+
+; dd CMD_QUIT_LEN
+; dd CMD_HELO_LEN
+; a.s.o
+
+6) jmp to 1 , increase lenght_table_offset by 4, increase the pointer to the strings by the values in the lenght_table  and continue until you get reply from the QUIT message
+
+so you will get small, efficient code
+
+
+Regards, 
+Mr Velox</div>
+    <div class="meta">Posted on 2001-06-26 11:34:00 by MrVelox</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>I''ve got a little problem with these codes - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26266" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26266">I''ve got a little problem with these codes</a></p>
+   <div class="post" id="post-190876">
+    <div class="subject"><a href="#post-190876">I''ve got a little problem with these codes</a></div>
+    <div class="body">It works well with C/SDK:
+
+void CreateString(unsigned char *pGlobal, unsigned int uSize, unsigned char ucToFill, unsigned char ucStep) {
+    HGLOBAL hGlobal;
+    if (!ucStep) pGlobal=NULL;
+    else {
+        hGlobal=GlobalAlloc(GMEM_FIXED | GMEM_ZEROINIT, uSize);
+        if (!hGlobal) MessageBox(NULL, szMemError, szWinTitle, MB_OK);
+        else {
+            pGlobal=(unsigned char *)GlobalLock(hGlobal);
+            if (!pGlobal) MessageBox(NULL, szMemError, szWinTitle, MB_OK);
+            else for (unsigned int Counter=0; Counter<=uSize; Counter+=ucStep) pGlobal=ucToFill;  }  }
+
+But, for Win32ASM:
+
+.data
+Counter    dw 0
+
+.data?
+hGlobal    dd ?
+
+;
+; parts of codes deleted
+;
+
+CreateString PROC pGlobal:DWORD, uSize:WORD, ucToFill:BYTE, ucStep:BYTE
+    .if (!ucStep)
+        ret
+    .endif
+    invoke GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, uSize
+    mov hGlobal, eax
+    .if (hGlobal==NULL)
+        invoke MessageBox, NULL, addr szMemError, addr szWinTitle, MB_OK
+        ret
+    .endif
+    invoke GlobalLock, hGlobal
+    mov pGlobal, eax
+    .if (pGlobal==NULL)
+        invoke MessageBox, NULL, addr szMemError, addr szWinTitle, MB_OK
+        ret
+    .endif
+    mov Counter, 0
+NextPos:
+    mov al, ucToFill
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    mov pGlobal, al  ; Program Crashed Here!!!
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    mov al, ucStep
+    mov ah, 0
+    add Counter, ax
+    mov ax, uSize
+    sub ax, Counter
+    .if (!ax)
+        ret
+    .endif
+    jmp NextPos
+CreateString endp
+
+
+I am not sure what's wrong with them.
+Please help me!!!</div>
+    <div class="meta">Posted on 2000-12-04 16:41:00 by beginner</div>
+   </div>
+   <div class="post" id="post-190877">
+    <div class="subject"><a href="#post-190877">I''ve got a little problem with these codes</a></div>
+    <div class="body">You've got a couple of problems... You're trying to create a new string and fill it all with one character right every ucStep?
+
+1.) Your locking a GMEM_FIXED string... If your planning on running on WinNT Win2K or even being nice to the other 32bit operating system you should use GMEM_MOVEABLE and then lock it. However that prevents immediate acces to it... so I'm not sure what the application of this is... We'll stick to GMEM_FIXED in my following example, and take out the lock for now.
+
+2.) Your memory access stuff is funny
+
+Well here let me just give you an example.. I have not tested this! I just wrote it up out of my head, so you may need to still fix some more... but this should get you going:
+
+
+
+CreateString PROC uses edi uSize:WORD, ucToFill:BYTE, ucStep:BYTE
+
+	.if (ucStep==NULL)
+		xor eax, eax
+		ret
+	.endif
+
+	;Move in our size of the string
+	mov ecx, uSize
+
+	;Allocate a string of the passed in size
+	invoke GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, ecx
+
+	.if (eax==NULL)	;Did we get an error?
+		;If we couldn't get the string we have a memory error
+		xor eax, eax
+		ret
+
+	.else	;Otherwise we're ok
+		;Save the handle of our memory
+		mov edi, eax
+	.endif
+
+startcopy:
+	mov BYTE PTR , ucToFill
+	add edi, ucStep
+	sub ecx, ucStep
+	cmp ecx, ecx
+	jle startcopy
+
+	mov eax, edi
+	ret
+CreateString endp
+
+
+
+Now to call this in a program all you need to do is
+
+invoke CreateString, 10, "a", 2
+.if (eax == NULL)
+	;We had a memory error show a message box here.
+.endif
+mov hMyString, eax
+
+It should then create a string which is 10 characters long with every two letters being an "a".
+
+Hope this works! Keep in mind it's not tested and you may have to check both the order you want the loop to run in (Adding the count before or after each loop iteration) and my conditional jumping I always forget those so check it up.
+
+See ya,
+Ben</div>
+    <div class="meta">Posted on 2000-12-04 21:42:00 by cyberben </div>
+   </div>
+   <div class="post" id="post-190878">
+    <div class="subject"><a href="#post-190878">I''ve got a little problem with these codes</a></div>
+    <div class="body">I've modified my code this way:
+
+CreateString PROC USES edi uSize:WORD, ucToFill:BYTE, ucStep:BYTE
+    .if (!ucStep)
+        ret
+    .endif
+    invoke GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, uSize
+    .if (!eax)
+        invoke MessageBox, NULL, addr szMemError, addr szWinTitle, MB_OK
+        ret
+    .endif
+    mov edi, eax
+    mov cx, uSize
+NextByte:
+    mov al, ucToFill
+    mov BYTE PTR , al
+    mov al, ucStep
+    add edi, eax
+    mov bl, ucStep
+    mov bh, 0
+    sub cx, bx
+    .if (!cx)
+        mov hGlobal, edi
+        ret
+    .endif
+    jmp NextByte
+CreateString endp
+
+But it still crashed......
+
+Maybe it will be easier to me to make this function with C and
+link them together......</div>
+    <div class="meta">Posted on 2000-12-05 06:29:00 by beginner </div>
+   </div>
+   <div class="post" id="post-190879">
+    <div class="subject"><a href="#post-190879">I''ve got a little problem with these codes</a></div>
+    <div class="body">I noticed a bit of a concern here:
+
+NextByte:
+mov al, ucToFill
+mov BYTE PTR , al
+mov al, ucStep
+
+add edi, eax  ; Uh-Oh!
+
+mov bl, ucStep
+mov bh, 0
+sub cx, bx
+
+Since there's no way to guarrantee that EAX wouldn't have been greater than 255, you should add a zeroing instruction there:
+
+NextByte:
+mov al, ucToFill
+mov BYTE PTR , al
+mov al, ucStep
+
+and eax, 0FFh
+add edi, eax  ; Should work now
+
+mov bl, ucStep
+mov bh, 0
+sub cx, bx</div>
+    <div class="meta">Posted on 2000-12-05 06:42:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190880">
+    <div class="subject"><a href="#post-190880">I''ve got a little problem with these codes</a></div>
+    <div class="body">Oh, wait...did you just omit the GlobalLock/GlobalUnlock functions, or are they not in your code?  Since GlobalAlloc returns a handle, not an address, that would make your program crash very quickly. :)</div>
+    <div class="meta">Posted on 2000-12-05 06:47:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190881">
+    <div class="subject"><a href="#post-190881">I''ve got a little problem with these codes</a></div>
+    <div class="body">The problem seemed solved.
+Thanks everybody :)
+
+There's one more question.
+
+
+.data
+ucToFill  db 17784 dup(255)
+
+.code
+WinMain PROC hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
+    invoke FindWindow, NULL, addr szWinTitle
+    .if (eax)
+        mov hWndProc, eax
+        invoke GetWindowThreadProcessId, hWndProc, addr lpdwProcID
+        invoke OpenProcess, PROCESS_ALL_ACCESS, FALSE, lpdwProcID
+        mov hProcess, eax
+        invoke WriteProcessMemory, hProcess, 450208H, addr ToFillTmp, 17784, NULL
+        .if (!eax)
+            invoke MessageBox, NULL, addr szErrWrite, addr szWinTitle, MB_OK
+            ret
+        .endif
+    .else
+        invoke MessageBox, NULL, addr szWinError, addr szWinTitle, MB_OK
+    .endif
+    ret
+WinMain endp
+
+
+I can use the codes above to write something into memory used by
+another process.
+
+Why can't I do that with a new string created via CreateString
+and assigned to pGlobal? (Codes were listed below.)
+
+
+.data?
+hGlobal dd ?
+pGlobal dd ?
+
+.code
+WinMain PROC hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
+    invoke FindWindow, NULL, addr szAppName
+    .if (eax)
+        mov hWndProc, eax
+        invoke GetWindowThreadProcessId, hWndProc, addr lpdwProcID
+        invoke OpenProcess, PROCESS_ALL_ACCESS, FALSE, lpdwProcID
+        mov hProcess, eax
+        invoke CreateString, 17784, 1, 4
+        invoke WriteProcessMemory, hProcess, 450208H, addr pGlobal, 17784, NULL
+        .if (!eax)
+            ;output error message
+            ;and remove the string just created
+            ret
+        .endif
+        ;remove the string just created
+    .endif
+    ret
+WinMain endp
+
+CreateString PROC USES edi uSize:WORD, ucToFill:BYTE, ucStep:BYTE
+    .if (!ucStep)
+        ret
+    .endif
+    invoke GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, uSize
+    mov hGlobal, eax
+    .if (!hGlobal)
+        invoke MessageBox, NULL, addr szMemError, addr szWinTitle, MB_OK
+        ret
+    .endif
+    invoke GlobalLock, hGlobal
+    mov edi, eax
+    mov cx, uSize
+NextByte:
+    mov al, ucToFill
+    mov BYTE PTR , al
+    mov al, ucStep
+    and eax, 0FFh
+    add edi, eax
+    mov bl, ucStep
+    mov bh, 0
+    sub cx, bx
+    .if (!cx)
+        mov pGlobal, edi
+        ret
+    .endif
+    jmp NextByte
+CreateString endp
+
+
+Thanks for your help ^_^</div>
+    <div class="meta">Posted on 2000-12-05 08:17:00 by beginner </div>
+   </div>
+   <div class="post" id="post-190882">
+    <div class="subject"><a href="#post-190882">I''ve got a little problem with these codes</a></div>
+    <div class="body">I think I found the problem.  In the first one, you had static memory (which required an ADDR or offset), while in the second program, it was dynamic memory.  With dynamic memory, all you -have- is an address.  For example:
+
+invoke WriteProcessMemory, hProcess, 450208H, addr pGlobal, 17784, NULL
+
+The problem here is the 'ADDR pGlobal'.  Suddenly, you're passing the address to the address of the data, instead of the address to the data.  Change it to:
+
+invoke WriteProcessMemory, hProcess, 450208h, pGlobal, 17784, NULL
+
+And it should work fine.</div>
+    <div class="meta">Posted on 2000-12-05 08:57:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190883">
+    <div class="subject"><a href="#post-190883">I''ve got a little problem with these codes</a></div>
+    <div class="body">Uh......I've tried both of them already.
+
+invoke WriteProcessMemory, hProcess, 450208H, addr pGlobal, 17784, NULL
+
+invoke WriteProcessMemory, hProcess, 450208h, pGlobal, 17784, NULL
+
+But none of them worked.
+
+I guess, there might be some problem in CreateString.
+
+I will try to find it out.
+
+////////////////////////////////////////////////////////////
+
+By the way, why can't I do this way?
+
+mov uCounter, 0
+invoke GlobalLock, hGlobal
+mov pGlobal, eax
+mov cx, uSize
+NextByte:
+mov al, ucToFill
+mov pGlobal, al
+add uCounter, ucStep
+;other codes omitted</div>
+    <div class="meta">Posted on 2000-12-05 09:21:00 by beginner </div>
+   </div>
+   <div class="post" id="post-190884">
+    <div class="subject"><a href="#post-190884">I''ve got a little problem with these codes</a></div>
+    <div class="body">Oh, I see it...you'll still need to use pGlobal, not addr pGlobal, but the problem -is- in CreateString.  Your mov pGlobal,edi has to be done before you modify edi.
+
+As for your second question, the first thing I saw was:
+
+add uCounter, ucStep
+
+One of the most aggrevating things about x86 technology is the inability to simply move one byte of data to another without having a waypoint.  So, in order to do this, you'd have to use a register (ie: al)
+
+mov al,ucStep
+add uCounter,al
+
+Assuming they're both 8 bit values.  If they're not, you'll have to convert the smaller one to the larger one's size:
+
+xor eax,eax
+mov al,ucStep
+add uCounter,eax</div>
+    <div class="meta">Posted on 2000-12-05 09:42:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190885">
+    <div class="subject"><a href="#post-190885">I''ve got a little problem with these codes</a></div>
+    <div class="body">Great! All problems were gone!
+
+I should assign edi to pGlobal right here:
+
+    invoke GlobalLock, hGlobal
+    mov edi, eax
+    mov pGlobal, edi
+    ;then process other codes
+
+Thank you very much :)
+
+////////////////////////////////////////////////////////////
+
+Then, the 2nd question in my last post, the main problem is:
+
+    mov Counter, 0
+NextByte:
+    mov al, ucToFill
+    mov pGlobal, al
+
+Everytime I try to do so, the assembler told me:
+ error A2101: cannot add two relocatable labels
+Why?
+
+Is edi always needed when trying to get/assign values of elements of an array?
+
+Thanks for your answering.</div>
+    <div class="meta">Posted on 2000-12-05 10:11:00 by beginner </div>
+   </div>
+   <div class="post" id="post-190886">
+    <div class="subject"><a href="#post-190886">I''ve got a little problem with these codes</a></div>
+    <div class="body">No, but a register is needed.  Since I don't use that system, I never get it confused, but I can see how it could be confusing.
+
+mov Counter, 0
+NextByte:
+mov al, ucToFill
+mov pGlobal, al 
+
+Could be written as:
+
+mov Counter,0
+NextByte:
+mov al,ucToFill
+
+xor ebx,ebx
+mov Counter,bl   ; or bx, or ebx as needed
+mov pGlobal,al ; Simply translates to mov ,al</div>
+    <div class="meta">Posted on 2000-12-05 11:15:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190887">
+    <div class="subject"><a href="#post-190887">I''ve got a little problem with these codes</a></div>
+    <div class="body">Unfortunately,
+
+mov pGlobal,al
+
+is the same as
+
+mov [(addr pGlobal) + ebx],al
+
+That means when EBX (Counter) is 0, you will be altering the pointer, pGlobal, itself.  
+
+You will need two registers, any two of the general registers will do.
+
+mov edx, ; get pointer
+mov ,al ; this should do the job</div>
+    <div class="meta">Posted on 2000-12-05 18:26:00 by ub1 </div>
+   </div>
+  </div>
+ </body>
+</html>

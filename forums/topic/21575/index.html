@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Debuggery - got a clue? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21575" />
+    <link rel="next" href="../?id=21575&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21575">Debuggery - got a clue?</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=21575&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=21575&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="21575" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=21575&amp;page=2">&gt;</a><a href="../?id=21575&amp;page=2">&raquo;</a></form>   <div class="post" id="post-162886">
+    <div class="subject"><a href="#post-162886">Debuggery - got a clue?</a></div>
+    <div class="body">I&#39;ve been working on a debugger thingy under the win32debug api, and I just added some code which is used to identify what module eip is currently within.<br />I currently achieve this by parsing the import table of the debug target app, then loading and unloading each and every lib I can see in there.. (perhaps someone can describe a cleaner way to do this?)<br />I&#39;ve set it up to pause automatically if it fails to identify which module eip is within, so that I can identify libs which are being mapped without notification, such as ntdll.<br /><br />(Just out of interest, I am debugging the debugger with itself during my testing.)<br /><br />OK, here comes the question:<br /><br />I noticed something weird, and I wanted to know if anyone has a clue on this one...<br />At some point, eip=7FFE0300, an unknown address.<br />Firing up Olly, I can see that the range from 7FFE0000 to 7FFF0000 is the &quot;data block of main thread&quot;... why would executable code reside here? Can anyone shed light on this? Am I losing the plot?<br /></div>
+    <div class="meta">Posted on 2005-08-06 18:01:18 by Homer</div>
+   </div>
+   <div class="post" id="post-162887">
+    <div class="subject"><a href="#post-162887">Re: Debuggery - got a clue?</a></div>
+    <div class="body">i think i know what you mean, its ither an int(9x) or a sysenter instruction i belive it has something to do with a context switch.</div>
+    <div class="meta">Posted on 2005-08-06 18:38:58 by Qages</div>
+   </div>
+   <div class="post" id="post-162888">
+    <div class="subject"><a href="#post-162888">Re: Debuggery - got a clue?</a></div>
+    <div class="body">Without looking at the code that resides there, I was more curious about WHY its there (since I decode only a handful of opcodes which are of interest to me).<br />Your allusion to thread context switching makes a lot of sense.<br />It occurs to me that rather than use heap memory for this, m$ decided to use a hardcoded VA.<br />I&#39;ll dig deeper, but I believe you are onto it.. thanks :)<br /></div>
+    <div class="meta">Posted on 2005-08-06 19:22:27 by Homer</div>
+   </div>
+   <div class="post" id="post-162898">
+    <div class="subject"><a href="#post-162898">Re: Debuggery - got a clue?</a></div>
+    <div class="body">At the start, on Windows NT, you can use the EnumProcessModules, GetModuleBaseName and GetModuleInformation functions to get the necessary information. On Windows 95 it might be a bit complicated.<br /><br />I don&#39;t know what&#39;s supposed to be at 7FFE0300. Which operating system version do you use, and what kind of CPU(s)?</div>
+    <div class="meta">Posted on 2005-08-07 08:58:55 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-162900">
+    <div class="subject"><a href="#post-162900">Re: Debuggery - got a clue?</a></div>
+    <div class="body">When NTDLL makes a call to the Windows executive it has the problem that it cannot execute a SYSCALL from user mode as the page ranges of those calls are restricted to OS use. In order to get around this problem it loads the service number into EAX and copies the address of the SYSCALL (07FFE0300h in the kernel/user shared page) into EDX. It then does an indirect call...<br /><br />mov EAX, srvnum<br />mov EDX, 07FFE0300h<br />call EDX<br />ret<br /></div>
+    <div class="meta">Posted on 2005-08-07 09:32:58 by donkey</div>
+   </div>
+   <div class="post" id="post-162901">
+    <div class="subject"><a href="#post-162901">Re: Debuggery - got a clue?</a></div>
+    <div class="body">take a look at summit soft article by john <br /><br />its shared user page mapped on all process by system <br />http://blog.kalmbachnet.de/?postid=11<br />http://www.summitsoftconsulting.com/SysCallOpts.htm<br /><br />oops donkey is faster than me :)<br /><br />since the above info is dud info already p<br />7C57EDD4 KERNEL32.GetTickCount? ? ?/$? BA 0000FE7F? ?MOV? ? ?EDX, 7FFE0000<br />7C57EDD9? ? ? ? ? ? ? ? ? ? ? ? ? ?|.? 8B02? ? ? ? ? MOV? ? ?EAX, DWORD PTR DS:<br />7C57EDDB? ? ? ? ? ? ? ? ? ? ? ? ? ?|.? F762 04? ? ? ?MUL? ? ?DWORD PTR DS:<br />7C57EDDE? ? ? ? ? ? ? ? ? ? ? ? ? ?|.? 0FACD0 18? ? ?SHRD? ? EAX, EDX, 18<br />7C57EDE2? ? ? ? ? ? ? ? ? ? ? ? ? ?\.? C3? ? ? ? ? ? RETN<br /><br /></code></pre><br /><br /><br />or if you play with windbg <br />.load kdex2x86<br /><br />!kuse*<br /><br />!kuser<br />KUSER_SHARED_DATA at 7ffe0000<br />TickCount:&nbsp; &nbsp; fa00000 * 000da6b1<br />TimeZone Id: 0<br />ImageNumber Range: [14c .. 14c]<br />Crypto Exponent: 0<br />SystemRoot: &#39;C:\WINNT&#39;<br /><br /><br /><br />:)<br /></div>
+    <div class="meta">Posted on 2005-08-07 09:40:09 by bluffer</div>
+   </div>
+   <div class="post" id="post-162906">
+    <div class="subject"><a href="#post-162906">Re: Debuggery - got a clue?</a></div>
+    <div class="body">if i got it right, here is a suggestion....<br /><br />before entering WaitForDebugEvent loop<br />call SymInitialize (imagehlp.lib)<br /><br />on LoadDll event call SymLoadModule<br />on UnloadDll event call SymUnloadModule<br /><br />Use? SymGetSymFromAddr to get current function<br />no need do the dirty work yourself</div>
+    <div class="meta">Posted on 2005-08-07 12:46:19 by drizz</div>
+   </div>
+   <div class="post" id="post-162917">
+    <div class="subject"><a href="#post-162917">Re: Debuggery - got a clue?</a></div>
+    <div class="body">Thanks for all those replies - much appreciated, especially the last one, from drizz..<br />too late dude, I&#39;ve already implemented all the code to walk libs on the fly :(<br /><br />Damn, I wish I asked earlier :)<br /></div>
+    <div class="meta">Posted on 2005-08-08 04:06:16 by Homer</div>
+   </div>
+   <div class="post" id="post-162918">
+    <div class="subject"><a href="#post-162918">Re: Debuggery - got a clue?</a></div>
+    <div class="body">Homer, hopefully not using Load+FreeLibrary :P<br /></div>
+    <div class="meta">Posted on 2005-08-08 07:18:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-162954">
+    <div class="subject"><a href="#post-162954">Re: Debuggery - got a clue?</a></div>
+    <div class="body">f0dder - yes.. although I realize that libs won&#39;t &#39;always&#39; map to the VA&#39;s specified in their headers.. my solution was to inject some code into the target which walked the libs &quot;in the context of the debuggee&quot;, shoved some results on the stack, then caused an int3 (returning control to the debugger), which would then repair the target&#39;s stack (grabbing the results in the process), repair the overwritten code (actually at the entrypoint of the target), reset eip to the entrypoint, and then continue with business as usual. Oh, and in order to capture &quot;late loading&quot; of libs, I hook the target&#39;s IAT if I see LoadLibrary in there, with another int3 based snippet.<br />What an ungainly solution, I just so wanted NOT to use the pe helper api, which is a bit like saying &quot;I want to shoot myself in the foot&quot;... I&#39;m tempted to throw in the towel and scrap all the relevant code at this moment, but it&#39;s hard to admit defeat when the implementation is working...<br /><br />Perhaps I&#39;ll just move it all into the &quot;onDllLoad&quot; debug notification, but I wasn&#39;t certain that would be triggered by &quot;late loaded&quot; libs (ie, the target calling LoadLibrary, or worse, manually loading its libs)<br /><br />I certainly don&#39;t want to write the world&#39;s coolest debugger - in fact, it&#39;s not a debugger I am writing at all but a kind of execution analyser (don&#39;t hit me on the head) - I just wanted to test some theories, and like most of my projects, it is a small animal that has grown rapidly into an unweildy and ungainly seven-headed beastie.. the more applications I analyse, the more tricks I learn, and ultimately, I merely wish to learn.<br /><br />One of the main reasons I chose this awful approach is that I had initially implemented an int3 at the entrypoint so I could effectively &quot;skip&quot; the DLL loading stuff and get straight to the entrypoint.<br />I didn&#39;t want to trace my way through the PE loader, but perhaps I should have?<br /></div>
+    <div class="meta">Posted on 2005-08-08 20:38:39 by Homer</div>
+   </div>
+   <div class="post" id="post-162955">
+    <div class="subject"><a href="#post-162955">Re: Debuggery - got a clue?</a></div>
+    <div class="body">Hm, couldn&#39;t you use GetModuleHandle instead of Load+FreeLibrary, or have I misunderstood what you&#39;re doing?<br /><br />Doing stuff manually is good for learning, but at the end of the day, the debug helper library might be better (or, at least study how the library works :)). An example of something you most likely DON&#39;T want to code yourself would be handling .pdb files.<br /><br />The int3-at-entry-plus-restoring-code-etc approach is what I used myself in the &quot;XCOM pitch-patcher&quot; (bugfix loader), by the way. Seems to work like a charm :)<br /></div>
+    <div class="meta">Posted on 2005-08-08 20:47:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-162956">
+    <div class="subject"><a href="#post-162956">Re: Debuggery - got a clue?</a></div>
+    <div class="body">My thingy is capable of enlisting all the imported libs and functions before it&#39;s been loaded by the pe loader at all, before I&#39;ve created the process (I don&#39;t attach for various reasons), I preload the target, walk its import directory, spit out all the relevant information, then unload the target, then the user can hit a button to create the process and begin debugging in earnest (dirty approach huh) ... due to my borrowing of some of iczelions example code..<br /><div class="quote"><br />The GetModuleHandle function returns a module handle for the specified module if the file has been mapped into the address space of the calling process.</div><br /><br />So, that&#39;s fine if the pe loader has completed... but not if it hasn&#39;t.<br />Thus, I enumerate imports twice - once before debugging begins, and again during debugging, in order to catch &quot;late loads&quot;, particularly those which are &quot;manually loaded&quot; by their callers, and here I refer to the &quot;static loading&quot; types of tricks used to hide libs from standard debuggers, by NOT using the pe loader.<br /><br />I should implement Sym functions and handle dll loading breaks and scrap 80% of the existing code.</div>
+    <div class="meta">Posted on 2005-08-08 21:10:13 by Homer</div>
+   </div>
+   <div class="post" id="post-162958">
+    <div class="subject"><a href="#post-162958">Re: Debuggery - got a clue?</a></div>
+    <div class="body">Ah, before the PE loader has completed - I see.<br /></div>
+    <div class="meta">Posted on 2005-08-08 21:13:43 by f0dder</div>
+   </div>
+   <div class="post" id="post-162982">
+    <div class="subject"><a href="#post-162982">Re: Debuggery - got a clue?</a></div>
+    <div class="body">**this also aplies to you last post**<br /><br />but noo, why not read the file on disk? (or hFile member of createprocess event) <br />if you want to do anything before dlls are loaded.<br /> <br />and yes &quot;..the target calling LoadLibrary&quot; -&gt; you _are_ informed @ &quot;onDllLoad&quot; debug notification<br /><br /><div class="quote"><br />One of the main reasons I chose this awful approach is that I had initially implemented an int3 at the entrypoint so I could effectively &quot;skip&quot; the DLL loading stuff and get straight to the entrypoint.<br />I didn&#39;t want to trace my way through the PE loader, but perhaps I should have?<br /></div><br />you have to put int3 at entrypoint. (*but not neccessarally on 9x*)<br /><br />i think you need some code DUDE!? :P<br /><pre><code><br />DbgEventCreateProcess proc uses ebx, cpdi:ptr CREATE_PROCESS_DEBUG_INFO<br />LOCAL nbr:dword,DosHdr:IMAGE_DOS_HEADER,NtHdr:IMAGE_NT_HEADERS<br />	assume ebx:ptr CREATE_PROCESS_DEBUG_INFO<br />	mov ebx,cpdi<br />	invoke ReadFile,.hFile,addr DosHdr,sizeof IMAGE_DOS_HEADER,addr nbr,0<br />	invoke SetFilePointer,.hFile,DosHdr.e_lfanew,0,FILE_BEGIN<br />	invoke ReadFile,.hFile,addr NtHdr,sizeof IMAGE_NT_HEADERS,addr nbr,0<br />	invoke SetFilePointer,.hFile,0,0,FILE_BEGIN<br />	invoke GetFileSize,.hFile,0<br />	invoke CloseHandle,.hFile<br />	...<br />	*print info*<br /></code></pre><br /><br /><pre><code><br />DbgEventLoadDll proc uses ebx esi, lddi:ptr LOAD_DLL_DEBUG_INFO<br />	assume ebx:ptr LOAD_DLL_DEBUG_INFO<br />	mov ebx,lddi<br />	mov esi,$invoke(GetMem,2*MAX_PATH)<br />	invoke GetModuleFileName,.lpBaseOfDll,esi,MAX_PATH*2-1<br />	...<br />	*print? info*<br /></code></pre><br /><br />if you want more pm me!? 8) i&#39;m also writting a little project with dbgapi</div>
+    <div class="meta">Posted on 2005-08-09 08:39:10 by drizz</div>
+   </div>
+   <div class="post" id="post-162989">
+    <div class="subject"><a href="#post-162989">Re: Debuggery - got a clue?</a></div>
+    <div class="body">drizz:<br />I have not yet implemented the Sym functionality, however, I&#39;ve implemented dll onload notifications, and I see that I NEVER get the lpImageName field, it ALWAYS seems to point to the same address within the thread information block (7FFE0014 or something similar) which in turn ALWAYS seems to contain NULL :(<br />That really sucks, it means I STILL have to perform the pe walk myself, if ONLY to get the name of the library !!!<br />Yes, I often wondered why iczelion loads and unloads the file as a datafile in his debug examples, when there&#39;s no context issue to worry about : LoadLibrary would have been ok in those examples.<br />However, I&#39;ve seen (under analysis) some applications which MANUALLY load one or more libraries (totally avoiding LoadLibrary, means we get no such notification) and also, I have NO IDEA about how to handle &quot;bound imports&quot; , let alone &quot;Import Forwarding&quot; :(<br />Can you offer suggestions on these topics and/or point me toward relevant information?<br />I am also interested in more information regarding the Sym functions...<br /><br />Also, you say that I *SHOULD* be injecting the int3 to entrypoint, thanks, that&#39;s good feedback :)<br />I would have assumed there was a &quot;clean&quot; way to break at the entrypoint, I find it incredible that this functionality is not provided by the debug helper api !!<br /><br />Finally, I must repeat, I&#39;m not writing a debugger per se, I&#39;m writing a &quot;flow analyser&quot;, which among other things, should prove useful in identifying execution bottlenecks etc. in my other projects :)<br /><br /><br />PS:<br />I just wanted to add this footnote:<br />I believe now that it was highly appropriate that I walk the import directory of the target, although I now know I can do that when the process is created.<br />The reason is that this is the ONLY way to get hold of the names of the imported libraries !!!<br />Here&#39;s what I cannot do : I cannot wait for a dll load notification, then walk the loaded library&#39;s header for its own filename. The reason is that field is created by the Linker, and may not be accurate, and/or can be changed later !!! Microsoft agree, and whine that they look forward to implementing it in some future release, which is really an excuse for not allowing us to get it directly from the pe loader, and/or not notifying us of the dll load PRIOR to it being loaded <br /><br /></div>
+    <div class="meta">Posted on 2005-08-09 11:44:17 by Homer</div>
+   </div>
+   <div class="post" id="post-162992">
+    <div class="subject"><a href="#post-162992">Re: Debuggery - got a clue?</a></div>
+    <div class="body"><div class="quote"><br />I&#39;ve implemented dll onload notifications, and I see that I NEVER get the lpImageName field, it ALWAYS seems to point to the same address within the thread information block (7FFE0014 or something similar) which in turn ALWAYS seems to contain NULL<br /></div><br />This is LOAD_DLL_DEBUG_INFO.lpImageName, right? You could try treating <strong>lpBaseOfDll</strong> as a handle, and use psapi to walk the module list?<br /><br /></div>
+    <div class="meta">Posted on 2005-08-09 12:19:08 by f0dder</div>
+   </div>
+   <div class="post" id="post-163010">
+    <div class="subject"><a href="#post-163010">Re: Debuggery - got a clue?</a></div>
+    <div class="body">i see your problem now...<br /><br />if lpImageName is 0 then? @1 &lt;no name&gt;<br />else readprocessmemory sizeof dword pointed by lpImageName<br />if that dword is 0 goto @1<br />else readprocessmemory sizeof MAX_PATH*2 bytes from that dword(address)<br />if fUnicode then convert from unicode to ascii<br />call symloadmodule with hFile,dllnameA, lpBaseOfDll<br /><br /><div class="quote"><br /> I&#39;ve seen (under analysis) some applications which MANUALLY load one or more libraries (totally avoiding LoadLibrary, means we get no such notification)<br /></div><br />i&#39;ve never seen that, i know it is possible but unless you are studing some malware why bother?<br /><br />EDIT1(2): i&#39;m talking rubbish<br />lpImageName points to PEB.NT_TIB.ArbitraryUserPointer inside address space of debugee<br />that points to unicode dll name (on <strong>NT</strong>)<br /><br />EDIT2: i was assuming wrong that calling GetModuleFileName(lpBaseOfDll) will work.<br />it only works if the dll is loaded for your process too.<br /></div>
+    <div class="meta">Posted on 2005-08-09 15:08:33 by drizz</div>
+   </div>
+   <div class="post" id="post-163032">
+    <div class="subject"><a href="#post-163032">Re: Debuggery - got a clue?</a></div>
+    <div class="body">I just like to cover all cases... if at some stage I choose to release this tool, I don&#39;t want people coming back to me and complaining about the various special cases which I did not cover.<br /><br />f0dder - yes, I can do that, and most likely will, although right now it&#39;s tempting to simply move my existing pe walking code into the dll onload notification handler as I suggested in an earlier post..<br /><br />drizz - currently I don&#39;t ReadProcessMemory on the lpImageName pointer, because Olly is telling me that it points to NULL, in all cases I have seen so far.. very disappointing stuff.<br />Microsoft mention that it is unlikely that the pe loader will return lpImageName for the FIRST DLL LOADED, and suggest we should be prepared to handle the case where either lpImageName, or the pointer behind it, are NULL .. I suggest that (at least from what I can see) this is ALWAYS the case :(<br />Oh well, looks like I&#39;ll have to grin and wear it :) I&#39;m interested in taking a peek at your stuff regardless, perhaps I can learn a thing or two, perhaps not, but it sure doesn&#39;t hurt to look.<br /><br /></div>
+    <div class="meta">Posted on 2005-08-09 23:53:07 by Homer</div>
+   </div>
+   <div class="post" id="post-163055">
+    <div class="subject"><a href="#post-163055">Re: Debuggery - got a clue?</a></div>
+    <div class="body"><div class="quote"><br />currently I don&#39;t ReadProcessMemory on the lpImageName pointer, because Olly is telling me that it points to NULL, in all cases I have seen so far.. very disappointing stuff.<br /></div><br /><strong>its NULL in YOUR address space it&#39;s not NULL in DEBUGEE address space.</strong><br />assuming you are debugging your debugger with olly<br /><br /><div class="quote"><br />Microsoft mention that it is unlikely that the pe loader will return lpImageName for the FIRST DLL LOADED, and suggest we should be prepared to handle the case where either lpImageName, or the pointer behind it, are NULL .. I suggest that (at least from what I can see) this is ALWAYS the case <br /></div><br />Microsoft says that for compatibility reasons with 9x. If you are going to support w9x too, then<br />there is a long road ahead of you. I admire Oleh for OllyDbg, it must have been a nightmare.<br /></div>
+    <div class="meta">Posted on 2005-08-10 08:26:32 by drizz</div>
+   </div>
+   <div class="post" id="post-163099">
+    <div class="subject"><a href="#post-163099">Re: Debuggery - got a clue?</a></div>
+    <div class="body">Actually no, I was debugging the DEBUGGEE with Olly, and comparing its &quot;memory map&quot; to the data obtained from my own debugger when debugging the same debuggee...<br />I&#39;m going to assume that this (lpImageName field) is simply is not a viable field and move on - after all, we&#39;re asm coders, we&#39;re not afraid of the pe minefield like some namby-pamby &quot;certified useless&quot; programmers :)<br />Do I sound like I am biased? lol<br /><br />As for supporting Win98 - No, I don&#39;t care about them much at all, I very much doubt this will be a commercial application, I&#39;m not pandering to those guys, screw them - they can use something else :)<br />On the other hand, at this very moment, theres no psapi, theres no dbgapi, theres no Sym stuff, and unless I find my hand forced, I&#39;ll support Win98 by happy accident..</div>
+    <div class="meta">Posted on 2005-08-11 00:48:56 by Homer</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=21575&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=21575&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="21575" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=21575&amp;page=2">&gt;</a><a href="../?id=21575&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

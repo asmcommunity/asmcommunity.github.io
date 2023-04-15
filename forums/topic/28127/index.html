@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>floppy disk imaging - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28127" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28127">floppy disk imaging</a></p>
+   <div class="post" id="post-199484">
+    <div class="subject"><a href="#post-199484">floppy disk imaging</a></div>
+    <div class="body">I was wondering if anyone could help with some procs for reading a floppy disk and creating an image out of it, and another for reading that image and writing it to a floppy. Looking to do something similar to rawrite for dos/linux, but create the images as well as write them. Any help would be much appreciated, thanks.</div>
+    <div class="meta">Posted on 2001-05-20 02:42:00 by mc</div>
+   </div>
+   <div class="post" id="post-199485">
+    <div class="subject"><a href="#post-199485">floppy disk imaging</a></div>
+    <div class="body">well it is easy to do I think. an image file
+is just what the name says. it is an image of
+track-per-track of a floppy or CD or what have you
+to make what you are wanting is easy read each
+track from the source disk then write them into a file
+But wait!!!! how can you read the sectors and track
+of a floppy from windows???? well, do it like this:
+
+;########################################################################
+; Read Sector PROCEDURE
+;########################################################################
+ReadSector PROC 
+	;=========================================================
+	;  This procedure reads the sector specified in the Regs
+	; structure. Default is four tries. It performs an int13. 
+	;=========================================================
+
+	;==================================
+	; set the current attempt
+	;==================================
+	MOV	CurAttempt, 0
+
+agn:	;==================================
+	; Fill sent regs to reset diskette
+	;==================================
+	MOV	EAX, 0
+	MOV	sent_regs.reg_EAX, EAX
+	MOV	EDX, 0
+	MOV	DL, Disk
+	MOV	sent_regs.reg_EDX, EDX
+
+	;==================================
+	; Make the call to DeviceIOControl
+	;==================================
+	INVOKE DeviceIoControl,hVWIN,VWIN32_DIOC_DOS_INT13,ADDR sent_regs,
+			SIZEOF sent_regs,ADDR sent_regs, SIZEOF sent_regs, ADDR Byte_Count,0
+	MOV	Result, EAX
+
+	;==================================
+	; Fill sent_regs w/master
+	;==================================
+	MOV	EAX, Regs.reg_EAX
+	MOV	sent_regs.reg_EAX, EAX
+	MOV	EAX, Regs.reg_EBX
+	MOV	sent_regs.reg_EBX, EAX
+	MOV	EAX, Regs.reg_ECX
+	MOV	sent_regs.reg_ECX, EAX
+	MOV	EAX, Regs.reg_EDX
+	MOV	sent_regs.reg_EDX, EAX
+	MOV	EAX, Regs.reg_EDI
+	MOV	sent_regs.reg_EDI, EAX
+	MOV	EAX, Regs.reg_ESI
+	MOV	sent_regs.reg_ESI, EAX
+	MOV	EAX, Regs.reg_FLAGS
+	MOV	sent_regs.reg_FLAGS, EAX
+	
+	;==================================
+	; Make the call to DeviceIOControl
+	;==================================
+	INVOKE DeviceIoControl,hVWIN,VWIN32_DIOC_DOS_INT13,ADDR sent_regs,
+			SIZEOF sent_regs,ADDR sent_regs, SIZEOF sent_regs, ADDR Byte_Count,0
+	MOV	Result, EAX
+
+	;==================================
+	; test for error
+	;==================================
+	.IF EAX == 0 || (sent_regs.reg_FLAGS & 0001h)
+
+		;==========================
+		; if attempts don't == 3
+		; go back and do again
+		;==========================
+		MOV	AL, NumAttempts
+		.IF CurAttempt != AL
+			INC CurAttempt
+			JMP agn
+		.ENDIF
+
+		;==========================
+		; if == 3 then return error
+		;==========================
+		MOV	EAX, sent_regs.reg_EAX
+		MOV	Regs.reg_EAX, EAX
+		JMP errr
+
+	.ENDIF
+
+	;============================
+	; Return from procedure
+	;============================
+done:	return 1
+
+	;============================
+	; Return w/ERROR
+	;============================
+errr:	return 0
+
+ReadSector endp
+
+Fine, but how do you write sectors to disk?
+well thats easy also....
+
+
+;########################################################################
+; WriteSector PROCEDURE
+;########################################################################
+WriteSector PROC 
+	;=========================================================
+	;  This procedure writes the sector specified in the Regs
+	; structure. It gets four tries. It performs an int13. 
+	;=========================================================
+
+	;==================================
+	; set the current attempt
+	;==================================
+	MOV	CurAttempt, 0
+
+agn:	;==================================
+	; Fill sent regs to reset diskette
+	;==================================
+	MOV	EAX, 0
+	MOV	sent_regs.reg_EAX, EAX
+	MOV	EDX, 0
+	MOV	DL, Disk
+	MOV	sent_regs.reg_EDX, EDX
+
+	;==================================
+	; Make the call to DeviceIOControl
+	;==================================
+	INVOKE DeviceIoControl,hVWIN,VWIN32_DIOC_DOS_INT13,ADDR sent_regs,
+			SIZEOF sent_regs,ADDR sent_regs, SIZEOF sent_regs, ADDR Byte_Count,0
+	MOV	Result, EAX
+
+	;==================================
+	; Fi</div>
+    <div class="meta">Posted on 2001-05-20 03:23:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-199486">
+    <div class="subject"><a href="#post-199486">floppy disk imaging</a></div>
+    <div class="body">Be careful, those calls rely on services provided by VWin32.VxD. On both my windows 98 computers (Different Win98 versions) I had to manualy extract VWin32.VxD out of the cabnet files which windows is installed from.</div>
+    <div class="meta">Posted on 2001-05-20 05:57:00 by George</div>
+   </div>
+   <div class="post" id="post-199487">
+    <div class="subject"><a href="#post-199487">floppy disk imaging</a></div>
+    <div class="body">Interesting!
+
+WinImage is a small proggie and is working same way
+and have even more features, like take image of
+whole hard disk. IMHO it works on any windows.
+It using just the api calls.
+
+BTW Zcoder do you have any idea of how to change
+amount of the sectors or size of sectors ???
+
+Which is easy done from DOS.
+
+forge</div>
+    <div class="meta">Posted on 2001-05-20 20:09:00 by forge</div>
+   </div>
+   <div class="post" id="post-199488">
+    <div class="subject"><a href="#post-199488">floppy disk imaging</a></div>
+    <div class="body">forge,
+I also have code to Format to
+any sector size and amount of
+sectors ect. So yes I do know
+how to do that also. You will get
+a error if your floppys can not
+format to what your trying to format
+to, I have made a program to format 1.44MB
+floppys to 1.7MB ad there readable in any
+windows or even from DOS. that is the limit
+on a floppy.</div>
+    <div class="meta">Posted on 2001-05-21 16:24:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-199489">
+    <div class="subject"><a href="#post-199489">floppy disk imaging</a></div>
+    <div class="body">Thanks Zcoder,
+
+Yes I have interest in source and I hope
+it is in ASM.
+
+What I need is to change sector size in
+one of the tracks and make this track marked
+as a bad. This way the disk copy wouldn't 
+work but still I'm able to read my data 
+of the sectors. I did try to change the data
+in a Diskette Parameters Table, pointed to by
+int 1Eh at Bios address 522h. This table seems to
+me is not used at all as the first byte = DFh
+which is 360k disk instead of AFh as should be 
+for 1.44 disk.
+
+You possibly can email the code to me,
+of course if you don't mind.
+
+Thanks
+
+forge
+
+P.S. ICQ Hero Ver. 2.3a on your page return
+zero file size.</div>
+    <div class="meta">Posted on 2001-05-22 00:30:00 by forge</div>
+   </div>
+   <div class="post" id="post-199490">
+    <div class="subject"><a href="#post-199490">floppy disk imaging</a></div>
+    <div class="body">I sent you the code and I hae fixed the
+problem with the ICQ hero program.</div>
+    <div class="meta">Posted on 2001-05-22 10:37:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-199491">
+    <div class="subject"><a href="#post-199491">floppy disk imaging</a></div>
+    <div class="body">hi all,
+
+i've done a little utility for physical copy of floppies.
+I'using 
+
+call    DeviceIoControl, hFileX, VWIN32_DIOC_DOS_INT13, offset reg, SIZE reg,offset reg, SIZE reg,\
+                         offset IObyte, 0
+
+where hFile is handle to open VWIN32.VXD
+
+The starange thing is that today, trying it in a PC without VWIN32.VXD it always work !? Why if VWIN32.VXD called don't exist ??  :confused: :confused:</div>
+    <div class="meta">Posted on 2001-06-06 03:50:00 by angelo</div>
+   </div>
+  </div>
+ </body>
+</html>

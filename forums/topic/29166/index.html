@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>how to handing hook in multiple threads (kernel mode) ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29166" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=113">Low Level Concepts</a> &raquo; <a href="../?id=29166">how to handing hook in multiple threads (kernel mode) ?</a></p>
+   <div class="post" id="post-205998">
+    <div class="subject"><a href="#post-205998">how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">hi all, i&#039;m going to make a kernel driver, that hooking into System Service Table, it&#039;s will hook NtCreateFile and NtOpenFile to keep track which file is accessed, then send this information to a program on usermode to check that if it&#039;s enough permission(that i define) to access the file, this program send back to kernel driver that allow or deny signal. The problem is in multiple threads running, i have not any idea to handing, like this<br />thread1-openfile --&gt; my hook function --&gt; wait for usermode <br />thread2-openfile --&gt; my hook function --&gt; wait for usermode <br /><br />i don&#039;t know which allow/deny signal apply to which thread .<br />hum! any idea ? thanks very much.<br /></div>
+    <div class="meta">Posted on 2008-09-26 10:26:36 by secmask</div>
+   </div>
+   <div class="post" id="post-205999">
+    <div class="subject"><a href="#post-205999">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">Why is this a problem? Its a systemwide hook, who cares what thread of what process is triggering this event? This question is spurious, and I really have to question the validity and merit of your post.<br /><br />Its an EVENT, your usermode code should handle it ASYNCHRONOUSLY!<br /><br /></div>
+    <div class="meta">Posted on 2008-09-26 10:40:30 by Homer</div>
+   </div>
+   <div class="post" id="post-206004">
+    <div class="subject"><a href="#post-206004">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">yeh, let&#039;s say that i have two thread, thread1 belong to process1, thread2 belong to process2, And a process X-which keep track all the EVENTs.<br />thread1 call NtOpenFile --&gt; my hook function send signal to process X by raise an event and WaitForObject(objectname=&quot;myevent&quot;)<br />thread2 call NtOpenFile --&gt; my hook function send signal to process X by raise an event and WaitForObject (objectname=&quot;myevent&quot;)<br />then after process-X do something and return deny code to the call of thread2, it signal thread2 to continue, but if i raise the event, maybe both of thread will resume to run, but thread1 will not to know it&#039;s should allow or deny the open file request.<br />may i was wrong in approach this problem?</div>
+    <div class="meta">Posted on 2008-09-26 12:48:00 by secmask</div>
+   </div>
+   <div class="post" id="post-206027">
+    <div class="subject"><a href="#post-206027">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">i found a solution at <a target="_blank" href="http://www.codeproject.com/KB/system/soviet_protector.aspx">http://www.codeproject.com/KB/system/soviet_protector.aspx</a><br />i mean the use of event object, all other thread will wait util the request to usermode is return.<br /><pre><code><br />&nbsp; &nbsp; KeWaitForSingleObject(&amp;event,Executive,KernelMode,0,0);<br /><br />&nbsp; &nbsp; strcpy(&amp;output[8],buff);<br />&nbsp; &nbsp; RtlFreeAnsiString(&amp;str);<br /><br />&nbsp; &nbsp; a=1;<br />&nbsp; &nbsp; memmove(&amp;output[0],&amp;a,4);<br />&nbsp; &nbsp; while(1)<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; KeDelayExecutionThread(KernelMode,0,&amp;li);<br />&nbsp; &nbsp; &nbsp; &nbsp; memmove(&amp;a,&amp;output[0],4);<br />&nbsp; &nbsp; &nbsp; &nbsp; if(!a)break;<br />&nbsp; &nbsp; }<br />&nbsp; &nbsp; memmove(&amp;a,&amp;output[4],4);<br />&nbsp; &nbsp; KeSetEvent(&amp;event,0,0);<br /><br /></code></pre><br /><br />not very good but work&nbsp; :)</div>
+    <div class="meta">Posted on 2008-10-01 22:09:01 by secmask</div>
+   </div>
+   <div class="post" id="post-206028">
+    <div class="subject"><a href="#post-206028">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">Ugh, the code in that article is horrible.<br /><pre><code><br />&nbsp; &nbsp; a=str.Length;buff=str.Buffer;<br />&nbsp; &nbsp; while(1)<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; if(buff==&#039;.&#039;){a++;break;}<br />&nbsp; &nbsp; &nbsp; &nbsp; a--;<br />&nbsp; &nbsp; }<br /></code></pre><br />Now, whaaaat happens if a user tries to execute &quot;x:\path\to\evil\file&quot; - with no extension? Perfectly legal under win32.<br /><br /><pre><code><br />&nbsp; &nbsp; //if it is not executable, it does not make sense to be bothered about it<br /><br />&nbsp; &nbsp; //return 1<br /><br />&nbsp; &nbsp; if(_stricmp(&amp;buff,&quot;exe&quot;)){RtlFreeAnsiString(&amp;str);return 1;}<br /></code></pre><br />.com, .scr, .pif, no-extension, etc?<br /><br /><pre><code><br />&nbsp; &nbsp; strcpy(&amp;output[8],buff);<br /></code></pre><br />Ugh, strcpy? In kernel mode?<br /><br />Oh, and a nasty spinloop is used to synchronize with the client... not to mention that memmove with a 4-byte value is used instead of some DWORD casting and atomic intrinsics. That person shouldn&#039;t be writing kernel-mode code.</div>
+    <div class="meta">Posted on 2008-10-02 01:00:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-206029">
+    <div class="subject"><a href="#post-206029">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">hi f0dder, i&#039;m try to find a way to synchronize kernel-mode and user-mode and i haven&#039;t have experience about this before, i need to pause all other request to Open-Create File, then ask user-mode code for permission, thread by thread. Of course, about the examples, maybe think just as &quot;runnable&quot; and author didn&#039;t check that . Could you tell me the better way to synchronize ? thanks</div>
+    <div class="meta">Posted on 2008-10-02 03:26:48 by secmask</div>
+   </div>
+   <div class="post" id="post-206030">
+    <div class="subject"><a href="#post-206030">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">other away, i think:<br />kernel-mode<br /><pre><code><br />KeWaitForMutexObject(enter_wait_object);<br /><br />// ... Fill filename to output buffer then <br /><br />KeSetEvent(usermode_should_read_buffer_now);&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;//&nbsp; --&gt; User-mode check for permission<br /><br />KeWaitForEvent(usermode_finished);<br /><br />// ... Read user return value from system buffer.<br /><br />KeReleaseMutex(enter_wait_object);<br /></code></pre><br /><br />usermode<br /><pre><code><br />while(true){<br />&nbsp; &nbsp; &nbsp; &nbsp;WaitForSingleObject(usermode_should_read_buffer_now);<br />&nbsp; &nbsp; &nbsp; &nbsp;ReadFile(....);<br />&nbsp; &nbsp; &nbsp; &nbsp;//process data and return value in kernel system buffer.<br />&nbsp; &nbsp; &nbsp; &nbsp;WriteFile(...);<br />&nbsp; &nbsp; &nbsp; &nbsp;SetEvent(usermode_finished);<br />}<br /></code></pre><br /><br />is it better?</div>
+    <div class="meta">Posted on 2008-10-02 03:53:42 by secmask</div>
+   </div>
+   <div class="post" id="post-206031">
+    <div class="subject"><a href="#post-206031">Re: how to handing hook in multiple threads (kernel mode) ?</a></div>
+    <div class="body">If kernelmode events can be shared with usermode, that would probably be a better solution, yes - but you will likely run into IRQL issues that you need to take into consideration.</div>
+    <div class="meta">Posted on 2008-10-02 06:04:54 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

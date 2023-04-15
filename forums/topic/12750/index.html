@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>List loading algo - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12750" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=12750">List loading algo</a></p>
+   <div class="post" id="post-98588">
+    <div class="subject"><a href="#post-98588">List loading algo</a></div>
+    <div class="body">I just posted a dialog demo in the MASM32 section but the code contained an algo for loading a list box that I thought someone may find useful in itself.<br /><pre><code><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />LoadListFromData proc hLst&#58;DWORD,lpdata&#58;DWORD<br /><br />  ; -- --------------------------------------------------------------------<br />  ; This procedure is designed to read a list of seperate items of string<br />  ; data from the data section that is zero seperated and double zero<br />  ; terminated. It passes the start address to the LB_ADDSTRING message<br />  ; then scans the string data for the next zero seperator. When it finds<br />  ; the next zero seperator, it tests if the next byte is also a zero,<br />  ; returns to the LB_ADDSTRING call if it is not or exits if it is.<br />  ; ----------------------------------------------------------------------<br /><br />    invoke SendMessage,hLst,WM_SETREDRAW,FALSE,0<br /><br />    push esi<br />    mov esi, lpdata<br /><br />  llfd&#58;<br />    invoke SendMessage,hLst,LB_ADDSTRING,0,esi<br />  @@&#58;<br />    inc esi<br />    cmp BYTE PTR &#91;esi&#93;, 0   ; check for zero seperator<br />    jne @B<br />    inc esi<br />    cmp BYTE PTR &#91;esi&#93;, 0   ; check for 2nd terminator<br />    jne llfd<br /><br />    pop esi<br /><br />    invoke SendMessage,hLst,WM_SETREDRAW,TRUE,0<br /><br />    ret<br /><br />LoadListFromData endp<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /></code></pre><br />All speed related improvements are welcome.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 08:38:14 by hutch--</div>
+   </div>
+   <div class="post" id="post-98665">
+    <div class="subject"><a href="#post-98665">List loading algo</a></div>
+    <div class="body">I would use this version, i wonder how would you like to speed up win api functions :)<br /><br />LoadListFromData proc uses esi edi ebx, hLst:DWORD,lpdata:DWORD<br /><br />    sub ebx,ebx<br />    mov esi,hLst<br /><br />    invoke SendMessage,esi,WM_SETREDRAW,FALSE,ebx<br /><br />    mov edi, lpdata<br /><br />  llfd:<br />    invoke SendMessage,esi,LB_ADDSTRING,ebx,edi<br /><br />    sub eax,eax<br />  @@:<br />    scasb<br />    jne @b<br /><br />    cmp byte ptr,al<br />    jne llfd<br /><br />    invoke SendMessage,esi,WM_SETREDRAW,TRUE,ebx<br />    ret<br /><br />LoadListFromData endp</div>
+    <div class="meta">Posted on 2003-04-22 15:47:12 by bart</div>
+   </div>
+   <div class="post" id="post-98706">
+    <div class="subject"><a href="#post-98706">List loading algo</a></div>
+    <div class="body">bart,<br />- Some time ago I investigated  scasb/jne @b<br />and on PIII we have retirement problem(see A.Fog)<br /><br />scasb ; 3mops<br />jne @b ; 1mop<br /><br />(3+1) / 3 = 2 clocks<br />So, we can't do the loop in one clock!!!<br /><br />- You can substitute SendMessage with DispatchMessage or<br />with direct call to the proc of hList.<br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-04-22 20:36:42 by lingo12</div>
+   </div>
+   <div class="post" id="post-98729">
+    <div class="subject"><a href="#post-98729">List loading algo</a></div>
+    <div class="body">Bart,<br /><br />The only method I know of speeding up API functions is to go buy yourself a 10 gig pentium 12.<br /><br />The idea with the algo was to get the API functions to read directly from the addresses in the DATA section without buffering.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 21:34:16 by hutch--</div>
+   </div>
+   <div class="post" id="post-98773">
+    <div class="subject"><a href="#post-98773">List loading algo</a></div>
+    <div class="body">speed up code around API functions == silly idea. How much are yo u really going to gain from this? Using DispatchMessage might be an interesting idea, even though I doubt you'll be able to tell that much difference... and what about filling the .time and .pt fields? (you'll probably get away with not doing it 99% of the time - but what about the remaining 1%?). Calling the wndproc directly... geez. Bad idea.</div>
+    <div class="meta">Posted on 2003-04-23 02:01:37 by f0dder</div>
+   </div>
+   <div class="post" id="post-98775">
+    <div class="subject"><a href="#post-98775">List loading algo</a></div>
+    <div class="body">I agree with f0dder here, there is not much you can do around an API call to get any reasonably speed improvement.<br /><br />What I have done with the algo is to turn off the update for the listbox while it is being loaded, get the API function to read directly from the source and minimise the loop overhead to find each following zero and find the next string start.<br /><br />Bart's code will be slower with scasb but loading an API is hardly fast so his version may be a small code replacement that is easily fast enough.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-23 02:17:39 by hutch--</div>
+   </div>
+   <div class="post" id="post-98783">
+    <div class="subject"><a href="#post-98783">List loading algo</a></div>
+    <div class="body">Doing SetRedraw is a good thing (but shouldn't you do an InvalidateRect after setting SetRedraw back to true?)<br /><br />Another optimization would be to do LB_INITSTORAGE when you add a large amount of strings. Of course this means you need to know the number of items beforehand, but I think that even scanning your list of items twice (one to get count of items, one to add) would be faster with the addition of LB_INITSTORAGE. I've recently done a bit of similar work with listviews, and for 10k items you can definitely feel the difference between using LVM_SETITEMCOUNT and not using it.</div>
+    <div class="meta">Posted on 2003-04-23 03:36:15 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Flooring divide - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15854" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=15854">Flooring divide</a></p>
+   <div class="post" id="post-122839">
+    <div class="subject"><a href="#post-122839">Flooring divide</a></div>
+    <div class="body">Hi,<br /><br />As you probably know, the idiv instruction does a round towards zero. This also means the remainder can be negative. But for my specific application I need the remainder to be positive. In other words, I have to compute the flooring divide.<br /><br />The straightforward C++ code that does this looks like this:<br /><pre><code><br />inline int floorDiv&#40;int a, int b&#41;<br />&#123;<br />	if&#40;b == 0&#41;<br />	&#123;<br />		return 0x80000000;   // Prevent exception<br />	&#125;<br /><br />	int q;   // Quotient<br />	int r;   // Remainder<br /><br />	if&#40;a &gt;= 0&#41;<br />	&#123;<br />		q = a / b;<br />	&#125;<br />	else<br />	&#123;<br />		q = a / b;<br />		r = -a % b;<br /><br />		if&#40;r&#41;<br />		&#123;<br />			q--;<br />		&#125;<br />	&#125;<br /><br />	return q;<br />&#125;<br /></code></pre><br />Which can be simplified to:<br /><pre><code><br />if&#40;b == 0&#41; return 0x80000000;	<br />int q = a / b;<br />if&#40;a &lt; 0 &amp;&amp; a % b&#41; q--;<br />return q;<br /></code></pre><br />But I have a few problems optimizing it in assembly. First of all I would like to get rid of the divide by zero test, or implement it without a jump. The rest I would also like to implement with cmov only because my arguments are quite unpredictable and there would be many jump mispredictions. The best I could produce was this:<br /><pre><code><br />if&#40;b == 0&#41; return 0x80000000;<br /><br />const int zero = 0;<br />const int one = 1;<br /><br />__asm<br />&#123;<br />	mov eax, a<br />	cdq<br />	idiv b<br /><br />	mov ebx, 0<br />	cmp a, 0<br />	cmovl ebx, one<br />	test edx, edx<br />	cmovz ebx, zero<br />	sub eax, ebx<br /><br />	mov a, eax<br />&#125;<br /><br />return a;<br /></code></pre><br />Ugly and slow? I know, I know... my integer code is very rusty. Most of the time I work with the very nice MMX and SSE instruction sets but today is different. That's why I could very much use your help. Any ideas would be very much appreciated as this is a bottleneck of my application! Thanks.</div>
+    <div class="meta">Posted on 2003-10-29 18:28:37 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-122918">
+    <div class="subject"><a href="#post-122918">Flooring divide</a></div>
+    <div class="body">mov eax,a<br />cdq<br />or eax,eax<br />setl ecx<br />idiv b<br /><br />or edx,edx<br />setnz edx<br />and ecx,edx<br />sub eax,ecx</div>
+    <div class="meta">Posted on 2003-10-30 08:44:42 by MikDay</div>
+   </div>
+   <div class="post" id="post-122929">
+    <div class="subject"><a href="#post-122929">Flooring divide</a></div>
+    <div class="body"><div class="quote"><br />mov eax,a<br />cdq<br />or eax,eax<br />setl ecx<br />idiv b<br /><br />or edx,edx<br />setnz edx<br />and ecx,edx<br />sub eax,ecx </div><br />Thanks! I forgot about the SET instructions. Why do you use OR instead of TEST? TEST doesn't write back to the register so it seems faster to me...<br /><br />Anyway, I think I've found an even faster way:<br /><pre><code><br />mov eax, a<br />cdq<br />idiv ebx<br /><br />shr edx, 31<br />sub eax, edx<br /></code></pre><br />It is based on the observation that if (a &lt; 0 &amp;&amp; a % b) is true then the remainder has a sign bit. And since I have to subtract one from the quotient under this condition, I can just subtract the sign bit. So the C++ equivalent becomes:<br /><pre><code><br />inline int floorDiv&#40;int a, int b&#41;<br />&#123;<br />    if&#40;b == 0&#41; return 0x80000000;<br />    return a / b - &#40;a % b &gt;&gt; 31&#41;;<br />&#125;<br /></code></pre><br />I think I''ll leave it this way because the compiler can better inline it.<br /><br />I'd still like to get rid of the divide by zero check though. I know it has something to do with masking interrupts, but I don't know the details or if it's possible on ring 3. Anyone?</div>
+    <div class="meta">Posted on 2003-10-30 10:47:44 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-122963">
+    <div class="subject"><a href="#post-122963">Flooring divide</a></div>
+    <div class="body">Hi, C0D1F1ED.<br />I don't think interrupt masking is possible under ring-3 (not &quot;legally&quot;, anyway). You can still do SEH to catch exceptions (there are samples on this in Iczelion's site), but IMHO it's probably more trouble that it's worth if you're looking for a speed optimization.</div>
+    <div class="meta">Posted on 2003-10-30 16:37:55 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-122978">
+    <div class="subject"><a href="#post-122978">Flooring divide</a></div>
+    <div class="body"><div class="quote"><br />Hi, C0D1F1ED.<br />I don't think interrupt masking is possible under ring-3 (not &quot;legally&quot;, anyway). You can still do SEH to catch exceptions (there are samples on this in Iczelion's site), but IMHO it's probably more trouble that it's worth if you're looking for a speed optimization. </div><br />Thanks for the information! Then I'll just attempt to avoid division by zero at a higher level...</div>
+    <div class="meta">Posted on 2003-10-30 19:11:21 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-122979">
+    <div class="subject"><a href="#post-122979">Flooring divide</a></div>
+    <div class="body">Ok, here are all four functions:<br /><pre><code><br />inline int floorDiv&#40;int a, int b&#41;<br />&#123;<br />	return a / b - &#40;&#40;unsigned&#41;&#40;a % b&#41; &gt;&gt; 31&#41;;<br />&#125;<br /><br />inline int ceilDiv&#40;int a, int b&#41;<br />&#123;<br />	a += b - 1;<br />	return a / b - &#40;&#40;unsigned&#41;&#40;a % b&#41; &gt;&gt; 31&#41;;<br />&#125;<br /><br />inline int floorMod&#40;int a, int b&#41;<br />&#123;<br />	int r = a % b;<br />	return r + &#40;&#40;r &gt;&gt; 31&#41; &amp; b&#41;;<br />&#125;<br /><br />inline int ceilMod&#40;int a, int b&#41;<br />&#123;<br />	int r = &#40;a + b - 1&#41; % b;<br />	return r + &#40;&#40;r &gt;&gt; 31&#41; &amp; b&#41; - b + 1;<br />&#125;<br /></code></pre><br />I won't expect any further optimizations, but the last one still looks sub-optimal, doesn't it? ;)</div>
+    <div class="meta">Posted on 2003-10-30 19:26:48 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-122980">
+    <div class="subject"><a href="#post-122980">Flooring divide</a></div>
+    <div class="body">I've never used SEH, but I can't see how it would effect optimization!?  SEH is setup during program initialization and would only cost cycles when an exception occurs - hopefully your program is not dividing by zero all time. :)  IMHO, this exception must be handled - one way or another.</div>
+    <div class="meta">Posted on 2003-10-30 19:41:11 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-123044">
+    <div class="subject"><a href="#post-123044">Flooring divide</a></div>
+    <div class="body">Hi, C0D1F1ED<br />1. IMHO, the instruction <em>TEST reg,reg</em> and instruction <em>OR reg,reg</em> require only 1 CPU clock.<br />2. I agree with <strong>bitRAKE</strong> - normally SEH don't effect optimization.</div>
+    <div class="meta">Posted on 2003-10-31 08:27:12 by MikDay</div>
+   </div>
+   <div class="post" id="post-123064">
+    <div class="subject"><a href="#post-123064">Flooring divide</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by MikDay </em><br />1. IMHO, the instruction <em>TEST reg,reg</em> and instruction <em>OR reg,reg</em> require only 1 CPU clock.</div><br />It's not an opinion, it's a fact or it isn't. ;) Both instructions are very similar, but OR writes the result back to the destination register. Therefore it creates a dependecy that would otherwise not be there:<br /><pre><code><br />test eax, eax<br />mov ebx, eax<br /></code></pre><br />These instructions could, theoretically, execute in parallel. They both only read eax.<br /><pre><code><br />or eax, eax<br />mov ebx, eax<br /></code></pre><br />These instrucions can't execute in parallel, because the second has to wait for the first one's result. The processor does not know that the first instruction does not change the value of eax. Actually it <em>could</em> know this by analyzing the instruction type and operands but I'm quite sure they don't waste transistors on this because it should be detected in the compiler's peephole optimizer.</div>
+    <div class="meta">Posted on 2003-10-31 09:49:20 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-123244">
+    <div class="subject"><a href="#post-123244">Flooring divide</a></div>
+    <div class="body"><div class="quote"><br />I've never used SEH, but I can't see how it would effect optimization!?  SEH is setup during program initialization and would only cost cycles when an exception occurs - hopefully your program is not dividing by zero all time. :)  IMHO, this exception must be handled - one way or another. </div><br />I had in mind to set up SEH inside the function... could you believe it didn't occur to me that you could do it on startup instead? (Well, SEH is a rather theorical knowledge to me since I have never actually implemented it yet).<br />Sorry for that misleading tip. :o</div>
+    <div class="meta">Posted on 2003-11-02 15:19:07 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

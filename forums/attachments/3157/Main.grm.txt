@@ -1,0 +1,710 @@
+!=====================================================================================
+! Strings that end up in the CGT File
+!=====================================================================================
+"Name"    = 'Grandma'
+"Author"  = 'Leith Ketchell'
+"Version" = '1.2' 
+"About"   = 'Experimental Grammar for Parser/Interpreter engine'
+!=====================================================================================
+
+!=====================================================================================
+! Parser Settings that end up in the CGT File
+!=====================================================================================
+"Case Sensitive" = False 
+"Start Symbol"   = <Program>
+!=====================================================================================
+
+!=====================================================================================
+! Terminal Symbols
+!=====================================================================================
+
+
+! String CharSets are defined as any printable character EXCEPT the delimiters (" and ')
+{StringChar 1} = {Printable} - ['']	! Theres two because we need to 'escape' for ' char
+{StringChar 2} = {Printable} - ["]
+{StringChar 3} = {Printable} - [<>]
+{Hex Digit}     = {Digit} + [abcdef] + [ABCDEF]    
+
+! Literal Strings are defined as a subset of the above charsets with appropriate delimiters
+StringLiteral = ''   {StringChar 1}* ''	
+              | '"'  {StringChar 2}* '"'	
+       !       | '<' {StringChar 3}*  '>'
+
+! Literal Numbers
+IntegerLiteral     = {Digit}+
+HexLiteral       = 0x{Hex Digit}+
+		   | {Digit}{Hex Digit}*'h'
+FloatLiteral     = {Digit}*'.'{Digit}+
+		   | {Digit}*'.'{Digit}+ 'f'
+
+
+
+
+! Identifiers: These are usually used for naming things, but can mean 'some word i dont know'.
+! ID is defined as any string which:
+!- contains a letter,
+!- may contain Digits and a handful of 'decoration' characters,
+!- may not be a single letter 'e' (or 'E')
+!Note that the single letter 'e' is reserved by the math evaluation rules.
+{IDSyms} = [_@#$] 			!Decoration characters
+{IdPrefix} = {Letter} - [eE]	!CharacterSet for names which are a single letter : cannot be e or E
+Exponent = e | E
+Id = {IdPrefix}			!If its a single letter, it cannot be 'e' or 'E' (exponent)
+   | {Letter}+ {IDSyms}* {AlphaNumeric}+ {IDSyms}* {AlphaNumeric}*  !If it starts with a letter, it has to be two characters or longer
+   | {IDSyms}+ {Digit}* {Letter}  {AlphaNumeric}* {IDSyms}* {AlphaNumeric}*	!If it starts with a decoration, it just needs at least one letter
+
+RepId = '&' Id 		!ReplaceMe , appears within Macros
+
+!User
+
+
+!Some VERY CLEVER redefining of the {Whitespace} terminal
+!allows us to separately define a "new line" terminal
+{WS} = {Whitespace} - {CR} - {LF}		!WS = Whitespace OTHER THAN CR/LF
+Whitespace = {WS}+				!Redefine Whitespace as 'any number of WS'
+NewLine = {CR}{LF}|{CR}|{LF}		!We can use this to demand new lines in our grammar
+
+Comment Start = '/*'
+Comment End   = '*/' 
+Comment Line = '//' 
+!=====================================================================================
+! NONTERMINAL SYMBOLS (REDUCTION RULES)
+!=====================================================================================
+
+<Terminator> ::= ';' 
+		| NewLine 
+		|   ';' NewLine
+		| NewLine <Terminator>	!Deal with multiple trailing CRLFs
+
+! This is our 'Start Symbol' where our grammar begins.
+! Program is defined as any number of Declarations or Statements.
+<Program> ::=   <Statements>
+	       | NewLine  <Program>        !Deal with multiple leading CRLFS (at start of program)
+		| NewLine 
+
+!=====================================================================================
+! Statements is defined as one or more statements.
+! Note that we try to put the 'lower order' term furthest to the right.
+<Statements> ::= <Statement> <Statements>
+		 | <Statement> 
+!==============================================================================
+
+<Statement> ::=  <Normal Stm> <Terminator>
+		| <IF Stm> <Terminator>
+	 	| <Macro Decl>
+		| <Struct Decl>
+		| <Label><Terminator>
+		|<OpCode> <Terminator>
+
+
+
+
+!=====================================================================================
+<Macro Decl>  ::= <MacroHead>  <MacroTail> 
+<MacroHead>  ::= <ID> macro  <MacroArgs>  <MacroLocals>  <Terminator> <Statements>
+<MacroTail> ::=  endm <Terminator> 
+
+<MacroArgs> ::= <ID> ',' <MacroArgs>
+		| <ID> | !<-- can be nothing
+<MacroLocals> ::= local <ID List> |
+
+
+!==============================================================================
+<Union> ::= <UnionHead> <UnionFields> <UnionTail>
+<UnionHead> ::= union <Terminator>
+<UnionTail> ::= ends <Terminator>
+<UnionFields>::=<UnionField><UnionFields> | <UnionField>
+<UnionField> ::=  <DefUnionField>   '?'     <Terminator> 
+		|   <DefUnionField>   '(?)'   <Terminator> 
+		|   <DefUnionField>   '()'    <Terminator> 
+		|   <DefUnionField> 	  	   <Terminator> 
+		|   <DefUnionUser>  '<>'     <Terminator>
+		|   <DefUnionUser>  '<?>'    <Terminator>
+		|   <DefUnionUser> 	    	   <Terminator>
+<DefUnionField> ::= <ID> <DefType> 
+<DefUnionUser>  ::= <ID> <ID> 
+!==============================================================================
+<Struct Decl> ::= <StructHead> <StructFields> <StructTail>
+
+!<StructFields> is quite complex: it can contain
+!<StructField>, <Union>, or nested <Struct Decl>/<Macro Decl>, interleaved in any order.
+<StructFields>::=<StructField><StructFields>
+		  | <Union> <StructFields> 
+		  | <Struct Decl> <StructFields> 
+		  | <Macro Decl> <StructFields> 
+                | <StructField> 
+                | <Union> 
+                | <Struct Decl> 
+		  | <Macro Decl>
+
+<StructField> ::=	  <ID> <DefType>  '?'     <Terminator> | <DefType>  '?' <Terminator>
+			| <ID> <DefType>    '(?)'   <Terminator> | <DefType>   '(?)' <Terminator>
+			| <ID> <DefType>   '()'   <Terminator> | <DefType>   '()' <Terminator>
+			| <ID> <DefType>  	  <Terminator>  | <DefType>  	  <Terminator> 
+			| <ID> <UserType>  '<>'   <Terminator> | <UserType>  '<>'   <Terminator>
+			| <ID> <UserType>  '<?>'  <Terminator> | <UserType>  '<?>'  <Terminator>
+			| <ID> <UserType>  <Terminator> |  <UserType>  <Terminator>
+
+
+<StructHead> ::= <ID> struct  <Terminator> 
+<StructTail> ::=      ends 	   <Terminator>
+
+!=====================================================================================
+
+<ID List> ::= <ID> ',' <ID List> | <ID>	!One or more comma-delimited IDs
+<IF Stm> ::=     if <Expression> <Terminator> <Statements> endif 
+		 | if <Expression> <Terminator>  <Statements> <elseifs> 
+		 | while <Expression><Terminator>  <Statements> endw 
+! One or more ELSEIF blocks
+<elseifs> ::= elseif <Expression> <Terminator>  <Statements> <elseifs>
+	    |  elseif <Expression> <Terminator>  <Statements> endif
+	    |  else <Terminator> <Statements> endif 
+
+
+
+!==============================================================================
+
+
+!==========================================
+! Arbitrary statements should be added here
+!==========================================
+<Normal Stm>  ::= echo <Expression>
+		 |  <Assignment> 							! Support for =, +=, -=, *=, /=, and repeat of these
+		 |  '.code' 
+		 |  '.data' 
+		 |  '.Segment' ID <FlagValues>
+		 |  <DefineData>					!define (un)labelled data entity
+		 
+
+! Assignments are for defining buildtime equates (literals)
+<Assignment> ::=  <ID> '=' <Assign Expr>
+	 	 |   <ID> 'equ' <Assign Expr>
+		 |  <ID> '+=' <Assign Expr>
+		 |   <ID> '-=' <Assign Expr>
+		 |  <ID> '*=' <Assign Expr>
+		 |   <ID> '/=' <Assign Expr>
+
+! Segment Flags
+<FlagValues> ::= <FlagValue> ',' <FlagValues>
+		|  <FlagValue>
+<FlagValue> ::= 'Writeable' | 'Executable' | 'BSS' |
+
+!==============================================================================
+! Data Declaration
+<DefineData> ::= <OptionalID>  <DefType> <Values> 
+		|                <DefType>  <Values> 
+		|  <OptionalID>  <DefArray> 
+		|                <DefArray> 
+		| <DefineUser>  <Values> 
+		| <DefineUser>  <UsrArray> 
+
+<DefineUser> ::=  <OptionalID> <UserType> 
+<UserType>::= <Identifier>
+
+<OptionalID> ::= <ID>
+
+<DefType> ::= db | dw | dd | dq | dt | byte | word | dword | qword | tword | real4 | real8 | real10 
+!<LiteralList> ::= <Literal> ',' <LiteralList> | <Literal>
+
+<DefArray> ::=   <DefType>   <NumberLiteral> dup '(' <Values> ')'
+<UsrArray> ::=   <NumberLiteral> dup '(' <Values> ')'
+
+!==============================================================================
+ 
+!  Support for complex expressions
+!  Operator Precedence is observed for math operators.
+!  Recommended not to modify this
+
+!===============================================
+<Expression> ::= <Assign Expr>
+!===============================================
+
+
+<Assign Expr>::=  <Assign Expr> '=' <Compare Expr>
+	 	 |   <Assign Expr> 'equ' <Compare Expr>
+		 |  <Assign Expr> '+=' <Compare Expr>
+		 |   <Assign Expr> '-=' <Compare Expr>
+		 |  <Assign Expr> '*=' <Compare Expr>
+		 |   <Assign Expr> '/=' <Compare Expr>
+		 |  <Compare Expr>
+ 
+<Compare Expr>::=  <Compare Expr> '>'  <AddSub Expr>	! Compare
+                 | <Compare Expr> '<'  <AddSub Expr>
+                 | <Compare Expr> '<=' <AddSub Expr>
+                 | <Compare Expr> '>=' <AddSub Expr>
+                 | <Compare Expr> '==' <AddSub Expr>
+                 | <Compare Expr> '<>' <AddSub Expr>
+                 | <AddSub Expr> 
+
+<AddSub Expr>      ::= <AddSub Expr> '+' <MulDiv Expr>		! Add Sub And Or
+                 |     <AddSub Expr> '-' <MulDiv Expr>
+                 |     <AddSub Expr> '&' <MulDiv Expr>
+		   |     <AddSub Expr> '|' <MulDiv Expr>
+                 |     <MulDiv Expr> 
+
+<MulDiv Expr>    ::= <MulDiv Expr> '*' <PowExp Expr> 		! Mul Div
+                |    <MulDiv Expr> '/' <PowExp Expr> 
+                |    <PowExp Expr> 
+
+<PowExp Expr>	::= <PowExp Expr> '^' <Shift Expr>		! Powers
+		  | <PowExp Expr> Exponent <Shift Expr>		! Exponents
+		  | <Shift Expr>
+
+<Shift Expr> ::=  <Shift Expr> 'shl' <Value>	!<Shift Expr> 'shl' <Value>
+		  | <Shift Expr> 'shr' <Value>	!<Shift Expr> 'shr' <Value>	
+		  | <Negate Expr>
+
+<Negate Expr>  ::= '-' <IncDec Expr> 				! Sign
+		   |     <IncDec Expr> 
+
+<IncDec Expr> ::= <ValueID> '++'
+		|    <ValueID> '--'
+		|'(' <Expression> ')'	
+		|   <SizeOf>
+
+<SizeOf> ::=  'sizeof' <ValueID> | 'sizeof' <DefType>
+             | 'sizeof('<ValueID>')' | 'sizeof('<DefType>')'
+		    | <Macro Execute InLine>
+		    
+		| <Value> 
+
+!==============================================
+! CPU REGISTERS AND OTHER DATATYPES
+!==============================================
+<reg8>  ::= AL | CL | DL | BL | AH | CH | DH | BH | R8
+<reg16> ::= AX | CX | DX | BX | SP | BP | SI | DI | R16
+<reg32> ::= EAX | ECX | EDX | EBX | ESP | EBP | ESI | EDI | R32
+<reg64> ::= RAX | RCX | RDX | RBX | RSP | RBP | RSI | RDI | R64
+<regfpu> ::= ST0 | ST1 | ST2 | ST3 | ST4 | ST5 | ST6 | ST7
+<segreg> ::= CS | DS | ES  | FS | GS | SS | segreg
+<creg> ::= CR0 | CR2 | CR3 | CR4 | 'CR0/2/3/4'
+<dreg> ::= DR0 | DR1 | DR2 | DR3 | DR6 | DR7 | 'DR0/1/2/3/6/7'
+<treg> ::= TR3 | TR4 | TR5 | TR6 | TR7 | 'TR3/4/5/6/7'
+<mmxreg> ::= mmxreg !need to define these
+
+<Operand> ::= byte ptr '[' <Operandi>']'
+	|	word ptr '[' <Operandi>']'
+	|	dword ptr '[' <Operandi>']'
+	|	qword ptr '[' <Operandi>']'
+	|	tword ptr '[' <Operandi>']'
+	|	real4 ptr '[' <Operandi>']'
+	|	real8 ptr '[' <Operandi>']'
+	|	real10 ptr '[' <Operandi>']'
+	|	ID ptr '[' <Operandi>']'
+	|	<Operandi>
+
+<Operandi> ::= <reg8> | <reg16> | <reg32> | <reg64> | <regfpu> | <Immediate>
+	    		 |  <segreg> | <creg> | <dreg> | <treg> | <mmxreg> 
+
+<Immediate> ::= <Expression>
+
+
+!==============================================
+! <Value> = ID, Literal or Braced Expression
+!==============================================
+ 
+
+<Value>       ::=   <Literal>				! Could be a simple Literal value (eg integer, string, float etc)
+		    | <ValueID>          			! Could be Name
+
+<ValueID> ::= <Id>		  
+<Identifier> ::= <Id>
+
+<Macro Execute InLine> ::= <Identifier> '(' <Values> ')'	
+
+<Values> ::=    '<' <Value List> '>' 
+		  |   <Value List> 		
+<Value List> ::=      '<>'	 
+			| <VL>
+			| <VL> ',' <Values> 
+<VL> ::= <Value>
+
+
+
+<Literal> ::=        <StringLiteral>				! String enclosed in a matched pair of " or ' characters
+                  | <NumberLiteral>			! integer or float (dotted integer), we dont distinguish yet
+
+<NumberLiteral>::= IntegerLiteral | FloatLiteral | HexLiteral
+<StringLiteral>::= StringLiteral
+!================================================================================
+ 
+<ID> ::= RepId | Id
+<Label> ::= <ID> ':'
+
+!==============================================
+! 80x86 OPCODES
+!==============================================
+<OpCode> ::=		AAA
+		|	AAS 
+		|	AAD
+		|	AAD <Operand>
+		|	AAM 
+		|      AAM <Operand>
+		|	ADC <Operand>  ',' <Operand>
+		|      ADD <Operand>  ',' <Operand>
+		|	AND <Operand>  ',' <Operand>
+		|	ARPL <Operand>  ',' <Operand>
+		| 	BOUND <Operand>  ',' <Operand>
+		|	BSF <Operand>  ',' <Operand>
+		|	BSWAP <Operand>
+		|	BT <Operand>  ',' <Operand>
+		|	BTC <Operand>  ',' <Operand>
+		|	BTR <Operand>  ',' <Operand>
+		|	BTS <Operand>  ',' <Operand>
+		|	CALL <Operand>
+		|	CALL FAR <Operand>
+		|	CALL <Operand> ':' <Operand>
+		|	CBW
+		|	CWD
+		|	CDQ
+		|	CWDE
+		|	CLC
+		|	CLD
+		|	CLI
+		|	CLTS
+		|	CMC
+		|	CMOVcc <Operand> ',' <Operand>
+		|	CMP <Operand> ',' <Operand>
+		|	CMPSB
+		|	CMPSW
+		|	CMPSD 
+		|	CMPXCHG <Operand> ',' <Operand>
+		|	CMPXCHG486 <Operand> ',' <Operand> 
+		|	CMPXCHG8B <Operand>
+		|	CPUID
+		|	DAA
+		|	DAS
+		|	DEC <Operand> 
+		|	DIV <Operand> 
+		|	EMMS
+		|	ENTER <Operand> ',' <Operand> 
+		|	F2XM1  
+		|	FABS 
+		|	FADD <Operand>  
+		|	FADD <Operand> ',' <Operand> 
+		|	FADD TO <Operand> 
+		|	FADDP <Operand> 
+		|	FADDP <Operand> ',' <Operand> 
+		|	FBLD <Operand> 
+		|	FBSTP <Operand> 
+		|	FCHS
+		|	FCLEX  
+		|	FNCLEX
+		|	FCMOVB <Operand> 
+		|	FCMOVB <Operand> ',' <Operand> 
+		|	FCMOVBE <Operand> 
+		|	FCMOVBE <Operand> ',' <Operand> 
+		|	FCMOVE <Operand> 
+		|	FCMOVE <Operand> ',' <Operand> 
+		|	FCMOVNB <Operand> 
+		|	FCMOVNB <Operand> ',' <Operand> 
+		|	FCMOVNBE <Operand> 
+		|	FCMOVNBE <Operand>  ',' <Operand> 
+		|	FCMOVNE <Operand> 
+		|	FCMOVNE <Operand> ',' <Operand> 
+		|	FCMOVNU <Operand>  
+		|	FCMOVNU <Operand>  ',' <Operand> 
+		|	FCMOVU <Operand> 
+		|	FCMOVU <Operand>  ',' <Operand> 
+		|	FCOM <Operand>  
+		|	FCOM <Operand> ',' <Operand> 
+		|	FCOMP <Operand> 
+		|	FCOMP <Operand> ',' <Operand> 
+		|	FCOMPP 
+		|	FCOMI <Operand> 
+		|	FCOMI <Operand> ',' <Operand> 
+		|	FCOMIP <Operand>  
+		|	FCOMIP <Operand> ',' <Operand> 
+		|	FCOS 
+		|	FDECSTP
+		|	FDISI
+		|	FNDISI
+		|	FENI
+		|	FNENI
+		|	FDIV <Operand> 
+		|	FDIV <Operand> ',' <Operand> 
+		|	FDIV TO <Operand> 
+		|	FDIVR <Operand>  
+		|	FDIVR <Operand> ',' <Operand> 
+		|	FDIVR TO <Operand> 
+		|	FDIVP <Operand> 
+		|	FDIVP <Operand>  ',' <Operand> 
+		|	FDIVRP <Operand> 
+		|	FDIVRP <Operand> ',' <Operand> 
+		|	FFREE <Operand> 
+		|	FIADD <Operand> 
+		|	FICOM <Operand> 
+		|	FICOMP <Operand> 
+		|	FIDIV <Operand> 
+		|	FIDIVR <Operand> 
+		|	FILD <Operand> 
+		|	FIST <Operand> 
+		|	FISTP <Operand>  
+		|	FIMUL <Operand>  
+		|	FINCSTP 
+		|	FINIT 
+		|	FNINIT 
+		|	FISUB <Operand>  
+		|	FISUBR <Operand>  
+		|	FLD <Operand>  
+		|	FLD1 
+		|	FLDL2E 
+		|	FLDL2T 
+		|	FLDLG2
+		|	FLDLN2 
+		|	FLDPI 
+		|	FLDZ 
+		|	FLDCW <Operand> 
+		|	FLDENV <Operand> 
+		|	FMUL <Operand> 
+		|	FMUL <Operand> ',' <Operand> 
+		|	FMUL TO <Operand> 
+		|	FMULP <Operand> 
+		|	FMULP <Operand> ',' <Operand> 
+		|	FNOP 
+		|	FPATAN  
+		|	FPTAN    
+		|	FPREM  
+		|	FPREM1 
+		|	FRNDINT   
+		|	FSAVE <Operand> 
+		|	FNSAVE <Operand> 
+		|	FRSTOR <Operand> 
+		|	FSCALE  
+		|	FSETPM  
+		|	FSIN     
+		|	FSINCOS  
+		|	FSQRT   
+		|	FST <Operand> 
+		|	FSTP <Operand> 
+		|	FSTCW <Operand> 
+		|	FNSTCW <Operand> 
+		|	FSTENV <Operand> 
+		|	FNSTENV <Operand> 
+		|	FSTSW <Operand> 
+		|	FNSTSW <Operand> 
+		|	FSUB <Operand> 
+		|	FSUB <Operand> ',' <Operand> 
+		|	FSUB TO <Operand> 
+		|	FSUBR <Operand> 	 
+		|	FSUBR <Operand> ',' <Operand> 
+		|	FSUBR TO <Operand>  
+		|	FSUBP <Operand> 
+		|	FSUBP <Operand> ',' <Operand> 
+		|	FSUBRP <Operand> 
+		|	FSUBRP <Operand> ',' <Operand> 
+		|	FTST 
+		|	FUCOM <Operand>
+		|	FUCOM <Operand> ',' <Operand> 
+		|	FUCOMP <Operand>  
+		|	FUCOMP <Operand> ',' <Operand> 
+		|	FUCOMPP
+		|	FUCOMI <Operand> 
+		|	FUCOMI <Operand> ',' <Operand> 
+		|	FUCOMIP <Operand> 
+		|	FUCOMIP <Operand> ',' <Operand> 
+		|	FXAM
+		|	FXCH 
+		|	FXCH <Operand> 
+		|	FXCH <Operand> ',' <Operand> 
+		|	FXTRACT
+		|	FYL2X   
+		|	FYL2XP1  
+		|	HLT  
+		|	IBTS <Operand> ',' <Operand> 
+		|	IDIV <Operand> 
+		|	IMUL <Operand> 
+		|	IMUL <Operand> ',' <Operand> 
+		|	IN <Operand> ',' <Operand> 
+		|	INC <Operand> 
+		|	INSB
+		|	INSW  
+		|	INSD  
+		|	INT <Operand>
+		|	INT1  
+		|	ICEBP    
+		|	INT01   
+		|	INT3     
+		|	INTO    
+		|	INVD   
+		|	INVLPG <Operand> 
+		|	IRET  
+		|	IRETW    
+		|	IRETD 
+		|	JCXZ <Operand> 
+		|	JECXZ <Operand> 
+		|	JMP <Operand> 
+		|	JMP SHORT <Operand> 
+		|	JMP <Operand> ':' <Operand> 
+		|	JMP FAR <Operand> 
+		|	Jcc <Operand> 
+		|	Jcc NEAR <Operand> 
+		|	LAHF
+		|	LAR <Operand> ',' <Operand> 
+		|	LDS <Operand> ',' <Operand>  
+		|	LES <Operand> ',' <Operand> 
+		|	LFS <Operand> ',' <Operand>
+		|	LGS <Operand> ',' <Operand> 
+		|	LSS <Operand> ',' <Operand> 
+		|	LEA <Operand> ',' <Operand> 
+		|	LEAVE
+		|	LGDT <Operand>  
+		|	LIDT <Operand>  
+		|	LLDT <Operand> 
+		|	LMSW <Operand> 
+		|	LOADALL 
+		|	LOADALL286 
+		|	LODSB  
+		|	LODSW 
+		|	LODSD 
+		|	LOOP <Operand> 
+		|	LOOP <Operand> ',' <Operand> 
+		|	LOOPE <Operand> 
+		|	LOOPE <Operand> ',' <Operand> 
+		|	LOOPZ<Operand> 
+		|	LOOPZ <Operand> ',' <Operand> 
+		|	LOOPNE <Operand> 
+		|	LOOPNE <Operand> ',' <Operand> 
+		|	LOOPNZ <Operand> 
+		|	LOOPNZ <Operand> ',' <Operand>  
+		|	LSL <Operand> ',' <Operand> 
+		|	LTR <Operand> 
+		|	MOV <Operand> ',' <Operand> 
+		|	MOVD <Operand> ',' <Operand>  
+		|	MOVQ <Operand> ',' <Operand> 
+		|	MOVSB  
+		|	MOVSW  
+		|	MOVSD 
+		|	MOVSX <Operand> ',' <Operand>  
+		|	MOVZX <Operand> ',' <Operand> 
+		|	MUL<Operand> 
+		|	NEG <Operand> 
+		|	NOT <Operand> 
+		|	NOP  
+		|	OR <Operand> ',' <Operand> 
+		|	OUT <Operand> ',' <Operand> 
+		|	OUTSB  
+		|	OUTSW  
+		|	OUTSD 
+		|	PACKSSDW <Operand> ',' <Operand> 
+		|	PACKSSWB <Operand> ',' <Operand> 
+		|	PACKUSWB <Operand> ',' <Operand> 
+		|	PADDB <Operand> ',' <Operand> 
+		|	PADDW <Operand> ',' <Operand> 
+		|	PADDD <Operand> ',' <Operand> 
+		|	PADDSB <Operand> ',' <Operand>  
+		|	PADDSW <Operand> ',' <Operand> 
+		|	PADDUSB <Operand> ',' <Operand> 
+		|	PADDUSW <Operand> ',' <Operand> 
+		|	PADDSIW <Operand> ',' <Operand> 
+		|	PAND <Operand> ',' <Operand> 
+		|	PANDN <Operand> ',' <Operand> 
+		|	PAVEB <Operand> ',' <Operand> 
+		|	PCMPEQB <Operand> ',' <Operand> 
+		|	PCMPEQW <Operand> ',' <Operand> 
+		|	PCMPEQD <Operand> ',' <Operand> 
+		|	PCMPGTB <Operand> ',' <Operand> 
+		|	PCMPGTW <Operand> ',' <Operand> 
+		|	PCMPGTD <Operand> ',' <Operand> 
+		|	PDISTIB <Operand> ',' <Operand> 
+		|	PMACHRIW <Operand> ',' <Operand> 
+		|	PMADDWD <Operand> ',' <Operand> 
+		|	PMAGW <Operand> ',' <Operand> 
+		|	PMULHRW <Operand> ',' <Operand> 
+		|	PMULHRIW <Operand> ',' <Operand> 
+		|	PMULHW <Operand> ',' <Operand> 
+		|	PMULLW <Operand> ',' <Operand> 
+		|	PMVZB <Operand> ',' <Operand> 
+		|	PMVNZB <Operand> ',' <Operand> 
+		|	PMVLZB <Operand> ',' <Operand> 
+		|	PMVGEZB <Operand> ',' <Operand> 
+		|	POP <Operand> 
+		|	POPA   
+		|	POPAW    
+		|	POPAD     
+		|	POPF    
+		|	POPFW        
+		|	POPFD   
+		|	POR <Operand> ',' <Operand> 
+		|	PSLLW <Operand> ',' <Operand> 
+		|	PSLLD <Operand> ',' <Operand> 
+		|	PSLLQ <Operand> ',' <Operand> 
+		|	PSRAW <Operand> ',' <Operand> 
+		|	PSRAD <Operand> ',' <Operand>  
+		|	PSRLW <Operand> ',' <Operand> 
+		|	PSRLD <Operand> ',' <Operand> 
+		|	PSRLQ <Operand> ',' <Operand> 
+		|	PSUBB <Operand> ',' <Operand> 
+		|	PSUBW <Operand> ',' <Operand> 
+		|	PSUBD <Operand> ',' <Operand> 
+		|	PSUBSB <Operand> ',' <Operand> 
+		|	PSUBSW <Operand> ',' <Operand> 
+		|	PSUBUSB <Operand> ',' <Operand>  
+		|	PSUBUSW <Operand> ',' <Operand> 
+		|	PSUBSIW <Operand> ',' <Operand> 
+		|	PUNPCKHBW <Operand> ',' <Operand> 
+		|	PUNPCKHWD <Operand> ',' <Operand> 
+		|	PUNPCKHDQ <Operand> ',' <Operand> 
+		|	PUNPCKLBW <Operand> ',' <Operand> 
+		|	PUNPCKLWD <Operand> ',' <Operand> 
+		|	PUNPCKLDQ <Operand> ',' <Operand> 
+		|	PUSH <Operand> 
+		|	PUSHA   
+		|	PUSHAD   
+		|	PUSHAW  
+		|	PUSHF   
+		|	PUSHFD   
+		|	PUSHFW 
+		|	PXOR <Operand> ',' <Operand> 
+		|	RCL <Operand> ',' <Operand> 
+		|	RCR <Operand> ',' <Operand> 
+		|	RDMSR    
+		|	RDPMC       
+		|	RDTSC   
+		|	RET   
+		|	RET <Operand> 
+		|	RETF    
+		|	RETF <Operand> 
+		|	RETN 
+		|	RETN <Operand> 
+		|	ROL <Operand> ',' <Operand> 
+		|	ROR <Operand> ',' <Operand> 
+		|	RSM  
+		|	SAHF  
+		|	SAL <Operand> ',' <Operand> 
+		|	SAR <Operand> ',' <Operand> 
+		|	SALC 
+		|	SBB <Operand> ',' <Operand> 
+		|	SCASB   
+		|	SCASW  
+		|	SCASD    
+		|	SETcc <Operand> 
+		|	SGDT <Operand> 
+		|	SIDT <Operand> 
+		|	SLDT <Operand> 
+		|	SHL <Operand> ',' <Operand> 
+		|	SHR <Operand> ',' <Operand> 
+		|	SHLD <Operand> ',' <Operand> ',' <Operand> 
+		|	SHRD <Operand> ',' <Operand> ',' <Operand> 
+		|	SMI 
+		|	SMSW <Operand> 
+		|	STC   
+		|	STD   
+		|	STI 
+		|	STOSB  
+		|	STOSW   
+		|	STOSD    
+		|	STR <Operand> 
+		|	SUB <Operand> ',' <Operand> 
+		|	TEST <Operand> ',' <Operand> 
+		|	UMOV <Operand> ',' <Operand> 
+		|	VERR <Operand> 
+		|	VERW <Operand> 
+		|	WAIT 
+		|	WBINVD    
+		|	WRMSR   
+		|	XADD <Operand> ',' <Operand> 
+		|	XBTS <Operand> ',' <Operand>  
+		|	XCHG <Operand> ',' <Operand> 
+		|	XLATB 
+		|	XOR <Operand> ',' <Operand> 

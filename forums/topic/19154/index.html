@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Raw Bytes to Bitmap - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19154" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19154">Raw Bytes to Bitmap</a></p>
+   <div class="post" id="post-148080">
+    <div class="subject"><a href="#post-148080">Raw Bytes to Bitmap</a></div>
+    <div class="body">I'm having a problem with converting raw bytes which are stored in a specific format in a file to a Bitmap. The Bitmap gets created with no errors but it isn't being displayed. I tried a normal bitmap and it works perfectly<br /><br />Firstly heres the working code with loading a normal bitmap.<br /><br /><div class="quote"><br />HBITMAP bmp;<br />char *file = &quot;apple.bmp&quot;;<br /><br />bmp = LoadImage(0, file, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);<br />/* ImageBox is a handle to a static image control */<br />SendMessage(ImageBox, STM_SETIMAGE, IMAGE_BITMAP, bmp);<br /><br /></div><br /><br />This works perfectly.<br /><br />Now for the raw bytes<br /><div class="quote"><br />HBITMAP bmp;<br />unsigned short bleh[44*44];<br />/* Get the bytes from a file */<br /><br />bmp = CreateBitmap(44, 44, 3, 5, &amp;bleh);<br />SendMessage(ImageBox, STM_SETIMAGE, IMAGE_BITMAP, bmp);<br /></div><br /><br />I can't seem to get this to work, it seems to create the bitmap (no error) but not being displayed.<br /><br />I also tried<br /><div class="quote">SetBitmapBits(bmp, 44*44*2, &amp;bleh);</div><br />but not success either.<br /><br />Can anyone give me a hand please? Sorry its in C and not asm though, but this is only site I could find on Win32 API.<br /><br />I also tried browsing the forums (doing a search) and there was a CreateCompatableBitmap() option but this is not what I need because I'm not dealing with Memory Devices.<br /><br />Also the raw image format is size 44 x 44 15 bit RGB</div>
+    <div class="meta">Posted on 2004-08-14 07:57:31 by rorra</div>
+   </div>
+   <div class="post" id="post-148082">
+    <div class="subject"><a href="#post-148082">Raw Bytes to Bitmap</a></div>
+    <div class="body">3 color planes and 5 bpp ???<br /><br />You might consider using 32 bpp it is much easier to work with. And only one color plane, it has nothing to do with the bits per color. Also the scan lines, not the pixels, need to be WORD aligned, at 15 bpp that's a bit tough I think it works out to 41 WORD values+4 bits. Remember also that colors are reversed and shifted in raw pixel format (BSWAP and SHR 8) so a pixel with a color value of 00AABBCC would be 00CCBBAA in raw format....<br /><br /><pre><code>bitmapbits DD 44*44 DUP &#40;008080FFh&#41;<br /><br />invoke CreateBitmap,44,44,1,32,offset bitmapbits<br />invoke SendDlgItemMessage, &#91;hwnd&#93;, 1001, STM_SETIMAGE, IMAGE_BITMAP, eax</code></pre><br /><br />Will create a bluish bitmap. You can substitute the 008080FFh for an array of color values, remembering that it is in the format 0RGB not the 0BGR that you are used to.</div>
+    <div class="meta">Posted on 2004-08-14 08:49:55 by donkey</div>
+   </div>
+   <div class="post" id="post-148088">
+    <div class="subject"><a href="#post-148088">Raw Bytes to Bitmap</a></div>
+    <div class="body">Thanks very much. Converted it to 32 bit and it worked perfectly!</div>
+    <div class="meta">Posted on 2004-08-14 09:31:44 by rorra</div>
+   </div>
+   <div class="post" id="post-148193">
+    <div class="subject"><a href="#post-148193">Strange Memory Leak</a></div>
+    <div class="body">Ok I've run into another problem. <br />I have a listbox of numbers from 0-65535 and I have a Static Image Box used to display an image. When I select an entry in the listbox it looks up the number and loads the bitmap from file. I'm explictly deleting the Bitmap everytime I load a new one into the imagebox but while I'm scrolling through the listbox the application gathers up memory like crazy. It can gain up to 30 megs (and it starts off at only 300kb). The really strange thing is when I minimise the application the entire memory that was gathered is deallocated and it goes back down to 300kb memory consumption. When I maximise it and begin scrolling it gathers up again (starting at 300kb). I was wondering if this was a Windows problem or is it me? I know I'm deallocating all the data when I'm loading etc. and I'm nearly sure it has something to do with the display otherwise windows wouldn't deallocate it.<br /><br />Heres my little code segment that deletes:<br /><br /><div class="quote"><br /><br />/* This just creates the imagebox */<br /><br />HWND CreateImageBox(DWORD x, DWORD y, DWORD nWidth, DWORD nHeight, HWND hWndParent,<br />				    HMENU hMenu)<br />{<br />	DWORD style = SS_BITMAP | WS_CHILD | WS_VISIBLE;<br />	return CreateWindowEx(0, &quot;STATIC&quot;, 0, style, x, y, nWidth, nHeight, <br />		hWndParent, hMenu, (HINSTANCE)hWndParent, NULL);<br />}<br /><br />/* Creates the listbox */<br />HWND CreateListBox(DWORD x, DWORD y, DWORD nWidth, DWORD nHeight, HWND hWndParent,<br />				    HMENU hMenu)<br />{<br />	DWORD style = WS_VSCROLL | WS_VISIBLE | WS_BORDER | WS_CHILD | LBS_NOTIFY ;<br />	style |= LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | LBS_DISABLENOSCROLL;<br />	return CreateWindowEx(WS_EX_CLIENTEDGE, &quot;LISTBOX&quot;, 0, style, x, y, nWidth, nHeight, <br />		hWndParent, hMenu, (HINSTANCE)hWndParent, NULL);<br />}<br /><br /><br />/* Heres the deleting/allocating */<br /><br />		case WM_COMMAND:<br />			if (LOWORD(wParam) == IDC_LISTBOX)<br />			{<br />				if (HIWORD(wParam) == LBN_SELCHANGE)<br />				{<br />					index  = SendMessage (hwndList, LB_GETCURSEL, 0, 0);<br />					length = SendMessage (hwndList, LB_GETTEXTLEN, index, 0) + 1;<br />					pEntry = calloc (length, sizeof (TCHAR)) ;<br />					SendMessage (hwndList, LB_GETTEXT, index, (LPARAM)pEntry);<br /><br />					bmp = SendMessage(hImageBox, STM_GETIMAGE, IMAGE_BITMAP, 0);<br />					if (bmp)<br />						DeleteObject(bmp);<br />					bmp = /* function to get the bitmap from file */<br />					bmp = SendMessage(hImageBox, STM_SETIMAGE, IMAGE_BITMAP, bmp);<br />					free(pEntry);<br />				}<br />			}<br />		break;<br />		<br /><br /></div><br /><br />Thanks again.</div>
+    <div class="meta">Posted on 2004-08-16 09:49:00 by rorra</div>
+   </div>
+   <div class="post" id="post-148194">
+    <div class="subject"><a href="#post-148194">Raw Bytes to Bitmap</a></div>
+    <div class="body">Hm, try checking the return value from DeleteObject to see if the bitmap is really deleted - perhaps it can't be deleted while it is selected into the static control?</div>
+    <div class="meta">Posted on 2004-08-16 10:02:36 by f0dder</div>
+   </div>
+   <div class="post" id="post-148195">
+    <div class="subject"><a href="#post-148195">Raw Bytes to Bitmap</a></div>
+    <div class="body">You are correct it wasn't deleting it properly. I tried making two Bitmap handles to store the old bitmap with GETIMAGE, setting the image static box to the new bitmap then deleting the old, however it still isn't getting deleted. Perhaps the new bitmap needs to be written to the Static box first before it released the old one? Is there any event I can use that will tell me that the window has finished redrawing?<br /><br /><div class="quote"><br />					bmpold = SendMessage(hImageBox, STM_GETIMAGE, IMAGE_BITMAP, 0);<br /><br />					bmp = /* read bitmap function */<br />					bmp = SendMessage(hImageBox, STM_SETIMAGE, IMAGE_BITMAP, bmp);<br />					if (bmpold)<br />					{<br />						if (DeleteObject(bmpold) != 0)<br />							printError(&quot;DObject&quot;); <br />					}<br /></div></div>
+    <div class="meta">Posted on 2004-08-16 12:32:29 by rorra</div>
+   </div>
+   <div class="post" id="post-148196">
+    <div class="subject"><a href="#post-148196">Raw Bytes to Bitmap</a></div>
+    <div class="body">Try STM_SETIMAGE with 0 instead of <strong>bmp</strong> parameter?</div>
+    <div class="meta">Posted on 2004-08-16 12:36:57 by f0dder</div>
+   </div>
+   <div class="post" id="post-148197">
+    <div class="subject"><a href="#post-148197">Raw Bytes to Bitmap</a></div>
+    <div class="body">Tried that also, the DeleteObject() won't work at all, it keeps returning non zero which means the resource wasn't deleted! Windows must be locking it somehow.</div>
+    <div class="meta">Posted on 2004-08-16 13:13:07 by rorra</div>
+   </div>
+   <div class="post" id="post-148198">
+    <div class="subject"><a href="#post-148198">Raw Bytes to Bitmap</a></div>
+    <div class="body">Hm, try DeleteObject without STM_SETIMAGE, to see if you can delete the bitmap at all? If that works, perhaps STM_GETIMAGE before storing any image, and obj=STM_GETIMAGE, STM_SETIMAGE(original), DeleteObject(obj) ?</div>
+    <div class="meta">Posted on 2004-08-16 13:23:57 by f0dder</div>
+   </div>
+   <div class="post" id="post-148199">
+    <div class="subject"><a href="#post-148199">Raw Bytes to Bitmap</a></div>
+    <div class="body">I don't know, once the bitmap is returned from my function that creates it, it won't even let me delete it. I'll have to look into it see whats the problem. Thanks for the effort.</div>
+    <div class="meta">Posted on 2004-08-16 13:55:28 by rorra</div>
+   </div>
+  </div>
+ </body>
+</html>

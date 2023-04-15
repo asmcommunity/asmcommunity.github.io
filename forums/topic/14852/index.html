@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>LTR command. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14852" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=14852">LTR command.</a></p>
+   <div class="post" id="post-115230">
+    <div class="subject"><a href="#post-115230">LTR command.</a></div>
+    <div class="body">Hello all.<br /><br />Tell me about the purpose of 'LTR(load task register)' command.<br />I don't know why LTR command used.<br />In the x86 datasheets, they described LTR command generally is used during system initialization.<br />But, i dont know when the task register(stored during system initialization) is used after setting up..<br /><br />In my codes, i just jumped to TSS32 DESCRIPTOR right away without setting initial TASK REGISTER value.<br />Afterwards, my program was crushed.<br />So, i set the initial TASK REGISTER same as TSS32 DESCRIPTOR. (in my codes, only one TSS32 descriptor exist)<br />And, this codes work okay without no errors!<br />why..????? why should i set the initial task register value???<br /><br />thankyou for reading.<br />regards..</div>
+    <div class="meta">Posted on 2003-08-24 10:06:49 by Yeori</div>
+   </div>
+   <div class="post" id="post-115286">
+    <div class="subject"><a href="#post-115286">LTR command.</a></div>
+    <div class="body">you know, that task registers are just selectors of gdt-entries with the flags set as tss. by that register the cpu knows to what segment the current taskstate has to be duped to.<br />i handle things that way in my os:<br />i initialize the complete system with all its hardware and paging-thingys. then i reserve some memory for the tss of the system (the os-task) and set up a gdt-entry for that place as tss. and load that selector with ltr - the cpu now knows where to store the taskstate on the first taskswitch.<br />when there is just one task, <strong>never</strong> jump/switch to the current tss (i.e. current tss != new tss), it will cause a gpf.</div>
+    <div class="meta">Posted on 2003-08-24 14:01:45 by hartyl</div>
+   </div>
+   <div class="post" id="post-115311">
+    <div class="subject"><a href="#post-115311">LTR command.</a></div>
+    <div class="body">Is the TSS descriptor(which was loaded by 'LTR' instruction during system initialization) never used again???<br /><br />and, How many TSS descriptors are necessary to complete the multi-tasking?</div>
+    <div class="meta">Posted on 2003-08-24 19:03:18 by Yeori</div>
+   </div>
+   <div class="post" id="post-115449">
+    <div class="subject"><a href="#post-115449">LTR command.</a></div>
+    <div class="body">well, again from beginning (i've written half of that text before my system crashed...):<br />i'll start off the basics: a tss (taskstate segment) is a piece of memory (at least 104 bytes) containing the information (registers, cr3, stacks for other previlege levels) of <strong>one</strong> task. a tss (taskstate selector) is a gdt-entry (i don't know if ldt also, but i don't believe). that entry must have some bits set to make it a 32bit tss. the base of that entry &quot;points&quot; to a piece of memory reserved for a task where the cpu can store te taskstate to.<br />now, here comes the basic multitasking (the simple one):<br />the cpu has some built in features to make an easy taskswitch.<br />- create a ts-selector and reserve enough memory for the taskstate. load the task-register with that tss (with the ltr-instruction).<br />- make some more tasks; each one needs its own ts-selector and ts-segment. when you create the tasks, you have to kind of initialize that task. i.e. set the eip-value to the entry-point, set cs, ds, ss, esp, eflags, maybe cr3<br />- now, to cause a taskswitch make an intersegmented jump to a tss (jmp tss:0x00000000), or its also possible to make that with an iret-instruction when the nt-flag of the elfags-register is set.<br />- the make the multitasking complete you need an external trigger that causes that taskswitch, usually you use a timer at 100 or 1000Hz. the timer-handler switches to the next task each time.<br /><br />backgrounds of the taskswitch:<br />the taskregister holds the currently used tss. if a taskswitch is caused the cpu transfers (almost) all its information into the memory and gets the new task-info. so, say you have that code:<br /><pre><code><br />mov ax,0x0030<br />ltr ax<br />jmp 0x0038&#58;0x00000000<br /></code></pre><br />assuming 0x0030 and 0x0038 are tss. the ltr-instruction loads the value of ax (0x0030) into the task-register. 0x0030 and 0x0038 are gdt-entries that &quot;point&quot; to at least 104 bytes memory the cpu can use (each one to a seperate).<br />when the cpu executes the jump-instruction following happens:<br />- all taskstate-information is stored to the current tss (which holds the task-register)<br />- the new task-register is loaded (0x0038 in that case)<br />- all taskstate-information is loaded from the new tss<br />- the execution continues for the new task, the old task will continue executing if you make a jump to 0x0030<br /><br />you see, it's damn easy since you just need tss (as many as there are tasks) and jump the the selectors - everything else does the cpu.<br />i hope that essay helped.</div>
+    <div class="meta">Posted on 2003-08-25 16:19:06 by hartyl</div>
+   </div>
+   <div class="post" id="post-115604">
+    <div class="subject"><a href="#post-115604">LTR command.</a></div>
+    <div class="body">I did it!<br /><br />Four threads run okay within my poor os.. :)<br />Thank you!</div>
+    <div class="meta">Posted on 2003-08-26 15:29:10 by Yeori</div>
+   </div>
+   <div class="post" id="post-115605">
+    <div class="subject"><a href="#post-115605">LTR command.</a></div>
+    <div class="body">congrats, man; this is a big step in the system-development.<br />i've reimplemented it im my paging-approach of my system. i have 256 tasks running... :cool:</div>
+    <div class="meta">Posted on 2003-08-26 15:33:41 by hartyl</div>
+   </div>
+   <div class="post" id="post-117236">
+    <div class="subject"><a href="#post-117236">LTR command.</a></div>
+    <div class="body">You both are The Greatest !!! Everything  you done is before me and it sounds like black magic. :(</div>
+    <div class="meta">Posted on 2003-09-06 11:01:45 by etn</div>
+   </div>
+   <div class="post" id="post-117260">
+    <div class="subject"><a href="#post-117260">LTR command.</a></div>
+    <div class="body">thanks man, but don't worry. everybody started off from zero. i was in the same situation as you are when i begun developing. things get clearer when you read into them and make the first tries. i didn't know anything of what i'm doing now when i started coding.</div>
+    <div class="meta">Posted on 2003-09-06 14:33:16 by hartyl</div>
+   </div>
+  </div>
+ </body>
+</html>

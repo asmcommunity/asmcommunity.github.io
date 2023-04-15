@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>What are whe trying to do? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17072" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=17072">What are whe trying to do?</a></p>
+   <div class="post" id="post-132431">
+    <div class="subject"><a href="#post-132431">What are whe trying to do?</a></div>
+    <div class="body">(Sorry my pour English, i can read but i barely write, xD)<br /><br />What are whe trying to do?<br /><br />Hello, I?ve been reading your book &quot;Inside ole&quot;. I'm barely reading the 2nd chapter and i have questions to make.<br /><br />BOOL CKoalaA::Init(void)<br />    {<br />    HRESULT     hr;<br /><br />    //Create our interface<br />    m_pImpIKoala=new CImpIKoala_A(this);<br /><br />    if (NULL==m_pImpIKoala)<br />        return FALSE;<br /><br />    hr=CreateAnimal(this, IID_IUnknown, (void **)&amp;m_pIUnknown);<br /><br />    if (FAILED(hr))<br />        return FALSE;<br /><br />    hr=m_pIUnknown-&gt;QueryInterface(IID_IAnimal, (void **)&amp;m_pIAnimal);<br />		//It will cause increment in the CKoala::m_cRef<br /><br />    if (FAILED(hr))<br />        return FALSE;<br /><br />    m_cRef--;<br /><br />    return TRUE;<br />    }<br />The code before where extracted from the example of &quot;inside ole&quot; Chapter 2 Objects and Interfaces:Implementing Reusability.<br />When i first look at this code i didn?t understand what where we trying to do with the m_cRef--.<br />Then looking up the the CAnimal i understand that it is to decrement the m_cRef that where been incremented in the IUnknown::QueryInterface() non-delegation CAnimal interface, by calling the IUnknown::QueryInterface delegation CAnimal, that its calling our CKoala::QueryInterface.<br />So that point its cleared.<br />											<br /><br /><br />My second point is about the next pieces of code:<br /><br />DWORD CKoalaA::Release(void)<br />    {<br />    if (0!=--m_cRef)<br />        return m_cRef;<br /><br />    m_cRef++;       //Artificial count preventing reentrancy<br />    delete this;<br />    return 0;<br />    }<br /><br />CKoalaA::~CKoalaA(void)<br />    {<br />    /*<br />     * Since this KoalaA is not aggregatable, we can use the<br />     * 32-bit rule under Win16 as well.<br />     */<br />    AddRef();<br />    ReleaseInterface(m_pIAnimal);<br /><br />    ReleaseInterface(m_pIUnknown);<br />    DeleteInterfaceImp(m_pImpIKoala);<br />    return;<br />    }<br /><br />DWORD CImpIAnimal_A::Release(void)<br />    {<br />    --m_cRef;<br />    return m_pUnkOuter-&gt;Release();<br />		//Delegating to the CKoala::Release<br />    }<br /><br />Well, at firt time i ask my self what its the m_cRef++ in the CKoala::Relase(void), then i realize that the delete this will make execute the CKoala::~CKoala which will try to delete the interface m_pIAnimal, and i see other problem: What its the AddRef(); before delete the interface??<br />Whell i mentally start emulating the behavior to see what happen, and i found that the key of all where the ReleaseInterface(m_pIAnimal) that will call the m_pIAnimal-&gt;Release(), which will delegate to the CKoala::Release.<br /><br />so i realize that the m_cRef++  folowed by the AddRef(), when the &quot;delete this&quot; call CKoala:~CKoala, will raise the value of m_cRef up to 2 (because at this time m_cRef == 0) and the m_pIAnimal-&gt;Release will decrement m_cRef (m_cRef == 1) and this will no cause reentry to the code that call &quot;delete this&quot; in our CKoala::Release().<br /><br />So i understand that both lines (AddRef() in CKoala::~CKoala, and m_cRef++ in CKoala::Release) are added in consequence to the call m_pIAnimal-&gt;Release() in CKoala::~CKoala.<br /><br />But WHY did we want to call m_pIAnimal-&gt;Release() if we know that this will only delegate to CKoala::Release, and how whe know that at this time CKoala::m_cRef it equal to 2, it will only decrement the CKoala::m_cRef, so the only effect of call m_pIAnimal-&gt;Release is decrement CKoala::m_cRef<br /><br />Can we do this instead that?:<br /><br />DWORD CKoalaA::Release(void)<br />    {<br />    if (0!=--m_cRef)<br />        return m_cRef;<br /><br />//    m_cRef++;       //Artificial count preventing reentrancy<br />    delete this;<br />    return 0;<br />    }<br /><br />CKoalaA::~CKoalaA(void)<br />    {<br />    /*<br />     * Since this KoalaA is not aggregatable, we can use the<br />     * 32-bit rule under Win16 as well.<br />     */<br />//    AddRef();<br />//    ReleaseInterface(m_pIAnimal);<br /><br />    ReleaseInterface(m_pIUnknown);<br />    DeleteInterfaceImp(m_pImpIKoala);<br />    return;<br />    }<br /><br />DWORD CImpIAnimal_A::Release(void)<br />    {<br />    --m_cRef;<br />    return m_pUnkOuter-&gt;Release();<br />		//Delegating to the CKoala::Release<br />    }<br />So my question is: &quot;What are we trying to do adding these lines?&quot;.<br /><br />That its my question, and i can not continue reading the book with full trust in my self of what i understand until someone answer me.<br /><br />__________________Hugo Mauricio Prado Macat<br /><br />you can contact me at:http://www.asmcommunity.net/board/cryptmail.php?tauntspiders=in.your.face@nomail.for.you&amp;id=140260d4497cdea247f787a656995019,http://www.asmcommunity.net/board/cryptmail.php?tauntspiders=in.your.face@nomail.for.you&amp;id=aca87bf9aed342d0a4d7b11b9e92193e<br />#ffaabb</div>
+    <div class="meta">Posted on 2004-02-03 16:51:04 by mauricioprado</div>
+   </div>
+   <div class="post" id="post-132445">
+    <div class="subject"><a href="#post-132445">What are whe trying to do?</a></div>
+    <div class="body">Have you noticed that this is an ASM forum ?<br />and COM quizz should be also in ASM :-?</div>
+    <div class="meta">Posted on 2004-02-03 21:21:55 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-132475">
+    <div class="subject"><a href="#post-132475">What are whe trying to do?</a></div>
+    <div class="body">Afternoon, mauricioprado.<br /><br />Whose book are you talking about?<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2004-02-04 05:14:39 by Scronty</div>
+   </div>
+   <div class="post" id="post-132594">
+    <div class="subject"><a href="#post-132594">What are whe trying to do?</a></div>
+    <div class="body">I know that is in ASM but the code its not complex, i think anyone that know any of COM should understand, much more if you know COM because all the text about that is explained in c/c++.<br /><br />If you or someone else steel think that i should traduce the code to asm to understand, please ask me to do it.<br /><br />(sorry my english)<br /><br />__________________Hugo Mauricio Prado Macat</div>
+    <div class="meta">Posted on 2004-02-04 22:26:36 by mauricioprado</div>
+   </div>
+   <div class="post" id="post-132639">
+    <div class="subject"><a href="#post-132639">What are whe trying to do?</a></div>
+    <div class="body">You dont need to traduce the code to asm to understand it, but<br />the FOCUS of this FORUM is for the ASM PROGRAMMING. Try to find at Google some OLE programming forum in C++ or LEARN Win32ASM, wich are IMO, much better.</div>
+    <div class="meta">Posted on 2004-02-05 07:15:06 by Opcode</div>
+   </div>
+   <div class="post" id="post-132863">
+    <div class="subject"><a href="#post-132863">What are whe trying to do?</a></div>
+    <div class="body">I known very much of win32asm, but i wanna to lear COM and i found a book explained in c++, so i'm learning in c fist to can apply in my asm programs<br /><br />(sorry my english);</div>
+    <div class="meta">Posted on 2004-02-07 21:46:41 by mauricioprado</div>
+   </div>
+   <div class="post" id="post-132864">
+    <div class="subject"><a href="#post-132864">What are whe trying to do?</a></div>
+    <div class="body">by the way, did any have a GOOD link to a COM documentation for ASM?</div>
+    <div class="meta">Posted on 2004-02-07 21:48:44 by mauricioprado</div>
+   </div>
+   <div class="post" id="post-132993">
+    <div class="subject"><a href="#post-132993">What are whe trying to do?</a></div>
+    <div class="body"><a target="_blank" href="http://ourworld.compuserve.com/homepages/ernies_world/a.htm">http://ourworld.compuserve.com/homepages/ernies_world/a.htm</a> <br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=15533">http://www.asmcommunity.net/board/index.php?topic=15533</a> <br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=441">http://www.asmcommunity.net/board/index.php?topic=441</a></div>
+    <div class="meta">Posted on 2004-02-09 07:18:12 by Opcode</div>
+   </div>
+   <div class="post" id="post-133093">
+    <div class="subject"><a href="#post-133093">What are whe trying to do?</a></div>
+    <div class="body">I am not a COM expert, but I think all those ++ and -- are just unnecessary tricks, present because the COM object vtable doesn't have the real destructor pointer in it, and &quot;Release&quot; needs to be used, and there might be some people that don't know they actually shouldn't place destruction code in Release, unless they're sure their object won't get inherited by a newer one. In other words:<br />I think this bunch of C++ code should be cleaned up, and converted like this into asm:<br /><br /><pre><code><br />.code<br /><br />&#91;color=red&#93;include ../CLASS.inc&#91;/color&#93;<br />	<br /><br />&#91;color=blue&#93;class&#91;/color&#93; IUnknown,,COM compatible<br />	virtual QueryInterface&#58;riid,ppvObj<br />	virtual AddRef&#58;<br />	virtual Release&#58;<br />	static 	RefCount dd 0	&#91;color=seagreen&#93;; this is global&#91;/color&#93;<br />&#91;color=blue&#93;endclass&#91;/color&#93;<br /><br />&#91;color=green&#93;IID_IAnimal&#58;&#91;/color&#93;<br />	dd 0BADF00Dh<br />	dw 1111h,2222h<br />	db 1,2,3,4,5,6,7,8	&#91;color=seagreen&#93;; our unique Animal GUID ^_^&#91;/color&#93;<br /><br />class Animal,IUnknown,COM compatible<br />	virtual Release&#58;	&#91;color=seagreen&#93;; override&#91;/color&#93;<br />	virtual Eat&#58;<br />	virtual Sleep&#58;<br />	virtual Miew&#58;<br />endclass<br /><br />		<br />	<br />&#91;color=seagreen&#93;;=====&#91;&#91; IUnknown.funcs &gt;&gt;===\&#91;/color&#93;<br />IUnknown_IUnknown proc me<br />	inc IUnknown_RefCount<br />	ret<br />IUnknown_IUnknown endp<br /><br />IUnknown_$IUnknown proc<br />	dec IUnknown_RefCount<br />	ret<br />IUnknown_$IUnknown endp<br />	<br />IUnknown_QueryInterface proc me,riid,ppvObj	<br />	DoWeSupportGUIDs riid,IID_IAnimal<br />	ret<br />IUnknown_QueryInterface endp<br /><br />IUnknown_AddRef proc me<br />	; hell no<br />	ret<br />IUnknown_AddRef endp<br /><br />IUnknown_Release proc me<br />	DeleteCOM me,IUnknown<br />	ret<br />IUnknown_Release endp<br />&#91;color=seagreen&#93;;=======/<br />;=====&#91;&#91; IAnimal &gt;&gt;===\&#91;/color&#93;<br />Animal_Release proc me<br />	DeleteCOM me,Animal<br />	ret<br />Animal_Release endp<br /><br />Animal_Animal proc me<br />	ret<br />Animal_Animal endp<br />	<br />Animal_$Animal proc me<br />	&#91;color=seagreen&#93;;--&#91; here clean up this object's mess &#93;------\<br />	;....<br />	;--------------------------------------------/&#91;/color&#93;<br />	ret<br />Animal_$Animal endp<br />	<br />Animal_Eat proc me<br />	ret<br />Animal_Eat endp<br /><br />	<br />Animal_Sleep proc me<br />	ret<br />Animal_Sleep endp<br />	<br />Animal_Miew proc me<br />	ret<br />Animal_Miew endp	<br />&#91;color=seagreen&#93;;=======/&#91;/color&#93;<br /></code></pre><br /><br />Easy ^_^</div>
+    <div class="meta">Posted on 2004-02-10 09:29:02 by Ultrano</div>
+   </div>
+   <div class="post" id="post-133670">
+    <div class="subject"><a href="#post-133670">What are whe trying to do?</a></div>
+    <div class="body">Hi Ultrano.<br /><br />currently I wouldnt suggest people creating COM objects using your OOP. The simple reason for this is that real life COM objects &quot;inherit&quot; from multiple abstract base classes (= interfaces), or, more technically spoken, they have several vtables, a feature your OOP doesnt support yet if I remember correctly.<br /><br />Japheth</div>
+    <div class="meta">Posted on 2004-02-16 04:45:14 by japheth</div>
+   </div>
+   <div class="post" id="post-133695">
+    <div class="subject"><a href="#post-133695">What are whe trying to do?</a></div>
+    <div class="body">ok :) anyway, I am not thinking of making COM objects any soon - I'm happy my OOP works perfectly with DirectX , which is important to me now :grin:</div>
+    <div class="meta">Posted on 2004-02-16 08:57:19 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

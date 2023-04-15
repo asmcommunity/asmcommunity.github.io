@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>WSAEnumNetworkEvents -&gt; zero event? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15798" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=15798">WSAEnumNetworkEvents -&gt; zero event?</a></p>
+   <div class="post" id="post-122412">
+    <div class="subject"><a href="#post-122412">WSAEnumNetworkEvents -&gt; zero event?</a></div>
+    <div class="body">hi @all, i have some trouble whit WSAEvents.<br />I searched and found many threads about the events (thx to savage for some code)<br />but it doesnt works correctly:<br /><br />invoke	WSAEventSelect, hServerSock,hEventObject,FD_ACCEPT+FD_READ+FD_CLOSE+FD_WRITE<br />invoke	WSAWaitForMultipleEvents, 1, addr hEventObject, FALSE, INFINITE, FALSE<br />then:<br />invoke WSAEnumNetworkEvents, hServerSock, hEventObject, addr wsaRemoteEvents<br />and i test for events:<br />test wsaRemoteEvents.lNetworkEvents, FD_READ<br />but i got only the FD_ACCES event (8), nothing more!<br />in my debugger i see the first loop (WSAWaitForMultipleEvents)<br />then i connect whith a browser or telnet or another programm (headreq from thomas)<br />and get my FD_ACCES event (i accept)... then  i got a zero event:<br />i see that &quot;wsaRemoteEvents.lNetworkEvents&quot; is zero... but WHAT is zero for a FD_xxx? After this &quot;zero event&quot; there is nothing, when i close my connecting program (telnet, headreq) i got a &quot;zero event&quot; too. <br />I tried to find it out about 2 days... its  possible that i misunderstood something, but my &quot;reading english&quot; is not as bad as my &quot;writing english&quot; ;)<br />some code:<br /><br /><pre><code><br />	<br />invoke WSACreateEvent<br />.if eax==0<br />    invoke MessageBox,0,addr msg_event_error,addr msg_Error,MB_ICONERROR<br />	jmp ENDE<br />.endif<br />mov hEventObject,eax<br /><br /><br />.data<br />    hClientSock dd 0<br />    testdata db &quot;HTTP/1.0 200 OK&quot;,CR,LF,&quot;Content-Lenght&#58; 5&quot;,CR,LF,&quot;Content-Type&#58; text/plain&quot;,CR,LF,&quot;Connection&#58; close&quot;,CR,LF,CR,LF,&quot;Hall?&quot;,0<br /><br />.code<br /><br />invoke	WSAEventSelect, hServerSock, hEventObject,FD_ACCEPT+FD_READ+FD_CLOSE+FD_WRITE<br />@waitfornextevent&#58;<br />invoke	WSAWaitForMultipleEvents, 1, addr hEventObject, FALSE, INFINITE, FALSE<br />invoke WSAEnumNetworkEvents, hServerSock, hEventObject, addr wsaRemoteEvents	<br /><br />test wsaRemoteEvents.lNetworkEvents, FD_READ<br />jz @f<br />invoke MessageBox,0,0,0,MB_ICONASTERISK<br />invoke recv,hClientSock,addr msg_buffer,255,0<br />@@&#58;<br />test wsaRemoteEvents.lNetworkEvents, FD_ACCEPT<br />jz @f<br />invoke MessageBox,0,0,0,MB_OK<br />invoke accept,hServerSock,0,0<br />mov hClientSock,eax<br />	<br />@@&#58;<br />test wsaRemoteEvents.lNetworkEvents, FD_CLOSE<br />jz @f<br />invoke closesocket,hClientSock<br />@@&#58;<br />test wsaRemoteEvents.lNetworkEvents, FD_WRITE<br /><br />jz @f<br />invoke MessageBox,0,0,0,MB_ICONEXCLAMATION<br />invoke send,hClientSock,addr testdata,sizeof testdata,0<br />@@&#58;<br /><br />jmp @waitfornextevent<br /><br /><br /></code></pre><br />PS:it should be a small HTTP-server...<br /><br /><br /><br />EDIT: 25.10.03 18:11:<br />I 'm good... i'm the best ...  :rolleyes:  i waste about 2-3 days to find the error... read <br />about 20 times msdn and thomas' winsocktut... and looked and rewrite about 100 times my code... but i dont see the logical error: first acept a conection and then<br /><br />invoke	WSAWaitForMultipleEvents, 1, addr hEventObject, FALSE, INFINITE, FALSE<br />invoke WSAEnumNetworkEvents, hClientSock, hEventObject, addr wsaRemoteEvents	<br />listen to the CLIENT Sock for Messages... <br />:stupid:</div>
+    <div class="meta">Posted on 2003-10-25 05:28:21 by CDW</div>
+   </div>
+   <div class="post" id="post-122752">
+    <div class="subject"><a href="#post-122752">WSAEnumNetworkEvents -&gt; zero event?</a></div>
+    <div class="body">I took zero to mean that no events occurred within the timeout period, and just jump back to wait some more... also note that with the WSAWaitForMultipleEvents that you QUITE OFTEN get just that - multiple events !! Check for things like FD_READ+FD_CLOSE  and not just the obvious :)</div>
+    <div class="meta">Posted on 2003-10-28 22:55:25 by Homer</div>
+   </div>
+   <div class="post" id="post-122785">
+    <div class="subject"><a href="#post-122785">WSAEnumNetworkEvents -&gt; zero event?</a></div>
+    <div class="body">my problem was that i looked for serversocketevents.<br /><br /><div class="quote">Check for things like FD_READ+FD_CLOSE and not just the obvious</div><br />i think i can do it whit 'test' <br />FD_READ          equ        001h<br />FD_CLOSE          equ       020h<br />so if you have a FD_READ+FD_CLOSE =  21h=0010 0001<br />i test for FD_READ only:<br />test eax,1  (1=&gt;2^0=&gt; so i test for bit 0)<br />first bit is set <br />i test for FD_CLOSE:<br />test eax,20h (20h=&gt;32d=&gt;2^5=&gt; so i test if  bit 5 is set ...<br />(you should not use &quot;cmp&quot; ;) )<br />but thx, i think i should check for FD_READ <strong>before</strong>  i test for FD_CLOSE :D</div>
+    <div class="meta">Posted on 2003-10-29 06:45:05 by CDW</div>
+   </div>
+  </div>
+ </body>
+</html>

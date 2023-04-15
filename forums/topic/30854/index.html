@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>split statusbar and DRAWITEMSTRUCT - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30854" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30854">split statusbar and DRAWITEMSTRUCT</a></p>
+   <div class="post" id="post-215774">
+    <div class="subject"><a href="#post-215774">split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body">Hello all,<br />I converted to Masm some example that Donkey made in GoAsm, to try to insert it in a little tool I am working on. <br />Here is it:<br /><pre><code>;##################################################################<br />; ODStatusBar.Asm<br />;##################################################################<br />.386<br />.model flat,stdcall<br />option casemap:none<br />DlgProc					PROTO :DWORD,:DWORD,:DWORD,:DWORD<br />DrawStatusParts			PROTO :DWORD,:DWORD<br /><br />include WINDOWS.inc<br />include Comctl32.inc<br />include user32.inc<br />include kernel32.inc<br />include gdi32.inc<br /><br />includelib comctl32.lib<br />includelib user32.lib<br />includelib kernel32.lib<br />includelib gdi32.lib<br /><br /><br /><br />STATUSPARAM struct<br />	pszText		DD	?<br />	dwColor		DD	?<br />	hIcon		DD	?<br />STATUSPARAM ends<br /><br />IDD_DLG1	EQU	1000<br />IDC_SBR1	EQU	1001<br /><br />.data?<br />	hInstance	DD 	?<br />	hStatus		DD	?<br />	sbParams	DB	(SIZEOF STATUSPARAM * 3) DUP (?)<br /><br />.data<br />	sbparts		DD	60,120,-1,0,0<br />	sbText1		DB	&quot;Part 1&quot;,0<br />	sbText2		DB	&quot;Part 2&quot;,0<br />	sbText3		DB	&quot;Part 3&quot;,0<br /><br />.code<br />start:<br />	invoke GetModuleHandleA, 0<br />	mov hInstance,eax<br />	invoke InitCommonControls<br />	invoke DialogBoxParam,hInstance,IDD_DLG1,0,offset DlgProc,0<br />	invoke ExitProcess,0<br /><br />DlgProc proc hwnd,uMsg,wParam,lParam<br />;	mov		eax,uMsg<br />	.if uMsg==WM_INITDIALOG<br />		invoke GetDlgItem,hwnd,IDC_SBR1<br />		mov hStatus,eax<br /><br />		invoke SendMessage,hStatus,SB_SETPARTS,3,offset sbparts<br />		push ebx<br /><br />		mov ebx,offset sbParams<br />		mov ,offset sbText1<br />		mov DWORD PTR ,00C08080h<br />		invoke LoadIcon,NULL,IDI_ASTERISK<br />		mov DWORD PTR ,eax<br />		invoke SendMessage,hStatus,SB_SETTEXT,SBT_OWNERDRAW or 0,ebx<br /><br />		add ebx, SIZEOF STATUSPARAM<br />		mov ,offset sbText2<br />		mov DWORD PTR ,0080FFFFh<br />		invoke LoadIcon,NULL,IDI_APPLICATION<br />		mov DWORD PTR ,eax<br />		invoke SendMessage,hStatus,SB_SETTEXT,SBT_OWNERDRAW or 1,ebx<br /><br />		add ebx, SIZEOF STATUSPARAM<br />		mov ,offset sbText3<br />		mov DWORD PTR ,008080FFh<br />		invoke LoadIcon,NULL,IDI_WINLOGO<br />		mov DWORD PTR ,eax<br />		invoke SendMessage,hStatus,SB_SETTEXT,SBT_OWNERDRAW or 2,ebx<br />		pop ebx<br />	.elseif uMsg==WM_DRAWITEM<br />		mov eax,wParam<br />		xor eax,IDC_SBR1<br />		.if ZERO?<br />			invoke DrawStatusParts,wParam,lParam<br />		.endif<br />	.elseif uMsg==WM_CLOSE<br />		INVOKE EndDialog,hwnd,0<br />		mov eax,FALSE<br />		ret<br />	.else <br />	mov eax,FALSE<br />	ret<br />	.endif<br />	mov eax, TRUE<br />	ret<br />DlgProc endp<br /><br />DrawStatusParts proc uses ebx edi esi, wParam,lParam<br />	mov ebx, lParam ; Pointer to DRAWITEMSTRUCT<br />	mov edi, ; Pointer to STATUSPARAM for this part<br />	or edi,edi<br />	.if !ZERO?<br />		invoke CreateSolidBrush,<br />		push eax<br />		mov esi,ebx<br />		add esi,DRAWITEMSTRUCT.rcItem<br />		invoke FillRect,,esi,eax<br />		mov eax,<br />		or eax,eax<br />		.if !ZERO?<br />			invoke DrawIconEx,,,,eax,16,16,NULL,NULL,DI_NORMAL<br />			add DWORD PTR ,18<br />		.endif<br />		invoke SetBkMode,,TRANSPARENT<br />		invoke SetTextColor,,0<br />		invoke lstrlen,<br />		invoke DrawText,,,eax,esi,DT_LEFT<br />		pop eax<br />		invoke DeleteObject,eax<br />	.endif<br />	ret<br />DrawStatusParts endp<br />end start</code></pre><br /><br />It works beautifully but, for the life of me, I cannot understand where that lparam pointing to DRAWITEMSTRUCT, in the DrawStatusParts proc, is comming from. <br />Any help appreciated.<br /><br />Best regards,<br />Bogdan</div>
+    <div class="meta">Posted on 2012-02-18 22:38:38 by bogroca</div>
+   </div>
+   <div class="post" id="post-215775">
+    <div class="subject"><a href="#post-215775">Re: split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body"><pre><code>DlgProc proc hwnd,uMsg,wParam,lParam</code></pre><br />and in <br /><pre><code>	.elseif uMsg==WM_DRAWITEM<br />		mov eax,wParam<br />		xor eax,IDC_SBR1<br />		.if ZERO?<br />			invoke DrawStatusParts,wParam,lParam<br />		.endif</code></pre><br /><br />You are just passing on the wParam and lParam that windows passes to the DialogProc callback to the DrawStatusParts</div>
+    <div class="meta">Posted on 2012-02-18 22:47:55 by Gunner</div>
+   </div>
+   <div class="post" id="post-215776">
+    <div class="subject"><a href="#post-215776">Re: split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body">Thank you Gunner!<br /><br />I was curious about before that point, though. As you can see, the DlgProc has the required lparam needed for DrawStatusParts already. Who passed it to DlgProc? The ideea is that, if I would adjust DlgProc, and call it from outside, how the pointer to DRAWITEMSTRUCT (in lparam) is to be passed in?<br /><br />Best regards,<br /><br />Bogdan</div>
+    <div class="meta">Posted on 2012-02-19 04:43:44 by bogroca</div>
+   </div>
+   <div class="post" id="post-215779">
+    <div class="subject"><a href="#post-215779">Re: split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body">Hello again,<br /><br />I think I figured parts of the answer. AFAIU, for the WM_DRAWITEM (which in thurn will call the proper funtions and lparams) message to be sent, the control has to be OWNERDRAW (SS_OWNERDRAW=0x0000000D). This is the point where I got stuck. In the example above, is nowhere that SS_OWNERDRAW is mentionned or used (including the rc file).<br />How did Donkey do it? <br />Thank you in advance!<br /><br />Best regards,<br />Bogdan</div>
+    <div class="meta">Posted on 2012-02-19 12:47:26 by bogroca</div>
+   </div>
+   <div class="post" id="post-215794">
+    <div class="subject"><a href="#post-215794">Re: split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body">This is solved! Thank you all that inspired me, including Gunner, Donkey and KetilO!<br /><br />Best regards,<br /><br />Bogdan</div>
+    <div class="meta">Posted on 2012-02-25 04:40:44 by bogroca</div>
+   </div>
+   <div class="post" id="post-215796">
+    <div class="subject"><a href="#post-215796">Re: split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body">Can you share with us what you came up with?<br /><br />farrier<br /></div>
+    <div class="meta">Posted on 2012-02-25 09:03:18 by farrier</div>
+   </div>
+   <div class="post" id="post-215803">
+    <div class="subject"><a href="#post-215803">Re: split statusbar and DRAWITEMSTRUCT</a></div>
+    <div class="body">Hi farrier,<br /><br />It was a simple .if ZERO? instead of !ZERO? mistake, in proccesing the WM_DRAWITEM, so my DrawStatusParts proc was never called. Caught it with Ollydbg.<br /><br />Best regards,<br /><br />Bogdan</div>
+    <div class="meta">Posted on 2012-02-26 05:18:46 by bogroca</div>
+   </div>
+  </div>
+ </body>
+</html>

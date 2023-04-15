@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to create a BMP  without using a resource identifier or an external file ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27837" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27837">How to create a BMP  without using a resource identifier or an external file ?</a></p>
+   <div class="post" id="post-198269">
+    <div class="subject"><a href="#post-198269">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">Hi!
+I've got the following problem..
+My program (at a certain point of execution) displays a Dialog box which contains a bitmap. This bitmap does NOT reside inside the RSRC section of the exe nor in a separate file. The data for the BMP (extracted from a real bmp) lies inside the .data section of my program.
+The first thing that came to mind was LoadBitmap..but this API requieres either a res. identifier or a pointer to a string which identifies the bmp.
+How can i create a bitmap in the afore mentioned conditions?I'm sure this is not very difficult, but i don't know much about bitmaps and stuff :)
+Just in case i did not make myself clear enough, picture the following:
+
+.DATA
+
+MyBitmap DB XX,XX,XX,XX,XX,XX,XX,XX,XX,XX,XX,XX,XX,0xETC
+
+Now what i want to know is how to create a BMP using the data inside the MyBitmap variable :)
+
+Thanks in advance as per usual.
+
+Bye!
+
+Latigo</div>
+    <div class="meta">Posted on 2001-04-28 23:56:00 by latigo</div>
+   </div>
+   <div class="post" id="post-198270">
+    <div class="subject"><a href="#post-198270">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">I am not sure how to get a DIB or DC on that
+section of memory, but that would seem somewhere
+down the road of what you want. Untill I find out
+how, I would try to save that area of memory to
+a temp.bmp file on disk then use loadImage then
+delete the temp.bmp now you have a handle to a
+bitmap and can now get a DC or a DIB or what have
+you on that. sorry if this is not what you wanted
+I just thought maybe this would be an answer.</div>
+    <div class="meta">Posted on 2001-04-29 02:02:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-198271">
+    <div class="subject"><a href="#post-198271">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">Ernie write this:
+
+This code seemed to work for me.
+<pre><code>
+
+; now get the bitmap resource
+invoke FindResource,hInstance, IDM_BITMAP_, RT_RCDATA
+; get handle to resource
+invoke LoadResource, hInstance, eax
+invoke LockResource, eax
+; get the bitmap to memory
+mov pBitmapFileHeader, eax
+xor edx, edx
+mov dx, 
+cmp dx, 4D42H ; 'BM' in hex
+jne BadFile
+mov edx, pBitmapFileHeader
+add eax, (BITMAPFILEHEADER PTR ).bfOffBits
+mov pBitmapData, eax
+mov eax, pBitmapFileHeader
+add eax, SIZEOF BITMAPFILEHEADER
+mov pBitmapInfoHeader, eax
+mov edx, pBitmapInfoHeader
+mov eax, (BITMAPINFOHEADER PTR ).biWidth
+mov nWidth, eax
+mov eax, (BITMAPINFOHEADER PTR ).biHeight
+mov nHeight, eax
+
+invoke GetDC, hIDM_picture
+mov hDCtemp, eax
+invoke CreateCompatibleDC, hDCtemp
+mov hDC, eax
+invoke CreateDIBitmap, hDCtemp, pBitmapInfoHeader,
+CBM_INIT, pBitmapData,
+pBitmapInfoHeader, DIB_RGB_COLORS
+mov hBitmap, eax
+; we can now assign this bitmap to a window
+invoke SendMessage, hIDM_picture, STM_SETIMAGE,
+IMAGE_BITMAP, hBitmap
+invoke ReleaseDC, hIDM_picture, hDCtemp
+invoke DeleteDC, hDCtemp
+
+</code></pre>
+
+Hope this helps.</div>
+    <div class="meta">Posted on 2001-04-29 03:16:00 by forge</div>
+   </div>
+   <div class="post" id="post-198272">
+    <div class="subject"><a href="#post-198272">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">Zcoder: Thanks mate, that's the exact same _temp_ solution i thought about :)
+I'll implement that and then keep on figuring out other possible solutions. I know there MUST be other ones :)
+Thanks again!
+
+Forge: Thanks to you too :).
+But there is a problem with that solution by Ernie. He makes a call to FindResource. I cannot do that since my bitmap is not inside the rsrc section.
+
+
+Latigo</div>
+    <div class="meta">Posted on 2001-04-29 04:30:00 by latigo</div>
+   </div>
+   <div class="post" id="post-198273">
+    <div class="subject"><a href="#post-198273">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">latigo: The FindResource/LockResource combination returns a pointer to the actual data in the resource. So you'll just have to remove all the resource stuff and put a pointer to your bitmap data in eax (or pBitmapFileHeader). Just one question: why don't you copy the data to a file, put it in your resource file and use LoadBitmap? It's quite easier.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-04-29 06:11:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-198274">
+    <div class="subject"><a href="#post-198274">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">latigo,
+
+<div class="quote">
+But there is a problem with that solution by Ernie.
+He makes a call to FindResource.
+I cannot do that since my bitmap is not inside the rsrc section.</div>
+
+<u>I think you want to hide a BMP from resource Hacker ???</u>
+
+There are a 2 ways of storing a BMP file within another EXE file,
+as a resource in the RC file, or use the tool is called
+BIN2DB.EXE (I can give U that)
+and it will convert a binary file into a DB sequence
+and you write it to a .data starting with a label.
+
+<pre><code>
+    mov lea, label
+    mov pBitmapFileHeader, eax
+    xor edx, edx
+    mov dx, 
+    cmp dx, 4D42H   ; 'BM'
+    jne BadFile
+    mov edx, pBitmapFileHeader
+    add eax, (BITMAPFILEHEADER PTR ).bfOffBits
+    mov pBitmapData, eax
+    mov eax, pBitmapFileHeader
+    add eax, SIZEOF BITMAPFILEHEADER
+    mov pBitmapInfoHeader, eax
+    mov edx, pBitmapInfoHeader
+    mov eax, (BITMAPINFOHEADER PTR ).biWidth
+    mov nWidth, eax
+    mov eax, (BITMAPINFOHEADER PTR ).biHeight
+    mov nHeight, eax
+
+    invoke GetDC, hIDM_picture
+    mov hDCtemp, eax
+    invoke CreateCompatibleDC, hDCtemp
+    mov hDC, eax
+    invoke CreateDIBitmap, hDCtemp,
+                           pBitmapInfoHeader,
+                           CBM_INIT,
+                           pBitmapData,
+                           pBitmapInfoHeader,
+                           DIB_RGB_COLORS
+    mov hBitmap, eax
+    invoke SendMessage,    hIDM_picture,
+                           STM_SETIMAGE,
+                           IMAGE_BITMAP,
+                           hBitmap
+
+</code></pre>
+
+Hope this will help.</div>
+    <div class="meta">Posted on 2001-04-29 20:03:00 by forge</div>
+   </div>
+   <div class="post" id="post-198275">
+    <div class="subject"><a href="#post-198275">How to create a BMP  without using a resource identifier or an external file ?</a></div>
+    <div class="body">Hey guys thanks very much for the info!
+
+Latigo</div>
+    <div class="meta">Posted on 2001-04-30 13:31:00 by latigo</div>
+   </div>
+  </div>
+ </body>
+</html>

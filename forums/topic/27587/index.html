@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>imagelist in listview - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27587" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27587">imagelist in listview</a></p>
+   <div class="post" id="post-197013">
+    <div class="subject"><a href="#post-197013">imagelist in listview</a></div>
+    <div class="body">I use the same imagelist procedure in
+several occasions without problems. Only
+when using it in the listview the 
+LVM_SETIMAGELIST 
+message returns the "invalid handle" error.
+When I use LVM_GETIMAGELIST message to check
+the imagelist I get no error! 
+Here is what I do (I check the other returned values
+and they are ok ):
+<pre><code>
+ImageList_Create
+LoadIcon
+ImageList_AddIcon
+LoadIcon
+ImageList_AddIcon
+DeleteObject, <handle of the first icon>
+DeleteObject, <handle of the second icon>
+CreateWindowEx (create the listview)
+SendMessage, <handle of listview>, LVM_SETIMAGELIST,\
+	 LVSIL_SMALL, <handle of imagelist>
+</code></pre>
+I noticed that Iczelion's listview tut doesn't use
+images. To keep the sample simple? Or because there is
+a snag?
+I have SP2.
+Any ideas?
+vesa</div>
+    <div class="meta">Posted on 2001-04-10 03:52:00 by vesa</div>
+   </div>
+   <div class="post" id="post-197014">
+    <div class="subject"><a href="#post-197014">imagelist in listview</a></div>
+    <div class="body">I use LVM_SETIMAGELIST with no problems.
+Are you sure the handle to the listview valid?
+
+I would need to see more of your code to help you further.
+
+Ewayne</div>
+    <div class="meta">Posted on 2001-04-11 16:45:00 by Ewayne</div>
+   </div>
+   <div class="post" id="post-197015">
+    <div class="subject"><a href="#post-197015">imagelist in listview</a></div>
+    <div class="body">Ewayne,
+I include a piece of code and resource. 
+You must make a bitmap with two images
+yourself, if you want to make an exe file.
+
+source:
+<pre><code>.386
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\comctl32.inc    
+include \masm32\include\gdi32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\comctl32.lib
+includelib \masm32\lib\gdi32.lib
+
+WinMain proto :DWORD,:DWORD,:DWORD,:DWORD
+
+.data?
+hInstance 		HINSTANCE ?
+CommandLine 		LPSTR 	?
+hStatic 		DWORD 	?
+lastError 		DWORD 	?
+hIcon 			DWORD 	?
+hImageList 		DWORD 	?
+hListView       	DWORD   ?
+nRadioDefault		DWORD 	?
+nLastError 		DWORD 	?
+hBitmap			DWORD	?
+
+.data
+
+ClassName		db "SimpleClass",0
+AppName			db "Sample",0
+MenuName		db "LISTVIEWMENU",0
+rcClient		RECT <>
+szListView 		db "SysListView32",0
+szBuffer		db 128 (0)
+
+.const
+IDM_EXIT        	equ 	300
+IDB_BITMAP 		equ	3
+
+.code
+start:
+        invoke GetModuleHandle, NULL
+	mov    hInstance,eax
+	invoke GetCommandLine
+	mov    CommandLine,eax
+	invoke WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT
+	invoke ExitProcess,eax
+
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
+	LOCAL wc:WNDCLASSEX
+	LOCAL msg:MSG
+	LOCAL hwnd:HWND
+
+	mov   wc.cbSize,SIZEOF WNDCLASSEX
+	mov   wc.style, CS_HREDRAW or CS_VREDRAW
+	mov   wc.lpfnWndProc, OFFSET WndProc
+	mov   wc.cbClsExtra,NULL
+	mov   wc.cbWndExtra,NULL
+	push  hInstance
+	pop   wc.hInstance
+	mov   wc.hbrBackground,COLOR_WINDOW+1
+	mov   wc.lpszMenuName,OFFSET MenuName
+	mov   wc.lpszClassName,OFFSET ClassName
+	invoke LoadIcon,hInst,IDI_APPLICATION
+	mov   wc.hIcon, eax
+	mov	wc.hIconSm, eax
+	invoke LoadCursor,NULL,IDC_ARROW
+	mov   wc.hCursor,eax
+	invoke RegisterClassEx, addr wc
+	invoke CreateWindowEx, NULL, ADDR ClassName, ADDR AppName,\
+           WS_SYSMENU or WS_CLIPSIBLINGS or WS_CAPTION, 0,\
+           0, 500, 300, NULL, NULL,\
+           hInst, NULL
+	mov   hwnd,eax
+	invoke ShowWindow, hwnd,SW_SHOWNORMAL
+	invoke UpdateWindow, hwnd
+	.WHILE TRUE
+		invoke GetMessage, ADDR msg,NULL,0,0
+		.BREAK .IF (!eax)
+			invoke TranslateMessage, ADDR msg
+			invoke DispatchMessage, ADDR msg
+	.ENDW
+	mov     eax,msg.wParam
+	ret
+WinMain endp
+
+WndProc proc  hWnd:HWND, uMsg:UINT, wParam:DWORD, lParam:DWORD
+	.IF uMsg == WM_CREATE
+		invoke InitCommonControls
+		invoke ImageList_LoadImage, hInstance, IDB_BITMAP, 16, 2,\
+			CLR_NONE, IMAGE_BITMAP, LR_CREATEDIBSECTION
+		.if eax == NULL
+			invoke GetLastError
+			mov nLastError,eax
+			invoke FormatMessage,\
+				FORMAT_MESSAGE_FROM_SYSTEM,\
+				NULL, nLastError, NULL, ADDR szBuffer, 64, NULL
+			invoke MessageBoxEx, NULL, ADDR szBuffer, NULL,\
+				MB_OK+MB_ICONINFORMATION, LANG_ENGLISH
+		.else
+			mov hImageList, eax
+		.endif
+		invoke GetClientRect, hWnd, ADDR rcClient
+       		invoke CreateWindowEx,NULL, ADDR szListView,NULL,\
+		      	WS_CHILD or WS_CLIPSIBLINGS or WS_VISIBLE or LVS_REPORT,\
+                      	0, 0, rcClient.right, rcClient.bottom,\
+			hWnd,NULL,hInstance,NULL 
+		.if eax == NULL
+			invoke GetLastError
+			mov nLastError,eax
+			invoke FormatMessage,\
+				FORMAT_MESSAGE_FROM_SYSTEM,\
+				NULL, nLastError, NULL, ADDR szBuffer, 64, NULL
+			invoke MessageBoxEx, NULL, ADDR szBuffer, NULL,\
+				MB_OK+MB_ICONINFORMATION, LANG_ENGLISH
+		.else
+			mov hListView, eax
+		.endif
+
+		invoke SendMessage, hListView, LVM_SETIMAGELIST,\
+			 LVSIL_SMALL, hImageList
+		.if eax == NULL
+			invoke GetLastError
+			mov nLastError,eax
+			invoke FormatMessage,\
+				FORMAT_MESSAGE_FROM_SYSTEM,\
+				NULL, nLastError, NULL, ADDR szBuffer, 64, NULL
+			invoke MessageBoxEx, hWnd, ADDR szBuffer, NULL,\
+				MB_OK+MB_ICONINFORMATION, LANG_ENGLISH
+		.endif
+
+	.ELSEIF uMsg == WM_COMMAND
+		mov eax, wParam
+
+		.if ax==IDM_EXIT
+			invoke DestroyWindow, hWnd
+		.endif
+
+	.ELSEIF uMsg==WM_DESTROY
+		invoke ImageList_Destroy, hImageList
+		invoke PostQuitMessage</div>
+    <div class="meta">Posted on 2001-04-12 05:27:00 by vesa</div>
+   </div>
+   <div class="post" id="post-197016">
+    <div class="subject"><a href="#post-197016">imagelist in listview</a></div>
+    <div class="body">The LVM_SETIMAGELIST message:
+
+Returns the handle of the Imagelist previously associated
+with the control if successful; NULL otherwise.
+
+So the first time you send the LVM_SETIMAGELIST message to
+your Listview it will return zero, because there wasn't
+a Imagelist previously associated with it. If you would
+send the LVM_SETIMAGELIST message twice, the second time
+will return the handle of the Imagelist.
+
+Does that help you any?
+
+Ewayne</div>
+    <div class="meta">Posted on 2001-04-12 23:48:00 by Ewayne</div>
+   </div>
+   <div class="post" id="post-197017">
+    <div class="subject"><a href="#post-197017">imagelist in listview</a></div>
+    <div class="body">Ewayne,
+that's it! I had a problem with the following sentence in the
+win32.hlp file (LVM_SETIMAGELIST):
+"Returns the handle of the image list previously associated with the control if successful." 
+I looked for an other way to 
+associate the image list with the control and missed  
+the possibility to send the message twice.
+Thanks!
+vesa</div>
+    <div class="meta">Posted on 2001-04-17 02:26:00 by vesa</div>
+   </div>
+  </div>
+ </body>
+</html>

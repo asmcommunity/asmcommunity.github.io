@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fast floating point comparison - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20012" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=20012">Fast floating point comparison</a></p>
+   <div class="post" id="post-153471">
+    <div class="subject"><a href="#post-153471">Fast floating point comparison</a></div>
+    <div class="body"><pre><code><br />ufcomp macro var1,var2<br />   mov eax,var1<br />   mov ebx,var2<br />   mov ecx,eax<br />   and ecx,ebx<br />   sar ecx,31<br />   xor eax,ecx<br />   xor ebx,ecx<br />   cmp eax,ebx<br />endm<br /></code></pre><br />after the macro, you use jxx as if you compared two signed integers. Only exception is that -0.0 &lt; 0.0 <br /><br /><br />speed test:<br /><br /><pre><code><br />invoke GetTickCount<br />	push eax<br />	mov ecx,1000000000<br />	push ecx<br />	@@&#58;<br />	;-----------------\<br />	; fcmp ke1,ke2 ; 4276 milliseconds // macro, from the asm DX sdk<br />	;ufcomp ke1,ke2 ; 3765 milliseconds // my macro<br />	;-----------------/<br />	dec dword ptr&#91;esp&#93;<br />	jnz @B<br />	pop ecx<br />	<br />	invoke GetTickCount<br />	pop edx<br />	sub eax,edx<br />	print eax<br /></code></pre><br />with both lines commented (empty code in loop), it takes 3355 milliseconds, so actually to execute 1 bil times, fcmp takes 921ms, while ufcomp takes 410ms<br />124% speedup , taking 0.7 cycle ...<br />This is on an AthlonXP2000+ (DDR 400MHz)<br /><br /><strong>How it works:</strong><br />Negative floats have the 31 least significant bits the same as their relative value. The most significant bit is set if the number is negative. <br />Case 1: If both var1 and var2 are positive, then a normal cmp can be used - for fastest results. But if the two floats can have any value - we first see if they're both negative. <br />Case 2: only one of them is negative. We can still use a normal cmp<br />Case 3: both are negative - then cmp should have inverse logic. But we won't do any jumps around, so we do this: on line 5, ecx is either 0 or FFFFFFFFh. It's the latter only if both numbers were negative. Then we xor with ecx to negate them, and finally compare them. <br />Thus all 3 cases get covered by non-branching code, and this on my AthlonXP runs in 0.7 cycle ^_^ . Improvements are welcome</div>
+    <div class="meta">Posted on 2004-11-29 17:40:20 by Ultrano</div>
+   </div>
+   <div class="post" id="post-153474">
+    <div class="subject"><a href="#post-153474">Fast floating point comparison</a></div>
+    <div class="body">nice - but shouldn't float comparisons be &quot;is difference between numbers reasonably small&quot; rather than equality, because of the imprecisions of floats? (me stupid)</div>
+    <div class="meta">Posted on 2004-11-29 19:09:05 by f0dder</div>
+   </div>
+   <div class="post" id="post-153479">
+    <div class="subject"><a href="#post-153479">Fast floating point comparison</a></div>
+    <div class="body">With the floating point compare instruction you'll get the same result anyway, it's just that this is faster. And if the coder wants little precision, he's better off converting both floats to long. <br />with jxx I mean: jl, jg, jle, jge, jne, jz<br /><br />test1 real4 3.3<br />rest2 real4 -17.5<br /><br />ufcomp test1,test2<br />jne @F<br />  print &quot;are equal&quot;<br />@@:<br />jl @F<br />  print &quot;test1 is greater&quot;<br />@@;<br />jg @F<br />  print &quot;test1 is lower&quot;<br />@@:</div>
+    <div class="meta">Posted on 2004-11-29 22:42:43 by Ultrano</div>
+   </div>
+   <div class="post" id="post-153485">
+    <div class="subject"><a href="#post-153485">Fast floating point comparison</a></div>
+    <div class="body">It seems to work!<br />Can you explain what's the effect on a float when its binary representation is reverted... (last 2 xor sentences)<br /><br />Regards  :) <br /><br />Biterider</div>
+    <div class="meta">Posted on 2004-11-30 00:49:12 by Biterider</div>
+   </div>
+   <div class="post" id="post-153490">
+    <div class="subject"><a href="#post-153490">Fast floating point comparison</a></div>
+    <div class="body">If the most significant bit of both floats is 1 (they're negative), when we negate the other bits we get a reverse result in the comparison. Uh can't explain things really well, but it's really similar to negating two integers and then comparing them. Only bits 31 and 30 are kind of special, but they get removed when comparing both negatives.</div>
+    <div class="meta">Posted on 2004-11-30 03:58:33 by Ultrano</div>
+   </div>
+   <div class="post" id="post-153492">
+    <div class="subject"><a href="#post-153492">Fast floating point comparison</a></div>
+    <div class="body">I explore the possibility for a more flexible register usage.<br /><br /><pre><code>ufcomp macro var1, var2<br />   local reg1, reg2, reg3<br /><br />   if &#40;opattr var1&#41; and 00010000b         ;;Is var1 a register?<br />     reg1 textequ &lt;var1&gt;<br />     if &#40;opattr var2&#41; and 00010000b       ;;Is var2 a register?<br />       reg2 textequ &lt;var2&gt;<br />     else<br />       ifdifi reg1, &lt;eax&gt;<br />         reg2 textequ &lt;eax&gt;<br />       elseifdifi reg1, &lt;ecx&gt;<br />         reg2 textequ &lt;ecx&gt;<br />       elseifdifi reg1, &lt;edx&gt;<br />         reg2 textequ &lt;edx&gt;<br />       endif<br />       mov reg2, var2<br />     endif<br />   else<br />     if &#40;opattr var2&#41; and 00010000b       ;;Is var2 a register?<br />       reg2 textequ &lt;var2&gt;<br />       ifdifi reg2, &lt;eax&gt; <br />         reg1 textequ &lt;eax&gt;<br />       elseifdifi reg2, &lt;ecx&gt;<br />         reg1 textequ &lt;ecx&gt;<br />       elseifdifi reg2, &lt;edx&gt;<br />         reg1 textequ &lt;edx&gt;<br />       endif<br />       mov reg1, var1 <br />     else<br />       reg1 textequ &lt;eax&gt;<br />       reg2 textequ &lt;ecx&gt;<br />       mov reg1, var1 <br />       mov reg2, var2<br />     endif    <br />   endif<br />   <br />   ifdifi reg1, &lt;eax&gt;<br />     ifdifi reg2, &lt;eax&gt;<br />       reg3 textequ &lt;eax&gt;<br />     endif<br />   endif<br /><br />   ifndef &lt;reg3&gt; <br />     ifdifi reg1, &lt;ecx&gt;<br />       ifdifi reg2, &lt;ecx&gt;<br />         reg3 textequ &lt;ecx&gt;<br />       endif<br />     endif<br />   endif<br />   <br />   ifndef &lt;reg3&gt;   <br />     ifdifi reg1, &lt;edx&gt;<br />       ifdifi reg2, &lt;edx&gt;<br />         reg3 textequ &lt;edx&gt;<br />       endif<br />     endif<br />   endif<br /><br />   mov reg3, reg1 <br />   and reg3, reg2 <br />   sar reg3, 31 <br />   xor reg1, reg3 <br />   xor reg2, reg3 <br />   cmp reg1, reg2<br />endm</code></pre><br /><br />Regards,<br /><br />Biterider</div>
+    <div class="meta">Posted on 2004-11-30 04:19:49 by Biterider</div>
+   </div>
+   <div class="post" id="post-153496">
+    <div class="subject"><a href="#post-153496">Fast floating point comparison</a></div>
+    <div class="body">Yup, I was also thinking about this ^_^</div>
+    <div class="meta">Posted on 2004-11-30 07:01:54 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

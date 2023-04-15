@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>casting 32bit to 16bit using SSE2 registers? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18583" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18583">casting 32bit to 16bit using SSE2 registers?</a></p>
+   <div class="post" id="post-143888">
+    <div class="subject"><a href="#post-143888">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">i have 16x 32bit unsigned integers in xmm4-xmm7<br /><br />now i need to cast them to 16x 16bit unsigned shorts.<br /><br />I tryed to subtract all double words with (0xFFFF0000) wich worked, but if i use packssdw i get overruns to 7FFF since its singed .. there is no unsigned version :(<br /><br />So some1 have a clue how to handle this fast?<br /><br />I came up with 4x shufhw and shuflw<br /><br />[00004444|00003333|00002222|00001111]<br />[00008888|00007777|00006666|00005555]<br />to<br />[00000000|44443333|22221111|22221111]<br />[00000000|88887777|66665555|66665555]<br />and a quadword shif right to<br />[00000000|44443333|22221111|22221111]<br />[00000000|00000000|44443333|22221111]<br />.<br />.<br />.<br />and than combine <br />[00000000|00000000|44443333|22221111]<br />[00000000|00000000|88887777|66665555]<br />to <br />[88887777|66665555|44443333|22221111]<br /><br />wich resluts in 8x shufle, 4x shifts and 2x combine<br /><br />kinda lots of cycles for a simple cast...<br /><br />some1 got a other idea?</div>
+    <div class="meta">Posted on 2004-06-15 14:18:49 by Andy2222</div>
+   </div>
+   <div class="post" id="post-143904">
+    <div class="subject"><a href="#post-143904">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">What about using pand to remove the highword of each dword, and then do the packssdw? It should not saturate then, since there is nothing to saturate.<br />Or if you need the saturation, only remove the topmost bit. Then everything is considered positive, and saturation only goes upwards.</div>
+    <div class="meta">Posted on 2004-06-15 16:47:57 by Scali</div>
+   </div>
+   <div class="post" id="post-143916">
+    <div class="subject"><a href="#post-143916">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">Rather than eschewing packssdw altogether you could use it but deal with the high bits separately:<br /><br /><pre><code><br />.data<br /><br />align 16<br />owMask	dd 4 dup&#40;00007FFFh&#41;<br /><br />.code<br /><br />; save high bits<br />movdqa xmm0,xmm4<br />psrlw xmm0,15<br />movdqa xmm1,xmm5<br />psrlw xmm1,15<br /><br />; remove high bits<br />pand xmm4,owMask<br />pand xmm5,owMask<br /><br />; do the pack<br />packssdw xmm5,xmm4<br /><br />; pack the high bits<br />packssdw xmm1,xmm0<br />; put into place<br />psllw xmm1,15<br /><br />; combine<br />por xmm5,xmm1<br /></code></pre><br /><br />So if xmm4 were 00001111000022220000333300004444<br />and xmm5 were 00005555000066660000777700008888<br /><br />then you end up with xmm5 as 11112222333344445555666677778888</div>
+    <div class="meta">Posted on 2004-06-15 17:21:46 by stormix</div>
+   </div>
+   <div class="post" id="post-143917">
+    <div class="subject"><a href="#post-143917">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">That wouldn't work. A value of 8000h and up would still saturate. <br /><br />Maybe this could work? (I've never done any programming with these modern instructions :P)<br /><pre><code>&#40;at beginning&#41;<br />mov eax,8000h<br />movd xmm0,eax<br />pshuflw xmm1,xmm0,0<br />pshufd xmm0,xmm0,0<br />movlhps xmm1,xmm1<br />...<br />psubd xmm4,xmm0<br />psubd xmm5,xmm0<br />packssdw xmm4,xmm5<br />psubd xmm6,xmm0<br />psubd xmm7,xmm0<br />packssdw xmm6,xmm7<br />pxor xmm4,xmm1<br />pxor xmm6,xmm1</code></pre></div>
+    <div class="meta">Posted on 2004-06-15 17:27:35 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-143925">
+    <div class="subject"><a href="#post-143925">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body"><div class="quote">That wouldn't work. A value of 8000h and up would still saturate. </div><br /><br />Then I suppose you need to sign-extend the word in order to make it not saturate, instead of just tossing out the high bits. It's late. And I don't really care :P<br />You can do this by simply using a shift left (pslld) by 16, and then an arithmetic shift right by 16 (psrad).<br />That is probably the most elegant solution.<br /><br />Something like:<br /><br /><pre><code><br />pslld xmm4, 16<br />psrad xmm4, 16<br />packssdw xmm4, xmm4<br /></code></pre><br /><br />And please, comment your code for a change?</div>
+    <div class="meta">Posted on 2004-06-15 17:47:03 by Scali</div>
+   </div>
+   <div class="post" id="post-143926">
+    <div class="subject"><a href="#post-143926">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">A value that is between 8000h and 0ffffh is outside the signed range, and won't fit. Andy2222 wants to pack unsigned words, however.<br />I am subtracting 8000h from every doubleword, so it will be between 0ffff8000h and 7fffh, then I pack and xor all the words with 8000h to get them back to what they were.<br /><br />It seemed that the high words would be zero on entry. If that's not the case, then your last solution might be the best.</div>
+    <div class="meta">Posted on 2004-06-15 18:00:51 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-143928">
+    <div class="subject"><a href="#post-143928">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body"><div class="quote"><br />Rather than eschewing packssdw altogether you could use it but deal with the high bits separately:<br /><br /><pre><code><br />.data<br /><br />align 16<br />owMask	dd 4 dup&#40;00007FFFh&#41;<br /><br />.code<br /><br />; save high bits<br />movdqa xmm0,xmm4<br />psrlw xmm0,15<br />movdqa xmm1,xmm5<br />psrlw xmm1,15<br /><br />; remove high bits<br />pand xmm4,owMask<br />pand xmm5,owMask<br /><br />; do the pack<br />packssdw xmm5,xmm4<br /><br />; pack the high bits<br />packssdw xmm1,xmm0<br />; put into place<br />psllw xmm1,15<br /><br />; combine<br />por xmm5,xmm1<br /></code></pre><br /><br />So if xmm4 were 00001111000022220000333300004444<br />and xmm5 were 00005555000066660000777700008888<br /><br />then you end up with xmm5 as 11112222333344445555666677778888 </div><br /><br />this works but u end up wih [44443333222211115555666677778888]<br /><br />@Sephiroth3 i will test your solution too, and yes the main problem is the packssdw with word's higher than 8000h<br /><br />PS: i came up with this solution meanwhile myself <br /><br />pshuflw xmm4,xmm4,136<br />pshuflw xmm5,xmm5,136<br />pshuflw xmm6,xmm6,136<br />pshuflw xmm7,xmm7,136<br /><br />pshufhw xmm4,xmm4,136<br />pshufhw xmm5,xmm5,136<br />pshufhw xmm6,xmm6,136<br />pshufhw xmm7,xmm7,136<br /><br />psrldq xmm4, 4<br />psrldq xmm5, 4<br />psrldq xmm6, 4<br />psrldq xmm7, 4<br /><br />punpcklqdq xmm4, xmm5<br />punpcklqdq xmm6, xmm7<br /><br />The problem is the packssdw instruction wich takes 4 cycles and is vectorized, so maybe using only pshuf and shift will result in a faster conversion. I have to test this.</div>
+    <div class="meta">Posted on 2004-06-15 18:04:56 by Andy2222</div>
+   </div>
+   <div class="post" id="post-143929">
+    <div class="subject"><a href="#post-143929">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">Are you sure you didn't forget about endianness? I.e. <br /><br /><pre><code><br />owLine1	dw 4444h,0,3333h,0,2222h,0,1111h,0<br /><br />movdqa xmm0,owLine1<br /><br />; xmm0 is now 00001111000022220000333300004444<br /></code></pre></div>
+    <div class="meta">Posted on 2004-06-15 18:10:46 by stormix</div>
+   </div>
+   <div class="post" id="post-143931">
+    <div class="subject"><a href="#post-143931">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">jup my fault :)</div>
+    <div class="meta">Posted on 2004-06-15 18:18:38 by Andy2222</div>
+   </div>
+   <div class="post" id="post-143953">
+    <div class="subject"><a href="#post-143953">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body"><div class="quote">It seemed that the high words would be zero on entry. If that's not the case, then your last solution might be the best.</div><br /><br />That depends on whether the high word is to be considered garbage or that the value is actually larger than a single word and requires saturation.<br />If no saturation, my routine, if yes saturation, your routine. But you could implement it much smaller if you just stored the entire 8000h-word in memory. Would lose the push/pop/shuf etc.</div>
+    <div class="meta">Posted on 2004-06-16 02:14:17 by Scali</div>
+   </div>
+   <div class="post" id="post-143975">
+    <div class="subject"><a href="#post-143975">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body"><pre><code>b8 00 80 00 00 mov eax,8000h<br />66 0f 6e c0 movd xmm0,eax<br />f2 0f 70 c8 00 pshuflw xmm1,xmm0,0<br />66 0f 70 c0 00 pshufd xmm0,xmm0,0<br />0F 16 C9 movlhps xmm1,xmm1</code></pre><br />I just realized I could use MOVD, and saved two more bytes...<br />It takes 14 bytes to set up XMM0, and 8 bytes to set up XMM1. Loading both from memory would use 24 bytes for each. Using the memory directly in the other operations would require 32 bytes for XMM0 and 24 bytes for XMM1.<br /><br />If saturation is desired, then it won't be so simple actually, since the 32-bit integers were unsigned. The following code has to be used. Unfortunately, it is quite long:<br /><pre><code><br />mov eax,8000h<br />movd xmm0,eax<br />pshuflw xmm1,xmm0,0<br />pshufd xmm0,xmm0,0<br />movlhps xmm1,xmm1<br />...<br />movdqa xmm2,xmm4<br />movdqa xmm3,xmm5<br />psubd xmm4,xmm0<br />psrad xmm2,31<br />psubd xmm5,xmm0<br />psrad xmm3,31<br />packssdw xmm4,xmm5<br />packssdw xmm2,xmm3<br />pxor xmm4,xmm1<br />pxor xmm5,xmm1<br />por xmm4,xmm2<br />por xmm5,xmm3<br />movdqa xmm2,xmm6<br />movdqa xmm3,xmm7<br />psubd xmm6,xmm0<br />psrad xmm2,31<br />psubd xmm7,xmm0<br />psrad xmm3,31<br />packssdw xmm6,xmm7<br />packssdw xmm2,xmm3<br />pxor xmm6,xmm1<br />pxor xmm7,xmm1<br />por xmm6,xmm2<br />por xmm7,xmm3<br /></code></pre><br />Maybe there's a better way?</div>
+    <div class="meta">Posted on 2004-06-16 07:17:23 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-143977">
+    <div class="subject"><a href="#post-143977">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">im looking for the fastest way btw, since i have to do these in a video loop ((resolution*yres + res/2*y/2 + res/2*y/2) resolution*25 frames pers second) since we do <br /><br />for a 800x600 video we get 18000000 pixels to work with, per second<br /><br />wich means every cycle counts memory size is irrelevant :)<br /><br />It seems that a implementation without using packssdw is faster since the vectorized instruction blocks (at least on an AMD) the following instructions.</div>
+    <div class="meta">Posted on 2004-06-16 07:33:15 by Andy2222</div>
+   </div>
+   <div class="post" id="post-143980">
+    <div class="subject"><a href="#post-143980">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">You could modify my version with saturation I suppose.<br />Use pcmpdg or whatever it was to test if the values are greater than FFFFh. The result of that pcmp is 0 for each dword that is &lt;= FFFF and FFFFFFFFh for each dword that is &gt; FFFF.<br />Now you or those two together, effectively the values are saturated now. Then do the shifts and pack as before.</div>
+    <div class="meta">Posted on 2004-06-16 07:55:45 by Scali</div>
+   </div>
+   <div class="post" id="post-144029">
+    <div class="subject"><a href="#post-144029">casting 32bit to 16bit using SSE2 registers?</a></div>
+    <div class="body">two-complement sux :)<br />(sorry :)</div>
+    <div class="meta">Posted on 2004-06-16 15:31:43 by HeLLoWorld</div>
+   </div>
+  </div>
+ </body>
+</html>

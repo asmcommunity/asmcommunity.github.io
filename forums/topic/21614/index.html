@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Floating point random number generation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21614" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21614">Floating point random number generation</a></p>
+   <div class="post" id="post-163156">
+    <div class="subject"><a href="#post-163156">Floating point random number generation</a></div>
+    <div class="body">Looking for a random number generator, I&#39;ve found (thanks to one of my &quot;C++ pals&quot;) a routine which could be expanded to assembly as:<br /><pre><code>iRand	PROC	USES EDX<br /><br />	mov	EAX,00BB38435h<br />	mul	<br />	add	EAX,03619636Bh<br />	mov	,EAX<br />	ret<br /><br />iRand	ENDP</code></pre><br /><br />It seems to produce well-distribued random dwords and I&#39;m used to initialize the seed with RDTSC. That&#39;s all for the integers. Now to the floating point results.<br /><br />The easiest way to produce a random floating point value I&#39;ve managed to write on my own is:<br /><pre><code>fRand	PROC	USES EDX<br /><br />	mov	EAX,00BB38435h<br />	mul	<br />	add	EAX,03619636Bh<br />	mov	,EAX<br />	and	EAX,07FFFFFFFh	; get rid of sign bit<br />	or	EAX,03F800000h	; fix the exponent<br />	ret<br /><br />fRand	ENDP</code></pre><br /><br />This procedure provides (just as the integer one) a very good distribution of values, however:<br />- resulting values are in the range between 1.0 (inclusive) and 2.0 (exclusive), and I&#39;ve not found any reasonable integer method for range conversion (any ideas?)<br />- results are returned in EAX, not on the top of FPU&#39;s stack. That seems to be against the &quot;common&quot; rules, but can be easily used for purposes of:<br /><pre><code>	mov ,$INVOKE(fRand)</code></pre><br /><br />Alternatively, I&#39;d propose such a modification (this solves both oddities listed above):<br /><pre><code>fRand	PROC<br /><br />	push	EAX<br />	push	EDX<br />	fld1<br />	mov	EAX,00BB38435h<br />	mul	<br />	fadd	st(0),st(0)<br />	add	EAX,03619636Bh<br />	mov	,EAX<br />	and	EAX,07FFFFFFFh	; get rid of sign bit<br />	or	EAX,03F800000h	; fix the exponent<br />	xchg	EAX,<br />	pop	EDX<br />	fsub	DWORD PTR <br />	add	ESP,04<br />	ret<br /><br />fRand	ENDP</code></pre><br /><br />Cheers, Mikael</div>
+    <div class="meta">Posted on 2005-08-12 04:31:46 by MikaelC</div>
+   </div>
+   <div class="post" id="post-163164">
+    <div class="subject"><a href="#post-163164">Re: Floating point random number generation</a></div>
+    <div class="body">There seems to be one more oddity with your algo for floating point values:<br />Based on random distribution of bits, bit30 should be set some 50% of the time. This means that the generated float value would be considered as a NAN some 50% of the time if you tried to use it as a parameter on the FPU. I do agree that the other 50% of the time, the generated number would be between 1 and 2.<br /><br />A result between 0 and 1 would be more acceptable since it could easily be converted to a random value within a specified range. My suggestion to prevent NANs and provide a random fractional floating point number between 0 and 1 would be (still based on your RNG algo):<br /><br /><pre><code>mov&nbsp; eax,00BB38435h<br />mul&nbsp; <br />add&nbsp; eax,03619636Bh<br />mov&nbsp; ,EAX<br />and&nbsp; eax,3FFFFFFFh&nbsp; &nbsp;  ;instead of 7FFFFFFFh<br />or&nbsp;  eax,3F800000h&nbsp; &nbsp;  ; fix the exponent to 1<br />push eax<br />fld&nbsp; dword ptr<br />fld1<br />fsubp st(1),st<br />pop&nbsp; eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;clean stack<br /></code></pre><br /><br />Raymond<br /></div>
+    <div class="meta">Posted on 2005-08-12 09:26:23 by Raymond</div>
+   </div>
+   <div class="post" id="post-163169">
+    <div class="subject"><a href="#post-163169">Re: Floating point random number generation</a></div>
+    <div class="body">You&#39;re absolutely right. Since we need an exponent equal to 127, bit 30 should be always cleared and thus - we need to and EAX with 3FFFFFFFh. Thanks.</div>
+    <div class="meta">Posted on 2005-08-12 11:38:15 by MikaelC</div>
+   </div>
+  </div>
+ </body>
+</html>

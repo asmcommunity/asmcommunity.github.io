@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>mdi problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26506" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26506">mdi problem</a></p>
+   <div class="post" id="post-191867">
+    <div class="subject"><a href="#post-191867">mdi problem</a></div>
+    <div class="body">i have made a mdi application, if one click 'NEW' it creates a new window, if you press again 'NEW' it creates another window..nothing special, but all the window have some picture that i blit to that window, for example, if i open three new mdi window each window has its own picture which i blit to the mdi window, problem is that all the mdi window use the same mdi_procedure for messages. Each window has own picture because when i create each new mdi window i add this window to the linked list and asociate picture with it,and when mdi window is doing wm_paint through mdi_procedure_message, it looks which window is active and then blits appropriate picture, i am wondering if there is some easier way, i mean, some way in which all the mdi window would use the same mdi_procedure_message function but have different pictures asociated with them(basiclly this is what is happening in Paint Shop Pro all Adobe Photoshop),thank you</div>
+    <div class="meta">Posted on 2001-01-04 22:02:00 by Geckoid</div>
+   </div>
+   <div class="post" id="post-191868">
+    <div class="subject"><a href="#post-191868">mdi problem</a></div>
+    <div class="body">There are a few ways around this problem, but they almost all involve SetWindowLong.  The best way (I think) is to use the process heap (GetProcessHeap), and allocate space on that heap (HeapAlloc) for everything that each MDI window uses, like one massive structure.  Then, use SetWindowLong to set the GWL_USERDATA area to set the pointer to this window's structure in the heap.  From now on, in your MDI window class, all you have to do is get that pointer, and you've got all your information back.  For example:
+
+.data?
+  MDI_CHILD_STRUCT struct
+    ...
+  MDI_CHILD_STRUCT endp
+
+.code
+
+MDIChildProc  proc hWin:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
+
+LOCAL lpHeapPtr :DWORD
+
+.if uMsg==WM_CREATE
+  invoke GetProcessHeap
+  invoke HeapAlloc,eax,NULL,SIZEOF MDI_CHILD_STRUCT
+  mov lpHeapPtr,eax
+  invoke SetWindowLong,hWin,GWL_USERDATA,eax
+.elseif uMsg==WM_DESTROY
+  invoke GetWindowLong,eax,GWL_USERDATA
+  mov lpHeapPtr,eax
+  invoke GetProcessHeap
+  invoke HeapFree,eax,NULL,lpHeapPtr
+.elseif uMsg==(some Window message)
+  invoke GetWindowLong,eax,GWL_USERDATA
+  mov lpHeapPtr,eax
+
+  ;... carry on with your task
+  ; I usually use this also:
+  ;  mov edi,eax
+  ;  assume edi:PTR MDI_CHILD_STRUCT
+  ;
+  ; Then, you can just use edi as a pointer to the data
+  ;  mov eax,.hBitmap  ; for example
+  ;
+  ; If you do this, don't forget to replace EDI to its original
+  ; value too.
+.endif
+
+MDIChildProc endp</div>
+    <div class="meta">Posted on 2001-01-04 22:25:00 by Racso </div>
+   </div>
+   <div class="post" id="post-191869">
+    <div class="subject"><a href="#post-191869">mdi problem</a></div>
+    <div class="body">Racso makes a lot of good points. Basically, you use the user data area to carry a value akin to a "this" object pointer. In C++, various objects of the same class all run the same code, but use "this" to point to custom object data and state information.
+
+That said, I do disagree STRONGLY with the use of "ASSUME" It's action at a distance, bad magic. You ASSUME at the top of a proc, and 58 lines later (when you've forgotten you ASSUMED anything) it fouls you up by assuming the wrong thing.
+
+My alternative is... say you had:
+
+MDI_CHILD_STRUCT struct
+   hBitmap    dword  0
+   MoreThing  dword  0
+   OtherThing dword  0
+MDI_CHILD_STRUCT endp
+
+
+You can use any register as a pointer to a structure, like so:
+
+invoke GetWindowLong, hWnd, GWL_USERDATA
+mov ecx, (MDI_CHILD_STRUCT PTR ).hBitmap 
+mov edx, (MDI_CHILD_STRUCT PTR ).OtherThing
+
+I much prefer this even though it has extra typing (heck, copy and paste it). Each line explicitly states what you intend to do, very hard to get lost.</div>
+    <div class="meta">Posted on 2001-01-05 00:35:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-191870">
+    <div class="subject"><a href="#post-191870">mdi problem</a></div>
+    <div class="body">There are at least three ways to associate specific data to a window. The first way is the one Rasco uses, ie., use GWL_USERDATA dword. The second way is to use cbWndExtra bytes. This method is best if you register your own window class: you can allocate any number of bytes for each window created from the class. The last method I know is to use SetProp to create a new window property.</div>
+    <div class="meta">Posted on 2001-01-05 23:15:00 by Iczelion </div>
+   </div>
+  </div>
+ </body>
+</html>

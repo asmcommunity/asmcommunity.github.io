@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>damn M$ ... NT bug - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15934" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15934">damn M$ ... NT bug</a></p>
+   <div class="post" id="post-123439">
+    <div class="subject"><a href="#post-123439">damn M$ ... NT bug</a></div>
+    <div class="body">Sometimes I just hate M$....maybe I should start hating them all the time instead<br />did you know that QueryServiceConfig() will crash if you pass it pointer to buffer that is not on dword alignment?<br />check out this code<br /><br /><pre><code><br />.data<br />buff db 1024 dup&#40;?&#41;<br />dummy dd ?<br />.code<br />start&#58;<br />	invoke	OpenSCManager,0,0,SC_MANAGER_ALL_ACCESS<br />	invoke	OpenService,eax,CTEXT&#40;&quot;Alerter&quot;&#41;,SERVICE_ALL_ACCESS ; instead alerter use any other available service name<br />	invoke	QueryServiceConfig,eax,offset buff,1024,addr dummy<br /><br /></code></pre><br /><br />Thatwill work fine if we assume that buff is on dword boundary (align it if its not under debugger or somthing like that) , but try this<br /><br /><pre><code><br />.data<br />buff db 1024 dup&#40;?&#41;<br />dummy dd ?<br />.code<br />start&#58;<br />	invoke	OpenSCManager,0,0,SC_MANAGER_ALL_ACCESS<br />	invoke	OpenService,eax,CTEXT&#40;&quot;Alerter&quot;&#41;,SERVICE_ALL_ACCESS ; instead alerter use any other available service name<br />	invoke	QueryServiceConfig,eax,&#91;color=red&#93;offset buff +1&#91;/color&#93;,1024,addr dummy<br /><br /></code></pre><br /><br />yup... effectively craches program on my XP and I wasted 3 wasted hours of my life figuring what is the problem..</div>
+    <div class="meta">Posted on 2003-11-04 18:03:57 by Mikky</div>
+   </div>
+   <div class="post" id="post-123452">
+    <div class="subject"><a href="#post-123452">damn M$ ... NT bug</a></div>
+    <div class="body">Hi<br /><br />That's a good thing to keep in mind. Horrors, an MS bug, who would have thunk it? ;-)<br /><br />Here's another one that caught me with MmIsAddressValid. Straight from the DDK:<br /><br />-------------------------------------------<br />MmIsAddressValid checks whether a page fault will occur for a read or write operation at a given virtual address.<br /><br />MmIsAddressValid(<br />    IN PVOID  VirtualAddress<br /><br />VirtualAddress - Points to the virtual address to check. <br />Return Value - If no page fault will occur from reading or writing at the given virtual address, MmIsAddressValid returns TRUE.<br />-------------------------------------------<br /><br />One would assume then, I believe, you would use the function something like<br /><br />invoke MmIsAddressValid, VirtualAddress<br />.if EAX == TRUE<br />...<br /><br />The only problem is that in the MmIsAddressValid function, the return value (0 or 1) is passed only to AL and not EAX. Plus, EAX immediately becomes the argument you pushed and is further manipulated, almost guaranteeing EAX won't be zero before the return value is passed.  A partial disassembly of the function shows the offending(?) code in ntoskrnl.exe:<br /><br /><pre><code><br />&#58;00442A08 MmIsAddressValid proc near<br />&#58;00442A08   mov    ecx, &#91;esp+arg_0&#93;<br />&#58;00442A0C   mov    eax, ecx<br />...<br />&#58;00442A5C   cmp    dword_4836A4, 0<br />&#58;00442A63   jz     short loc_442A69<br />&#58;00442A65   xor    al, al  ; memory protected or not paged in<br />&#58;00442A67   jmp    short locret_442A6B<br />&#58;00442A69   mov    al, 1  ; memory paged in and valid<br />&#58;00442A6B   retn   4<br />&#58;00442A6B MmIsAddressValid endp<br /></code></pre><br /><br />The caution here is to only check if AL is TRUE, not EAX. Since TRUE equ 1 and not 00000001, I guess there's nothing wrong with this, but it does seem to go against principle in 32 bit code, no?<br />How about a Microsoft bug forum? ;)<br /><br />Cheers,<br />Kayaker</div>
+    <div class="meta">Posted on 2003-11-04 20:43:50 by Kayaker</div>
+   </div>
+   <div class="post" id="post-123453">
+    <div class="subject"><a href="#post-123453">damn M$ ... NT bug</a></div>
+    <div class="body">Maybe I'm wrong here but I don't think this is a bug.  The second parameter is not just any old buffer, but actually a structure that Windows fills.  The definition is:<br /><br /><pre><code><br />typedef struct _QUERY_SERVICE_CONFIG &#123;<br />  DWORD dwServiceType;<br />  DWORD dwStartType;<br />  DWORD dwErrorControl;<br />  LPTSTR lpBinaryPathName;<br />  LPTSTR lpLoadOrderGroup;<br />  DWORD dwTagId;<br />  LPTSTR lpDependencies;<br />  LPTSTR lpServiceStartName;<br />  LPTSTR lpDisplayName;<br />&#125; QUERY_SERVICE_CONFIG, *LPQUERY_SERVICE_CONFIG;<br /></code></pre><br /><br />If the first field is supposed to be a DWORD, shouldn't the buffer you allocate be aligned on a DWORD boundry?</div>
+    <div class="meta">Posted on 2003-11-04 20:44:27 by Mecurius</div>
+   </div>
+   <div class="post" id="post-123490">
+    <div class="subject"><a href="#post-123490">damn M$ ... NT bug</a></div>
+    <div class="body">Kayaker, thats what am talking  about, but note that even though TRUE usually means 1 it is actually every non-zero value (at least in C/C++). In ether case they should point that procedure returns non-zero value for success.<br /><br />Mecurius, data is data, you can store it in buffer declared as dwords, bytes, or QUERY_SERVICE_CONFIG. Note that QUERY_SERVICE_CONFIG struct have not fixed length so thats why I used that big buffer. And yes everything on 32bit processor should be be on dword boundary becouse of performances, but in no way a non-alignment data should crash the program.</div>
+    <div class="meta">Posted on 2003-11-05 04:41:43 by Mikky</div>
+   </div>
+   <div class="post" id="post-123495">
+    <div class="subject"><a href="#post-123495">damn M$ ... NT bug</a></div>
+    <div class="body"><div class="quote"><strong>Kayaker</strong>: <em>The only problem is that in the MmIsAddressValid function, the return value (0 or 1) is passed only to AL and not EAX.</em></div>Hi, Kayaker. No problem with MmIsAddressValid because its defined like this:<br /><br /><strong>BOOLEAN</strong><br />  MmIsAddressValid(<br />    IN PVOID  VirtualAddress<br />    );<br /><br />You see the return value is of type BOOLEAN. And BOOLEAN defined in ddk headers like this:<br /><br />typedef UCHAR BOOLEAN;</div>
+    <div class="meta">Posted on 2003-11-05 06:05:37 by Four-F</div>
+   </div>
+   <div class="post" id="post-123573">
+    <div class="subject"><a href="#post-123573">damn M$ ... NT bug</a></div>
+    <div class="body">Thank you Four-F, that clarifies things immensely.  I never considered that BOOLEAN in the API declaration signified anything other than a dword return value. I can see this (BOOLEAN return value being passed in AL) in several other functions now as well.  Darn, and it was so easy to blame M$ too, instead of my own ignorance and lack of formal C training ;-)<br /><br />Still, it bears a bit of caution, from windows.inc it appears<br />BOOLEAN != BOOL, but also<br />bool != BOOL<br />a bit confusing perhaps.<br /><br />----------------------<br />; 8 bit   BYTE<br />bool                        typedef BYTE<br />BOOLEAN                     typedef BYTE<br /><br />; 32 bit  DWORD<br />BOOL                        typedef DWORD<br />----------------------<br /><br />Heheh, there's a phrase that's somewhat appropriate, I don't know how well this would translate into Russian ;)<br /><br />&quot;I see said the blind man to his deaf dog&quot;<br /><br />Regards,<br />Kayaker</div>
+    <div class="meta">Posted on 2003-11-05 21:14:54 by Kayaker</div>
+   </div>
+   <div class="post" id="post-123606">
+    <div class="subject"><a href="#post-123606">damn M$ ... NT bug</a></div>
+    <div class="body">BTW, primarily BOOLEN was defined as DWORD. I wrote about it here:<br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=8991">WINDOWS.INC version 125b</a> <br />But two different definitions of one type!... windows.inc is still buggy :-(</div>
+    <div class="meta">Posted on 2003-11-06 03:28:52 by Four-F</div>
+   </div>
+  </div>
+ </body>
+</html>

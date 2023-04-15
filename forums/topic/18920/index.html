@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>invoke-like function - calling register - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18920" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18920">invoke-like function - calling register</a></p>
+   <div class="post" id="post-146448">
+    <div class="subject"><a href="#post-146448">invoke-like function - calling register</a></div>
+    <div class="body">Hello,<br /><br />Well I'm trying to call a register but Macros wont work.<br /><br />I've tried invoke, scall and xcall, tried also to modify them but I can't make it work...<br /><br />Suppose this little piece of code:<br /><br /><pre><code><br />.data <br /><br />szDllName BYTE &quot;user32.dll&quot;,0<br />szFuncName BYTE &quot;MessageBoxA&quot;,0<br /><br />.code<br /><br />invoke Loadlibrary,addr szDllName<br />mov hModule,eax<br /><br />invoke GetProcAddress,hModule,addr szFuncName<br />;function pointer in eax<br /><br />invoke eax, hWin, addr szText, addr szCaption,MB_OK ; I'm searching for something like that<br /><br /></code></pre><br /><br />Anyone know what I must change to Xcall macro to make it accpet registers as first value ?<br /><br />Maybe I should write a new macro ?<br /><br />Thank you very much.<br /><br />Thanks to fodder for pointing me to xcall (that's a really good macro, thanks Stryker !)<br /><br />Regards, Neitsa.</div>
+    <div class="meta">Posted on 2004-07-19 19:58:22 by Neitsa</div>
+   </div>
+   <div class="post" id="post-146458">
+    <div class="subject"><a href="#post-146458">invoke-like function - calling register</a></div>
+    <div class="body">smile :grin:<pre><code>.686<br />.MMX<br />.XMM<br />.MODEL FLAT, STDCALL<br />OPTION SCOPED<br />OPTION CASEMAP&#58;NONE<br /><br />INCLUDE C&#58;masm32includewindows.inc<br />INCLUDE C&#58;masm32includekernel32.inc<br />INCLUDELIB C&#58;masm32libkernel32.lib<br />INCLUDE C&#58;masm32includeuser32.inc<br />INCLUDELIB C&#58;masm32libuser32.lib<br /><br />@str macro _str&#58;vararg<br />local @@1<br />    if @InStr&#40;1, &lt;_str&gt;, &lt;!&quot;&gt; &#41;<br />        .data<br />            @@1 db _str, 0<br />        .code<br />        exitm &lt;offset @@1&gt;<br />    else<br />        exitm &lt;_str&gt;<br />    endif<br />endm<br /><br />@preverse MACRO ParList&#58;REQ<br />    LOCAL Value, arg<br />    Value TEXTEQU &lt;&gt;<br />    % FOR arg, &lt;ParList&gt;<br />        Value CATSTR &lt;arg&gt;, &lt;,&gt;, Value<br />    ENDM<br />    Value SUBSTR Value, 1, @SizeStr&#40; %Value &#41; - 1<br />    Value CATSTR &lt;!&lt;&gt;, Value, &lt;!&gt;&gt;<br />    EXITM Value<br />ENDM<br /><br />xcall MACRO function&#58;REQ, parameters&#58;VARARG<br />    LOCAL paddr<br />    IFNB &lt;parameters&gt;<br />        % FOR param, @preverse&#40;&lt;parameters&gt;&#41;<br />            IF @SizeStr&#40;&lt;param&gt; &#41; GT 4<br />                paddr SUBSTR &lt;param&gt;, 1, 5<br />                IFIDNI paddr, &lt;ADDR &gt;<br />                    paddr SUBSTR &lt;param&gt;, 6, @SizeStr&#40;&lt;param&gt;&#41; - 5<br />                    lea eax, paddr<br />                    push eax<br />                ELSE<br />                    push @str&#40;&lt;param&gt;&#41;<br />                ENDIF<br />            ELSE<br />                push @str&#40;&lt;param&gt;&#41;<br />            ENDIF<br />        ENDM<br />    ENDIF<br />    call function<br />ENDM<br /><br />.DATA<br /><br />    szText      BYTE &quot;Text&quot;, 0<br />    szCaption   BYTE &quot;Caption&quot;, 0<br /><br />    szDllName   BYTE &quot;user32.dll&quot;,0<br />    szFuncName  BYTE &quot;MessageBoxA&quot;,0<br />    <br />.DATA<br /><br />    hWin        DWORD ?<br />    hModule     DWORD ?<br /><br />.CODE<br /><br />start&#58;<br /><br />    invoke  LoadLibrary, ADDR szDllName<br />    mov     hModule, eax<br /><br />    invoke  GetProcAddress, hModule, ADDR szFuncName<br />    mov     ecx, eax<br /><br />    xcall   ecx, hWin, ADDR szText, ADDR szCaption, MB_OK ; I'm searching for something like that<br /><br />    invoke  ExitProcess, 0<br />    ret<br /><br />END start</code></pre>remember ADDR  is<pre><code>lea eax, LABEL<br />push eax</code></pre>:grin:</div>
+    <div class="meta">Posted on 2004-07-19 21:59:27 by arkane</div>
+   </div>
+   <div class="post" id="post-146472">
+    <div class="subject"><a href="#post-146472">invoke-like function - calling register</a></div>
+    <div class="body">Another simulation of invoke macro:<br /><pre><code><br />_invoke MACRO funcname&#58;REQ,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13,p14,p15,p16,p17,p18,p19,p20<br />local pos<br /><br />    FOR arg,&lt;p20,p19,p18,p17,p16,p15,p14,p13,p12,p11,p10,p9,p8,p7,p6,p5,p4,p3,p2,p1&gt;<br /><br />        IFNB &lt;arg&gt;<br />             pos=@InStr&#40;1,arg,&lt;ADDR&gt;&#41; OR @InStr&#40;1,arg,&lt;addr&gt;&#41; OR @InStr&#40;1,arg,&lt;Addr&gt;&#41;<br /><br />             IF pos<br /><br />                IF &#40;OPATTR&#40;@SubStr&#40;arg,%pos+5&#41;&#41;&#41; EQ 98<br />                        lea eax,@SubStr&#40;&lt;arg&gt;,%pos+5&#41;<br />                        push eax<br />                ELSE<br />                        push OFFSET @SubStr&#40;&lt;arg&gt;,%pos+5&#41;<br />                ENDIF<br /><br />             ELSE<br />                        push arg<br />             ENDIF<br />        ENDIF<br />    ENDM<br />call funcname<br />ENDM<br /></code></pre></div>
+    <div class="meta">Posted on 2004-07-20 05:22:11 by Vortex</div>
+   </div>
+   <div class="post" id="post-146481">
+    <div class="subject"><a href="#post-146481">invoke-like function - calling register</a></div>
+    <div class="body">Hello,<br /><br />Thank you very much for your answers.<br /><br />It seems to work now. :alright: <br /><br />I've got some compile errors in some cases, dunno exactly where it came from. I'll continue to search. Anyway now It works...<br /><br />Thanks a lot.<br /><br />Regards, Neitsa.</div>
+    <div class="meta">Posted on 2004-07-20 07:05:34 by Neitsa</div>
+   </div>
+  </div>
+ </body>
+</html>

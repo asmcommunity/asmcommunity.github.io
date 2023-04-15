@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>EnumWindows and WriteFile - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18348" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18348">EnumWindows and WriteFile</a></p>
+   <div class="post" id="post-142179">
+    <div class="subject"><a href="#post-142179">EnumWindows and WriteFile</a></div>
+    <div class="body">Hello!<br />            The problem is that i am using EnumWindows to get the list of all currently active windows<br />But i also want to write it to a log file cureated in the same directory.<br /><br />EnumWindows works out successfully, even the log file is created but i cant seem to write into the file :( <br /><br />the size of the log file remains 0Kb only i dont know why :(<br /><br />I use createfile to make the file and writefile to write to it.<br /><br />The window name is stored in : szTemp db 200 dup(0) and the window name <br /><br />is retrived using getwindowtext. Can anyone help me please :confused: <br /><br />If possible Please post the writefile code coz i can already enumwindow's successfully :grin: <br /><br />Thankyou for reading:)</div>
+    <div class="meta">Posted on 2004-05-26 14:23:58 by telophase</div>
+   </div>
+   <div class="post" id="post-142180">
+    <div class="subject"><a href="#post-142180">EnumWindows and WriteFile</a></div>
+    <div class="body"><pre><code><br /><br />NumberOfBytesWritten dd ?<br />FileName db &quot;C&#58;\test&quot; 0<br />szTemp db 128 dup &#40;?&#41;<br /><br />invoke WriteMemIntoFile, OFFSET FileName, OFFSET szTemp, 128<br /><br />WriteMemIntoFile proc szFileName&#58;DWORD, MemoryADDR&#58;DWORD, Size2Write&#58;DWORD<br />    <br />    invoke CreateFile, szFileName, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0<br />    push eax    ; for CloseHandle<br />      invoke WriteFile, eax, MemoryADDR, Size2Write, OFFSET NumberOfBytesWritten, 0<br />    <br />    call CloseHandle<br />ret<br />endp<br /></code></pre><br /><br />Should work. Of course if you want to append to a file, you need to set the file pointer to the end using SetFilePointer</div>
+    <div class="meta">Posted on 2004-05-26 14:45:20 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-142193">
+    <div class="subject"><a href="#post-142193">EnumWindows and WriteFile</a></div>
+    <div class="body">telophase, <br />see &quot;Tiny window informers&quot;:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=18195&amp;highlight=kero">http://www.asmcommunity.net/board/showthread.php?threadid=18195&amp;highlight=kero</a><br /><br />Source of WinTreeSnap contains code you need<br />(EnumWindows + output list via Create/WriteFile).</div>
+    <div class="meta">Posted on 2004-05-26 18:28:01 by kero</div>
+   </div>
+   <div class="post" id="post-142201">
+    <div class="subject"><a href="#post-142201">EnumWindows and WriteFile</a></div>
+    <div class="body">Thanks for the link kero :alright: <br /><br />Jimmy,<br />  <br />             I could get your code but the problem is that in the text file to which i am appending each<br /><br />window name should be on a new line so that the user can read comforatbily.<br /><br />Isn't there any function like &quot;WriteLine&quot; which we have in Visual Basic or atleast we could emulate it<br /><br />in assembly? could that be done ? :confused: <br /><br />:stupid:</div>
+    <div class="meta">Posted on 2004-05-26 22:28:18 by telophase</div>
+   </div>
+   <div class="post" id="post-142204">
+    <div class="subject"><a href="#post-142204">EnumWindows and WriteFile</a></div>
+    <div class="body">Yes, just add crlf with WriteFile.</div>
+    <div class="meta">Posted on 2004-05-27 00:17:40 by roticv</div>
+   </div>
+   <div class="post" id="post-142207">
+    <div class="subject"><a href="#post-142207">How?</a></div>
+    <div class="body">I know CrLF db 0ah,0dh but how to add to write file ?? :confused:</div>
+    <div class="meta">Posted on 2004-05-27 00:24:29 by telophase</div>
+   </div>
+   <div class="post" id="post-142210">
+    <div class="subject"><a href="#post-142210">EnumWindows and WriteFile</a></div>
+    <div class="body"><pre><code><br />.data<br />hLogFile dd 0<br />DidWriteLog dd 0<br />.data?<br />LogBuf db 256 dup &#40;?&#41;<br />.code<br />CreateLog macro pName&#58;REQ<br />mov hLogFile,$invoke &#40;CreateFile,pName,GENERIC_READ or GENERIC_WRITE,0, 0, CREATE_ALWAYS,0,0&#41;<br />endm<br /><br />WriteLog proc pText&#58;DWORD<br />            invoke lstrlen,pText<br />@@&#58;    push eax<br />            invoke WriteFile,hLogFile,pText,eax, addr DidWriteLog,0 <br />            pop eax<br />            sub eax,DidWriteLog<br />            .if eax&gt;0<br />                  jmp @B<br />            .endif<br />            ret<br />WriteLog endp<br /><br />Log macro pText&#58;REQ<br />push esi<br />push edi<br />pushad<br />invoke WriteLog, pText<br />popad<br />pop edi<br />pop esi<br />endm<br /><br /><br />LogDWORD macro pText&#58;REQ,Val&#58;REQ<br />push esi<br />push edi<br />pushad<br />invoke wsprintf,addr LogBuf,pText,Val<br />invoke WriteLog,addr LogBuf<br />popad<br />pop edi<br />pop esi<br />endm<br /><br />CloseLog macro<br />invoke CloseHandle,hLogFile<br />endm<br /><br />CTEXT macro Text&#58;VARARG<br />        local szText<br />        .data<br />        szText byte Text, 0<br />        .code<br />        exitm &lt;offset szText&gt;        <br />endm<br /><br /></code></pre><br /><br />OK now - instructions to use this stuff.<br />Add a line early in your program<br /><pre><code>CreateLog CTEXT &#40;&quot;MYLOGFILE.TXT&quot;&#41;</code></pre><br />and somewhere at the end of the program<br /><pre><code>CloseLog</code></pre><br /><br />Now anywhere in your program, add plaintext lines to the logfile with the command:<br /><pre><code>Log CTEXT&#40;&quot;This line will be logged&quot;,13,10&#41;</code></pre><br />Note that the CRLF (13,10) is optional, sometimes its desirable write a few things to the log on a single line.<br />The final Logging macro I've supplied u with is to be used as if you were using wsprintf:<br /><pre><code>LogDWORD CTEXT&#40;&quot;The Value is %lu&quot;,13,10&#41;, MyValue</code></pre><br />or possibly <pre><code>LogDWORD CTEXT&#40; &quot;Today is %s&quot;&#41;,addr szDay</code></pre><br />LogDWORD is a generic wsprintf-driven Log macro, don't misinterpret it because of its name, it'll do anything wsprintf will, and output it to your file, with the one drawback that the version supplied is limited to a single argument.<br /><br />Feel free to modify as required, personally what I do is something like this:<br />if __DEBUG__<br />    Log CTEXT(&quot;Logging Enabled,&quot;,13,10)<br />endif<br /><br />then add a switch at the start of the program<br />__DEBUG__ equ 0 (or 1) <br />allows me to build my application with or without any logging code, so I can make a debugging version or a final version using the same source, and without having to remove all my debug lines later, or have any of that code appear in my final product.<br /><br /><br />Have fun :)</div>
+    <div class="meta">Posted on 2004-05-27 01:11:10 by Homer</div>
+   </div>
+   <div class="post" id="post-142211">
+    <div class="subject"><a href="#post-142211">Thank You</a></div>
+    <div class="body">Thanks for the code :grin:</div>
+    <div class="meta">Posted on 2004-05-27 01:33:24 by telophase</div>
+   </div>
+  </div>
+ </body>
+</html>

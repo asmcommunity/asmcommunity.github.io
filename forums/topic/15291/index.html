@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>A way to handle an interrupt gate in a driver - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15291" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15291">A way to handle an interrupt gate in a driver</a></p>
+   <div class="post" id="post-118761">
+    <div class="subject"><a href="#post-118761">A way to handle an interrupt gate in a driver</a></div>
+    <div class="body">DivideError:   (ISR)<br /><br />        push ebp<br />        mov ebp,esp<br />        mov eax,dword ptr ss:;EFLAGS zeroed out<br />        mov Startflags,eax<br />        mov eax,dword ptr ss: ; got address here<br />        add eax,02h                   <br />        mov dword ptr ss:,eax<br />        pop ebp<br />        mov eax, dword ptr ss: ;good EIP<br />        mov GoodEIP,eax       <br />        pop edx                         ;flags<br />        pop ecx                         ;CS<br />        pop eax                         ;EIP changed here<br />        mov eax,GoodEIP<br />        jmp eax<br /><br />  In this sub routine we understand that the data segment and the stack segment are the same selector, selector 10h in a driver. Selector 10h is the operating systems global data selector with a base address of 0h and full limit of FFFFFFh. Also the stack grow upwards because it is also the data segment. Being that the handler is in the same code segment as the process, we cannot do a far return as is necessary to pop the Eflags/CS/EIP off the stack. So it must be done manually as shown above. The scheduler triggered by timer interrupt will attempt to alter the EIP which is why you must get it early and store it.<br /><br />        push ecx            ; save selector, ecx value of 10h(the data selector)<br />        push ebp            ; A way of storing information<br />        push esp            ; on the stack<br />        pop ebp<br />        xor ecx,ecx<br />        xor edx,edx<br />        push ecx<br />        push edx<br />        SIDT ss:   ; Store IDT address and seg. limit on stack<br />        pop edx             ; high word <br />        pop ecx             ; low word<br />        pop ebp<br />        mov eax,edx<br />        shr eax,010h<br />        shl ecx,010h<br />        or eax,ecx          ; IDT address now in &quot;eax&quot;<br />        mov IDTbase,eax<br />        pop ecx<br /><br />Now we have interrupt vecter table address<br /><br />        mov edi,IDTbase<br />        push ds<br />        mov ds,cx <br />        mov eax, dword ptr ds:    ;High word of 8 bytes<br />        mov HwordDiv,eax <br />        mov eax, dword ptr ds:    ;IDT base + 00=<br />        mov LwordDiv,eax                   ;Divide Error Exception<br />        push ebx<br />        xor ebx,ebx<br />        push cs<br />        pop ebx              ;*<br />        ror eax,010h<br />        cmp bx,ax            ; See if same CS selector<br />        jnz NoGo<br />        mov eax,DivideError  ; location of new ISR<br />        push ecx<br />        mov ecx,LwordDiv<br />        mov cx,ax<br />        mov dword ptr ds:,ecx<br />        mov ecx,HwordDiv<br />        ror ecx,010h<br />        shr eax,010h<br />        mov cx,ax<br />        rol ecx,010h<br />        mov dword ptr ds:,ecx<br />        pop ecx<br />        pop ebx<br />        pop ds<br /><br />Here we replaced the Divide by zero interrupt vector with a pointer to the ISR which resides in current code segment. The divide by zero interrupt or exception is offset zero in the IDT with each entry being two dwords or 64 bits (8 bytes)<br /><br />        push ebx<br />        xor edx,edx<br />        mov eax,00000002h<br />        mov ebx,00000000h   ; divide by zero<br />        div ebx<br />        nop<br />        nop<br />        nop<br />        nop<br />PopEBX:<br />        pop ebx<br /><br />Lastely we try it out</div>
+    <div class="meta">Posted on 2003-09-20 07:23:56 by mrgone</div>
+   </div>
+  </div>
+ </body>
+</html>

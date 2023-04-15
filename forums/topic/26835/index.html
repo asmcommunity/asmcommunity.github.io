@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Tabing around the christmas tree...... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26835" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26835">Tabing around the christmas tree......</a></p>
+   <div class="post" id="post-193219">
+    <div class="subject"><a href="#post-193219">Tabing around the christmas tree......</a></div>
+    <div class="body">ok so i tryed to make my topic go with a christmas song, so what?  anyway what would u have to do in order to make a tab sequence... like im typing somthing in one edit box, and i want to hit tab and go to the next one and after entering stuff in that one i want to hit tab so that i can just press enter instead of having to click the button.  any ideas?
+
+any help would be apreciated!
+
+-brad</div>
+    <div class="meta">Posted on 2001-02-10 14:22:00 by Rage9</div>
+   </div>
+   <div class="post" id="post-193220">
+    <div class="subject"><a href="#post-193220">Tabing around the christmas tree......</a></div>
+    <div class="body">I like Christmas songs.
+
+If your window is a dialog box, the order in which controls are listed in the resource file seems to determine tab sequence.</div>
+    <div class="meta">Posted on 2001-02-10 16:55:00 by vReal</div>
+   </div>
+   <div class="post" id="post-193221">
+    <div class="subject"><a href="#post-193221">Tabing around the christmas tree......</a></div>
+    <div class="body">i have oftern wondred about this, and have eventuly come to the conclusion, that there is no API behind tabbing between controls, its just something extra a programmer has coded into an app.
+
+The best way i could think of, would be to have a array in memory which would look something like this:
+
+<pre><code>
+CurrentFocus DWORD ?
+CtlIdArrayStart equ $
+CtlId1 WORD ?
+CtlId2 WORD ?
+CtlId3 WORD ?
+CtlId4 WORD ?
+.
+.
+.
+CtlIdn WORD ?
+NumberOfWindows equ (CtlIdArrayStart - $) / 2
+
+</code></pre>
+
+This array contains all of the ID's of your child windows. Now you would have to hook the window proc for each of those child windows as you created them:
+
+<pre><code>
+invoke HookWindowProc ,hCtln
+.
+.
+.data?
+ iHooks DWORD ?
+ WindowHookArray DWORD NumberOfWindows * 2
+.code
+.
+.
+HookWindowProc proc hCtl:HWND
+
+invoke SetWindowLong ,hCtl,GWL_WNDPROC,Offset wpCtlProc
+
+lea edx,
+mov dword ptr ,hCtl
+mov dword ptr ,eax
+
+inc iHooks
+
+mov eax,TRUE
+ret
+HookWindowProc endp
+.
+.
+.
+wpCtlProc proc hWnd:HWND,uMsg:UINT,wParam:WPARAM,lParam:LPARAM
+
+.IF uMsg==WM_CHAR ;If the message to the control is a key press
+    .IF wParam==VK_TAB ;We want the tab key
+        invoke TabbPressed ;call the function to deal with this
+        jmp Func_End       ;and return cause we have dealt with the message
+    .ENDIF
+.ELSEIF uMsg==WM_SETFOCUS ;Otherwise, if the focus of an control set with mouse etc
+    invoke UpdateCurrentTabbFocus ,hWnd ;Call the function to deal witht that
+.ENDIF
+
+invoke TabbedCallWndProc ,hWnd ;Now we must pass the message to its correct WndProc
+
+Func_End:
+ret
+wpCtlProc endp
+
+</code></pre>
+
+Now note that the hooked window proc above is for all the child windows, so the last function called ('TabbedCallWndProc') deals with dispatching the messages to the correct window.
+
+<pre><code>
+
+TabbedCallWndProc proc hCtl:HWND,hWnd:HWND,uMsg:UINT,wParam:WPARAM,lParam:LPARAM
+
+mov eax,hCtl ;This is the window we are searching for
+mov edx,Offset WindowHookArray ;The address of our array
+mov ecx,iHooks ;The number of hooks so we dont cause an exception
+
+@@:
+.IF dword ptr !=eax ;The current window handle in the array doesn't match
+    add edx,8 ;So increment the pointer to the next one
+    dec ecx   ;decrease the counter
+    jnz @B    ;and loop back if its not zero
+
+    not ecx     ;else set eax to -1
+    mov eax,ecx ;And return
+
+.ELSE ;else  points to the new window proc
+    invoke CallWindowProc ,dword ptr ,hWnd,uMsg,wParam,lParam
+.ENDIF
+
+ret ;And return with either -1 indicating an error, or the return value from the message
+TabbedCallWndProc endp
+
+</code></pre>
+
+These two procs deal with the tabb key presses and the focus of controls:
+
+1) 'TabbPressed'
+This proc searches the Ctl id array defined before, for the current control with the focus and gives it to the next control with the id in the array.
+
+2) 'UpdateCurrentTabbFocus'
+If the user clicks a mouse on a control in your window, then presses a tabb key, a bug will occour because the array mentioned before will be set incorrectly to the current control
+
+<pre><code>
+
+TabbPressed proc hParent:DWORD
+
+.IF CurrentFocus==NumberOfWindows ;wrap-around to avoid going of table bounds
+    mov CurrentFocus,0
+.ENDIF
+
+mov edx,CurrentFocus ;Get the current control
+shl edx,1 ;mutliply by 2
+add edx,CtlIdArrayStart + 2;Get the offset in mem of the current focus control id
+                       ;then +2 for the next control to set focus to.
+
+movzx edx,word ptr 
+
+invoke GetDlgItem ,hParent,edx ;Get the handle from the id
+invoke SetFocus ,eax
+
+ret
+TabbPressed endp
+.
+.
+.
+UpdateCurrentTabbFocus proc hWnd:HWND
+
+invoke GetWindowLong ,hWnd,GWL_ID
+
+mov ecx,NumberOfWindows
+mov edx,CtlArrayIdStart
+
+@@:
+.IF word ptr !=ax
+    add edx,2
+    dec ecx
+    jnz @B
+
+    xor eax,eax
+.ELSE
+    .IF ecx==1
+        xor edx,edx
+    .ELSE
+        sub edx,CtlArrayIdStart
+        shr edx,1
+        inc edx
+    .ENDIF
+
+    mov CurrentFocus,edx
+    mov eax,edx
+.</div>
+    <div class="meta">Posted on 2001-02-11 02:19:00 by George</div>
+   </div>
+  </div>
+ </body>
+</html>

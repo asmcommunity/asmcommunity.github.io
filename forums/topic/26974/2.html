@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Smooth Shading and MSIMG32.DLL - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26974" />
+  <link rel="prev" href="../?id=26974&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26974">Smooth Shading and MSIMG32.DLL</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=26974&amp;page=1" style="">&laquo;</a><a href="../?id=26974&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="26974" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-193943">
+    <div class="subject"><a href="#post-193943">Smooth Shading and MSIMG32.DLL</a></div>
+    <div class="body">Try this...
+
+<pre><code>
+;--------------------------------------------
+;Color is in eax do something with it here...
+;Need to preserve: ebx, esi, edi
+;--------------------------------------------
+	invoke	CreateSolidBrush, eax
+	mov	hBrush, eax
+
+	invoke	SelectObject, hDC, hBrush
+	mov	hBrushOld, eax
+
+	invoke	PatBlt, hDC, RangeCount, 0, 1, 100, PATCOPY
+
+	invoke	SelectObject,hDC,hBrushOld
+	invoke	DeleteObject,hBrush
+
+...or...
+
+	invoke	CreateSolidBrush, eax
+	invoke	SelectObject, hDC, eax
+	push	eax	;old brush
+
+	invoke	PatBlt, hDC, RangeCount, 0, 1, 100, PATCOPY
+
+	pop     eax	;old brush
+	invoke	SelectObject, hDC, eax
+	invoke	DeleteObject, eax
+
+</code></pre>
+
+...you need to save the old brush, and restore that selection.  Creating a DIB brush with the colors and then painting the height might be faster.  Just pass an array of width DWORDS, and have the algorithm fill the array.  I don't know - certainly there are hundreds of ways to do it.
+
+Take care, bitRAKE
+
+
+This message was edited by bitRAKE, on 2/25/2001 3:27:12 PM</div>
+    <div class="meta">Posted on 2001-02-25 14:36:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-193944">
+    <div class="subject"><a href="#post-193944">Smooth Shading and MSIMG32.DLL</a></div>
+    <div class="body">Success!!!
+
+I thought I could just select a stock object onto a dc to
+clean it up. Guess not. I swear I read that somewhere on MSDN;
+but it could have been a misprint/misread too...
+
+Thanks for all of your help. It works great now!!
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-02-25 18:11:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-193945">
+    <div class="subject"><a href="#post-193945">Smooth Shading and MSIMG32.DLL</a></div>
+    <div class="body">I found another error in my code:
+
+The blue part looses the sign under some conditions.  Below is the code I currently have.  I'm only scaling the values by 128 to save the sign on the blue component.  A question I have thou, is why the colors aren't more continuous like the title bar?  Why do I get banding?
+
+It's been fun coding with you,
+bitRAKE
+
+<pre><code>ColorRange PROC USES ebx esi edi,
+	StartColor:DWORD, EndColor:DWORD, RangeCount:DWORD, hDC:DWORD, wid:DWORD
+
+	LOCAL	dx1:DWORD
+	LOCAL	dx2:DWORD
+	LOCAL	dx3:DWORD
+
+	mov	ecx, EndColor
+	mov	edi, StartColor
+	sal	ecx, 7
+	sal	edi, 7
+
+	mov	eax, ecx
+	mov	ebx, edi
+	and	eax, 0FF000000h / 2
+	and	ebx, 0FF000000h / 2
+	sub	eax, ebx
+	cdq
+	idiv	RangeCount
+	mov	dx1, eax
+
+	mov	eax, ecx
+	mov	esi, edi
+	and	eax, 0FF0000h / 2
+	and	esi, 0FF0000h / 2
+	sub	eax, esi
+	cdq
+	idiv	RangeCount
+	mov	dx2, eax
+
+	mov	eax, ecx
+	and	eax, 0FF00h / 2
+	and	edi, 0FF00h / 2
+	sub	eax, edi
+	cdq
+	idiv	RangeCount
+	mov	dx3, eax
+
+	mov	eax, StartColor
+lp:
+
+;--------------------------------------------
+;Color is in eax do something with it here...
+;Need to preserve: ebx, esi, edi
+;--------------------------------------------
+	invoke	CreateSolidBrush, eax
+	invoke	SelectObject, hDC, eax
+	push	eax	;old brush
+
+	invoke	PatBlt, hDC, RangeCount, 0, 1, wid, PATCOPY
+
+	pop     eax	;old brush
+	invoke	SelectObject, hDC, eax
+	invoke	DeleteObject, eax
+
+	add	ebx, dx1
+	mov	eax, ebx
+	and	eax, 0FF000000h / 2
+
+	add	esi, dx2
+	mov	edx, esi
+	and	edx, 0FF0000h / 2
+	or	eax, edx
+
+	add	edi, dx3
+	mov	edx, edi
+	and	edx, 0FF00h / 2
+	or	eax, edx
+
+	shr	eax, 7
+
+	dec	RangeCount
+	jne	lp
+
+	ret
+ColorRange ENDP</code></pre></div>
+    <div class="meta">Posted on 2001-02-25 21:07:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-193946">
+    <div class="subject"><a href="#post-193946">Smooth Shading and MSIMG32.DLL</a></div>
+    <div class="body">I'm using 128 for my RangeCount. So far, I haven't seen any
+banding. However, I did notice it when I cut it back to 32.
+
+Also, we aren't using floating math. A little could help with
+the band widths...
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-02-25 21:44:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-193947">
+    <div class="subject"><a href="#post-193947">Smooth Shading and MSIMG32.DLL</a></div>
+    <div class="body">Here's how I'm using the code.
+
+The last paramater is the width of the area (window) divided by
+the RangeCount. This is the width of each PatBlt rectangle.
+
+<pre><code>
+    .elseif uMsg == WM_PAINT
+        invoke BeginPaint,hWin,ADDR Ps
+        invoke Gradient, Ps.hdc, 0CC6600h, 0FFDEBBh, 128, 640, 20, 5
+        invoke EndPaint,hWin,ADDR Ps
+        return 0
+</code></pre>
+
+<pre><code>
+Gradient PROC USES ebx esi edi, hDC:DWORD, StartColor:DWORD, EndColor:DWORD, RangeCount:DWORD, wt:DWORD, ht:DWORD, BarWidth:DWORD
+
+LOCAL dx1:DWORD
+LOCAL dx2:DWORD
+LOCAL dx3:DWORD
+LOCAL iLeft:DWORD
+
+mov ecx, StartColor
+mov edi, EndColor
+sal ecx, 7
+sal edi, 7
+
+mov eax, ecx
+mov ebx, edi
+and eax, 0FF000000h / 2
+and ebx, 0FF000000h / 2
+sub eax, ebx
+cdq
+idiv RangeCount
+mov dx1, eax
+
+mov eax, ecx
+mov esi, edi
+and eax, 0FF0000h / 2
+and esi, 0FF0000h / 2
+sub eax, esi
+cdq
+idiv RangeCount
+mov dx2, eax
+
+mov eax, ecx
+and eax, 0FF00h / 2
+and edi, 0FF00h / 2
+sub eax, edi
+cdq
+idiv RangeCount
+mov dx3, eax
+
+mov eax, EndColor
+lp:
+
+
+    invoke   CreateSolidBrush, eax                          ;
+    invoke   SelectObject, hDC, eax                         ;
+    push eax                                                ; old brush
+
+
+    mov eax, RangeCount
+    sub eax, 1
+    mul BarWidth
+    mov iLeft, eax
+    invoke   PatBlt, hDC, iLeft, 0, BarWidth, ht, PATCOPY   ;
+
+
+    pop eax                                                 ; old brush
+    invoke   SelectObject, hDC, eax                         ;
+    invoke   DeleteObject, eax                              ;
+
+
+add ebx, dx1
+mov eax, ebx
+and eax, 0FF000000h / 2
+
+add esi, dx2
+mov edx, esi
+and edx, 0FF0000h / 2
+or eax, edx
+
+add edi, dx3
+mov edx, edi
+and edx, 0FF00h / 2
+or eax, edx
+
+shr eax, 7
+
+dec RangeCount
+jne lp
+
+ret
+Gradient ENDP
+</code></pre>
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-02-25 22:28:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-193948">
+    <div class="subject"><a href="#post-193948">Smooth Shading and MSIMG32.DLL</a></div>
+    <div class="body">As to my previous question:
+My desktop color depth is 16-bit and windows has a smooth gradient on the title bar, but the GDI calls can't produce the same gradient?  The colors are right, but windows clips the color somehow?  This problem doesn't exist at 24/32-bit color depths.
+
+The algorithm is designed to provide the smoothest transition it can given 24-bit color.  BarWidth is totally un-needed.  In the present state, that I have posted above, the algorithm will only have problems if the colors don't exist.
+example:
+start=F00000
+end=FF0000
+...then only 15 colors exist, so ColorRange can be up to 15*128 without problems!  We don't need floating point math, because I'm doing fixed point with enough precision.
+bitRAKE
+
+This message was edited by bitRAKE, on 2/25/2001 11:27:00 PM</div>
+    <div class="meta">Posted on 2001-02-25 22:48:00 by bitRAKE</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=26974&amp;page=1" style="">&laquo;</a><a href="../?id=26974&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="26974" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

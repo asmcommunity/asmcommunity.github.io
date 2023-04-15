@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. ex. #6.1 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27490" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27490">Basics of Asm32 in opt. ex. #6.1</a></p>
+   <div class="post" id="post-196550">
+    <div class="subject"><a href="#post-196550">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Handling arguments in Win32 style procs.
+Passing arg. to invoke.
+Addressing to arguments.
+(Based on analiz of comctls.asm - masm32\example1\comctls.asm)
+For beginners
+-----------------------
+<pre><code>
+Look at the code.
+ m2m caW,lParam[0] ;client area width
+ m2m caH,lParam[2] ;client area height
+
+To understand it fully in need to have a clear picture of what
+actually are arguments in stdcall procs, locals, stack, and stack frame.
+In such times I really hate R.Hyde - he might have wrote good,
+big and detailed articles on such topics, but he prefered his HLA when
+proceeded to Win32 ASM.
+
+I'm not going now in detail of stack framing, only basic information.
+When in a proc like:
+
+WndProc proc hWnd:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
+
+...
+and then you addressing to any of the argument
+like mov eax,hWnd
+or    .IF uMsg==WM_SIZE (really: cmp uMsg,5)
+
+You are in real code addressing to data throu ebp as a pointer.
+
+At the begining of such procs there is stack framing routine:
+;upon entry in stack return address and followed it arguments
+       puch ebp ;now in stack old ebp, ret address,arg
+       mov ebp,esp ;it's for using ebp as pointer for memory in stack
+       sub esp,number of bytes needed for locals
+....
+after that you may see that
+data in  = old ebp
+data in  = return address
+data in  = first argument (the same is [8]
+as you can see step is 4: ,[4],[8]
+because all this data has DWORD size (4 bytes)
+So now you probably can see that
+ mov eax,hWnd is really mov eax,dword ptr [8]
+ sub eax,uMsg   is really sub eax,dword ptr  ;
+ if wParam == WM_SIZE is really cmp dword ptr [10h],5
+ or eax,lParam is really or eax,dword ptr [14h]
+
+So what is lParam[2]? it's [14h]+2 which is [16h]
+
+Now let's have a look at the code:
+
+ m2m caW,lParam[0] ;client area width
+ m2m caH,lParam[2] ;client area height
+
+ invoke GetWindowRect,hStatus,ADDR Rct
+ mov eax, Rct.bottom
+ sub eax,Rct.top
+ sub caH,eax
+ invoke MoveWindow,hStatus,0,caH,caW,caH,TRUE
+
+It is for repositioning status bar.
+m2m is macro and means
+ push memsource
+ pop  memdest
+caW and caH are local varibles and also addressed with help of ebp but
+with minus offset 'cause they are between old esp and new esp
+after substruction from esp number of bytes we need for local.
+Because frame rutine put old esp to ebp (mov ebp,esp) and stack is growing
+down (all new data with pushes go to less adresses then previous) memory
+for locals are always in region between ebp (wich has bigger address) and new esp 
+(wich has less address). It preserves locals from owewriting by stack operations
+and allow address to them using ebp as a pointer so
+ = address of the first local dword
+ = address of the second and so on.
+
+so
+m2m caW,lParam[0] ;client area width
+ m2m caH,lParam[2] ;client area height
+might for example means
+ push [14]
+ pop   
+ push [16]
+ pop   [-8]
+
+Enough for now. Hope it help at least understand
+ m2m caW,lParam[0] ;client area width
+ m2m caH,lParam[2] ;client area height
+is 4 stack operation with memory addressed by ebp.
+
+Actually Steve (the author) found not bad way to address to width and height partts
+in lParam. Instead of shifing and anding to extract low and high word from DWORD lParam
+he just shift address by 2 so that low word of lParam gets in low word of one local
+variable and high word of lParam gets in LOW WORD of the other local variable.
+Good trick, Steve :)
+
+Let's now count size and clocks for this part of code and try to do it faster and shorter.
+
+ push [14]
+ pop   
+ push [16]
+ pop   [-8] 
+
+Push memory 2 clocks, size with this addr. mode - 3 bytes
+Pop memoty 3 clocks,size with this addr mode - 3 bytes
+Altogether 10 clocks , 12 bytes.
+
+Second part
+ mov eax, Rct.bottom	;1 clock ,3 bytes
+ sub eax,Rct.top		;2 clocks,3 bytes
+ sub caH,eax	                ;3 clocks,3 bytes
+;6 clocks, 9 bytes to culculate
+invoke MoveWindow,hStatus,0,caH</div>
+    <div class="meta">Posted on 2001-04-01 09:33:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196551">
+    <div class="subject"><a href="#post-196551">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Here is an alternative approach but it suffers from the same crudity as the
+original example, it uses what is properly a WORD size address from the
+stack and puts it into a DWORD size parameter in the MoveWindow() function
+call.
+
+It appears to work because the parameters for MoveWindow for the client area
+size can never be above the WORD limit of 64k and apparently it only reads
+the first WORD of the parameter. Replacing PUSH & POP in the m2m macro with
+the following code that accesses the stack directly gives a smaller instruction
+count.
+<pre><code>
+  .elseif uMsg == WM_SIZE
+
+      invoke SendMessage,hToolBar,TB_AUTOSIZE,0,0
+
+    ; -------------------------------------------------
+      invoke GetWindowRect,hStatus,ADDR Rct
+      mov eax, Rct.bottom
+      sub eax, Rct.top
+      movzx edx, word ptr 
+      sub edx, eax
+
+      invoke MoveWindow,hStatus,0,edx,,edx,TRUE
+    ; -------------------------------------------------
+</code></pre>
+
+For safety reasons it is worth carrying the extra instruction to endure the
+data content is correct,
+
+<pre><code>
+      movzx eax, 
+      invoke MoveWindow,hStatus,0,edx,eax,edx,TRUE
+</code></pre>
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-01 12:27:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196552">
+    <div class="subject"><a href="#post-196552">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">movxz eax, WORD ptr 
+can't be just movxz eax,</div>
+    <div class="meta">Posted on 2001-04-01 18:10:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196553">
+    <div class="subject"><a href="#post-196553">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">You are right, there are some things you should not post at 2am
+before you go to sleep, here is the working version.
+<pre><code>
+    .elseif uMsg == WM_SIZE
+
+        invoke SendMessage,hToolBar,TB_AUTOSIZE,0,0
+
+        invoke GetWindowRect,hStatus,ADDR Rct
+        mov eax, Rct.bottom
+        sub eax, Rct.top
+        movzx edx, word ptr 
+        sub edx, eax
+        movzx eax, word ptr 
+
+        invoke MoveWindow,hStatus,0,edx,eax,edx,TRUE
+</code></pre>
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-01 19:51:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196554">
+    <div class="subject"><a href="#post-196554">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body"><pre><code>
+Hi all. Lots of interesting stuff here. First let me stress that you don't need
+to keep specifying :DWORD in arguments, locals and immed. pushes. This is the
+default size for any 32 bit dataseg - which .model FLAT creates.
+
+myproc proc arg1, arg2, ...		; these args will be dwords by default
+local l1, l2 ...                ; as will these locals
+
+
+It seems noone knows that Masm has a limited "casting" ability? Many times we
+want to resize a child control to the whole client area. Typicaly we do:
+
+	.if umsg == WM_SIZE
+		movzx eax, word ptr wparam		; width
+		movzx edx, word ptr wparam+2	; height
+		invoke MoveWindow, hCtl, 0, 0, eax, edx, TRUE
+
+but you can just do this...
+
+	 d equ <dword ptr>	; for brevity
+	 w equ <word ptr>
+
+	.if umsg == WM_SIZE
+		invoke MoveWindow, hCtl, 0, 0, d,	d, TRUE
+
+We need a "double" cast here. The "" forces a word access. This
+is'nt enough though - you will crash because Masm will push words instead of
+dwords (** bug? The proto should forbid this). Adding the second (outer) cast
+to dword however causes Masm to promote the word to a dword!
+
+
+If however you reference a variable which is already of type byte or word,
+Masm will promote it to dword on it's own.
+
+.data
+b1	sbyte 43
+
+.code
+	invoke dwtoa, b1, addr buffer
+
+... will faithfully produce the string "43" in buffer!</code></pre>
+
+Have fun!!!</div>
+    <div class="meta">Posted on 2001-04-01 21:37:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196555">
+    <div class="subject"><a href="#post-196555">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Oops... I just discovered that auto promotion does'nt always work.  I invoked dwtoa with a byte, word and dword.  It worked every time.  Tried the same thing with MoveWindow ... crashed.
+
+It did work with a dword override though - ie.
+
+iwidth   dw 600
+iheight  dw 400
+
+invoke MoveWindow, hCtl, 0, 0, dword ptr iwidth, dword ptr iheight, TRUE
+
+It would seem that Masm IS promoting the words to dwords correctly. As opposed to just pushing the dword at that address on to the stack!
+
+I'd be interested in hearing how others fair with this technique.  Do I have a corrupt Masm.exe?
+
+gfalen</div>
+    <div class="meta">Posted on 2001-04-02 02:05:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196556">
+    <div class="subject"><a href="#post-196556">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Your code:
+<pre><code>
+.if umsg == WM_SIZE
+      invoke MoveWindow, hCtl, 0, 0, d,   d, TRUE
+is the same as:
+.if umsg == WM_SIZE
+      invoke MoveWindow, hCtl, 0, 0, lparam, lparam+2, TRUE
+
+it will result in (d,   d):
+
+	push   ;dword
+                push  ;dword
+</code></pre>
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 12:02:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196557">
+    <div class="subject"><a href="#post-196557">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">to Hutch:
+I did even more funny thing:
+I spelt movxz instead of movzx.
+And I did it twice :)
+As to your version:
+Add size and speed of instruction to get clear picture.
+Number of instruction means nothing.
+The only matter is their speed and size.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 12:20:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196558">
+    <div class="subject"><a href="#post-196558">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Svin, the code
+
+    invoke MoveWindow, hCtl, 0, 0, lparam, lparam+2, TRUE
+
+assumes there are 2 dwords at lparam & lparam+2 (MoveWindow expects this). But lparam actually contains 2 words packed into a dword (WM_SIZE msg). Masm does'nt know this and pushes the 2 dwords at those addresses. But those addresses DO NOT contain the width & height as dwords!  This will fail. I've tried it.
+
+That is the reason we need a cast here (word to dword). Do you see what I'm driving at?
+
+gfalen</div>
+    <div class="meta">Posted on 2001-04-02 16:16:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196559">
+    <div class="subject"><a href="#post-196559">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">I have no idea what are you driving at,
+the only thing I can see in debugger or in opcodes
+is just that all three version in source will produce
+the same opcode.
+They all push dword ptr  and dword ptr 
+I can write it in pure opcodes or with any of sintax above
+it'll be the same.
+MoveWindow, as Steve noted, just doesn't check high word
+of those arguments.
+so when you push dword (or lParam) the low word will be
+width and high word will be height 
+but the func. just doesn't care as it appearse to be what is
+in high word, then when you push dword ptr (or lParam+2)
+the high word of original lParam gets to low word of pushed
+argument and high word of this argument is filled with the stack
+garbidge.
+You may write anything you want in your source the matter is
+not what you write but what opcode is translated from your
+code.
+It's very easy for asm programmer figure out what actually
+tranclated - look at opcode in debugger or disams it.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 17:10:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196560">
+    <div class="subject"><a href="#post-196560">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">I understand. I was'nt aware of this behavior in the MoveWindow API.  On my system it crashes if I do what you say - which would seem to indicate that this function IS sensitive to the hiword.
+
+Have you actually tried to resize a control using your method for retrieving width/height from lparam?  I know typicaly people use movzx to convert the words to dwords.
+
+gfalen</div>
+    <div class="meta">Posted on 2001-04-02 18:14:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196561">
+    <div class="subject"><a href="#post-196561">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">NT and Win2k are supposed to be sensitive to the 16 high bits, because they use 32-bit coordinates.  Also Win2k is supposed to have a multi-monitor capability which requires a large coordinate space.  (An image can be dragged from one monitor into another.)
+
+This message was edited by tank, on 4/2/2001 6:33:50 PM
+
+This message was edited by tank, on 4/2/2001 7:14:37 PM</div>
+    <div class="meta">Posted on 2001-04-02 18:32:00 by tank</div>
+   </div>
+   <div class="post" id="post-196562">
+    <div class="subject"><a href="#post-196562">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Hey Tank. Did you get the jist of what I was saying?  All this speculation aside, what I was really trying to convey was this method of promoting a byte or word to a dword by a "double cast".
+
+dword ptr
+
+The inner cast  FORCES a word access. The outer cast dword ptr then causes Masm to promote/convert it to dword.
+
+I think this is really neat. I just stumbled on this a few weeks ago. I've never seen it documented or even mentioned anywhere.
+
+gfalen</div>
+    <div class="meta">Posted on 2001-04-02 18:47:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196563">
+    <div class="subject"><a href="#post-196563">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">How can MASM force word access?
+Push just fill memory of the stack that's all.
+
+to tank: 
+Well, I was a little bit alarm when saw Steve's code.
+But it works on both NT2000 and NT4.
+Anyway I it weren't - Steve would have recieved a lot of bag reports, but MASM32 with comctrls.exe
+has been distrebuted for long and nobody's reported bug yet.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 19:41:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196564">
+    <div class="subject"><a href="#post-196564">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">to gfalen
+This particular thread is discusing opt. of one
+prog.
+It is in masm32 example1.
+Of course I tested all code on both OS (NT4 and 98)
+In original and optimized proc in both cases we
+sent garbige in high words.
+I had not known it myself before analyze Steve's code.
+But it works!
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 19:46:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196565">
+    <div class="subject"><a href="#post-196565">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">to Svin re: How can MASM force word access?
+
+Simple. LPARAM is a dword, If you push it, masm will push 4 bytes.
+
+The  overides this and forces a word access. This was the whole point of my post. How to coerce a word(or byte) to a dword w/o using movzx/movsx!
+
+gfalen</div>
+    <div class="meta">Posted on 2001-04-02 20:48:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196566">
+    <div class="subject"><a href="#post-196566">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body"><pre><code>
+;Write a program:
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\user32.inc
+include C:\masm32\include\kernel32.inc
+includelib kernel32.lib
+includelib user32.lib
+WndProc proto :DWORD,:DWORD,:DWORD,:DWORD
+
+.code
+start:
+d equ <dword ptr>   
+w equ <word ptr>
+
+WndProc proc hWnd,uMsg,wParam,lParam
+invoke MoveWindow,0,0,0,d,   d, TRUE
+invoke MoveWindow,0,0,0,lParam,lParam+2,TRUE
+invoke MoveWindow,0,0,0,[20],[22],TRUE
+ ret
+WndProc endp
+
+	end start
+;Compile and disassemble it (don't run though :)
+LOOK!!!!!!!!!!!!!!:
+.00401010: 55                              push      ebp
+.00401011: 8BEC                         mov       ebp,esp
+.00401013: 6A01                          push      001
+.00401015: FF7516                      push      d,[00016]
+.00401018: FF7514                      push      d,[00014]
+.0040101B: 6A00                         push      000
+.0040101D: 6A00                         push      000
+.0040101F: 6A00                         push      000
+.00401021: E82A000000             call     .000401050   -------- (1)
+.00401026: 6A01                         push      001
+.00401028: FF7516                     push      d,[00016]
+.0040102B: FF7514                     push      d,[00014]
+.0040102E: 6A00                         push      000
+.00401030: 6A00                         push      000
+.00401032: 6A00                         push      000
+.00401034: E817000000             call     .000401050   -------- (2)
+.00401039: 6A01                         push      001
+.0040103B: FF7516                     push      d,[00016]
+.0040103E: FF7514                     push      d,[00014]
+.00401041: 6A00                         push      000
+.00401043: 6A00                         push      000
+.00401045: 6A00                         push      000
+.00401047: E804000000             call     .000401050   -------- (3)
+
+CAN YOU SEE ANY DIFFERENCE ?!
+</code></pre>
+I don't ........
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 21:15:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196567">
+    <div class="subject"><a href="#post-196567">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Guys,
+
+The original example was written about 2 years ago and it was a standard
+trick to save a few instructions by pushing the address of the forst word
+value as one DWORD parameter followed by the second as a DWORD parameter.
+
+What you get pushed on the stack is real easy to find out, just run it
+through a decompiler. The risk with the technique that I used 2 years ago
+is that a later version OS may not be tolerant of the highword that will
+produce a different DWORD value.
+
+Pulling the value directly off the stack as a WORD and converting it to a
+DWORD with MOVZX is a viable and safe technique that does not suffer much
+code for doing it.
+
+As far as the idea of double type casting, what you see when you decompile
+it is what you get, there is nothing magic about an address on the stack,
+push a DWORD from that address and you get the 4 bytes at that address.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-02 21:45:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196568">
+    <div class="subject"><a href="#post-196568">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Ok. This is hard to refute. I just tried it here... MoveWindow does behave as you said!  I guess it's this behavior that caused me to misinterpret what was really happening.
+
+One thing I still don't understand though. I can do this:
+
+.data
+buf db 20 dup(?)
+b1  db 1
+w1  dw 2
+d1  dd 4
+
+.code
+  invoke dw2a, b1, addr buf   ; or
+  invoke dw2a, w1, addr buf   ; or 
+  invoke dw2a, d1, addr buf   
+
+...they all work!
+
+But the proto for dw2a has a dword as the 1'st arg. So why does'nt masm flag this as an error?
+
+Puzzling behavior...
+
+gfalen</div>
+    <div class="meta">Posted on 2001-04-02 22:03:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-196569">
+    <div class="subject"><a href="#post-196569">Basics of Asm32 in opt. ex. #6.1</a></div>
+    <div class="body">Puzzling behavior :)
+It's puzzling only if you don't know opcode or don't use debugger and disassembler.
+You must get debbuger and disassm and attatch to you asm shell.
+Steve's editor already has option "disassmble", all you need is attach debugger to his shell.
+It's possible 'cause his editor is highly configurable.
+You don't need to run program if there is something puzzling. All you need to look in opcodes
+in mnemonics in debugger or disasmed code.
+MASM doesn't do anything with data in stack ( I can't imagine how can it be done for all the future
+situation even if it was discribed in SFiction).
+All MASM does is writing opcodes.
+What does it mean push d,[22]?
+For example ebp = 1000 esp = 1100
+It commands the processor 
+1. Cuclulate address of data by adding ebp and 22. 
+ Processor gets value 1022
+2. Get data (dword - 4 bytes) from address 1022
+3. Write the data to address 1100.
+4. Add to esp 4.
+Now in address 1100 we have for bytes taken from address 1022.
+They occupide adresses 1100,1101,1102,1103
+And now esp has value  1104.
+
+Now about this "black magic double casting".
+As both of you said is that MASM forced access to word and then convert it double word, zeroing
+that way first dword. Or may be even it commands to MoveWindow how to treat the word pushed?
+
+Exuse me but it's absolute nonsence.
+Masm just push dword that's all.
+To do the job you thought masm is doing, it needs to generate two commands.
+ pushw [20]
+ pushw 0
+ pushw [22]
+ pushw 0
+Then is the stack you would have two  dwords with zeroed high words.
+But masm doesn't do it.
+It just pushes dwords looking at your d w statement.
+It's actually mean push dword ptr data wich started from word ptr
+In other word with data in ebp+20 it means:
+push dword ptr data wich has the same address as ebp+20
+in other word  push dword ptr ebp+20 :)
+So it produce exactly the same code.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-03 06:33:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

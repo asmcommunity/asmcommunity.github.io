@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fast lstrlen - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17994" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=17994">Fast lstrlen</a></p>
+   <div class="post" id="post-138903">
+    <div class="subject"><a href="#post-138903">Fast lstrlen</a></div>
+    <div class="body">I've been doing a string library and I have a fast MMX lstrlen that I thought somebody might find interesting. Comes in at about 194 clocks for a 512 byte string. For comparison, the masm32 version times out at 672 and the lstrlen api at 2093.<br /><br /><pre><code>ALIGN 16<br />lszlenMMX FRAME pString<br /><br />	mov eax,&#91;pString&#93;<br />	nop<br />	nop ; fill in stack frame+mov to 8 bytes<br /><br />	pxor mm0,mm0<br />	nop ; fill pxor to 4 bytes<br />	pxor mm1,mm1<br />	nop ; fill pxor to 4 bytes<br /><br />	&#58; ; this is aligned to 16 bytes<br /><br />	movq mm0,&#91;eax&#93;<br />	pcmpeqb mm0,mm1<br />	add eax,8<br />	pmovmskb ecx,mm0<br />	or ecx,ecx<br />	jz &lt;<br /><br />	sub eax,&#91;pString&#93;<br />	<br />	bsf ecx,ecx<br />	sub eax,8<br />	add eax,ecx<br />	<br />	emms<br /><br />   RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-04-14 02:32:29 by donkey</div>
+   </div>
+   <div class="post" id="post-138941">
+    <div class="subject"><a href="#post-138941">Fast lstrlen</a></div>
+    <div class="body">As usual to speed it even more, you have to unroll and perhaps do some prefetching. Anyway here's some codes that did the unrolling and a interesting snipplet for strlen that made used to sse by nexo.<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4058&amp;perpage=15&amp;highlight=strlen&amp;pagenumber=9">http://www.asmcommunity.net/board/index.php?topic=4058&amp;perpage=15&amp;highlight=strlen&amp;pagenumber=9</a></div>
+    <div class="meta">Posted on 2004-04-14 08:05:04 by roticv</div>
+   </div>
+   <div class="post" id="post-138942">
+    <div class="subject"><a href="#post-138942">Fast lstrlen</a></div>
+    <div class="body">MMX was looked at extensively in this thread.<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=3525">http://www.asmcommunity.net/board/showthread.php?threadid=3525</a><br /><br />...how does your algo compare?</div>
+    <div class="meta">Posted on 2004-04-14 09:01:30 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-138962">
+    <div class="subject"><a href="#post-138962">Fast lstrlen</a></div>
+    <div class="body"><div class="quote"><br />MMX was looked at extensively in this thread.<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=3525">http://www.asmcommunity.net/board/showthread.php?threadid=3525</a><br /><br />...how does your algo compare? </div><br /><br />Hi BitRake,<br /><br />The last algo tested in the thread is 26 clocks slower than mine on 512 characters, I tested with this algo on a P3:<br /><br /><pre><code>StrLen FRAME lpString<br />	uses ebx<br /><br />	mov ecx,&#91;lpString&#93;<br />	pxor MM0,MM0<br />	pxor MM1,MM1<br />	<br />	mov ebx,16<br />	ALIGN 16<br />0&#58;	pcmpeqb MM1,&#91;ecx+8&#93;<br />	pcmpeqb MM0,&#91;ecx&#93;<br />	nop<br /><br />	add ecx,ebx<br />	packsswb MM1,MM1<br />	packsswb MM0,MM0<br /><br />	movd edx,MM1<br />	movd eax,MM0<br />	or edx,eax<br /><br />	je 0<br />	bsf eax,eax<br />	jne &gt;1<br />	add ecx,8<br />	bsf eax,edx<br />1&#58;	sub ecx,&#91;lpString&#93;<br />	shr eax,2<br /><br />	emms<br />	lea eax,&#91;ecx+eax-16&#93;<br />	RET<br />ENDF</code></pre><br /><br />Result was 221 clocks, string aligned and algo aligned at 16, mine was 195 clocks. Not really an official test but close enough for my purposes.<br /><br />My string was :<br /><br /><pre><code>ALIGN 16<br />LongString	DB	512 DUP &#40;&quot;A&quot;&#41;<br />		DB	0</code></pre><br /><br />The first one in the thread performed horribly (LongStrLen by The Svin) but I think there is a problem with my translation (as the Svin is normally very fast) so I will have to check it further.<br /><br /><br />Timings if anyone is interested:<br /><br /><strong>For 1000 itterations each</strong><br /><br /><strong>String aligned</strong><br />---------------------------------------- lszLenMMX<br />Line 220: eax = 194062<br />Line 234: eax = 194111<br />Line 248: eax = 194047<br />Line 262: eax = 194107<br />---------------------------------------- StrLen<br />Line 278: eax = 221033<br />Line 292: eax = 221042<br />Line 306: eax = 221030<br />Line 320: eax = 261810<br />---------------------------------------- LongStrLen<br />Line 336: eax = 559995<br />Line 350: eax = 560019<br />Line 364: eax = 560013<br />Line 378: eax = 560020<br />---------------------------------------- lstrlen<br />Line 412: eax = 2093069<br />Line 426: eax = 2092999<br />Line 440: eax = 2093000<br />Line 454: eax = 2142887<br /><br /><strong>String not aligned</strong><br />---------------------------------------- lszLenMMX<br />Line 219: eax = 348083<br />Line 233: eax = 348062<br />Line 247: eax = 348068<br />Line 261: eax = 348076<br />---------------------------------------- StrLen<br />Line 277: eax = 376061<br />Line 291: eax = 376067<br />Line 305: eax = 376045<br />Line 319: eax = 376056<br />---------------------------------------- LongStrLen<br />Line 335: eax = 687225<br />Line 349: eax = 687205<br />Line 363: eax = 687272<br />Line 377: eax = 687296<br />---------------------------------------- lstrlen<br />Line 411: eax = 2093057<br />Line 425: eax = 4157187<br />Line 439: eax = 2093013<br />Line 453: eax = 2107915<br /></div>
+    <div class="meta">Posted on 2004-04-14 10:44:11 by donkey</div>
+   </div>
+   <div class="post" id="post-138963">
+    <div class="subject"><a href="#post-138963">Fast lstrlen</a></div>
+    <div class="body"><div class="quote"><br />As usual to speed it even more, you have to unroll and perhaps do some prefetching. Anyway here's some codes that did the unrolling and a interesting snipplet for strlen that made used to sse by nexo.<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4058&amp;perpage=15&amp;highlight=strlen&amp;pagenumber=9">http://www.asmcommunity.net/board/index.php?topic=4058&amp;perpage=15&amp;highlight=strlen&amp;pagenumber=9</a> </div><br /><br />Thanks Roticv,<br /><br />I was unaware of how to unroll it, I will have to study a bit more I guess, no harm there. I'm trying to make a nice alternative to the masm32 string library functions, both normal and mmx variants. I am learning the MMX instruction set as I go but it is a brain busting process.</div>
+    <div class="meta">Posted on 2004-04-14 10:49:21 by donkey</div>
+   </div>
+   <div class="post" id="post-138975">
+    <div class="subject"><a href="#post-138975">Fast lstrlen</a></div>
+    <div class="body"><strong>donkey</strong>, that algo was for Athlon.  <strong>Svin</strong>'s should perform better as he is coding for P1 MMX CPU.  The Athlon's internal handling of MMX is very different than Intel's implementation on P3 or P4.  One additional ceavat is they are for very long strings - mine quickly approaches &lt; 0.4 cycles per byte, but you won't see this in 512 bytes.</div>
+    <div class="meta">Posted on 2004-04-14 12:16:34 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-138977">
+    <div class="subject"><a href="#post-138977">Fast lstrlen</a></div>
+    <div class="body"><div class="quote"><br /><strong>donkey</strong>, that algo was for Athlon.  <strong>Svin</strong>'s should perform better as he is coding for P1 MMX CPU.  The Athlon's internal handling of MMX is very different than Intel's implementation on P3 or P4. </div><br /><br />Hi bitRAKE,<br /><br />yeah I know, that's why I specified that it was running on a P3. I haven't tried it on any other machines yet but I assume it will significantly degrade. I made a minor change, aligning each pxor at the top, it still runs at 194 clocks, there was a minor improvement on the 1000 itterations but less than 1 clock per itteration. Also I wasn't aware that I could use the same source and destination for bsf so I stole that from your code, one less register changed on exit.<br /><br />This is what I have for the Svin's routine, it looks OK but I obviously missed something...<br /><br /><pre><code>LongStrLen FRAME lpString<br />	uses edi, esi, ebx<br />.data<br />ALIGN 8<br />mask1 dq ?<br />mask2 dq ?<br />.code<br />	xor eax,eax<br />	movq mm1,&#91;mask1&#93;		;put addrs in cache<br />	movq mm2,&#91;mask2&#93;<br />	mov edi,&#91;lpString&#93;<br />	movd mm0,eax<br />	mov esi,offset mask1<br />&#58;	movq mm1,&#91;edi&#93;		;1<br />	movq mm2,&#91;edi+8&#93;<br />	pcmpeqb mm1,mm0	;2<br />	pcmpeqb mm2,mm0<br />	movq &#91;mask1&#93;,mm1		;3<br />	movq &#91;mask2&#93;,mm2<br />	mov eax,&#91;esi&#93;		;4<br />	mov edx,&#91;esi+4&#93;<br />	mov ecx,&#91;esi+8&#93;		;5<br />	mov ebx,&#91;esi+12&#93;<br />	or eax,edx		;6<br />	jne &gt;.calc<br />	or ecx,ebx		;7<br />	lea edi,&#91;edi+16&#93;	<br />	je &lt;<br /><br />.calc&#58;	mov al,&#91;esi&#93;<br />	inc esi<br />	test al,al<br />	je .calc<br />	sub esi,offset mask1+17<br />	mov edx,&#91;lpString&#93;<br />	lea eax,&#91;edi+esi&#93;	<br />	sub eax,edx<br />	ret<br />ENDF</code></pre><br /><br />These are the results from a length of 8192:<br /><br /><pre><code>---------------------------------------- lszLenMMX<br />Line 244&#58; eax = 2599041<br />Line 258&#58; eax = 2599057<br />Line 272&#58; eax = 2976620<br />Line 286&#58; eax = 2599415<br />---------------------------------------- StrLen<br />Line 302&#58; eax = 2848044<br />Line 316&#58; eax = 3239447<br />Line 330&#58; eax = 2934327<br />Line 344&#58; eax = 2848041<br />---------------------------------------- LongStrLen<br />Line 360&#58; eax = 8698090<br />Line 374&#58; eax = 8687823<br />Line 388&#58; eax = 8617627<br />Line 402&#58; eax = 8214474<br />---------------------------------------- lstrlen<br />Line 418&#58; eax = 34025910<br />Line 432&#58; eax = 33675862<br />Line 446&#58; eax = 33370283<br />Line 460&#58; eax = 33644663</code></pre><br /><br /><br />I tried a big file (&gt;1MB) <br /><br />Based on 10 itterations, file was copied to the Heap.<br /><br /><pre><code>Line 350&#58; &#91;cbFile&#93; = 1257440<br />---------------------------------------- lszLenMMX<br />Line 423&#58; eax = 23707720<br />Line 437&#58; eax = 23741159<br />Line 451&#58; eax = 23966429<br />Line 465&#58; eax = 23846091<br />---------------------------------------- StrLen<br />Line 481&#58; eax = 23527538<br />Line 495&#58; eax = 23462042<br />Line 509&#58; eax = 23891781<br />Line 523&#58; eax = 23967803<br />---------------------------------------- lstrlen<br />Line 539&#58; eax = 80543036<br />Line 553&#58; eax = 79785431<br />Line 567&#58; eax = 80412584<br />Line 581&#58; eax = 78676772</code></pre></div>
+    <div class="meta">Posted on 2004-04-14 12:25:02 by donkey</div>
+   </div>
+   <div class="post" id="post-138984">
+    <div class="subject"><a href="#post-138984">Fast lstrlen</a></div>
+    <div class="body">Hi roticv,<br /><br />I tried a prefetch but in all cases it ran slower, I am not completely sure why but I think it has to do with the fact that my loop is designed to be exactly 16 bytes long, any attempt to change the size seems to carry a severe penalty (+ 50 clocks or more).</div>
+    <div class="meta">Posted on 2004-04-14 14:00:25 by donkey</div>
+   </div>
+   <div class="post" id="post-139187">
+    <div class="subject"><a href="#post-139187">Fast lstrlen</a></div>
+    <div class="body">Donkey, what size strings are you aiming for? If it's a replacement for lstrlen, I assume the target is generic ASCIZ strings, with a usually limited length - might be overkill (and perhaps slower?) to use heavily unrolled MMX loops.<br /><br />If the goal is a high-performance string library, a lot of stuff can be done. I'm thinking in the direction of making a string a structure, rather than just the raw bytes. Fields would be current length, maximum length, and dynamic growing memory buffer (growing in chunks, reallocs are expensive). Here, the 'heavy' string length routines could be used when initializing from a large ASCIZ string.<br /><br />Of course such a string library won't be as generically usable without the creation of some macros, but if done correctly you can get a lot of flexibility and speed (a dword lookup will is probably a bit hard to beat ;)).<br /><br />Just some stray thoughts.</div>
+    <div class="meta">Posted on 2004-04-16 22:39:43 by f0dder</div>
+   </div>
+   <div class="post" id="post-139191">
+    <div class="subject"><a href="#post-139191">Fast lstrlen</a></div>
+    <div class="body">Hi f0dder,<br /><br />The algorithm actually compares favorably as low as 32 characters but it is meant for long strings, over 200 characters. For example counting characters in a text edit buffer. I use Agner's for short strings:<br /><br /><pre><code>lszLen FRAME pString<br />	uses ebx,edx,ecx<br /><br />		mov eax,&#91;pString&#93;<br />		lea edx,&#91;eax+3&#93;<br />	&#58;  <br />		mov ebx,&#91;eax&#93;<br />		add eax,4<br />		lea ecx,&#91;ebx-01010101h&#93;<br />		not ebx<br />		and ecx,ebx<br />		and ecx,80808080h    <br />		jz &lt;<br />		test ecx,00008080h<br />		jnz &gt;<br />		shr ecx,16<br />		add eax,2<br />	&#58;<br />		shl cl,1<br />		sbb eax,edx<br /><br />    ret<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-04-16 22:50:24 by donkey</div>
+   </div>
+   <div class="post" id="post-139248">
+    <div class="subject"><a href="#post-139248">what the hell!!</a></div>
+    <div class="body">Hey guys,<br />      Why are you going mad over a few clock cycles. AFAIK most ppl now have Pentiums. Even if they have less then Pentiums,  a few ticks won't count would it?<br /><br />Thomas Antony<br />:o :tongue: :rolleyes: :confused: :notsure: :stupid: :)</div>
+    <div class="meta">Posted on 2004-04-17 11:27:13 by thomasantony</div>
+   </div>
+   <div class="post" id="post-139250">
+    <div class="subject"><a href="#post-139250">Fast lstrlen</a></div>
+    <div class="body">thomasantony, it matters if you're dealing with a lot of huge string bulk processing - and even for the small regular strings, it's nice to have some fast code rather than calling kernel32.lstrlena .</div>
+    <div class="meta">Posted on 2004-04-17 11:34:36 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

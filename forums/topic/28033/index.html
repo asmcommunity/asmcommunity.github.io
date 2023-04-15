@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Direct Floppy Drive Access??????? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28033" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28033">Direct Floppy Drive Access???????</a></p>
+   <div class="post" id="post-199142">
+    <div class="subject"><a href="#post-199142">Direct Floppy Drive Access???????</a></div>
+    <div class="body">Hi, 
+Is it possible to access a floppy disk drive DIRECTLY thruogh some function (like SYMANTEC NDD does)?
+I need to write some sector(s) on the floppy drive. How is it possible to do it?</div>
+    <div class="meta">Posted on 2001-05-12 08:24:00 by diamond</div>
+   </div>
+   <div class="post" id="post-199143">
+    <div class="subject"><a href="#post-199143">Direct Floppy Drive Access???????</a></div>
+    <div class="body">i'm just working on this (just to read HD).
+From some articles i found on the net 
+to write absolute to a floppy from win 95 you need to do a call to VMM32.VXD that emulate interrupt. I just try to explain ..
+<pre><code>
+so 1st, you have to open VXD file ..
+
+call    CreateFileA, offset VXDHandle, GENERIC_READ or  GENERIC_WRITE, FILE_SHARE_READ or FILE_SHARE_WRITE, NULL,OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+
+2nd, now you need to fill a 'reg' structure as per int 13h..
+this is the struct,
+
+DIOCRegs	STRUC
+reg_EBX	DD	?
+reg_EDX	DD	?           
+reg_ECX	DD	?           
+reg_EAX	DD	?           
+reg_EDI	DD	?           
+reg_ESI	DD	?           
+reg_Flags	DD	?
+DIOCRegs	ENDS
+
+3rd. once you filled the structure as per int 13h os 25h
+call DeviceIoControl as follow...
+ 
+
+call    DeviceIoControl, hFileX, VWIN32_DIOC_DOS_INT13, offset reg, SIZE reg,offset reg, SIZE reg, offset IObyte, 0
+
+
+VWIN32_DIOC_DOS_IOCTL                equ  1   ; INT 21H / AH := 44H automatically
+VWIN32_DIOC_DOS_INT25                equ  2
+VWIN32_DIOC_DOS_INT26                equ  3
+VWIN32_DIOC_DOS_INT13                equ  4   ; YES, you can work with physical
+VWIN32_DIOC_SIMCTRLC                 equ  5   ; sectors (MBR)
+VWIN32_DIOC_DOS_DRIVEINFO            equ  6   
+
+</code></pre>
+
+hope it help</div>
+    <div class="meta">Posted on 2001-05-12 10:05:00 by angelo</div>
+   </div>
+   <div class="post" id="post-199144">
+    <div class="subject"><a href="#post-199144">Direct Floppy Drive Access???????</a></div>
+    <div class="body">For floppy read/write of direct sectors/tracks (no filesystem) you shoul read the NEC8272 and late improvements from Intel and NEC (this chip is the floppy controller)
+
+i used to do it on ZxSpectrum and 286 machines with simple OUT and IN instructions (not so simple on Z80 because of required speed, but pretty simple from 286 upwards)
+
+so it can eventually work like that on win95 or using WinIO.dll on wim98SE/Me/2k 
+
+but take care Nec8272 floppy drive controller is NOT a very simple chip to program... a little experience is required..but not very much either...just dont activate the DMA mode to keep it simple...make fast IN/OUT sequence to send comands and DATA to or from chip...
+
+today micros sure can do it without DMA and this saves you another programming problem...more complicated IMHO because of interupts ;)</div>
+    <div class="meta">Posted on 2001-05-12 20:25:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-199145">
+    <div class="subject"><a href="#post-199145">Direct Floppy Drive Access???????</a></div>
+    <div class="body">I have done the same thing with VWin32.VxD to access disks directly. I only have a .lib and a .inc, 
+which are not 100% tested, but should work on any drive. they definatly work on floppy disks 
+through as I have been using them to write boot sectors to disk.
+
+The only problem, which is windows not me, is that on both of my computer systems (Win98) the file 
+VWin32.VxD was not actualy installed on disk and only on one of my systems could I find the file 
+in the windows installation files. So in short dont write a program which assumes the existance of 
+VWin32.VxD.
+
+PS If you want my direct disk librarys im quite happy to email you to them (and the source if I 
+can find it)
+
+This message was edited by George, on 5/13/2001 6:06:45 AM</div>
+    <div class="meta">Posted on 2001-05-13 06:04:00 by George</div>
+   </div>
+   <div class="post" id="post-199146">
+    <div class="subject"><a href="#post-199146">Direct Floppy Drive Access???????</a></div>
+    <div class="body">here is a example of reaing Floppy's
+
+
+;########################################################################
+; Read Sector PROCEDURE
+;########################################################################
+ReadSector PROC 
+	;=========================================================
+	;  This procedure reads the sector specified in the Regs
+	; structure. Default is four tries. It performs an int13. 
+	;=========================================================
+
+	;==================================
+	; set the current attempt
+	;==================================
+	MOV	CurAttempt, 0
+
+agn:	;==================================
+	; Fill sent regs to reset diskette
+	;==================================
+	MOV	EAX, 0
+	MOV	sent_regs.reg_EAX, EAX
+	MOV	EDX, 0
+	MOV	DL, Disk
+	MOV	sent_regs.reg_EDX, EDX
+
+	;==================================
+	; Make the call to DeviceIOControl
+	;==================================
+	INVOKE DeviceIoControl,hVWIN,VWIN32_DIOC_DOS_INT13,ADDR sent_regs,
+			SIZEOF sent_regs,ADDR sent_regs, SIZEOF sent_regs, ADDR Byte_Count,0
+	MOV	Result, EAX
+
+	;==================================
+	; Fill sent_regs w/master
+	;==================================
+	MOV	EAX, Regs.reg_EAX
+	MOV	sent_regs.reg_EAX, EAX
+	MOV	EAX, Regs.reg_EBX
+	MOV	sent_regs.reg_EBX, EAX
+	MOV	EAX, Regs.reg_ECX
+	MOV	sent_regs.reg_ECX, EAX
+	MOV	EAX, Regs.reg_EDX
+	MOV	sent_regs.reg_EDX, EAX
+	MOV	EAX, Regs.reg_EDI
+	MOV	sent_regs.reg_EDI, EAX
+	MOV	EAX, Regs.reg_ESI
+	MOV	sent_regs.reg_ESI, EAX
+	MOV	EAX, Regs.reg_FLAGS
+	MOV	sent_regs.reg_FLAGS, EAX
+	
+	;==================================
+	; Make the call to DeviceIOControl
+	;==================================
+	INVOKE DeviceIoControl,hVWIN,VWIN32_DIOC_DOS_INT13,ADDR sent_regs,
+			SIZEOF sent_regs,ADDR sent_regs, SIZEOF sent_regs, ADDR Byte_Count,0
+	MOV	Result, EAX
+
+	;==================================
+	; test for error
+	;==================================
+	.IF EAX == 0 || (sent_regs.reg_FLAGS & 0001h)
+
+		;==========================
+		; if attempts don't == 3
+		; go back and do again
+		;==========================
+		MOV	AL, NumAttempts
+		.IF CurAttempt != AL
+			INC CurAttempt
+			JMP agn
+		.ENDIF
+
+		;==========================
+		; if == 3 then return error
+		;==========================
+		MOV	EAX, sent_regs.reg_EAX
+		MOV	Regs.reg_EAX, EAX
+		JMP errr
+
+	.ENDIF
+
+	;============================
+	; Return from procedure
+	;============================
+done:	return 1
+
+	;============================
+	; Return w/ERROR
+	;============================
+errr:	return 0
+
+ReadSector endp
+
+;########################################################################
+; End ReadSector procedure
+;########################################################################
+
+If you want more example like format,writeing to sectors ect.
+just let me know I have it all.</div>
+    <div class="meta">Posted on 2001-05-13 22:02:00 by Zcoder</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Flying toolbar - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27794" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27794">Flying toolbar</a></p>
+   <div class="post" id="post-198058">
+    <div class="subject"><a href="#post-198058">Flying toolbar</a></div>
+    <div class="body">I'm trying to realize a Word-like free flying toolbar.
+I made a toplevel window (WS_POPUP) and used all the
+wicked wm_activate, wm_ncactivate and so on.
+
+But I could not have the window to be always active.
+If I click on main window, the toolbar becomes inactive,
+and if clicking on the toolbar, the main window becomes
+inactive. One of the resulting problems is, that the
+tooltips of the toolbar inside the window dont work if
+the window is inactive.
+
+Has anybody an example for that ?
+
+beaster.</div>
+    <div class="meta">Posted on 2001-04-25 11:26:00 by beaster</div>
+   </div>
+   <div class="post" id="post-198059">
+    <div class="subject"><a href="#post-198059">Flying toolbar</a></div>
+    <div class="body">beaster i coded this up for you. there is one button on the floating toolbar. oh ya forgot to mention i modified the TBBUTTON struct in the windows.inc file. i just eliminated one line that i thought wasnt neccessary. mine now looks like this:
+
+TBBUTTON STRUCT
+  iBitmap   DWORD      ?
+  idCommand DWORD      ?
+  fsState   BYTE       ?
+  fsStyle   BYTE       ?
+  ;bReserved BYTE 2 dup(?)  <-- elimitated this line dont know why its even there.
+  iString   DWORD      ?
+TBBUTTON ENDS
+
+<pre><code>.586
+.model flat,stdcall
+option casemap:none
+
+WinMain proto :DWORD,:DWORD,:DWORD,:DWORD
+
+
+include     \masm32\include\windows.inc
+include     \masm32\include\kernel32.inc
+include     \masm32\include\comctl32.inc
+include     \masm32\include\comdlg32.inc
+include     \masm32\include\user32.inc
+includelib  \masm32\lib\kernel32.lib
+includelib  \masm32\lib\user32.lib
+includelib  \masm32\lib\comctl32.lib
+includelib  \masm32\lib\comdlg32.lib
+
+.const
+ToolBarID   equ 1000
+Button1ID   equ 1001
+
+.data
+ClassName   db "SimpleWinClass",0
+AppName     db "A Simple Window",0
+ClassName1  db "Child2",0
+Tip1	    db "This Works",0
+ButtonText  db "Look",0
+
+.data?
+hInstance   HINSTANCE ?
+Child1      HWND      ?
+hwnd        HWND      ?
+hToolBar    HWND      ?
+TB          TBBUTTON  <>
+
+.code
+
+start:
+
+	invoke InitCommonControls
+	invoke GetModuleHandle, NULL
+	mov    hInstance,eax
+	invoke WinMain, hInstance,NULL,NULL, SW_SHOWDEFAULT
+	invoke ExitProcess,eax
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
+	LOCAL  wc:WNDCLASSEX
+	LOCAL  wc2:WNDCLASSEX
+	LOCAL  msg:MSG
+	mov    wc.cbSize,SIZEOF WNDCLASSEX
+	mov    wc.style,CS_HREDRAW or CS_VREDRAW
+	mov    wc.lpfnWndProc, OFFSET WndProc
+	mov    wc.cbClsExtra,NULL
+	mov    wc.cbWndExtra,NULL
+	push   hInst
+	pop    wc.hInstance
+	mov    wc.hbrBackground,COLOR_WINDOW+3
+	mov    wc.lpszMenuName,NULL
+	mov    wc.lpszClassName,OFFSET ClassName
+	invoke LoadIcon,NULL,IDI_APPLICATION
+	mov    wc.hIcon,eax
+	mov    wc.hIconSm,eax
+	invoke LoadCursor,NULL,IDC_ARROW
+	mov    wc.hCursor,eax
+	invoke RegisterClassEx, ADDR wc
+	INVOKE CreateWindowEx,NULL,
+	                      ADDR ClassName,
+	                      ADDR AppName,
+                          WS_OVERLAPPEDWINDOW,
+                          CW_USEDEFAULT,
+                          CW_USEDEFAULT,
+                          400,
+                          300,
+                          NULL,
+                          NULL,
+                          hInst,
+                          NULL
+	mov hwnd,eax
+	
+    mov wc2.cbSize,SIZEOF WNDCLASSEX
+    mov wc2.style,CS_BYTEALIGNWINDOW
+    mov wc2.lpfnWndProc,OFFSET WndProc2
+    mov wc2.cbClsExtra,NULL
+    mov wc2.cbWndExtra,NULL
+    push hInst
+    pop wc2.hInstance
+    mov wc2.hbrBackground,COLOR_BTNFACE+1
+    mov wc2.lpszMenuName,NULL
+    mov wc2.lpszClassName,OFFSET ClassName1
+    invoke LoadIcon,NULL,IDI_APPLICATION
+    mov   wc2.hIcon,eax
+    mov wc2.hIconSm,eax
+    invoke LoadCursor,NULL,IDC_ARROW
+    mov wc2.hCursor,eax
+    invoke RegisterClassEx, ADDR wc2
+    invoke CreateWindowEx,WS_EX_TOOLWINDOW,
+                          ADDR ClassName1,
+                          NULL,
+                          WS_CHILD or WS_CAPTION,
+                          50,
+                          50,
+                          150,
+                          62,
+                          hwnd,
+                          NULL,
+                          hInstance,
+                          NULL
+      mov Child1, eax
+      
+      invoke ShowWindow,hwnd,SW_SHOWNORMAL
+      invoke ShowWindow,Child1,SW_SHOWNORMAL
+	  invoke UpdateWindow, hwnd
+
+	.WHILE TRUE
+		invoke GetMessage, ADDR msg,NULL,0,0
+		.BREAK .IF (!eax)
+		invoke TranslateMessage, ADDR msg
+		invoke DispatchMessage, ADDR msg
+	.ENDW
+	mov eax,msg.wParam
+ret
+WinMain endp
+
+WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	.IF uMsg==WM_DESTROY
+		invoke PostQuitMessage,NULL
+    .ELSE
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam	
+		ret
+	.ENDIF</div>
+    <div class="meta">Posted on 2001-04-25 16:19:00 by smurf</div>
+   </div>
+  </div>
+ </body>
+</html>

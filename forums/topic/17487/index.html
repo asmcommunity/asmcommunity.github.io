@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Dynamic Linker - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17487" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=35">Toolchain Development</a> &raquo; <a href="../?id=17487">Dynamic Linker</a></p>
+   <div class="post" id="post-135335">
+    <div class="subject"><a href="#post-135335">Dynamic Linker</a></div>
+    <div class="body">Does anyone have a working dynamic linker, or some good documentation on implementing one.<br /><br />I have reached a point where I would like to add drivers to my OS, which are loaded at runtime (rather than statically linked).<br /><br />If I understand correctly, to achieve this I need a dynamic linker - which is where I'm stuck :)<br /><br />I did notice that old DOS drivers didn't need to be dynamically linked, so if there is a good solid workaround for dynamic linking I'd be interested in that too.<br /><br />The only considerations are that the drivers are loaded from disk (I have a working FAT12 FS) and may be stored anywhere in memory.</div>
+    <div class="meta">Posted on 2004-03-08 01:11:57 by Sentient</div>
+   </div>
+   <div class="post" id="post-135384">
+    <div class="subject"><a href="#post-135384">Re: Dynamic Linker</a></div>
+    <div class="body"><div class="quote"><br />Does anyone have a working dynamic linker, or some good documentation on implementing one.<br /><br />I have reached a point where I would like to add drivers to my OS, which are loaded at runtime (rather than statically linked).<br /></div><br />The easily solution is to require fixed entry points at known offsets from the beginning of the file.<br /><br /><div class="quote"><br />If I understand correctly, to achieve this I need a dynamic linker - which is where I'm stuck :)<br /></div><br />Well, strictly speaking this is not necessary if you carefully define the interface to your drivers. Dynamic linking is useful when you need to link arbitrary code at run-time (i.e., code that doesn't have a fixed set of entry points).<br /><br /><div class="quote"><br />I did notice that old DOS drivers didn't need to be dynamically linked, so if there is a good solid workaround for dynamic linking I'd be interested in that too.<br /></div><br />They had fixed entry points (or used the INT instruction).<br /><br /><div class="quote"><br />The only considerations are that the drivers are loaded from disk (I have a working FAT12 FS) and may be stored anywhere in memory. </div><br /><br />If you need true dynamic linking, all you do is build part of the linker into the OS and have it automatically resolve the linkages when it loads the dynamically linked code. Obviously, you have to be able to read some sort of symbol table information from the file being loaded for linking and correlate this with the program (OS) linking to such code.  But as it is *your* OS, you get to define how the linkage works.<br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2004-03-08 14:29:30 by rhyde</div>
+   </div>
+   <div class="post" id="post-135407">
+    <div class="subject"><a href="#post-135407">Dynamic Linker</a></div>
+    <div class="body">Being in a flat protected mode (4GB Selectors), each driver will have a different offset in memory which is dynamically allocated.<br /><br />I understand your idea about fixed offset within the file, but when I use absolute addressing its going to cause serious problems. Without prior knowledge, I would assume that DOS drivers avoided this by being loaded on segment boundaries (ie 16byte aligned), hence the offset would always start at 0. I dont have this option (or should I say, I want to avoid segmentation).<br /><br />Am I missing a point, or did I fail to mention something which changes your answer?</div>
+    <div class="meta">Posted on 2004-03-08 18:14:39 by Sentient</div>
+   </div>
+   <div class="post" id="post-135425">
+    <div class="subject"><a href="#post-135425">Dynamic Linker</a></div>
+    <div class="body">Dynamic linkage is a good thing - this means you can reference your kernel-mode API by name instead of by syscall &quot;magic numbers&quot;. And some basic dynamic linking isn't very hard to implement (until you start adding reference counting and such, but that can be added 'later' ;)). If you use a format like PE or ELF for kernel+drivers (and you really should), you already have import and export tables.<br /><br />There's a bunch of ways to do a driver model. You could either have no exports and a single &quot;DriverEntry&quot; entrypoint, which would fill a structure with various other information, depending on your OS needs (DriverInit, DriverDestroy, DriverIoControl, DriverProcessAttach, DriverProcessDetach comes to mind), or you could export all the necessary routines via an export table.<br /><br />Btw, if your drivers share the same memory space (having each driver being a separate process w/separate CR3 is probably a bit overkill :p),<br />do remember to &quot;rebase&quot; the core OS drivers to avoid relocations... if using the PE format for your drivers, this is easy - the MS rebase tool can do it :)</div>
+    <div class="meta">Posted on 2004-03-09 01:59:24 by f0dder</div>
+   </div>
+   <div class="post" id="post-135489">
+    <div class="subject"><a href="#post-135489">Dynamic Linker</a></div>
+    <div class="body"><div class="quote"><br />Being in a flat protected mode (4GB Selectors), each driver will have a different offset in memory which is dynamically allocated.<br /><br />I understand your idea about fixed offset within the file, but when I use absolute addressing its going to cause serious problems. Without prior knowledge, I would assume that DOS drivers avoided this by being loaded on segment boundaries (ie 16byte aligned), hence the offset would always start at 0. I dont have this option (or should I say, I want to avoid segmentation).<br /><br />Am I missing a point, or did I fail to mention something which changes your answer? </div><br /><br />By &quot;fixed entry points&quot; I meant offset from the beginning of the file, not an absolute address in memory. When you load the file into memory, you can compute the entry points of the various routines by adding the offset and the load address together.<br /><br />That's the easy way, and works okay for device drivers.<br /><br />For generic dynamic loading, you need to supply a symbol table with the object files that specifies the offsets of the various symbols into the object file and use a simple lookup at load time to correlate addresses.  Again, the details depend upon the file format you use (or create).<br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2004-03-09 12:59:35 by rhyde</div>
+   </div>
+   <div class="post" id="post-135608">
+    <div class="subject"><a href="#post-135608">Dynamic Linker</a></div>
+    <div class="body">It probably makes more sense to call them &quot;relative entry points&quot;. Relative to your driver load address, where the load address is where you load the first byte of the driver file.<br /><br />You can also skip the symbol table lookup, and just hold a table of entry point addresses at or near the beginning of the driver file. The table in the file will contain file offsets and an entry point count. The driver loader would just load the driver and update the table to hold true addresses.<br /><br />How will you handle data?<br /><br />In a flat model, nonstack labels are absolute. There is no <strong>implicit</strong> relative address mode for data to mirror the EIP-relative address mode for jumps and calls. All relative data addresses must use &quot;based addressing&quot;, where you use up a register to hold a &quot;base&quot; address.<br /><br />If you do not use based addresses for driver data, the driver file will need to hold a relocation table for data addresses.</div>
+    <div class="meta">Posted on 2004-03-10 23:24:23 by tenkey</div>
+   </div>
+   <div class="post" id="post-135615">
+    <div class="subject"><a href="#post-135615">Dynamic Linker</a></div>
+    <div class="body">It all depends on what you want to do, I guess. If you want to support other tools than just whatever assembler you're using, &quot;fixed entrypoints&quot; is not the best idea - most linkers don't give you the fine-grained control necessary to do this. There's sense in using ELF or PE. But of course it's your OS, so you choose what to do.<br /><br />Whatever fileformat you choose, I would still recommend a symbol-based approach rather than fixed offsets, though. Even if you don't care for other tools than your own, named importing/exporting is a lot more flexible &amp; extensible.</div>
+    <div class="meta">Posted on 2004-03-11 03:27:55 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

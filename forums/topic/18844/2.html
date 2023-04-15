@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ShellExecute - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18844" />
+  <link rel="prev" href="../?id=18844&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18844">ShellExecute</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=18844&amp;page=1" style="">&laquo;</a><a href="../?id=18844&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="18844" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-169402">
+    <div class="subject"><a href="#post-169402">Re: ShellExecute</a></div>
+    <div class="body">Hi all :)<br /><br />There are also a couple problems with calling GetExitCodeProcess in a loop. The first, it eats 100% CPU. The second, if the invoked process happens to return STILL_ACTIVE on exit, your app will never leave the loop.</div>
+    <div class="meta">Posted on 2006-01-09 09:58:15 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-169403">
+    <div class="subject"><a href="#post-169403">Re: ShellExecute</a></div>
+    <div class="body">The 100% CPU usage can be taken care of by insert Sleep(something-not-0), but that&#39;s a workaround rather than a fix (read: it&#39;s a <em>hack</em>), and introduces latency that WaitForSingleObject doesn&#39;t have. For a simple &quot;spawn app and wait until it terminates&quot;, there really isn&#39;t any reason not to use WFSO, and handles should be closed as well.<br /></div>
+    <div class="meta">Posted on 2006-01-09 10:43:34 by f0dder</div>
+   </div>
+   <div class="post" id="post-169472">
+    <div class="subject"><a href="#post-169472">Re: ShellExecute</a></div>
+    <div class="body"><pre><span style="font-size:2>&nbsp; &nbsp; .386<br />&nbsp; &nbsp; .model flat, stdcall<br />&nbsp; &nbsp; option casemap :none<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; include \masm32\include\windows.inc<br />&nbsp; &nbsp; include \masm32\include\kernel32.inc<br />&nbsp; &nbsp; include \masm32\include\user32.inc<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; includelib \masm32\lib\kernel32.lib<br />&nbsp; &nbsp; includelib \masm32\lib\user32.lib<br /><br />&nbsp; &nbsp; _Str MACRO Params:VARARG<br />&nbsp; &nbsp; &nbsp; LOCAL _MyStr<br />&nbsp; &nbsp; &nbsp; .data<br />&nbsp; &nbsp; &nbsp; &nbsp; _MyStr BYTE Params,0<br />&nbsp; &nbsp; &nbsp; align 4<br />&nbsp; &nbsp; &nbsp; .code<br />&nbsp; &nbsp; &nbsp; &nbsp; EXITM &lt;ADDR _MyStr&gt;<br />&nbsp; &nbsp; endm<br />&nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; .data?<br />&nbsp; &nbsp; &nbsp; StartInfo STARTUPINFOA&lt;&gt;<br />&nbsp; &nbsp; &nbsp; ProcInfo PROCESS_INFORMATION&lt;&gt;<br />&nbsp; &nbsp; &nbsp; ExitCode DWORD ?<br />&nbsp; &nbsp; &nbsp; ThreadHandle DWORD ?<br />&nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; .data<br />&nbsp; &nbsp; &nbsp; FileAddress BYTE &quot;c:\Win98se\Notepad.exe&quot;,0<br />&nbsp; &nbsp; .code<br />;------------------------------------------------------------<br />StillExists PROC<br />&nbsp; @@:<br />&nbsp; INVOKE GetExitCodeProcess, ProcInfo.hProcess, OFFSET ExitCode<br />&nbsp; INVOKE Sleep,10d<br />&nbsp; CMP ExitCode , STILL_ACTIVE<br />&nbsp; JE @B<br />&nbsp; INVOKE MessageBox,0,_Str(&quot;Notepad is closed&quot;) , _Str(&quot;Confirmation&quot;),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; MB_ICONINFORMATION or MB_OK<br />&nbsp; INVOKE TerminateThread,ThreadHandle,0<br />&nbsp; INVOKE TerminateProcess,ProcInfo.hProcess,0<br />&nbsp; PUSH 0b<br />&nbsp; CALL ExitProcess&nbsp; <br />&nbsp; RET<br />StillExists ENDP<br />;------------------------------------------------------------<br />start:<br />&nbsp; LEA EAX , StartInfo<br />&nbsp; MOV DWORD PTR  , SIZEOF STARTUPINFOA<br />&nbsp; MOV DWORD PTR  , STARTF_USESHOWWINDOW<br />&nbsp; MOV DWORD PTR  , SW_SHOWNORMAL<br />&nbsp; <br />&nbsp; INVOKE CreateProcess,0b, OFFSET FileAddress, 0b, 0b, FALSE, NORMAL_PRIORITY_CLASS,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  0b,0b,OFFSET StartInfo, OFFSET ProcInfo<br />&nbsp; ; Note : The last parameter is the Thread ID, not the Thread Handle<br />&nbsp; ; But we can store it into the ThreadHandle Variable <br />&nbsp; ; as long as we dont need the ThreadId<br />&nbsp; INVOKE CreateThread,0b,1024,ADDR StillExists,0b,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; THREAD_SUSPEND_RESUME,OFFSET ThreadHandle<br />&nbsp; MOV ThreadHandle , EAX<br />&nbsp; INVOKE ResumeThread,ThreadHandle<br />end start</span></pre></div>
+    <div class="meta">Posted on 2006-01-11 22:05:05 by XCHG</div>
+   </div>
+   <div class="post" id="post-169477">
+    <div class="subject"><a href="#post-169477">Re: ShellExecute</a></div>
+    <div class="body"><pre><code>.386<br />.model flat,stdcall<br />option casemap:none<br />include windows.inc<br />include kernel32.inc<br />include user32.inc<br />includelib kernel32.lib<br />includelib user32.lib<br />.data<br />szNotepadPath db &quot;C:\WINNT\notepad.exe&quot;,0<br />szMsg db &quot;Notepad has been shut down!&quot;,0<br />szErrorText db &quot;Failed to start a process!&quot;,0<br />.data?<br />sui STARTUPINFO&nbsp; &lt;&gt;<br />pi PROCESS_INFORMATION &lt;&gt;<br />.code<br /><br />start:<br />	assume edi:PTR STARTUPINFO<br />	mov edi,offset sui<br />	xor ebx,ebx<br />	mov .cb,sizeof STARTUPINFO<br />	mov .dwFlags,STARTF_USESHOWWINDOW<br />	mov .wShowWindow,SW_SHOWNORMAL<br />	assume edi:NOTHING<br />	invoke CreateProcess,offset szNotepadPath,ebx,ebx,ebx,ebx,NORMAL_PRIORITY_CLASS,ebx,ebx,offset sui,offset pi<br />	mov edi,offset szErrorText<br />	test eax,eax<br />	jz @@msg<br />	mov edi,offset szMsg<br />	invoke WaitForSingleObject,pi.hProcess,INFINITE<br />	@@msg:<br />	invoke MessageBox,ebx,edi,ebx,MB_ICONINFORMATION<br />	invoke ExitProcess,ebx<br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2006-01-12 03:08:51 by k3Eahn</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=18844&amp;page=1" style="">&laquo;</a><a href="../?id=18844&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="18844" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Window Skinning code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19348" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19348">Window Skinning code</a></p>
+   <div class="post" id="post-149330">
+    <div class="subject"><a href="#post-149330">Window Skinning code</a></div>
+    <div class="body">Heya.. the following procedure &quot;should&quot; skin a Window using the Region method.<br />Assumptions made are 1)that the bmp is at least as large as the window,<br />and 2) that the topleft (0,0) pixel contains the colorkey to be used for &quot;transparent&quot; pixels (IE not included in the window region).<br /><br />It's not working - I end up with NO pixels in my region and my window won't display at all... can anyone see why?<br /><br /><br /><pre><code><br />SkinWindow proc hWin, hBmp<br />local dwWidth<br />local dwHeight<br />local CursorX<br />local CursorY<br />local MyColour<br />local hRgn<br />local hpixelrgn<br />local rc&#58;RECT<br />local hMemDC<br />local hDC<br /><br />mov hDC ,$invoke &#40;GetWindowDC,hWin&#41;         ;Get DeviceContext of target Window<br /><br />invoke GetWindowRect,hWin   ,addr rc            ;Measure target Window<br />m2m dwWidth, rc.right<br />m2m dwHeight,rc.bottom<br /><br />mov hMemDC,$invoke &#40;CreateCompatibleDC,hDC&#41;     ;Create a DC to work with<br />invoke SelectObject,hMemDC,hBmp                           ;Select the bmp into our DC<br /><br />xor eax,eax<br />mov CursorX,eax<br />mov CursorY,eax<br />mov MyColour,$invoke &#40;GetPixel, hMemDC,CursorX,CursorY&#41;<br />xor ebx,ebx<br />.while ebx&lt;dwHeight<br />    xor ebx,ebx<br />    .while ebx&lt;dwWidth<br />        invoke GetPixel, hMemDC,CursorX,CursorY<br />        .if eax!=MyColour      ;if the pixel is NOT the keyed colour<br />            mov eax,CursorX   ;create a single-pixel Region<br />            inc eax<br />            mov ebx,CursorY<br />            inc ebx<br />            mov hpixelrgn,$invoke &#40;CreateRectRgn, CursorX, CursorY, eax, ebx&#41; <br />            .if eax!=0<br />                .if hRgn==0                 ;if this is the first pixelregion ever processed<br />                    m2m hRgn,hpixelrgn ;just use it as the existing region<br />                .else   ;Combine the singlepixel Region with the existing Region<br />                    invoke CombineRgn, hRgn ,hRgn, hpixelrgn , RGN_OR   <br />                    invoke DeleteObject, hpixelrgn<br />                .endif<br />            .endif<br />        .endif<br />        inc CursorX<br />        mov ebx,CursorX<br />    .endw<br />    inc CursorY<br />    mov ebx,CursorY<br />.endw<br />invoke SetWindowRgn,hWin,hRgn,TRUE<br />invoke DeleteDC,hMemDC<br />invoke ReleaseDC,hWin,hDC<br />ret<br /><br />SkinWindow endp<br /></code></pre><br /><br /><br />for the curious, I call the procedure from here:<br />    .elseif uMsg==WM_CREATE<br />      mov hBmp, $invoke (LoadBitmap,hInstance,801)<br />      invoke SkinWindow, hWin, hBmp</div>
+    <div class="meta">Posted on 2004-09-08 02:07:00 by Homer</div>
+   </div>
+   <div class="post" id="post-149331">
+    <div class="subject"><a href="#post-149331">Window Skinning code</a></div>
+    <div class="body">Hi,<br /><br />One obvious problem before any further digging into it:<br /><br />invoke GetWindowRect,hWin   ,addr rc            ;Measure target Window <br />m2m dwWidth, rc.right <br />m2m dwHeight,rc.bottom <br /><br />rc.right is NOT your window's width and rc.bottom is NOT your window's height. Subtract rc.left and rc.top respectively.<br /><br />Antonis</div>
+    <div class="meta">Posted on 2004-09-08 02:18:56 by akyprian</div>
+   </div>
+   <div class="post" id="post-149352">
+    <div class="subject"><a href="#post-149352">Window Skinning code</a></div>
+    <div class="body">...not related to the bug, but the routine you're using is incredibly slow. There was some other thread around here a while ago (search for putpixel) that ends up with a very fast method.</div>
+    <div class="meta">Posted on 2004-09-08 07:52:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-149411">
+    <div class="subject"><a href="#post-149411">Window Skinning code</a></div>
+    <div class="body">The code I used to &quot;measure&quot; the window was ok in this instance (only because my application window's topleft corner coincides with the screen topleft corner at the moment of creation).<br />You are of course correct, and I modified the code to suit.<br /><br />I rewrote the proc and it now works, I'll tidy it up and repost it, but I want to implement fast getpixel first.</div>
+    <div class="meta">Posted on 2004-09-09 02:45:10 by Homer</div>
+   </div>
+   <div class="post" id="post-149412">
+    <div class="subject"><a href="#post-149412">Window Skinning code</a></div>
+    <div class="body">Don&#39;t base your algorithm around GetPixel - even if you write your own fast version. Have a look at http://www.asmcommunity.net/board/index.php?topic=17519<br /></div>
+    <div class="meta">Posted on 2004-09-09 02:59:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-149419">
+    <div class="subject"><a href="#post-149419">Window Skinning code</a></div>
+    <div class="body">I did - didn't I say I did?<br />I have written this in the past as part of a DX support class (CTexture), the only difference being I was using D3DXCreateTexture to load the image.<br /><br />Does this look ok to you?<br /><br /><pre><code><br />;Assumptions&#58;<br />;Bmp is loaded &#40;we have hBmp&#41;<br />;pbmi from GetDIBits<br />;pbits from CreateDIBSection<br /><br />GetPixelQuick proc uses ebx esi pbmi, pbits, pX, pY<br />local bitsperpixel<br />local bytesperpixel<br />xor eax,eax<br />mov esi,pbmi<br />mov ax,&#91;esi&#93;.BITMAPINFOHEADER.biBitCount  <br />mov bitsperpixel,eax      ;bits per pixel<br />shr eax,3                         ;bits per pixel/8 = bytes per pixel<br />mov bytesperpixel,eax   ;bytes per pixel<br />mov eax, &#91;esi&#93;.BITMAPINFOHEADER.biWidth     ;eax= pixels per scanline<br />mul bytesperpixel       ;ImageWidth &#40;in pixels&#41; * bytes per pixel = bytes per scanline &#40;aka Stride&#41;<br />mul pY                         ;Stride * Y<br />push eax                     ;preserve bytes2skip &#40;for Y only&#41;<br />mov eax, pX<br />mul bytesperpixel       ;eax=bytes2skip in X<br />pop ebx                       ;restore bytes2skip in Y<br />add eax,ebx                  ;eax = #bytes to skip in X and Y<br />add eax, pbits               ;+baseaddress of bitdata<br />return dword ptr&#91;eax&#93;    ;fetch pixeldata and return<br />GetPixelQuick endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-09-09 06:46:15 by Homer</div>
+   </div>
+   <div class="post" id="post-149420">
+    <div class="subject"><a href="#post-149420">Window Skinning code</a></div>
+    <div class="body">If you are referring to horizontal scan regions instead of pure pixel tests, I'm already on it... but I still need to correctly calculate pixel colour data addresses based on the basepointer and pixel X and Y coords, so I still would like to know if that code looks good or not - I'm not in a position to test the code until much later today.</div>
+    <div class="meta">Posted on 2004-09-09 06:50:15 by Homer</div>
+   </div>
+   <div class="post" id="post-149431">
+    <div class="subject"><a href="#post-149431">Window Skinning code</a></div>
+    <div class="body"><div class="quote"><br />I did - didn't I say I did? <br /></div><br />If you're referring to GetPixel, you said <em>but I want to implement fast getpixel first</em>.<br /><br /><div class="quote"><br />Does this look ok to you? <br /></div><br />I haven't looked at it - you shouldn't have GetPixel as a proc... you should do the bitmap setup at start of the &quot;create_region_from_bitmap&quot;, and work directly on the pixel data from there on.<br /><br /><div class="quote"><br />If you are referring to horizontal scan regions instead of pure pixel tests, I'm already on it...<br /></div><br />Good, that one helps a bunch too. And rather than using CombineRgn, you should create a bunch of RECTs and using the Ext* create region thingy. It helps somewhat too, but not as measurable... stil an optimization though.</div>
+    <div class="meta">Posted on 2004-09-09 08:09:51 by f0dder</div>
+   </div>
+   <div class="post" id="post-149438">
+    <div class="subject"><a href="#post-149438">Window Skinning code</a></div>
+    <div class="body">Fill a crapload of RECTs, set up a RGNDATA (and header), throw it at ExtCreateRgn thingy, gotcha. I can see how it would be faster too, since each call to CombineRgn probably internally amounts to creating two 'rects' and combining them.</div>
+    <div class="meta">Posted on 2004-09-09 08:43:27 by Homer</div>
+   </div>
+   <div class="post" id="post-149445">
+    <div class="subject"><a href="#post-149445">Window Skinning code</a></div>
+    <div class="body">I threw this together earlier :)<br /><br />The following code is my version of the ExtCreateRegion thingy skinning method.I use a BufferManager object to help with the RGNDATA struct<br /><pre><code><br /> RGNDATA struct<br />    rdh RGNDATAHEADER &lt;&gt; <br />    Buffer BYTE ?   ;&lt;--Buffer is meant to hold an array of RECT structs.<br /> RGNDATA ends<br /></code></pre><br /><br />I'll cheat by shoving a RGNDATAHEADER struct into my cool magic buffer and then just shove each RECT into the buffer after it.<br />hehehe instant RGNDATA ready for the call to ExtCreateRegion  8) <br /><br />@f0dder : The BufferManager is an oop object that wraps the paged HeapAlloc / HeapReAlloc functionality you have mentioned elsewhere.<br /><br /><br /><pre><code><br />;Returns hRegion or NULL=failed<br />MakeRegionList proc hBmp<br />local rgndatahdr&#58;REGIONDATAHEADER<br />local pManager<br />local BoundingRect&#58;RECT<br />set pManager as BufferManager<br />    mov pManager, new &#40;BufferManager&#41;<br />    mov rgndatahdr.dwSize,sizeof rgndatahdr<br />    mov rgndatahdr.iType, RDH_RECTANGLES<br />    xor eax,eax<br />    mov rgndatahdr.nCount, eax              ;&lt;-- copy the #rects here later !!!<br />    mov rgndatahdr.nRgnSize,eax          ;&lt;-- copy sizeof rects buffer here later !!!<br />    mov rgndatahdr.rcBound.left,eax      ;&lt;-- copy Bounding Rect here later !!!<br />    mov rgndatahdr.rcBound.right,eax<br />    mov rgndatahdr.rcBound.top,eax<br />    mov rgndatahdr.rcBound.bottom,eax<br />    pcall pManager.Store, addr rgndatahdr, sizeof rgndatahdr      ;store the header in the buffer<br />    invoke EnlistRects, pManager, hBmp, addr BoundingRect      ;returns #rects and BoundingRect<br />    mov ebx,pManager                                        <br />    mov ecx,&#91;ebx&#93;.BufferManager.pBuffer                                 ;baseptr of buffer<br />    mov &#91;ecx&#93;.REGIONDATAHEADER.nCount, eax                    ;store #rects as returned from EnlistRects<br />    mov eax,&#91;ebx&#93;.BufferManager.dwWrite                               ;sizeof header+rects array<br />    sub eax,sizeof REGIONDATAHEADER                                 ;minus sizeof header<br />    mov  &#91;ecx&#93;.REGIONDATAHEADER.nRgnSize, eax               ;= sizeof rects array<br />    m2m &#91;ecx&#93;.REGIONDATAHEADER.rcBound.left, BoundingRect.left<br />    m2m &#91;ecx&#93;.REGIONDATAHEADER.rcBound.right, BoundingRect.right<br />    m2m &#91;ecx&#93;.REGIONDATAHEADER.rcBound.top, BoundingRect.top<br />    m2m &#91;ecx&#93;.REGIONDATAHEADER.rcBound.bottom, BoundingRect.bottom    <br />    invoke ExtCreateRegion,NULL,&#91;ebx&#93;.BufferManager.dwWrite,&#91;ebx&#93;.BufferManager.pBuffer<br />    push eax<br />    delete pManager<br />    pop eax<br />    ret<br />MakeRegionList endp<br /></code></pre><br /><br />Note to Hiro: can you please add .INC to the attachable filetypes? Thanks.</div>
+    <div class="meta">Posted on 2004-09-09 09:26:24 by Homer</div>
+   </div>
+   <div class="post" id="post-149449">
+    <div class="subject"><a href="#post-149449">Window Skinning code</a></div>
+    <div class="body">and now I'm home I've also put this together.<br />(I'll finish it up later, it's been a long day)<br /><br /><pre><code><br />EnlistRects proc pManager, hBmp, pBoundingRect ,MyColour<br />local numRects<br />local pBits<br />local CurrentX<br />local CurrentY<br />local dwWidth<br />local dwHeight<br />local Scanning<br />local Stride<br />local MyColour<br />local rc&#58;RECT<br />set pManager as BufferManager<br /><br />;get bmp width and height<br />;getdib<br />;createdibsection<br />mov pBits,eax<br />;calculate Stride<br /><br />xor ebx,ebx<br />mov CurrentY,ebx<br />mov numRects,ebx<br />.while ebx&lt;dwHeight<br />    mov CurrentX,0<br />    mov Scanning,FALSE<br />    xor ebx,ebx<br />    .while ebx&lt;dwWidth<br />        mov eax,CurrentY<br />        mul Stride<br />        push eax<br />        mov eax,CurrentX<br />        mul bpp<br />        shr eax,3<br />        add eax,pBits<br />        pop ebx<br />        add eax,ebx<br />        .if dword ptr&#91;eax&#93;!=MyColour<br />            .if Scanning==FALSE<br />                mov Scanning,TRUE<br />                mov eax,CurrentY<br />                mov rc.top, eax<br />                inc eax<br />                mov rc.bottom, eax<br />                m2m rc.left, CurrentX                <br />            .endif<br />        .else<br />            .if Scanning==TRUE<br />                mov Scanning,FALSE<br />                m2m rc.right,CurrentX<br />                pcall pManager.Store, addr rc, sizeof rc<br />                inc numRects<br />            .endif<br />        .endif<br />        inc CurrentX<br />        mov ebx,CurrentX<br />    .endw<br />    inc CurrentY<br />    mov ebx,CurrentY<br />.endw<br />return numRects<br />EnlistRects endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-09-09 10:02:55 by Homer</div>
+   </div>
+   <div class="post" id="post-149492">
+    <div class="subject"><a href="#post-149492">Window Skinning code</a></div>
+    <div class="body">Just following this thread for the first time and throwing my 2 cents in.<br /><br />By manually scanning the raw bitmap color bytes and creating a &quot;group&quot; of RECTs and using the ExtCreateRegion is by far the fastest method I have found.<br /><br />I'll attach a few ASM files that I have made during the last six months or so that does what you are looking for.  These are optimized routines for creating a HRGN.<br /><br />To use these two ASM files, call the 'CreateRegionFromHBITMAP' function and pass it the HBITMAP, width, height, transparent color (should be NULL if you pass TRUE for UseFirstPixel) and wether to use the first pixel color or not (TRUE/FALSE).<br /><br />Let me know if you have any questions about my code.<br /><br />Relvinian</div>
+    <div class="meta">Posted on 2004-09-09 18:16:52 by Relvinian</div>
+   </div>
+   <div class="post" id="post-149498">
+    <div class="subject"><a href="#post-149498">Window Skinning code</a></div>
+    <div class="body">Your code is practically the same as f0dder's, but interesting nonetheless. The pseudocode I posted yesterday is missing a stall for the end of each horizontal line, obviously I wrote it at a whim.<br />I'll push on with my variant and make it work :)</div>
+    <div class="meta">Posted on 2004-09-09 22:28:22 by Homer</div>
+   </div>
+   <div class="post" id="post-149523">
+    <div class="subject"><a href="#post-149523">Window Skinning code</a></div>
+    <div class="body">I think it's cool how much alike mine and Relvinians code are :)</div>
+    <div class="meta">Posted on 2004-09-10 07:15:28 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

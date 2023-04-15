@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>push -&gt; call proc -&gt; pop = crash - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25887" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25887">push -&gt; call proc -&gt; pop = crash</a></p>
+   <div class="post" id="post-188763">
+    <div class="subject"><a href="#post-188763">push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body">Can anyone tell me what I&#39;m doing wrong here/what causes the crash?<br /><br />What I&#39;m trying to do:<br />Push a 0 or a 1 onto the stack depending on which radio button is checked. Then in the Convert proc pop that value into eax and then either multiply or divide.<br /><br /><pre><code>			invoke IsDlgButtonChecked,hWin,IDC_RBNEUROSEK			;get checked state of Euro-&gt;SEK radio button<br />			.if eax==BST_CHECKED<br />				mov edx,0<br />				push edx<br />				call Convert<br />			.endif<br />			invoke IsDlgButtonChecked,hWin,IDC_RBNSEKEURO			;get checked state of SEK-&gt;Euro radio button<br />			.if eax==BST_CHECKED<br />				mov edx,1<br />				push edx<br />				call Convert<br />			.endif</code></pre><br /><br /><pre><code>Convert proc<br /><br />	invoke StrToFloat, addr buffer, addr inputvalue<br />	fld inputvalue<br />	pop eax<br />	.if eax==0<br />		fmul SEKvalue<br />	.endif<br />	.if eax==1<br />		fdiv SEKvalue<br />	.endif<br />	fstp inputvalue<br />	invoke FloatToStr2, inputvalue, addr buffer<br />	ret<br /><br />Convert endp</code></pre><br /><br />The Convert proc used to work without the pop/if statements in it and with just a single fdiv or fmul. <br /><br />Thanks.</div>
+    <div class="meta">Posted on 2007-04-06 17:28:57 by Ixje</div>
+   </div>
+   <div class="post" id="post-188764">
+    <div class="subject"><a href="#post-188764">Re: push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body">It would work if you didn&#39;t use the proc and endp macros which modify the stack. See, if you call something then it&#39;s return address gets pushed onto the stack. Here, you pop that return address into eax inside your convert proc. Just change your Convert proc as shown below and all should be fine.<br /><br /><pre><code><br />Convert proc myflag:DWORD<br /><br />	invoke StrToFloat, addr buffer, addr inputvalue<br />	fld inputvalue<br />	.if myflag==0<br />		fmul SEKvalue<br />	.else<br />		fdiv SEKvalue<br />	.endif<br />	fstp inputvalue<br />	invoke FloatToStr2, inputvalue, addr buffer<br />	ret<br /><br />Convert endp<br /></code></pre><br /><br />A good exercise would be to debug starting from push eax | call Convert and see how exactly everything works ;)</div>
+    <div class="meta">Posted on 2007-04-06 17:45:23 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-188765">
+    <div class="subject"><a href="#post-188765">Re: push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body">push edx&nbsp; &nbsp; &nbsp; &nbsp;;0000<br />call Convert&nbsp; &nbsp;;0030 0000<br /><br />So now the return address 0030 is on the top of the stack<br />and:<br /><br />pop eax&nbsp; ;eax gets the return address 0030<br />ret&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;gets the push edx of 0000...and -----&gt;BOOM :-)<br /><br /></div>
+    <div class="meta">Posted on 2007-04-06 18:29:16 by eek</div>
+   </div>
+   <div class="post" id="post-188766">
+    <div class="subject"><a href="#post-188766">Re: push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body"><div class="quote"><br />push edx&nbsp; &nbsp; &nbsp;  ;0000<br />call Convert&nbsp;  ;0030 0000<br /><br />So now the return address 0030 is on the top of the stack<br />and:<br /><br />pop eax&nbsp; ;eax gets the return address 0030<br />ret&nbsp; &nbsp; &nbsp; &nbsp;  ;gets the push edx of 0000...and -----&gt;BOOM :-)<br /><br /><br /></div><br /><br />Anything that gets PUSHed outside of a CALL should to be POPed outside of the CALL to keep things clean. This is the standard for CDECL (LibC) and FASTCALL (64-bit replacement for Win32 STDCALL, which in itself is actually more like CDECL.) However, if you don&#39;t need the value that you PUSHed, simply ADD to ESP.<br /><br /><pre><code><br />			invoke IsDlgButtonChecked,hWin,IDC_RBNEUROSEK			;get checked state of Euro-&gt;SEK radio button<br />			.if eax==BST_CHECKED<br />				mov edx,0<br />				push edx<br />				call Convert<br />				add esp,4&nbsp; &nbsp; ;***** Compensate for 4-byte PUSH of EDX prior to CALL *****<br />			.endif<br />			invoke IsDlgButtonChecked,hWin,IDC_RBNSEKEURO			;get checked state of SEK-&gt;Euro radio button<br />			.if eax==BST_CHECKED<br />				mov edx,1<br />				push edx<br />				call Convert<br />				add esp,4&nbsp; &nbsp; ;***** Compensate for 4-byte PUSH of EDX prior to CALL *****<br />			.endif<br /></code></pre><br /><br />Also, to access values on the stack, use ESP/EBP...<br /><br /><pre><code><br />Convert proc<br /><br />	invoke StrToFloat, addr buffer, addr inputvalue<br />	fld inputvalue<br />	mov eax,DWORD ;***** EIP takes up closest 4 bytes ATM, go beyond it *****<br />	.if eax==0<br />		fmul SEKvalue<br />	.endif<br />	.if eax==1<br />		fdiv SEKvalue<br />	.endif<br />	fstp inputvalue<br />	invoke FloatToStr2, inputvalue, addr buffer<br />	ret<br /><br />Convert endp<br /></code></pre><br /><br />HtH.</div>
+    <div class="meta">Posted on 2007-04-06 18:44:06 by SpooK</div>
+   </div>
+   <div class="post" id="post-188768">
+    <div class="subject"><a href="#post-188768">Re: push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body">Thanks all for the good and clear feedback. Guess next time I should use the debugger first :oops:</div>
+    <div class="meta">Posted on 2007-04-07 05:13:12 by Ixje</div>
+   </div>
+   <div class="post" id="post-188770">
+    <div class="subject"><a href="#post-188770">Re: push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body"><div class="quote"><br />Thanks all for the good and clear feedback. Guess next time I should use the debugger first :oops:<br /></div><br /><br />Just keep in mind that with the stack, First In Last Out (FILO) ;)</div>
+    <div class="meta">Posted on 2007-04-07 09:42:29 by SpooK</div>
+   </div>
+   <div class="post" id="post-188775">
+    <div class="subject"><a href="#post-188775">Re: push -&gt; call proc -&gt; pop = crash</a></div>
+    <div class="body"><div class="quote"><br />Just keep in mind that with the stack, First In Last Out (FILO) ;)<br /></div><br /><br />I did keep the FILO in mind. But what I didn&#39;t think about was that the return address also gets pushed to the stack.</div>
+    <div class="meta">Posted on 2007-04-07 10:33:44 by Ixje</div>
+   </div>
+  </div>
+ </body>
+</html>

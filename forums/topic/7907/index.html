@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bitmap loading problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7907" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=7907">Bitmap loading problem</a></p>
+   <div class="post" id="post-57621">
+    <div class="subject"><a href="#post-57621">Bitmap loading problem</a></div>
+    <div class="body">I've got a function which loads a bit map of either 8/16/24 bit color depth.<br /><br />the 8 bit section works with all image sizes but for some reason the 24 bit section (which dependig on the bitdepth of the screen will convert the bitmap to either 16 or 32 bits, gives an error unless the bitmaps are a certain size.<br />Funnily enough the error does not occur in the code which I wrote but during a call to GlobalAlloc.<br /><br />for example: the call to GlobalAlloc fails if the bitmap is say 320x240. but it succeeds if the bitmap size is 640x240.<br /><br />Does anyone have any idea why this might be happening ?<br /><br />cheers:confused:</div>
+    <div class="meta">Posted on 2002-09-13 18:19:33 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-57623">
+    <div class="subject"><a href="#post-57623">Bitmap loading problem</a></div>
+    <div class="body">I've never had such problems with GlobalAlloc, perhaps if you post some code.</div>
+    <div class="meta">Posted on 2002-09-13 18:31:02 by Eóin</div>
+   </div>
+   <div class="post" id="post-57624">
+    <div class="subject"><a href="#post-57624">Bitmap loading problem</a></div>
+    <div class="body"><pre><code><br />PT &quot;Converting 24bit RGb to 32bit RGB&quot;<br />                invoke GlobalAlloc,GMEM_FIXED or GMEM_ZEROINIT,&#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biSizeImage<br /> 	test eax,eax<br /> 	jz error_close<br />	mov _lpTempBuf,eax<br /> 	;allocate final 32 bit storage buffer<br /> 	mov eax,&#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biWidth<br /> 	mov ecx,&#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biHeight<br /> 	mul ecx<br />	shl eax,2;multiply by four since 32 bit values<br /> 	invoke GlobalAlloc,GMEM_FIXED or GMEM_ZEROINIT,eax<br /> 	test eax,eax<br /> 	jz error_close2<br />	mov &#40;pBITMAPFILE &#91;ebx&#93;&#41;.lpImage,eax<br />	;now read it in<br /> 	invoke ReadFile,_hFile,_lpTempBuf,&#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biSizeImage,addr _dwBytesRead,NULL<br /><br />  ;now convert each 24 bit RGB value into a 32 bit value<br />	mov eax,&#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biWidth<br />	mul &#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biHeight<br />	mov edi,&#40;pBITMAPFILE &#91;ebx&#93;&#41;.lpImage ;destination buffer<br />	mov esi,_lpTempBuf;source buffer<br />	mov ecx,eax ;ecx=width*height<br /><br />	mov edx,ecx<br />	shl edx,1<br />	add edx,ecx ;multiply edx by 3<br />&#91;B&#93;	do_RGB32&#58;;extract RGB components  &lt;problem may have something to do with this loop<br />	   mov eax,dword ptr&#91;esi+edx&#93;;load in rgb data<br />	   and eax,00FFFFFFH<br />  	   mov dword ptr&#91;edi+ecx*4&#93;,eax;build up 32 bit color word write to output buffer<br />  	   sub edx,3<br /> 	   dec ecx<br />  	   jg do_RGB32<br />	RGB32_done&#58;&#91;/B&#93;<br />	PT &quot;image Converted&quot;<br />  mov &#40;pBITMAPFILE &#91;ebx&#93;&#41;.BIH.biBitCount,32;update the bitmap info<br />  invoke GlobalFree,_lpTempBuf ;free temporary buffer<br /></code></pre><br /><br />The above is the section which converts the 24bit rgb to 32bit.<br />The next call to GlobalAlloc fails. If i substitute <strong>mov dword ptr,eax</strong> with <strong>mov dword ptr</strong>, then the next globalalloc succeeds but the image won't be converted properly...<br /><br />cheers</div>
+    <div class="meta">Posted on 2002-09-13 18:56:19 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-57696">
+    <div class="subject"><a href="#post-57696">Bitmap loading problem</a></div>
+    <div class="body">well I solved the GlobalAlloc problem by passing the flag GMEM_MOVEABLE and using GlobalLock<br />but now if the mouse moves over the window I get a GPF...<br />cheers.</div>
+    <div class="meta">Posted on 2002-09-14 05:28:03 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-57775">
+    <div class="subject"><a href="#post-57775">Bitmap loading problem</a></div>
+    <div class="body">weird, I've never used the GlobalAlloc, If this sounds unreasonable please give me a virtual slap ;) . Anyway why not use the HeapCreate and HeapAlloc functions? You can easily create a growable heap and u can allocate memory until pigs start to fly.</div>
+    <div class="meta">Posted on 2002-09-14 12:07:05 by x86asm</div>
+   </div>
+   <div class="post" id="post-57822">
+    <div class="subject"><a href="#post-57822">Bitmap loading problem</a></div>
+    <div class="body">WHew...problem solved...<br />there was a <strong>jge</strong> which should have been a <strong>jg</strong> which was causing the problem...its funny how that caused windows to go crazy!!<br /><br />cheers:alright:</div>
+    <div class="meta">Posted on 2002-09-14 17:22:29 by MArtial_Code</div>
+   </div>
+  </div>
+ </body>
+</html>

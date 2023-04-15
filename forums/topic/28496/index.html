@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>anyone know why this code isnt working? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28496" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28496">anyone know why this code isnt working?</a></p>
+   <div class="post" id="post-201586">
+    <div class="subject"><a href="#post-201586">anyone know why this code isnt working?</a></div>
+    <div class="body">this is my write to file procedure. when i delete an item from my listview each item is suppose to be checked and written back to a new file with the same name. im able to delete a line from the listview but my file doesnt reflect the changes.
+
+<pre><code>
+.data
+FileName1 db "destroyed.ini",0
+
+.data?
+hFileHandle HANDLE ?
+ItemBuffer  db 12000 dup (?)
+ItemCount   dd 16 dup  (?)
+LVI LVITEM  <?>
+
+.....
+......
+
+SaveToFile PROC 
+
+    LOCAL SaveRowCounter        :DWORD
+    LOCAL SaveColumnCounter     :DWORD
+
+    INVOKE CloseHandle, hFileHandle
+    INVOKE CreateFile,addr FileName1,GENERIC_READ or GENERIC_WRITE,0,0,CREATE_ALWAYS,0,0   ;open file
+    MOV hFileHandle,EAX
+
+    mov SelectedItem,0
+    invoke SendMessage,hListView1,LVM_GETNEXTITEM,-1,LVNI_SELECTED                         ;get selected item
+    mov SelectedItem,eax
+    invoke SendMessage,hListView1,LVM_DELETEITEM,SelectedItem,0                            ;delete selected item
+
+    Invoke SendMessage,hListView1,LVM_GETITEMCOUNT,0,0                                     ;get total amount of items in listview
+    mov ItemCount,eax
+    invoke wsprintf,ADDR StoreCount,ADDR fmtGetCount,ItemCount                             ;convert total to readable format
+    mov LVI.iItem,0
+
+save_loop:
+    mov eax, LVI.iItem               
+        .WHILE ItemCount > eax                                                            ;while Amount of items in listview is greater than\
+                                                                                          ;current listview item continue looping
+            MOV LVI.imask,LVIF_TEXT
+            MOV LVI.pszText,offset ItemBuffer
+            MOV LVI.cchTextMax,sizeof ItemBuffer
+            INVOKE SendMessage,hListView1,LVM_GETITEM,0,offset LVI.imask                  ;Get listview item info
+            
+            invoke SetFilePointer,hFileHandle,NULL,NULL,FILE_END
+            INVOKE lstrlen,addr ItemBuffer
+            INVOKE WriteFile,hFileHandle,addr ItemBuffer,EAX,addr bRead,NULL              ;write the item that was retreived\
+                                                                                          ;to the file
+            INVOKE WriteFile,hFileHandle,addr EndOfLine,2,addr bRead,NULL                 ;add new line afterwards
+            INC LVI.iItem
+            JMP save_loop                                                                 ;loop until all items in list are saved
+        .ENDW
+    ret
+
+SaveToFile ENDP</code></pre>
+
+
+smurf</div>
+    <div class="meta">Posted on 2001-06-22 05:24:00 by smurf</div>
+   </div>
+   <div class="post" id="post-201587">
+    <div class="subject"><a href="#post-201587">anyone know why this code isnt working?</a></div>
+    <div class="body">Did you close the file handle at the end of your program ?</div>
+    <div class="meta">Posted on 2001-06-22 05:29:00 by karim</div>
+   </div>
+   <div class="post" id="post-201588">
+    <div class="subject"><a href="#post-201588">anyone know why this code isnt working?</a></div>
+    <div class="body">yep sure did also placed another one at the end of my procedure just to double check that that wasnt the problem.
+
+still doesnt work.:(
+
+smurf</div>
+    <div class="meta">Posted on 2001-06-22 05:34:00 by smurf</div>
+   </div>
+   <div class="post" id="post-201589">
+    <div class="subject"><a href="#post-201589">anyone know why this code isnt working?</a></div>
+    <div class="body">in your code when sending the LVM_GETITEM message, you pass a pointer to an element of the LV_ITEM structure, rather than a pointer to the structure itself!
+
+Change:
+<pre><code>INVOKE SendMessage,hListView1,LVM_GETITEM,0,offset LVI.imask</code></pre>
+
+To:
+<pre><code> INVOKE SendMessage, hListView1, LVM_GETITEM, 0, offset LVI</code></pre>
+
+That may help!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-22 06:02:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201590">
+    <div class="subject"><a href="#post-201590">anyone know why this code isnt working?</a></div>
+    <div class="body">1. your "CreateFile" with flag CREATE_ALWAYS will not clear file content. Use TRUNCATE_EXISTING
+
+2. There is no need for "invoke SetFilePointer"
+3. Your LVI is in uninitialized data section, but member iSubItem is not initialized
+4. I would avoid to invoke WriteFile 2 times. Better use lstrcat before lstrlen to append CRLF to your string and delete second WriteFile</div>
+    <div class="meta">Posted on 2001-06-22 06:04:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201591">
+    <div class="subject"><a href="#post-201591">anyone know why this code isnt working?</a></div>
+    <div class="body">nope that didnt work either.
+
+smurf</div>
+    <div class="meta">Posted on 2001-06-22 06:06:00 by smurf</div>
+   </div>
+   <div class="post" id="post-201592">
+    <div class="subject"><a href="#post-201592">anyone know why this code isnt working?</a></div>
+    <div class="body">ok here is my complete source code. you need to make sure that you have a file named test.ini in the folder your assembled exe is located. also you need to also place at least one line of text in it also.
+
+here is the code i hope someone can figure this out for me!:)
+
+<pre><code>.586
+.model flat, stdcall
+ option casemap :none
+      
+      include       \masm32\include\windows.inc
+      include       \masm32\include\kernel32.inc
+      include       \masm32\include\user32.inc
+      include       \masm32\include\comctl32.inc
+      include       /masm32/include/masm32.inc
+
+      includelib    \masm32\lib\kernel32.lib
+      includelib    \masm32\lib\user32.lib
+      includelib    \masm32\lib\comctl32.lib 
+      includelib    /masm32/lib/masm32.lib
+
+      
+      WinMain       PROTO :DWORD,:DWORD,:DWORD,:DWORD
+      WndProc       PROTO :DWORD,:DWORD,:DWORD,:DWORD
+      TopXY         PROTO :DWORD,:DWORD
+      CreateButtons PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+      LoadList      PROTO :DWORD,:DWORD
+      CreateEditBox PROTO :DWORD,:DWORD
+      SaveToFile    PROTO
+ 
+InsertColumn MACRO handle,txt,width
+      LOCAL lbl
+      LOCAL strng
+      jmp lbl
+      strng db txt,0
+  lbl:
+      mov col.imask,LVCF_TEXT or LVCF_WIDTH
+      mov col.fmt,0
+      mov col.lx,width
+      mov col.pszText,offset strng
+      invoke lstrlen,offset strng
+      mov col.cchTextMax,eax
+      invoke SendMessage,handle,LVM_INSERTCOLUMN,0,addr col
+ENDM
+
+.const
+Button0ID equ 1001
+Button1ID equ 1002
+Edit0ID   equ 1003
+      
+.data
+      ClassName       db "Starting Template",0
+      CaptionText     db "A Simple Listview",0
+      LvClassName     db "SysListView32",0
+      ButtonText0     db "Remove",0
+      ButtonText1     db "Add",0
+      ButtonClassName db "Button",0
+      FileName        db "test.ini",0
+      Eye             db "Seeing Eye",0
+      EndOfLine       db  0Dh,0Ah
+      EditClassName   db "Edit",0
+    fmtGetCount       db "%lu",0
+      
+.data?
+      hWnd          HANDLE   ?
+      hInstance     HANDLE   ?
+      hListView     HANDLE   ?
+      hButton0      HANDLE   ?
+      hButton1      HANDLE   ?
+      hEdit0        HANDLE   ?
+      hFile1        HANDLE   ?
+      col           LVCOLUMN <>
+      bRead         dd       ?
+      item3         LVITEM  <?>
+      item4         LVFINDINFO <?>
+      buffer2       db 128 dup (?)
+      ItemCount     dd 16 dup  (?)
+      StoreCount    dd 16 dup  (?)
+      ItemBuffer    db 12000 dup (?)
+
+
+.code
+ start:
+      invoke GetModuleHandle, NULL
+      mov hInstance, eax
+      invoke WinMain,hInstance,NULL,NULL,SW_SHOWDEFAULT
+      invoke ExitProcess,eax
+      invoke InitCommonControls
+
+; ########################################################################
+
+WinMain proc hInst     :DWORD,
+             hPrevInst :DWORD,
+             CmdLine   :DWORD,
+             CmdShow   :DWORD
+
+      ;====================
+      ; Put LOCALs on stack
+      ;====================
+
+      LOCAL  wc   :WNDCLASSEX
+      LOCAL  msg  :MSG
+      LOCAL  Wwd  :DWORD
+      LOCAL  Wht  :DWORD
+      LOCAL  Wtx  :DWORD
+      LOCAL  Wty  :DWORD
+
+      ;==================================================
+      ; Fill WNDCLASSEX structure with required variables
+      ;==================================================
+
+         mov    wc.cbSize,       SIZEOF WNDCLASSEX
+	 mov    wc.style,        CS_HREDRAW + CS_VREDRAW
+	 mov    wc.lpfnWndProc,  OFFSET WndProc
+	 mov    wc.cbClsExtra,   NULL
+	 mov    wc.cbWndExtra,   NULL
+	 mov    eax,             hInstance
+	 mov    wc.hInstance,    eax
+         invoke LoadIcon,        NULL,IDI_APPLICATION
+	 mov    wc.hIcon,        eax
+	 mov    wc.hIconSm,      eax
+	 invoke LoadCursor,      NULL,IDC_ARROW
+	 mov    wc.hCursor,      eax
+	 mov    wc.hbrBackground,COLOR_BTNFACE+1
+	 mov    wc.lpszMenuName, NULL
+	 mov    wc.lpszClassName,OFFSET ClassName
+
+
+	 invoke RegisterClassEx, addr wc
+
+      ;================================
+      ; Centre window at following size
+      ;===========</div>
+    <div class="meta">Posted on 2001-06-22 07:34:00 by smurf</div>
+   </div>
+   <div class="post" id="post-201593">
+    <div class="subject"><a href="#post-201593">anyone know why this code isnt working?</a></div>
+    <div class="body">check success of CreateFile. I think you get Error INVALID_HANDLE_VALUE (=-1) in eax.</div>
+    <div class="meta">Posted on 2001-06-22 08:16:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201594">
+    <div class="subject"><a href="#post-201594">anyone know why this code isnt working?</a></div>
+    <div class="body">thanks japheth you put a smile on my face.:)
+
+smurf</div>
+    <div class="meta">Posted on 2001-06-22 08:27:00 by smurf</div>
+   </div>
+   <div class="post" id="post-201595">
+    <div class="subject"><a href="#post-201595">anyone know why this code isnt working?</a></div>
+    <div class="body">use "CREATE_ALWAYS or TRUNCATE_EXISTING" instead of "TRUNCATE_EXISTING" alone</div>
+    <div class="meta">Posted on 2001-06-22 08:31:00 by japheth</div>
+   </div>
+  </div>
+ </body>
+</html>

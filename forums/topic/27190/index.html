@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Class Mimicking - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27190" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27190">Class Mimicking</a></p>
+   <div class="post" id="post-194973">
+    <div class="subject"><a href="#post-194973">Class Mimicking</a></div>
+    <div class="body">Okay, here's a good one.  In MASM, it's possible to create a struct and use it to model what would otherwise be a C++ class, or perhaps a COM object.  Even simulate polymorphism and inheritance in some ways.  Good enough.  Now, here's where the question begins: with the struct, everything is public, so-to-speak.
+
+Let's say I wanted some variables which will be relevant to each instance of the type, but won't be exposed to the outside world (private members).  In struct, there's no way to do this, since it's all private.
+
+If I have local variables in the asm file of relevance, there is a single copy, and if I have 10 of these structures in use, and they all need to do something, specially on a thread, I"m screwed.
+
+Two ways of solving this, create an array of the "private" variables, indexed to the number of "structs" in use.  Which is a crummy solution.
+
+The next solution I thought of, is to leave the private memebers out of the struct defined in the include file for people to use.  This requires they be the last members or you're screwed.  But I can see this wouldn't be good either.
+
+Anyone have a better way of achieving this???
+
+Thanks,
+_Shawn</div>
+    <div class="meta">Posted on 2001-03-11 22:01:00 by _Shawn</div>
+   </div>
+   <div class="post" id="post-194974">
+    <div class="subject"><a href="#post-194974">Class Mimicking</a></div>
+    <div class="body">Provide the user with an external struct and use another one interally.  If the user can access the private members, then you haven't wrapped them good enough - or you over documented the interface :P  The interface defines the amount of containment that you have.  The more dynamic the interface - the less containment you have, and the more cohesion between your code and the external code.  Assembly language programmers tend to favor a lot of cohesion - the code is faster, but not as universal.  The rest of modern programming has went full speed in the other direction.
+
+Just my twisted view :P
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-11 23:10:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-194975">
+    <div class="subject"><a href="#post-194975">Class Mimicking</a></div>
+    <div class="body">How to 'contain' a class.
+
+A class in the OOP sense has a public interface, and a private implementation. It would be nice if we say had a proc named CONSTRUCTOR that wouldn't get confused with the other 12 classes we need, each having it's own procedure of the same name.
+
+In my current project, that's the situation I have. In just a sense of general cleanliness, I wanted to do just such a containment, mostly to insure some of the stuff I was writing was truly re-useable (i.e., didn't sneak in any global variables).
+
+Here's how I did it, using several COM classes. 
+
+Each class goes inside a .asm file for a separate compilation to object code. 
+
+Whatever needs to be public goes into a separate .inc file. This file gets included into that .asm, and whatever other .asm modules are going to use the class.
+
+Here's a list of the exports for my cProject Class from the  cProject.inc file:
+
+<pre><code>
+sLIBID_Project     TEXTEQU    {blah blah blah}
+sCLSID_cProject    TEXTEQU    {blah blah blah}
+sIID_IProject      TEXTEQU    {blah blah blah}
+
+externdef          LIBID_Project:  GUID
+externdef          CLSID_cProject: GUID
+externdef          IID_IProject:   GUID
+externdef          ProjectClass:   ClassItem
+
+pLIBID_Project     EQU   OFFSET LIBID_Project
+pCLSID_cProject    EQU   OFFSET CLSID_cProject
+pIID_IProject      EQU   OFFSET IID_IProject
+
+ProjectCreationInfo	STRUCT
+	{some custom members to create specific initiated object types)
+ProjectCreationInfo	ENDS
+
+_vtIProject MACRO CastName:REQ
+{one of those silly interface definition macros with all the comethods thingies}
+ENDM
+
+IProject              STRUCT
+    _vtIProject IProject
+IProject              ENDS
+</code></pre>
+
+Thus, the interface for the Class is public, ready for use by the rest of the project. As are the GUIDS, either as text (which is probably not needed), buy more importantly, the GUIDS themselves are defined in the .data area of the Class, and the pointers to them are defined.
+
+Hiding inside this list is this curious item:
+
+<pre><code>
+externdef          ProjectClass:   ClassItem
+</code></pre>
+
+The ClassItem is the structure that defines the class to the CoLib AllocObject proc. It's quite important to export this, as it is used to create new objects through this procedure, like so:
+
+<pre><code>
+invoke AllocObject, ADDR pProj, ADDR ProjectClass, NULL, ADDR pci
+</code></pre>
+
+Where pProj is the COM object pointer we get in return, and pci is a ProjectCreationInfo structure to initialize the newborn object to a specific project. (The NULL is for the outer Unknown, since it's not being aggregated we don't indicate one).
+
+The .asm file is compiled to a library with this:
+
+<pre><code>
+ml /nologo /c /coff cProject.asm
+lib cProject.obj /out:cProject.lib
+</code></pre>
+
+In use, the project (small 'p') using this class includes the .inc and includelib the .lib of this Class. The ProjectObjData (the private object instance data structure) is NOT accessable to the whole project. In fact, all the private variables, structures, procedures, in fact, everything but some GUIDS and the ClassItem are hidden inside the library. 
+
+
+Post Mortem: One thing to note this code in NOT for a DLL server, so no ClassMap is needed. The ClassMap needs specific info for each class (the ClassItem),  arranged into a structure list. You would need some way (code?) to copy individual ClassItems into a single monolithic list. 
+
+My latest thinking on ClassMaps is they should be a list of ClassItem pointers to get around this limitation. However, this would break all existing projects written with CoLib. 
+
+Get ready for this, CoLib 2.0 will be using these ClassItem pointers.
+
+(Now Hiro, don't you go moving this thread to the COM section)  ;-)
+
+
+
+This message was edited by Ernie, on 3/12/2001 2:16:40 AM</div>
+    <div class="meta">Posted on 2001-03-12 01:10:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-194976">
+    <div class="subject"><a href="#post-194976">Class Mimicking</a></div>
+    <div class="body">Good going Ernie!
+
+I'd like to...oh, boy...encapsulate the Web Browser control in
+a lib so it will be easier for everyone to use. I haven't posted
+it yet anyway (because I can't to get ASM code to talk to the
+HTML DOM).
+
+Any words of wizdom?
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-03-12 09:23:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-194977">
+    <div class="subject"><a href="#post-194977">Class Mimicking</a></div>
+    <div class="body">Ernie,
+
+So this means that I have a struct for example, in my asm file, and then what I want exposed goes into the inc (that's also included with the (asm?) or the one that goes to the users?? and is used by the other modules of the project?  Does this also mean that the private data would be the last members of the struct to ensure that they can be hidden without alignment problems?
+
+Thanks,
+Shawn</div>
+    <div class="meta">Posted on 2001-03-12 10:00:00 by _Shawn</div>
+   </div>
+   <div class="post" id="post-194978">
+    <div class="subject"><a href="#post-194978">Class Mimicking</a></div>
+    <div class="body"><So this means that I have a struct for example, in my asm file, and then what I want exposed goes into the inc (that's also included with the (asm?) or the one that goes to the users?? and is used by the other modules of the project?>
+
+Yes, the inc file of public information is shared by both the class asm and with the rest of the project. This keeps everyone playing the same game.
+
+<Does this also mean that the private data would be the last members of the struct to ensure that they can be hidden without alignment problems?>
+
+The way this all works out, you never export that structure. It's solely internal to your class.
+
+In traditional OOP coding, you give the client (the requestor, the code that called NEW on your class) the address of some part of the "object," the object being all your private instance data, and whatever other control info you need. The particular address in this struct you pass back holds another pointer, it points to a list of function pointers. These are the methods of your class.
+
+That sorely needs a picture. Sorry we're stuck in an ASCII world here.
+
+That address is often refered to as "this." The structure pointer to by "this" is some sort of heap allocated memory (ie, not global .data memory as you may make several instances of one class).
+
+When the object's methods are called, each call includes "this" as a parameter, so the class code knows which object (literally "this" object) is being worked with.
+
+A call would look like:
+
+<pre><code>
+invoke SomeClassConstructor, ADDR pObject  ; fill a this ref for us
+; do something with the object
+
+mov ecx, pObject    ; get the object pointer
+mov ecx,       ; it points to the function table, so get it
+invoke .SomeInterface.SomeFunction, this_, {whatever other parameters}
+</code></pre>
+
+
+The class code must be able to translate "this" into the address of the whole private object data structure.
+
+For a simple single interface class (ie, one that does not multiply inherite), this is super simple to work out, as you can make "this" point to the first element of the structure, and use it directly as a pointer to the private data structure.
+
+Using the CoLib to see all this is probably not the way to go, as it has lots of other side issues it covers (like it can handle multiple inheritance). A better look is in my orgional "MyCom" tut, which is a dirt simple object if you ignore the COM specific stuff like the registration methods.
+
+Assembly Programming Journal has my orgional artical, along with someone elses in a previous issue, one or the other may be of help. See issues 5 (Bill's art) & 8 (mine).
+
+My tuts are also in the MASM32 SP2, which you may already have.</div>
+    <div class="meta">Posted on 2001-03-12 10:42:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-194979">
+    <div class="subject"><a href="#post-194979">Class Mimicking</a></div>
+    <div class="body">The SmallTalk solution is to make all data private, and to allow access via "getter" and "setter" functions.  In ASM, these functions could be macros, which would eliminate the CALL-RET overhead.</div>
+    <div class="meta">Posted on 2001-03-12 14:15:00 by tank</div>
+   </div>
+   <div class="post" id="post-194980">
+    <div class="subject"><a href="#post-194980">Class Mimicking</a></div>
+    <div class="body">Is it possible to nest structures and then access them, like in VB I can say
+
+X = mystruc.substruct.value
+
+In asm, is such a thing possible?  This would happen if a structure contains a member which is another structure
+
+_SHawn</div>
+    <div class="meta">Posted on 2001-03-12 19:30:00 by _Shawn</div>
+   </div>
+   <div class="post" id="post-194981">
+    <div class="subject"><a href="#post-194981">Class Mimicking</a></div>
+    <div class="body">Yep. Possible. I think the limit is 20 nestings deep.
+
+Just be aware that myself and others note bugs as you do this, in my case it was forgetting default values. However, since that time I have not been able to make the bug re-occure (damnit, I spent a bad Sunday morning tracking it and making a work-around, I should keep the bad source too?)
+
+
+Anyway, say you have:
+
+<pre><code>
+S1 STRUCT
+  A1 DW ?
+S1 ENDS
+
+S2 STRUCT
+  B1 DW ?
+  Ax S1 {}
+S2 ENDS
+
+SS2 S2  {}
+
+Then you can access it as
+
+mov S2.Ax.A1, null
+</code></pre></div>
+    <div class="meta">Posted on 2001-03-12 23:52:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

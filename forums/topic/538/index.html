@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Resource Editor - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=538" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=538">Resource Editor</a></p>
+   <div class="post" id="post-3256">
+    <div class="subject"><a href="#post-3256">Resource Editor</a></div>
+    <div class="body">I have just started experimenting with my resource editor and have quickly picked up how to create a simple form with a few controls on it, and have managed to compile it into my .exe<br /><br />however i have a few questions...<br /><br />first of all, is Developer studio the best resource editor?<br /><br />when i compile it, it says it cant find various .h files. i have VC++ (i dont know any C++, it was cheap at a car boot sale :D ) and have them in my Microsoft Developer Studio directory.<br />and how can i get around copying all the .h files to the project directory to make it aseemble properly? if i set the dir to the .h files dir then it says it cant find the .rc (obviously). <br /><br />is .rc the best type to save the resource as?<br /><br />once i have got it into the .exe though, i am stuck. i cant work out how to actually make it appear. this is my code so far:<br /><br />invoke GetModuleHandle, NULL<br />mov hInstance,eax<br />invoke DialogBoxParam, hInstance, FormName, NULL, ADDR DlgProcedure, 0<br />invoke ExitProcess,0<br /><br />it says theres an error in the DialogBoxParam. second parameter is undefined, and its an argument type mismatch. that is the name of my form, and from various sources i have looked at, this is how the form is made to be shown on the screen. im pretty sure its an error in the source file, not the .rc. but i cant see what.<br /><br />thanks in advance for your help.<br />skud.</div>
+    <div class="meta">Posted on 2001-08-08 07:38:38 by skud</div>
+   </div>
+   <div class="post" id="post-3257">
+    <div class="subject"><a href="#post-3257">Resource Editor</a></div>
+    <div class="body">In your resource script, you will have defined the dialog by either some name or an integer value.<br /><br />e.g.<br /><pre><code><br />MainDlg DIALOG 77, 235, 207, 70<br />...<br />...<br /></code></pre><br /><br />In this case the name of the dialog is MainDlg.<br />It could be &quot;1 DIALOG ....&quot;.<br /><br />In your .asm file you need:<br /><pre><code><br />.data<br />DlgName  db &quot;MainDlg&quot;,0<br /><br />.code<br />  invoke DialogBoxParam, hInstance, ADDR DlgName, NULL, ADDR DlgProc, NULL<br /></code></pre><br /><br />Or if the dialog is defined using an integer rather than some name:<br /><pre><code><br />.code<br />  invoke DialogBoxParam, hInstance, 1, NULL, ADDR DlgProc, NULL<br /></code></pre><br />It can be made more readable using equates though.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-08 08:37:23 by Mirno</div>
+   </div>
+   <div class="post" id="post-3259">
+    <div class="subject"><a href="#post-3259">Resource Editor</a></div>
+    <div class="body">thx.<br /><br />it compiles now but it still doesnt show the window :(<br />i tried using showwindow with it but that doesnt do anything...<br /><br />skud.</div>
+    <div class="meta">Posted on 2001-08-08 09:04:14 by skud</div>
+   </div>
+   <div class="post" id="post-3260">
+    <div class="subject"><a href="#post-3260">Resource Editor</a></div>
+    <div class="body">Could you post the code &amp; rc file.<br /><br />It'd make it a bit easier to help!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-08 09:16:51 by Mirno</div>
+   </div>
+   <div class="post" id="post-3261">
+    <div class="subject"><a href="#post-3261">Resource Editor</a></div>
+    <div class="body">here ya go!<br /><br />thanks for the swift responses too.<br />the wonders of email notify!</div>
+    <div class="meta">Posted on 2001-08-08 09:50:17 by skud</div>
+   </div>
+   <div class="post" id="post-3265">
+    <div class="subject"><a href="#post-3265">Resource Editor</a></div>
+    <div class="body">Do you build using Quick Editor, or the batch files in \masm32\bin?<br />If you do, then the .rc file needs to be called rsrc.rc as this is hard coded into the building &amp; linking process.<br /><br />If you simply rename the .rc file and compile, you'll see a button on screen, and processor usage goes to 100%.<br />If you don't get that, then the assembler hasn't linked in the rsrc.obj file (which explains why it didn't work :D ).<br /><br />After renaming the file. You'll also need to make some changes to the .asm file too!<br /><br />1) The DLG proc returns true if it has processed its own message, otherwise it returns false.<br /><br />So you need to add:<br /><pre><code><br />  .if uMsg == WM_CLOSE<br />       .....<br />  .if uMsg == IDC_BUTTON1<br />       .....<br />  .else<br />       mov eax, FALSE<br />       ret<br />  .endif<br /><br />  mov eax, TRUE<br />  ret<br />DlgProc ENDP<br /></code></pre><br /><br />2) When you click on a button, the dialog receives a WM_COMMAND message. When receving a WM_COMMAND, the ID of the command is in the lower 16bits of wParam, and the handle of the control is in lParam.<br /><br />So change your code to:<br /><pre><code><br />  .elseif uMsg == WM_COMMAND<br />      .IF lParam != 0 ;Control if &gt;0, menu if 0<br />          mov eax, wParam<br />          and eax, 0FFFFh<br />          .IF eax == IDC_BUTTON1<br />               ....<br />          .ENDIF<br />      .ENDIF<br />   .....<br /></code></pre><br /><br />That should make it work properly.<br /><br />3) Just for completeness, change from using &quot;ExitProcess, 0&quot; in your &quot;WM_CLOSE&quot; to using &quot;EndDialog, hWnd, 0&quot;.<br />Its a little more &quot;proper&quot;!<br /><br /><br />I've included the &quot;cut-down&quot; version of the .rc file (hand edited to remove all the crap VC puts in). Its easier to read, and modify by hand, if you play around with it for a while you'll soon learn what everything does!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-08 10:31:29 by Mirno</div>
+   </div>
+   <div class="post" id="post-3267">
+    <div class="subject"><a href="#post-3267">Resource Editor</a></div>
+    <div class="body">Oops missed the zip!</div>
+    <div class="meta">Posted on 2001-08-08 10:33:26 by Mirno</div>
+   </div>
+   <div class="post" id="post-3268">
+    <div class="subject"><a href="#post-3268">Resource Editor</a></div>
+    <div class="body">its still not working<br />assembles, but when i run it it doesnt do anything.<br /><br />is my Make.bat ok?<br /><br />@echo off<br />C:\Masm32\BIN\rc rsrc.rc<br />C:\masm32\bin\ml /nologo /c /coff Button.asm<br />C:\masm32\bin\link /SUBSYSTEM:WINDOWS /LIBPATH:c:\masm32\lib Button.obj<br />echo.<br />echo.<br />echo.<br />if exist *.obj del *.obj<br />pause<br />cls</div>
+    <div class="meta">Posted on 2001-08-08 10:46:03 by skud</div>
+   </div>
+   <div class="post" id="post-3270">
+    <div class="subject"><a href="#post-3270">Resource Editor</a></div>
+    <div class="body"><strong>&quot;\masm32\bin\rc button.rc&quot;</strong> is fine if you are doing a make file yourself.<br />However, rc doesn't produce an .obj file. To do this you need to use <strong>&quot;\masm32\bin\cvtres /machine:ix86 button.res&quot;</strong><br />This will produce an .obj file.<br /><br />This brings us a whole new problem, as you have button.obj from button.asm, and button.obj from button.rc! I'm sure you can solve that one though!<br /><br />When linking also link the resource's object file too.<br /><br />That should solve the problem.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-08 10:55:53 by Mirno</div>
+   </div>
+   <div class="post" id="post-3271">
+    <div class="subject"><a href="#post-3271">Resource Editor</a></div>
+    <div class="body">Hi Skud,<br />there are several fundamental mistakes in your .asm code as mirno has pointed out.  I won't bother going over them.<br /><br />Here however is the zip file of your sources which I've edited to remove errors it's also got the binaries in it.<br /><br />Mirno hasn't pointed this out but note That IDC_BUTTON must also be defined in the ASm source file<br /><br />don't hesitate to contact me if you don't understand something<br />I've got some improved batch files if you want them also<br /><br />the Martial</div>
+    <div class="meta">Posted on 2001-08-08 11:17:32 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-3272">
+    <div class="subject"><a href="#post-3272">Resource Editor</a></div>
+    <div class="body">thanks a lot for taking the time to correct my code!...<br />but i can't compile it. theres something wrong with my .bat.<br />i really dont get how the linking process works, or what .obj files do.<br /><br />could you please correct my .bat<br /><br />i just need a working example to get me on the right track.<br /><br />skud.<br /><br />PS. my Make.bat is posted above this post somewhere.</div>
+    <div class="meta">Posted on 2001-08-08 11:25:29 by skud</div>
+   </div>
+   <div class="post" id="post-3273">
+    <div class="subject"><a href="#post-3273">Resource Editor</a></div>
+    <div class="body">This:<br /><pre><code><br />-------------------------------- make.bat --------------------------------<br />@echo off <br />\masm32\bin\rc rsrc.rc<br />\masm32\bin\cvtres /machine&#58;ix86 rsrc.res<br />\masm32\bin\ml /nologo /c /coff button.asm <br />\masm32\bin\link /SUBSYSTEM&#58;WINDOWS /LIBPATH&#58;c&#58;\masm32\lib button.obj rsrc.obj<br />echo. <br />echo. <br />echo. <br />if exist *.obj del *.obj <br />if exist *.res del *.res<br />pause <br />------------------------------------------------------------------------------<br /></code></pre><br /><br />It works for me!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-08 11:41:55 by Mirno</div>
+   </div>
+   <div class="post" id="post-3274">
+    <div class="subject"><a href="#post-3274">Resource Editor</a></div>
+    <div class="body">thanks.<br />compiles and runs now, after a thousand posts!<br /><br />however, when i press the button nothing happens.<br />i understand that anything being triggered sends a WM_COMMAND right?<br /><br />and then, as you said, the lower 16bits of wParam contains the name of the control thats been triggered. i have done this kind of thing before under winsock in non-blocking mode, but the same code here doesnt seem to be working...</div>
+    <div class="meta">Posted on 2001-08-08 11:56:53 by skud</div>
+   </div>
+   <div class="post" id="post-3275">
+    <div class="subject"><a href="#post-3275">Resource Editor</a></div>
+    <div class="body">hmmmm<br /><br />mirno's code is working<br />martial something wrong with yours mate :D<br /><br />i have a look at it.<br />shud have checked before posting.</div>
+    <div class="meta">Posted on 2001-08-08 11:59:39 by skud</div>
+   </div>
+   <div class="post" id="post-3276">
+    <div class="subject"><a href="#post-3276">Resource Editor</a></div>
+    <div class="body">skud, follow these steps and you should compile and run buttons.asm<br /><br />1) extract the zip file and place button.rc and button.asm into as directory say \masm32\button<br /><br />2)place build.bat in \masm32\bin<br /><br />3) open a dos window and navigate to where you placed button.rc and button.asm<br /><br />4)type the following then press return<br />set masm32path=c:\masm32<br /><br />5)type the following to compile and run button.asm <br /><br />%masm32path%\bin\build.bat button .\<br /><br />if you follow the above you should have no problems.<br /><br />p.s my code works perfectly...check the paths because my masm32 instalation is in d:\programs\ while yours is probably in c:\<br />p.p.s the button.exe is the button.asm compiled on my machine<br />the martial</div>
+    <div class="meta">Posted on 2001-08-08 12:30:19 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-3277">
+    <div class="subject"><a href="#post-3277">Resource Editor</a></div>
+    <div class="body">ok i have it working.<br /><br />but why does the button have a .cont value?<br />the resource file knows it as its name and so does the .asm so whats the point in it? and how do you decide what value it has?<br /><br />thanks.<br />skud.</div>
+    <div class="meta">Posted on 2001-08-08 13:39:35 by skud</div>
+   </div>
+   <div class="post" id="post-3282">
+    <div class="subject"><a href="#post-3282">Resource Editor</a></div>
+    <div class="body">good,<br /><br />resources such as menuitems and buttons need an integer ID This ID gets passed to the window procedure as the low word of wParam when the item is clicked.  <br /><br />In the window procedure we compare the loword of wPram to the resource ID to find out which button/menuitem was selected so we can act accordingly<br /><br />the value in the .CONST section defines a constant which will be the ID for the button.  This value must be the same as what's defined in the resource file or at best you'll get nothing happening.<br /><br />You can pretty much choose whatever value you wish for the ID bearing in mind that it must fit into 16 bits so the ID can be between 0 and 65535 decimal or 0 to FFFF hex<br /><br />so for eg my resource file:<br /><br />#include &quot;c:\programs\masm32\include\resource.h&quot;<br />#define IDM_MENU  1<br />#define IDM_OPEN  2 <br />#define IDM_SAVE   3<br />#define IDM_EXIT    4<br />#define IDM_HELP   5<br />#define IDM_ABOUT 6<br />#define IDE_EDIT1   100<br />#define IDB_START   200<br />#define IDB_RESET   201<br />#define IDC_UP        300<br /><br />Timer DIALOGEX 10,10,62,110<br />CAPTION &quot;Timer&quot;<br />Style DS_MODALFRAME|WS_VISIBLE|WS_CAPTION|WS_MINIMIZEBOX|WS_SYSMENU|WS_OVERLAPPED|DS_3DLOOK<br />MENU IDM_MENU /*declares a menu for the above dialog box*/<br />{<br />    EDITTEXT IDE_EDIT1,5,1,52,9,ES_CENTER<br />    PUSHBUTTON &quot;Start!&quot;,IDB_START,5,20,25,9<br />    PUSHBUTTON &quot;Reset!&quot;,IDB_RESET,32,20,25,9<br />    AUTOCHECKBOX &quot;UP&quot;,IDC_UP,30,12,20,5<br />}<br />IDM_MENU MENU    <br />{<br />    POPUP &quot;&amp;File&quot;<br />	{<br />	MENUITEM &quot;&amp;Open...&quot;,IDM_OPEN<br />	MENUITEM &quot;&amp;Save...&quot;,IDM_SAVE<br />	MENUITEM SEPARATOR<br />	MENUITEM &quot;E&amp;xit&quot;,IDM_EXIT<br />	}<br />	POPUP &quot;&amp;Help&quot;<br />	{<br />	MENUITEM &quot;&amp;About&quot;,IDM_ABOUT<br />	}     <br />}<br /><br />~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br /><br />all of the #define above will have an equivalent equ in my asm source.<br /><br />eg:<br /><br />.CONST<br />IDM_MENU equ  1<br />IDM_OPEN equ  2 <br />IDM_SAVE equ   3<br />IDM_EXIT equ    4<br />IDM_HELP equ   5<br />IDM_ABOUT equ 6<br />IDE_EDIT1 equ   100<br />IDB_START equ   200<br />IDB_RESET equ   201<br />IDC_UP equ        300<br /><br />I hope that helps a bit<br /><br />P.S. have a look at RadASM which is posted on this board.  It's got a dialog editor which doesn't add any extraneous info to the .rc file. It'll automatically assign a value for the IDs which you can export for inclusion in your asm source file.<br /><br />The Martial</div>
+    <div class="meta">Posted on 2001-08-08 15:12:55 by MArtial_Code</div>
+   </div>
+  </div>
+ </body>
+</html>

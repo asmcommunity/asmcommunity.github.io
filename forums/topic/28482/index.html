@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Self-modifying code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28482" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28482">Self-modifying code</a></p>
+   <div class="post" id="post-201480">
+    <div class="subject"><a href="#post-201480">Self-modifying code</a></div>
+    <div class="body">This topic came up a few weeks ago. I tried
+the various suggestions on how to make self-
+modifying code.
+1. Put (a copy of) the code in the stack.
+No go on Win95 or 98 -- page fault immediately
+I try to jump into the stack.
+2. Poke in the PE header to make a code section
+writeable.
+Again no go. In 95 and 98, all code sections
+are readable and none is writeable, whatever
+the PE header says. But this might work on NT.
+3. Get a piece of heap using GlobalAlloc
+and copy the code to that.
+Yes, this worked. The heap is writeable and
+executable at the same time, to my surprise.
+Moreover its CS and DS selectors are the
+same as those of the mother program. So how
+come the mother code section is not writeable?
+Perhaps the OS is using two selectors with
+overlapping ranges: one execute-read, and the
+other read-write. But even so, why aren't those
+selectors visible? Anyone know? Bogdan?
+
+Sysop, please delete the other copy of this
+thread; it got interrupted during the upload.
+
+This message was edited by Larry Hammick, on 6/21/2001 12:35:23 AM</div>
+    <div class="meta">Posted on 2001-06-21 00:29:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201481">
+    <div class="subject"><a href="#post-201481">Self-modifying code</a></div>
+    <div class="body">You could use fasm. It requires more setup (ie defining the
+import section), but you have more control than masm (my belief).
+Here is a small exec. Note the ease in converting the code section to writable.
+<pre><code>
+; fasm example of writing 32-bit PE program using Win32 API
+
+format PE GUI
+entry start
+
+include 'win32.inc'
+
+section '.code' code readable executable
+
+  start:
+
+	push	MB_OK + MB_ICONEXCLAMATION
+	push	_caption
+	push	_message
+	push	0
+	call	
+
+	push	0
+	call	
+
+section '.data' data readable writeable
+
+  _caption db 'Win32 assembly program',0
+  _message db 'Hello World!',0
+
+section '.idata' import data readable writeable
+
+  dd 0,0,0,rva kernel_name,rva kernel_table
+  dd 0,0,0,rva user_name,rva user_table
+  dd 0,0,0,0,0
+
+  kernel_table:
+    ExitProcess dd rva _ExitProcess
+    dd 0
+  user_table:
+    MessageBox dd rva _MessageBoxA
+    dd 0
+
+  kernel_name db 'KERNEL32.DLL',0
+  user_name db 'USER32.DLL',0
+
+  _ExitProcess dw 0
+    db 'ExitProcess',0
+  _MessageBoxA dw 0
+    db 'MessageBoxA',0
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-21 01:32:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201482">
+    <div class="subject"><a href="#post-201482">Self-modifying code</a></div>
+    <div class="body">It is easy enough to make the section
+table <em>say</em> that the code section
+is writeable, but no code section is
+writeable in 95/98. The PE header is
+intended for several OS's and CPU types,
+and Windows can and does disregard some
+of the PE header fields. (E.g. you can
+poke zero into the RVA of all the
+sections, and the program will still
+run.)</div>
+    <div class="meta">Posted on 2001-06-21 01:38:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201483">
+    <div class="subject"><a href="#post-201483">Self-modifying code</a></div>
+    <div class="body">Use WriteProcessMemory. With this function, you can overwrite code with impunity. If you think WriteProcessMemory is cumbersome, use VirtualProtect to mark the page(s) you want to modify as writable.
+Modification of the section attributes to read-write is useful BEFORE the image is loaded into memory. Once the image is already loaded, the section attributes are already set by Windows and the attribute values in the section table is never used again.</div>
+    <div class="meta">Posted on 2001-06-21 01:43:00 by Iczelion</div>
+   </div>
+   <div class="post" id="post-201484">
+    <div class="subject"><a href="#post-201484">Self-modifying code</a></div>
+    <div class="body">Look at the two lines before the exit:
+<pre><code>
+format PE GUI
+entry Start
+
+include 'Win32.inc'
+
+;***---------------------------------------------------------------***
+section '.code' code readable writeable executable
+Start:
+      mov   edx, 0x3A8D9B0F
+;***------------------------------------------------------***
+;***edx to hex string
+;***
+PopUp_Hex32:
+      mov   ecx, 0x08                  ;8 Hex digits
+      mov   esi, Debug.message + 2
+   .ascii:
+      rol   edx, 4                     ;Get the first digit
+      mov   al, 0x0F                   ;  ^^^^
+      and   al, dl                     ;  ^^^^
+      add   al, 0x90                   ;The kewl
+      daa                              ; 4 Instruction
+      adc   al, 0x40                   ; conversion
+      daa                              ; ^^^^^
+      mov   , al                  ;Store into message text
+      inc   esi                        ;Set to next offset
+      loop  .ascii
+
+      push  MB_OK + MB_ICONHAND
+      push  Debug.caption
+      push  Debug.message
+      push  0
+      call  
+
+      mov   edx, 0x90909090    ;***|||| This writes over code!!!
+      mov   [.ascii], edx
+
+      push  0
+      call  
+
+;***---------------------------------------------------------------***
+;section '.data' data readable writeable
+
+Debug:
+   .caption db 'Debug Message', 0
+   .message db '0xXXXXXXXX', 0
+
+;***---------------------------------------------------------------***
+section '.idata' import data readable writeable
+
+  dd 0,0,0,rva kernel_name,rva kernel_table
+  dd 0,0,0,rva user_name,rva user_table
+  dd 0,0,0,0,0
+
+  kernel_table:
+    ExitProcess dd rva _ExitProcess
+    dd 0
+  user_table:
+    MessageBox dd rva _MessageBoxA
+    dd 0
+
+  kernel_name db 'KERNEL32.DLL',0
+  user_name db 'USER32.DLL',0
+
+  _ExitProcess dw 0
+    db 'ExitProcess',0
+  _MessageBoxA dw 0
+    db 'MessageBoxA',0
+</code></pre>
+
+This message was edited by eet_1024, on 6/21/2001 1:47:51 AM</div>
+    <div class="meta">Posted on 2001-06-21 01:46:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201485">
+    <div class="subject"><a href="#post-201485">Self-modifying code</a></div>
+    <div class="body">Thanks icz, I'll definitely try it.</div>
+    <div class="meta">Posted on 2001-06-21 02:00:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201486">
+    <div class="subject"><a href="#post-201486">Self-modifying code</a></div>
+    <div class="body"><div class="quote">
+Poke in the PE header to make a code section
+writeable.
+Again no go. In 95 and 98, all code sections
+are readable and none is writeable, whatever
+the PE header says. But this might work on NT.
+</div>
+Hi Larry! i have tried this approach several times (in Win9x) in different programs i made and it does work. I don't know why you say it will not work. 
+You could check some virii sources for self-modifying code :)
+Bye!
+
+Latigo</div>
+    <div class="meta">Posted on 2001-06-21 09:38:00 by latigo</div>
+   </div>
+   <div class="post" id="post-201487">
+    <div class="subject"><a href="#post-201487">Self-modifying code</a></div>
+    <div class="body">nah larry, you can make sections r/w and it WILL work on every
+win32 version. this is also the preferred method, using
+writeprocessmemory etc is a dumb hard way.
+
+its as simple as using '.data' instead of '.code'..
+if it doesnt work then yer doing something wrong, as ive been using it for years...</div>
+    <div class="meta">Posted on 2001-06-21 09:44:00 by diediedie</div>
+   </div>
+   <div class="post" id="post-201488">
+    <div class="subject"><a href="#post-201488">Self-modifying code</a></div>
+    <div class="body">Okay, I'll try again. That's good news.
+(Edit) It works! Excellent news. Now I
+can make my 32-bit stuff as unreadable
+as my DOS stuff. Thanks all.
+(Another edit) Putting code in the stack
+also works provided that you make .data
+an executable+writeable section.
+
+
+This message was edited by Larry Hammick, on 6/22/2001 8:21:16 AM</div>
+    <div class="meta">Posted on 2001-06-21 09:56:00 by Larry Hammick</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>More fun with PICs - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28609" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28609">More fun with PICs</a></p>
+   <div class="post" id="post-202253">
+    <div class="subject"><a href="#post-202253">More fun with PICs</a></div>
+    <div class="body">At the tail end of my bubble project, I was left with one messy spot of code, that being the 'Wait' macro.
+
+'Wait' is used to waste a certain ammount of instructions to allow real world events to occure. In fact, most of the frame time is spent nop-ing instead of processing info.
+
+Attempt one was simple and direct:
+
+<pre><code>
+Wait 	MACRO cycles
+LoopCount = cycles
+  	while LoopCount > 0
+        nop
+LoopCount --
+	endw
+        ENDM
+</code></pre>
+
+Well, it works, but it takes another ROM location per wasted cycle. That's a double waste. Sure, I had plenty of room to waste (my choice of processor can store a K of instructions, which is really way planty), but this lacks a certain elegance. So....
+
+Wait2 uses loops to waste time. Timing a loop on a PIC is a bit tricky, as all instructions execute in 1 cycle EXCEPT for any branch taken, which is 2 cycles. 
+
+Furthermore, the only machine lever branch testing conditionals (ie, jmp IF) are of the form "If X true, skip next instruction" Case in point, the conditional I use here is called 'decfsc' for dec f (register) and skip next instruction if f is now zero. One never truly gets used to instuctions like this. I usually end up alising them into more human compatable terms. 
+
+One point to keep in mind here, there is no RAM in the conventional sense, just a bunch of 8 bit registers. The W register is special, it's the working register, sort of an accumulator; W is also 8 bits long.
+
+OK, so here's the revised macro:
+
+<pre><code>
+Wait2	MACRO cycles
+	LOCAL Remainder, LongLoops, jf1, jf2
+	IF cycles >= 4
+	; we can make a loop to handle these
+LongLoops   SET (cycles - 1 ) / 3 
+Remainder SET cycles - ( LongLoops * 3 ) - 1
+	movlw LongLoops
+	movwf WaitCount
+LongLoop:
+	decfsz WaitCount, F
+	goto LongLoop
+	ELSE
+Remainder SET cycles
+	ENDIF
+	IF Remainder == 3
+	goto jf1
+jf1:
+	nop
+	ENDIF
+	IF Remainder == 2
+	goto jf2
+jf2:
+	ENDIF
+	IF Remainder == 1
+	nop
+	ENDIF
+        ENDM
+</code></pre>
+
+Lot's more compiler thought here, but much simpler (and lower code count) while executing. Let's take the trivial case where cycles =3
+
+For 3, the whole "LongLoop" piece is skipped. Instead, the macro resolves to:
+
+<pre><code>
+	goto jf1
+jf1:
+	nop
+</code></pre>
+
+  Not bad, 3 cycles for 2 instructions. (THREE cycles? Sure, the goto takes 2 cycles itself, plus one for the nop).
+
+The only time this gets used is when exactly 3 cycles are to be wasted. For 1 or 2, the other macros take over. For more then 3, the LongLoop wastes most of the time, and just one or two cycles are wasted at the tail.
+
+The big waste of time occures in this part of LongLoop:
+
+<pre><code>
+LongLoops   SET (cycles - 1 ) / 3 
+Remainder SET cycles - ( LongLoops * 3 ) - 1
+	movlw LongLoops
+	movwf WaitCount
+LongLoop:
+	decfsz WaitCount, F
+	goto LongLoop
+	ELSE
+</code></pre>
+
+We only get here for 4 or more cycles. For LongLoops = 1, the loop terminates without looping (remember, skip IF zero, so the goto LongLoop isn't executed). So the shortest loop is 4 cycles. Each LongLoop we do goto expends 3 cycles (1 for the decfsz, two for the goto).
+
+How much can it waste? Well, we can fill LongLoops with zero to get 256 loops for a total waste of time of 769 cycles. It would be nice to raise an error is more then this is requested, but due to some compiler feature (bug) I can't get the IF to work.
+
+So at it's longest when wasting (5 + 3N), or (6 + 3N) cycles, the routine takes 5 instuctions. For (4+3N), it takes just 4 instructions.
+
+That's pretty tight code for a complete waste of time.</div>
+    <div class="meta">Posted on 2001-07-02 23:17:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-202254">
+    <div class="subject"><a href="#post-202254">More fun with PICs</a></div>
+    <div class="body">Sorry ernie,
+But the people I work with have
+wasting time down to a sience, they can do
+it better then any program you can comeup with.
+You see, people on an hourly wage, have to learn
+to waste time. it just life....
+someday we may beable to teach computers to waste
+time like humans, the only people I know that are
+very close to this is Microsoft....
+
+Zcoder.....</div>
+    <div class="meta">Posted on 2001-07-03 12:23:00 by Zcoder</div>
+   </div>
+  </div>
+ </body>
+</html>

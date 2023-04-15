@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Again GDI animation! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27712" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27712">Again GDI animation!</a></p>
+   <div class="post" id="post-197634">
+    <div class="subject"><a href="#post-197634">Again GDI animation!</a></div>
+    <div class="body">Hi all,
+
+using the information I had I built up the animation I wanted. Actually, as I saw, it is pretty simple :)
+
+So I created the following code. I know the code is not optimized and it is not structured very clever but this is just working in a template so it has to be enough for now. As you can see in WndProc I react on the WM_PAINT message and there I pass two params to my function. The WindowDC and the Bitmap.
+
+<pre><code>
+
+8< --------------------
+
+in WndProc:
+
+    .elseif uMsg == WM_PAINT
+          invoke BeginPaint,hWin,ADDR Ps
+          mov hDC, eax
+          invoke DrawImage,hDC,hBmp1
+          invoke EndPaint,hWin,ADDR Ps
+          return 0
+8< --------------------
+; ##########################################################
+
+DrawImage PROC hWindowDC:HDC, Grafic:DWORD
+
+LOCAL hOld:DWORD
+LOCAL MyXWidth:DWORD
+LOCAL MyYWidth:DWORD
+LOCAL MyXPos:DWORD
+LOCAL MyYPos:DWORD
+
+invoke CreateCompatibleDC,hWindowDC
+mov hBitDC,eax
+invoke SelectObject,hBitDC,Grafic
+mov hOld,eax
+
+.if TitleDone == 0
+; needed only when starting the program
+; I am using this TitleDone flag to make sure that I don't
+; see the animation every time the user 
+; changed focus to another prog and back, so if REDRAW is 
+; needed, one will see the image 
+; immediately w/o animation
+mov MyXWidth,1
+mov MyYWidth,512
+mov MyXPos,0
+mov MyYPos,0
+draw_loop1:
+invoke BitBlt,hWindowDC,MyXPos,MyYPos,MyXWidth,MyYWidth,hBitDC,MyXPos,MyYPos,SRCCOPY
+invoke Sleep,1		;is this method okay? I want to keep the animation nearly the
+inc MyXPos		;same on every PC, no matter how fast or slow by using this
+cmp MyXPos,762		;constant value of 1ms, would you use any other way to do this?
+jl draw_loop1
+mov TitleDone,1
+
+.elseif TitleDone == 1
+; here we reach everytime the function is called after the first run
+invoke BitBlt,hWindowDC,0,0,762,512,hBitDC,0,0,SRCCOPY
+.endif
+invoke SelectObject,hWindowDC,hOld
+invoke DeleteDC,hBitDC
+ret
+
+DrawImage ENDP
+
+; ##########################################################
+
+</code></pre>
+
+This does exactly what I want, but I am stuck with another thing. Now, when the user dared to click on the screen in my window then I want to do a similar ("loading" from bottom to top) animation and (for now) close the program afterwards. I tried to <strong>CreateSolidBrush</strong> and the function returns a handle for me (I checked the return value of every function I used to find the error.). Now I want to <strong>SelectObject</strong> this Brush on hBitDC (used above) and there I found the error. After checking the return value for several possible values I found out that I get 0 (NULL, now this is a very unusual return value if something goes wrong :D) and that means:
+<div class="quote">
+If an error occurs and the selected object is not a region, the return value is NULL
+</div>
+Aha? And .. hmm .. what do I have to do now? Hopefully someone can help me with this. I just want to have a grey (#808080) rectangle removing the bitmap slowly. I tried to do this with a bitmap and it worked perfectly. But I don't want a grey bitmap of 762x512 as this is not the cool way but the cheating way (I think so :D).
+
+Stefan</div>
+    <div class="meta">Posted on 2001-04-19 20:48:00 by Stefan Krause</div>
+   </div>
+   <div class="post" id="post-197635">
+    <div class="subject"><a href="#post-197635">Again GDI animation!</a></div>
+    <div class="body">Hi
+
+Well your code will probable work...but :
+(there is allways a but :D )
+
+1. WM_paint message is send by windows to you for REDRAWING your window client area, it will appear when window is resized or another window that was in from of your window moves away ...
+
+2. Its recomended in the docs: not to make too much operations on messages...as this can adversely affect windows :) so i used to do a single blit on wm_paint from backbuffer to window hDC (client areea) see below-->
+
+3. It will somehow flicker,...i just recomend makeing a back buffer (a memory DC, use CreateCompatibleDC and Bitmap) and then do as above...i mean for a game...i suppose you want to get there sometime :)
+
+4. about the "cheat" versus "cool" way of doing the thing...well in GAMES its allway the fast way that is the "cool" way, because speed is of the essence...now why to fill the arrea again and again with a dark grey brish (this will eat some CPU time on larger areas) and not to Blit (simple fast operation) a bitmap on it ? advantage is marginal here i know ...but i detect a "way of thinking" here...i mean the background will not ALLWAYS be the "neutral grey"...you will want to change it someday ..soon :)
+
+
+Hope i have been the bad guy enough ... :) 
+
+you are makeing real progress here...i can see the path...
+Keep up the good work and an opened mind :)</div>
+    <div class="meta">Posted on 2001-04-19 23:00:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-197636">
+    <div class="subject"><a href="#post-197636">Again GDI animation!</a></div>
+    <div class="body">Hi Bogdan,
+
+thank you for your answer.
+
+1. Yes, I knew/noticed that already but this was for this instance the only fast way to implement my animation into the template.
+
+2. <em>uncommented</em> :)
+
+3. Yes, I tried to make this backbuffer thing but can you give me a working example on how to do this or recommend me any cool tutorial showing this? In the code I wanted to create another CompatibleDC right after I created the first one in the code (see above) but this fails (WHY?). I would really like to see an example-source-code-snippet (cool word, ehh? :D). Of course you are right! I am hunting for some kind of a game.
+
+4. <div class="quote">...but i detect a "way of thinking" here...you will want to change it someday ..soon</div>
+Nice too hear that from a person actually doing such a big game in ASM with a lot of programming experience.
+
+
+I looked at Saf- but I don't really like the source (Sorry SaFc0n, nix gegen dich). So, if someone has an example for this backbuffer and surface thing and how to then implement my animations (there I don't really know the way, okay, during gameplay I use a timer for updating the screen) but here I am not really sure what to do :(
+
+Stefan
+
+This message was edited by Stefan Krause, on 4/20/2001 5:19:50 PM</div>
+    <div class="meta">Posted on 2001-04-20 17:18:00 by Stefan Krause</div>
+   </div>
+   <div class="post" id="post-197637">
+    <div class="subject"><a href="#post-197637">Again GDI animation!</a></div>
+    <div class="body">well there was some code about this on the net...just i cant remember where...(eh my age is starting to show :) )
+
+if i cant find it on my HDD (very un-organized) i will extract some code from one of our early GDI version of the game...when we did it using the GDI...
+
+just dont forget to email me if i forget to send it to you / post code here ... in a few days...</div>
+    <div class="meta">Posted on 2001-04-20 22:42:00 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

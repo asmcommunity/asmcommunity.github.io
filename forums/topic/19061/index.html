@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DirectDraw windowed mode - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19061" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=19061">DirectDraw windowed mode</a></p>
+   <div class="post" id="post-147405">
+    <div class="subject"><a href="#post-147405">DirectDraw windowed mode</a></div>
+    <div class="body">Hi guys,<br />I have a fairly annoying problem with DirectDraw windowed mode. I created a window and got DirectDraw to work with it. But there is a problem. When I do a Blt to the window, it engulfs the *WHOLE* window. The toolbar at the top where the title, the minimize and the maximize buttons are is engulfed!! This is very annoying as I plan to add a menu to this window. <br /><br />-Also when the window is moved the Blt's do not do there job anymore. It seems I need to respond when the window is moved. I'm not sure why this is cause I do the following for each Blt to the window.<br /><pre><code><br />	mov ecx,SIZEOF RECT<br />	xor eax,eax<br />	lea edi,drect<br />	rep stosb                 ;Zero it out<br />	<br />	<br />	<br />	<br />	invoke GetClientRect, hwnd, ADDR drect<br />	mov eax,drect.left<br />	mov p1.x,eax<br />	<br />	mov eax,drect.top<br />	mov p1.y,eax<br />	<br />	mov eax,drect.right<br />	mov p2.x,eax<br />	<br />	mov eax,drect.bottom<br />	mov p2.y,eax<br />	<br />	invoke ClientToScreen, hwnd, ADDR p1<br />	invoke ClientToScreen, hwnd, ADDR p2<br />	<br />	mov eax,p1.x<br />	mov drect.left,eax<br />	<br />	mov eax,p1.y<br />	mov drect.top,eax<br />	<br />	mov eax,p2.x<br />	mov drect.right,eax<br />	<br />	mov eax,p2.y<br />	mov drect.bottom,eax<br />	<br />	<br />	<br />	<br />	mov bltfx1.dwSize,SIZEOF DDBLTFX<br />	DDSINVOKE Blt, lpSurf, ADDR drect, lpBack, NULL, NULL, ADDR bltfx1<br /></code></pre><br /><br />lpSurf is the primary surface, lpBack is my back buffer (bot DirectDrawSurface obj's).<br /><br />Is there any special steps I must do when the window is moved? And what window style do I use to prevent DirectDraw from engulfing the WHOLE window?<br /><br />Current window style: WS_OVERLAPPEDWINDOW<br />Using CreateWindowEx. NULL in the dwExStyle parameter.</div>
+    <div class="meta">Posted on 2004-08-04 19:37:41 by x86asm</div>
+   </div>
+   <div class="post" id="post-147412">
+    <div class="subject"><a href="#post-147412">DirectDraw windowed mode</a></div>
+    <div class="body">I dont know wich version of DIRECTX you're coding in but, maybe you can use these snippets ?<br /><br />.data<br /><br />rc			RECT &lt;&gt;<br /><br />m_Minimized		dd	FALSE<br />m_Maximized		dd	FALSE<br />m_dwWindowStyle		dd	0<br />m_dwWindowExStyle	dd	0<br />m_WindowWidth		dd	640<br />m_WindowHeight		dd	480<br /><br /><br />.code<br /><br />; to get the exact backbuffer and frontbuffer size, you could try this:<br /><br />	mov		m_dwWindowStyle,WS_OVERLAPPEDWINDOW<br />	mov		m_dwWindowExStyle,0<br /><br />	invoke		SetRect,addr rc,0,0,m_WindowWidth,m_WindowHeight   <br /><br />	.if (m_Menu)<br />		invoke		AdjustWindowRectEx,addr rc,m_dwWindowStyle,TRUE,m_dwWindowExStyle<br />	.else<br />		invoke		AdjustWindowRectEx,addr rc,m_dwWindowStyle,FALSE,m_dwWindowExStyle<br />	.endif<br /><br />	mov			eax,rc.left<br />	sub			rc.right, eax<br />	mov			eax,rc.top<br />	sub			rc.bottom, eax<br /><br />;---------- <span class="text-center"> ----------<br />	invoke		                GetSystemMetrics,SM_CXSCREEN<br />	sub			eax,rc.right<br />	shr			eax,1<br />	mov			rc.left,eax<br />	invoke		                GetSystemMetrics,SM_CYSCREEN<br />	sub			eax,rc.bottom<br />	shr			eax,1<br />	mov			rc.top,eax<br /><br />	invoke		                CreateWindowEx,m_dwWindowExStyle,addr ClassName,addr AppName,m_dwWindowStyle, <br />							rc.left,rc.top,rc.right,rc.bottom,NULL,m_Menu,hInst,NULL<br />	mov			hWnd,eax<br /><br /><br />; for window changing and resizing try this in your msgproc<br /><br />MsgProc	proc hwnd:DWORD,wMsg:DWORD,wParam:DWORD,lParam:DWORD<br /><br />	.if	wMsg == WM_SIZE		; check if window size has changed<br />		.if  wParam == SIZE_RESTORED<br />			.if( m_Maximized )<br />				mov	m_Maximized,FALSE<br />			.endif<br />			.if( m_Minimized)<br />				mov	m_Minimized,FALSE<br />			.endif<br />			.if( !m_Maximized &amp;&amp; !m_Minimized )<br />;-------&gt;			; yes, here you have to recreate directdraw to the new window size<br />			.endif<br />		.elseif wParam == SIZE_MINIMIZED<br />			mov	m_Minimized,TRUE<br />			mov	m_Maximized,FALSE<br />		.elseif wParam == SIZE_MAXIMIZED<br />			mov	m_Minimized,FALSE<br />			mov	m_Maximized,TRUE<br />;-------&gt;			; yes, here you have to  recreate directdraw to the new window size<br />		.endif<br />	.endif</div>
+    <div class="meta">Posted on 2004-08-04 20:31:05 by Siekmanski</div>
+   </div>
+   <div class="post" id="post-147413">
+    <div class="subject"><a href="#post-147413">DirectDraw windowed mode</a></div>
+    <div class="body">I have locked the ability to resize the window by arbitrary sizes, so resizing is not the problem lol. There seems to be a weird problem with my app. I did the set up just like you did (without the centering of the window) and the DirectDraw Blt to the primary surface took the WHOLE window. I just want it to leave the toolbar at the top and possibly the menu.</div>
+    <div class="meta">Posted on 2004-08-04 20:37:09 by x86asm</div>
+   </div>
+   <div class="post" id="post-147414">
+    <div class="subject"><a href="#post-147414">DirectDraw windowed mode</a></div>
+    <div class="body">Did you create a clipper with &quot;CreateClipper&quot; ?<br /><br />The DirectDrawClipper object can be attached to a DirectDrawSurface if desired, and used during Blt</div>
+    <div class="meta">Posted on 2004-08-04 20:46:41 by Siekmanski</div>
+   </div>
+   <div class="post" id="post-147415">
+    <div class="subject"><a href="#post-147415">DirectDraw windowed mode</a></div>
+    <div class="body">You used this for Blt:<br /><br />	DDSINVOKE Blt, lpSurf, ADDR drect, lpBack, NULL, NULL, ADDR bltfx1<br /><br /> And this is from the SDK ( 9.0 ):<br /><br />  Blt, LPRECT lpDestRect, LPDIRECTDRAWSURFACE lpDDSrcSurface, LPRECT lpSrcRect, DWORD dwFlags, LPDDBLTFX lpDDBltFX<br /><br /><br />Parameters:<br /><br />lpDestRect:<br /><br />  Points to a RECT structure that defines the upper left and lower right points of the rectangle on the destination surface which is to be blted to.<br /><br />lpDDSrcSurface:<br /><br />  Points to the IDirectDrawSurface interface of the DirectDrawSurface object. This is the source for the blit operation.<br /><br />lpSrcRect:<br /><br />Points to a RECT structure that defines the upper left and lower right points of the rectangle on the source surface which is to be blted from.<br /><br />dwFlags:<br /><br />Zero or more of the following values.<br /><br />Value Description <br />DDBLT_ALPHADEST Use the alpha information in the pixel format or the alpha channel surface attached to the destination surface as the alpha channel for this blit. <br />DDBLT_ALPHADESTCONSTOVERRIDE Use the dwConstAlphaDest member in the DDBLTFX structure as the alpha channel for the destination surface for this blit. <br />DDBLT_ALPHADESTNEG The NEG suffix indicates that the destination surface becomes more transparent as the alpha value increases. (0 is opaque) <br />DDBLT_ALPHADESTSURFACEOVERRIDE Use the lpDDSAlphaDest member in the DDBLTFX structure as the alpha channel for the destination for this blit. <br />DDBLT_ALPHAEDGEBLEND Use the dwAlphaEdgeBlend member in the DDBLTFX structure as the alpha channel for the edges of the image that border the color key colors. <br />DDBLT_ALPHASRC Use the alpha information in the pixel format or the alpha channel surface attached to the source surface as the alpha channel for this blit. <br />DDBLT_ALPHASRCCONSTOVERRIDE Use the dwConstAlphaSrc member in the DDBLTFX structure as the alpha channel for the source for this blit. <br />DDBLT_ALPHASRCNEG The NEG suffix indicates that the source surface becomes more transparent as the alpha value increases. (0 is opaque) <br />DDBLT_ALPHASRCSURFACEOVERRIDE Use the lpDDSAlphaSrc member in the DDBLTFX structure as the alpha channel for the source for this blit. <br />DDBLT_ASYNC Do this blit asynchronously through the FIFO in the order received. If there is no room in the hardware FIFO fail the call. <br />DDBLT_COLORFILL Uses the dwFillColor member in the DDBLTFX structure as the RGB color to fill the destination rectangle on the destination surface. <br />DDBLT_DDFX Uses the dwDDFX member in the DDBLTFX structure to specify the effects to use for the blit. <br />DDBLT_DDROPS Uses the dwDDROPS member in the DDBLTFX structure to specify the ROPS that are not part of the Win32 API. <br />DDBLT_KEYDEST Use the color key associated with the destination surface. <br />DDBLT_KEYDESTOVERRIDE Use the dckDestColorkey member in the DDBLTFX structure as the color key for the destination surface. <br />DDBLT_KEYSRC Use the color key associated with the source surface. <br />DDBLT_KEYSRCOVERRIDE Use the dckSrcColorkey member in the DDBLTFX structure as the color key for the source surface. <br />DDBLT_ROP Use the dwROP member in the DDBLTFX structure for the raster operation for this blit. These ROPs are the same as the ones defined in the Win32 API. <br />DDBLT_ROTATIONANGLE Use the dwRotationAngle member in the DDBLTFX structure as the angle (specified in 1/100th of a degree) to rotate the surface. <br />DDBLT_WAIT Do not return immediately with the DDERR_WASSTILLDRAWING message if the bltter is busy -- wait until the blit can be set up or another error occurs. <br />DDBLT_ZBUFFER Z-buffered blit using the z-buffers attached to the source and destination surfaces and the dwZBufferOpCode member in the DDBLTFX structure as the z-buffer opcode. <br />DDBLT_ZBUFFERDESTCONSTOVERRIDE Z-buffered blit using the dwConstDest member and the dwZBufferOpCode member in the DDBLTFX structure as the z-buffer and z-buffer opcode respectively for the destination. <br />DDBLT_ZBUFFERDESTOVERRIDE Z-buffered blit using the lpDDSDestZBuffer member and the dwZBufferOpCode member in the DDBLTFX structure as the z-buffer and z-buffer opcode respectively for the destination. <br />DDBLT_ZBUFFERSRCCONSTOVERRIDE Z-buffered blit using the dwConstSrcZ member and the dwZBufferOpCode member in the DDBLTFX structure as the z-buffer and z-buffer opcode respectively for the source. <br />DDBLT_ZBUFFERSRCOVERRIDE Z-buffered blit using the lpDDSSrcZBuffer member and the dwZBufferOpCode member in the DDBLTFX structure as the z-buffer and z-buffer opcode respectively for the source. <br /><br /><br />lpDDBltFx:<br />Pointer to a DDBLTFX structure</div>
+    <div class="meta">Posted on 2004-08-04 21:13:11 by Siekmanski</div>
+   </div>
+   <div class="post" id="post-147421">
+    <div class="subject"><a href="#post-147421">DirectDraw windowed mode</a></div>
+    <div class="body"><div class="quote"><br />Did you create a clipper with &quot;CreateClipper&quot; ?<br /><br />The DirectDrawClipper object can be attached to a DirectDrawSurface if desired, and used during Blt </div><br />ya I created the clipper object and attached it to my window handle. I'll look into more closely tomorrow, almost bed time for me ;)</div>
+    <div class="meta">Posted on 2004-08-04 22:00:15 by x86asm</div>
+   </div>
+   <div class="post" id="post-147422">
+    <div class="subject"><a href="#post-147422">DirectDraw windowed mode</a></div>
+    <div class="body">I seem to have fixed it. It seems that I did not think that ignoring window messages would cause such a malfunction but it did! So I used the DefWindowProc to handle it and voila it worked. Though I'm still gonna see if I can fix it with working when I draw the window around. Cause the screen goes white when I drag it.</div>
+    <div class="meta">Posted on 2004-08-04 22:41:12 by x86asm</div>
+   </div>
+   <div class="post" id="post-147423">
+    <div class="subject"><a href="#post-147423">DirectDraw windowed mode</a></div>
+    <div class="body">IF the window moves, do I reattach the clipper?</div>
+    <div class="meta">Posted on 2004-08-04 22:43:58 by x86asm</div>
+   </div>
+   <div class="post" id="post-147433">
+    <div class="subject"><a href="#post-147433">DirectDraw windowed mode</a></div>
+    <div class="body">No, the clipper will take care of everything. It's so powerful that you can use 1 clipper for all windows of a MDI app - move them, resize them, hide, maximize - it'll do its job :)</div>
+    <div class="meta">Posted on 2004-08-05 02:06:56 by Ultrano</div>
+   </div>
+   <div class="post" id="post-147499">
+    <div class="subject"><a href="#post-147499">DirectDraw windowed mode</a></div>
+    <div class="body">yikes this is freaky, whenever I drag my window the screen gors blank. What Window message do I intercept? How do u guys handle ur main DirectDraw window being dragged. Its frustrating cuz I dont know where it is coming from :S or how to fix it.</div>
+    <div class="meta">Posted on 2004-08-05 21:32:42 by x86asm</div>
+   </div>
+   <div class="post" id="post-147850">
+    <div class="subject"><a href="#post-147850">DirectDraw windowed mode</a></div>
+    <div class="body">When do you draw in the window ? Also, maybe you should register the window class with empty background brush. <br /><br />In my apps I use this without problem. And I use a simple window timer for the animation. <br />Yet I also have a really interesting problem (see attached image below). My DD app is MDI - and all windows are painted using DD. Each important window has its own surface, 16-bit RGB, and there are some more surfaces for sprites and backgrounds - in 16-bit RGB again. It all worked fine until I bought a Radeon 9200 - and my app is the only one to have this problem. My question is: is there something that I must have missed so that this happens? <br />I copy the 16-bit decompressed bitmap over a surface which I allocated as 16-bit RGB. Yet, the surface is monochrome! When I allocate it as 32-bit surface, again it's treated as 8-bit.</div>
+    <div class="meta">Posted on 2004-08-10 15:37:27 by Ultrano</div>
+   </div>
+   <div class="post" id="post-147856">
+    <div class="subject"><a href="#post-147856">DirectDraw windowed mode</a></div>
+    <div class="body"><div class="quote"><br />When do you draw in the window ? Also, maybe you should register the window class with empty background brush. <br /><br />In my apps I use this without problem. And I use a simple window timer for the animation. <br />Yet I also have a really interesting problem (see attached image below). My DD app is MDI - and all windows are painted using DD. Each important window has its own surface, 16-bit RGB, and there are some more surfaces for sprites and backgrounds - in 16-bit RGB again. It all worked fine until I bought a Radeon 9200 - and my app is the only one to have this problem. My question is: is there something that I must have missed so that this happens? <br />I copy the 16-bit decompressed bitmap over a surface which I allocated as 16-bit RGB. Yet, the surface is monochrome! When I allocate it as 32-bit surface, again it's treated as 8-bit. </div><br /><br />Damn, thats a weird problem, which version of the ATI driver are you using? I have a 128MB Radeon 9100 and I have not encountered this problem using both 16-bit and 32-bit RGB surfaces. For my app I'm using a 32-bit surface. In that case I do not respond to the WM_PAINT messsage but instead let DefWindowProc handle it even when using DirectDraw. I did try to respond to the message but when that message came I Blt'd (is that a word :tongue: ) my rendering surface to the primary surface. It seemed that the WM_PAINT message came so often in WindowsXP (OS that I am using) that it was enough to slash my apps performance in half!! I'm not sure why this is but this may be of help to you. I just let DefWindowProc handle it and it worked much better. I am using the Catalyst 4.7 series driver. They are pretty big so if u have a 56k, you may have to wait a while :( . You also could be avoiding the pitch member or mistreating it somehow. I remember having garbled gfx like that and the reason was mistreating the pitch. Possibly take a look at the code that is rendering to the surface.</div>
+    <div class="meta">Posted on 2004-08-10 18:19:10 by x86asm</div>
+   </div>
+   <div class="post" id="post-147861">
+    <div class="subject"><a href="#post-147861">DirectDraw windowed mode</a></div>
+    <div class="body">I use the latest Omega drivers. Btw, it's 24k not 56k I'm on :) . I'm sure it's not the pitch - obviously surfaces always get allocated 8-bit monochrome. I'll fix this problem by coding it in C++ using 100% working code - because my workflow design is a bit weird (MDI with DD is rare :grin: ) and I might have made errors in my asm code. <br /><br />You must respond to the WM_PAINT:<br /><pre><code><br />.elseif msg==WM_PAINT<br />invoke BeginPaint,hWnd,addr ps<br />invoke EndPaint,hWnd,addr ps<br />mov eax,1<br />ret<br />.elseif<br /></code></pre><br />Otherwise the performance gets cut because your window gets flooded with WM_PAINT messages and there's some part of the API that processes these messages too slow. It gets flooded because Windows sees the window is all marked dirty. The four lines of code above contain internally:<br />invoke ValidateRect,hWnd,0<br />this marks the whole window clean - and your app at cpu 0 %</div>
+    <div class="meta">Posted on 2004-08-10 21:25:48 by Ultrano</div>
+   </div>
+   <div class="post" id="post-147912">
+    <div class="subject"><a href="#post-147912">DirectDraw windowed mode</a></div>
+    <div class="body">ohhhhhhh, I see damn, no wonder, lol u just helped me fix a pretty large problem. Hopefully I helped ya somewhat in exchange, good luck with your music app, btw how is it coming along? I havent talked to ya in a while.</div>
+    <div class="meta">Posted on 2004-08-11 15:40:25 by x86asm</div>
+   </div>
+   <div class="post" id="post-147942">
+    <div class="subject"><a href="#post-147942">DirectDraw windowed mode</a></div>
+    <div class="body">Thanks :) . Well, I've got tons of work besides that app, and coding is slow. This DD problem has freezed the project and I can't find time to fix it.  I've got a well-paid job now :grin: and my boss is cool. <br />But slowing the project down for a while is for good - now I can gradually afford the hardware necessary to code with/for, and I've learnt quite a few things about advanced sound processing and coding style. :grin:<br />How are things going around you ?</div>
+    <div class="meta">Posted on 2004-08-12 03:29:49 by Ultrano</div>
+   </div>
+   <div class="post" id="post-148062">
+    <div class="subject"><a href="#post-148062">DirectDraw windowed mode</a></div>
+    <div class="body">Ah things are going quite well, I have just successfully added a windowed mode to my emulator after assuming fullscreen only. I also made use of the hardware Blt functions and I was amazed at the speedup! I also found that I have a knack for writing and debugging CPU emulation cores. I am also accepted into Ryerson University for Electrical Engineering! Quite happy with my accomplishment (<a target="_blank" href="www.ryerson.ca">www.ryerson.ca</a>). Good luck with your program and your new found job, what do u do at ur job?</div>
+    <div class="meta">Posted on 2004-08-13 20:05:24 by x86asm</div>
+   </div>
+   <div class="post" id="post-148077">
+    <div class="subject"><a href="#post-148077">DirectDraw windowed mode</a></div>
+    <div class="body">I work at <a target="_blank" href="www.beiks.com">www.beiks.com</a> , doing lots of different stuff: databases, sound decompression + synthesis + sequencing, tools to code ARMlets with (overcoming the OS weaknesses), also made two 2D/3D engines (just for training). Probably soon we're going to make games, too :)</div>
+    <div class="meta">Posted on 2004-08-14 05:07:47 by Ultrano</div>
+   </div>
+   <div class="post" id="post-148083">
+    <div class="subject"><a href="#post-148083">DirectDraw windowed mode</a></div>
+    <div class="body"><div class="quote"><br />I am also accepted into Ryerson University for Electrical Engineering!</div><br />Congratulations <strong>x86asm</strong>. I'm happy for you. I think it was a right decision to choose the Electrical Engineering after all, if you would like to develop processors in the future. Perhaps you remember your question that where is a good place to learn. I think Canada is a good place. There is also an Institute for Quantum Computing in Ontario: <a target="_blank" href="http://www.iqc.ca">www.iqc.ca</a>, and such institutes involving Quantum Computing are very rare.<br /><br />Regards,<br />bszente</div>
+    <div class="meta">Posted on 2004-08-14 08:59:13 by bszente</div>
+   </div>
+  </div>
+ </body>
+</html>

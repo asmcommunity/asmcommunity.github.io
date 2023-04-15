@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>virtual listview + LVS_EX_CHECKBOXES doesn't work? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6479" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6479">virtual listview + LVS_EX_CHECKBOXES doesn't work?</a></p>
+   <div class="post" id="post-46688">
+    <div class="subject"><a href="#post-46688">virtual listview + LVS_EX_CHECKBOXES doesn't work?</a></div>
+    <div class="body">Seems that the above combination doesn't work although I cannot find any docs about that. If I set the extended style LVS_EX_CHECKBOXES the listview frees a little space on the left (report view) for the image to display as it should be, but I never get any request LVN_GETDISPINFO with bit LVIF_STATE set. So no images are drawn.<br /><br />Setting images with LVN_GETDISPINFO/LVIF_IMAGE works, but has some limitations I dont want to accept yet.<br /><br />Any ideas?</div>
+    <div class="meta">Posted on 2002-07-08 08:27:03 by japheth</div>
+   </div>
+   <div class="post" id="post-46689">
+    <div class="subject"><a href="#post-46689">virtual listview + LVS_EX_CHECKBOXES doesn't work?</a></div>
+    <div class="body">Did you set the ex. style with ListView_SetExtendedListViewStyle? I've had problems with setting it as extended style for CreateWindowEx..<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-07-08 08:35:47 by Thomas</div>
+   </div>
+   <div class="post" id="post-46699">
+    <div class="subject"><a href="#post-46699">virtual listview + LVS_EX_CHECKBOXES doesn't work?</a></div>
+    <div class="body">Hi Thomas,<br /><br />yes I set the extended style with ListView_SetExtendedListViewStyle.<br /><br />In fact, my app was working fine until I decided to switch to virtual listviews because of speed. Yes, it is faster now, but seems I have to &quot;swallow some toads&quot; (hope this is understandable - the other disadvantage of virtual listviews is sorting must be done by hand).</div>
+    <div class="meta">Posted on 2002-07-08 11:18:44 by japheth</div>
+   </div>
+   <div class="post" id="post-46778">
+    <div class="subject"><a href="#post-46778">virtual listview + LVS_EX_CHECKBOXES doesn't work?</a></div>
+    <div class="body">I've never heard the phrase 'swallow some toads', but it sounds like a good way to describe virtual listviews ;-)  I lost my checkboxes too!   I don't know if this is what you tried,  but I think you need to create a State image list with INDEXTOSTATEIMAGEMASK of 2 checkbox icon images, I assume to replace the ones normally created by the control with the LVS_EX_CHECKBOXES style.<br /><br /><br />LVS_EX_CHECKBOXES <br />Enables check boxes for items in a list-view control. When set to this style, the control creates and sets a state image list with two images using DrawFrameControl. State image 1 is the unchecked box, and state image 2 is the checked box. Setting the state image to zero removes the check box altogether.<br /><br /><br />Once you've created the image list hopefully you can set the state of the checkboxes with<br />;------------------------------------------<br />; (INDEX SHL 12)  INDEX can be 0,1 or 2:<br />;0 = no checkbox<br />;1 = unchecked checkbox<br />;2 = checked checkbox<br />	mov lvi.stateMask, LVIS_STATEIMAGEMASK<br />	mov lvi.state,(2 SHL 12)<br />	invoke SendMessage, _hListView, LVM_SETITEMSTATE, lvi.iItem, ADDR lvi.LV_ITEM <br />;---------------------------------------------<br /><br />I don't know if the checkboxes will still respond as normal to a mouse click and you can use BN_CLICKED to handle the users selection, this might be another toad to swallow...<br /><br /><br />btw Japheth, thanks for the suggestion of using NM_RCLICK to handle the popup menu on a virtual listview, it works nicely.  I had tried it but rejected it initially because it doesn't return the mouse hot spot like WM_CONTEXT does, but I got it with this<br /><br /><pre><code><br />.if &#91;edi&#93;.hwndFrom == eax  &amp;&amp; &#91;edi&#93;.code == NM_RCLICK<br /><br />	invoke GetMessagePos	; returns cursor position in screen coordinates<br />        mov ebx, eax		; x/y pos of window<br />        and ebx, 0000ffffh      ; ebx = LOWORD&#40;lparam&#41; = x pos<br />        shr eax, 16             ; eax = HIWORD&#40;lparam&#41; = y pos<br /><br />	invoke TrackPopupMenu, hPopupMenu, 0, ebx, eax, 0, hMainWindow, NULL<br /></code></pre><br /><br /><br />The other problem with how to ensure that WM_NOTIFY is called for every item in the listview rather than just for the on-screen items when RedrawWindow is called, can be solved with sending an SB_PAGEDOWN message for the number of pages you have.<br /><br /><pre><code><br />;--------------------------------------------------------<br />; WM_NOTIFY with the LVN_GETDISPINFO notification code<br />; will be called for each item in listview in response to the scrolling. <br />;--------------------------------------------------------<br />; sif SCROLLINFO &lt;sizeof SCROLLINFO&gt;<br /><br />invoke GetScrollInfo, hListView, SB_VERT, addr sif<br /><br />mov edi, sif.nPage  ; number of rows per page &#40;indexed to 0&#41;<br />mov eax, sif.nMax  ; maximum scrolling position = number of rows &#40;indexed to 0&#41;<br />xor edx, edx		<br />div edi	; rows / &#40;rows/page&#41; <br />		<br />mov edi, eax  ; whole number result of division = # pages to scroll	<br />mov esi, 0<br />		<br />.while esi &lt; edi	<br /><br />	invoke SendMessage, hListView, WM_VSCROLL, SB_PAGEDOWN, NULL<br />	inc esi<br />.endw<br /></code></pre> <br /><br />The only problem with this is the last item on a page becomes the first item on the next page, so you end up with a few duplicate WM_NOTIFY messages you may have to filter depending on what you're doing.<br /><br /><br />You said setting images with LVN_GETDISPINFO/LVIF_IMAGE works but has some limitations you dont want to accept yet.  What kind of limitations?<br /><br />Kayaker</div>
+    <div class="meta">Posted on 2002-07-08 20:12:12 by Kayaker</div>
+   </div>
+   <div class="post" id="post-46824">
+    <div class="subject"><a href="#post-46824">virtual listview + LVS_EX_CHECKBOXES doesn't work?</a></div>
+    <div class="body">Kayaker,<br /><br />thanks for the reply. I can confirm I've done the checkbox stuff as you have described in your post. Although I think that sending message LVM_SETITEMSTATE for image states is useless, because windows keeps track of selection and focus state only in virtual listviews (tried it anywhere).<br /><br />One limitation of using LVN_GETDISPINFO/LVIF_IMAGE are IMO that once you have set an image for an item windows will reserve space for it on the report view and until now I haven't found a way to get rid of it (except for recreating the listview window). I wanted to dynamically show/hide the images, which was easy with LVS_EX_CHECKBOXES style.<br /><br />japheth</div>
+    <div class="meta">Posted on 2002-07-09 02:35:01 by japheth</div>
+   </div>
+  </div>
+ </body>
+</html>

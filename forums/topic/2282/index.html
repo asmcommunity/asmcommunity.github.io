@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>interesting problem (possibly a masm bug?) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2282" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2282">interesting problem (possibly a masm bug?)</a></p>
+   <div class="post" id="post-14409">
+    <div class="subject"><a href="#post-14409">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">Hi,<br /><br />the following small prog compiles and linkes without errors:<br /><br /><pre><code><br /><br />        .386<br />        .Model flat,stdcall<br />		option casemap&#58;none<br /><br />	.nolist<br />	.nocref<br />	include \masm32\include\windows.inc<br />	include \masm32\include\kernel32.inc<br />	include \masm32\include\user32.inc<br />	.list<br />	.cref<br /><br />CStr macro y&#58;req<br />local sym<br />CONST segment dword public 'DATA'<br />ifidni &lt;y&gt;,&lt;&quot;&quot;&gt;<br />sym db 0<br />else<br />sym db y,0<br />endif<br />CONST ends<br />	exitm &lt;offset sym&gt;<br />	endm<br /><br />	.data<br /><br />szDef db &quot;default&quot;,0<br /><br />    .code<br /><br />DisplayLine proto &#58;ptr byte<br /><br />WinMain proc hInst&#58;HINSTANCE,hPrevInst&#58;HINSTANCE,lpszCmdLine&#58;ptr byte,iCmdShow&#58;sdword<br /><br />	local var1&#58;dword<br /><br />;	nop						; program executes ok if activated<br />    mov eax,CStr&#40;&quot;Hello&quot;&#41;<br />	invoke DisplayLine,eax<br />	xor eax,eax<br />	ret<br /><br />WinMain	endp<br /><br />DisplayLine PROC pString&#58;ptr byte<br /><br />	local var1&#58;dword<br /><br />	mov 	eax,pString<br />	.IF &#40;eax == 0&#41;<br />		mov eax,offset szDef<br />	.ENDIF<br />	invoke MessageBox,0,eax,0,MB_OK<br />	ret<br />DisplayLine ENDP<br /><br />WinMainCRTStartup proc<br /><br />		invoke GetModuleHandle,0<br />		invoke WinMain,eax,0,0,0<br />		invoke ExitProcess,eax<br />        ret<br /><br />WinMainCRTStartup endp<br /><br />        end<br /></code></pre><br /><br />but the generated code crashes. If the &quot;nop&quot; line in proc WinMain is activated, the prog runs ok.<br /><br /><br />the generated listing file is very interesting. Heres an excerpt:<br /><br /><pre><code><br /> 00000000			WinMain proc hInst&#58;HINSTANCE,hPrevInst&#58;HINSTANCE,lpszCmdLine&#58;ptr byte,iCmdShow&#58;sdword<br /><br />					local var1&#58;dword<br /><br />				;	nop						; program executes ok if activated<br /> 00000000  55		   *	    push   ebp<br /> 00000001  8B EC	   *	    mov    ebp, esp<br /> 00000003  83 C4 FC	   *	    add    esp, 0FFFFFFFCh<br /> 00000000		     1	CONST segment dword public 'DATA'<br /> 00000000 48 65 6C 6C 6F     1	??0019 db &quot;Hello&quot;,0<br />	   00<br /> 00000006		     1	CONST ends<br /> 00000006  B8 00000000 R	    mov eax,CStr&#40;&quot;Hello&quot;&#41;<br />					invoke DisplayLine,eax<br /> 0000000B  50		   *	    push   eax<br /> 0000000C  E8 00000000	   *	    call   DisplayLine<br /> 00000011  33 C0			xor eax,eax<br />					ret<br /> 00000013  C9		   *	    leave  <br /> 00000014  C2 0010	   *	    ret    00010h<br /><br /> 00000017			WinMain	endp<br /><br /> 00000017			DisplayLine PROC pString&#58;ptr byte<br /><br />					local var1&#58;dword<br /><br /> 00000017  55		   *	    push   ebp<br /> 00000018  8B EC	   *	    mov    ebp, esp<br /> 0000001A  83 C4 FC	   *	    add    esp, 0FFFFFFFCh<br /> 0000001D  8B 45 08			mov 	eax,pString<br />					.IF &#40;eax == 0&#41;<br /> 00000020  0B C0	   *	    or	eax, eax<br /> 00000022  75 FF	   *	    jne    @C0001<br /> 00000024  B8 00000000 R			mov eax,offset szDef<br />					.ENDIF<br /> 00000023		   *@C0001&#58;<br />					invoke MessageBox,0,eax,0,MB_OK<br /> 00000023  6A 00	   *	    push   +000000000h<br /> 00000025  6A 00	   *	    push   +000000000h<br /> 00000027  50		   *	    push   eax<br /> 00000028  6A 00	   *	    push   +000000000h<br /> 0000002A  FF 15 00000000 E *	    call   _imp__MessageBoxA@16<br />					ret<br /></code></pre><br /><br />Have a look at eip 00000024. Here masm calculates wrong as eip of next line is 00000023.<br /><br />Problem seems to be the use of macro CStr, but only if it is used in the first line of a proc (and the error becomes visible only in the next proc?!?)<br /><br />Has anyone had a similar problem? Or could anyone explain what is wrong?<br /><br />japheth</div>
+    <div class="meta">Posted on 2001-12-09 09:24:03 by japheth</div>
+   </div>
+   <div class="post" id="post-14414">
+    <div class="subject"><a href="#post-14414">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">If you put a label instead of nop it also works OK. :confused:</div>
+    <div class="meta">Posted on 2001-12-09 09:45:03 by CodeLover</div>
+   </div>
+   <div class="post" id="post-14439">
+    <div class="subject"><a href="#post-14439">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">Correct me if I am wrong but there is no indicator to the assembler where the program starts and stops.<br /><br />Would it work if you used &quot;Start:&quot; and &quot;End Start&quot; ?<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2001-12-09 16:06:13 by hutch--</div>
+   </div>
+   <div class="post" id="post-14441">
+    <div class="subject"><a href="#post-14441">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">Hutch, if /ENTRY is not specified and you don't give a start address<br />to END, the linker looks for a few predefined symbols, like<br />WinMainCRTStartup .</div>
+    <div class="meta">Posted on 2001-12-09 16:30:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-14444">
+    <div class="subject"><a href="#post-14444">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">This sounds like a MASM bug. Any instruction that you put after &quot;local var1:DWORD&quot; makes the program works perfectly. Replace nop with anything you want and it will work</div>
+    <div class="meta">Posted on 2001-12-09 16:51:15 by CodeLover</div>
+   </div>
+   <div class="post" id="post-14446">
+    <div class="subject"><a href="#post-14446">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">Yup, it sure looks like a MASM bug to me. I just tried assembling it with 6.15 and got the same result.<br /><br />I think it may have something to do with the CONST section in the macro coming right afrer a LOCAL, but the gererated code does look OK there.<br /><br />The address of @C0001 should be 000029, 6 bytes more than it is, which also happens to be the size of the CONST section. So it sounds like the &quot;internal pointer&quot; in MASM got screwed up some how. Congratulations! :grin:<br /><br />I guess the good news is that you know how to fix it. :)</div>
+    <div class="meta">Posted on 2001-12-09 17:22:47 by S/390</div>
+   </div>
+   <div class="post" id="post-14465">
+    <div class="subject"><a href="#post-14465">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">Naaaa...<br /><br />Its just his funny code. :)<br /><br /><br />I comment out and replaced these two lines and all works well...<br /><pre><code><br />;CONST segment dword public 'DATA'<br />.data<br /><br />...<br /><br />;CONST ends<br />.code</code></pre><br /><br />I cant say i know where one learns that form (seen others use simular stuff), but .data and .code always worked for me... and seems to be winning the race at this point :)<br /><br />Hope this helps..<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2001-12-10 01:57:36 by NaN</div>
+   </div>
+   <div class="post" id="post-14467">
+    <div class="subject"><a href="#post-14467">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">NaN,<br /><br />you are right, it works when using the predefined segment directives. But it still is a bug. BTW, I have deliberately used the old style directive so the macro can also be used to define string pointers in the .data section. <br /><br />japheth</div>
+    <div class="meta">Posted on 2001-12-10 02:57:58 by japheth</div>
+   </div>
+   <div class="post" id="post-14504">
+    <div class="subject"><a href="#post-14504">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">to define string pointers in the any section you can use this macro.<br /><br /><pre><code><br />$TO MACRO sText<br />; $TO defines text both in .data or .code sections and returns its offset<br />local szText, SegName<br />	SegName TEXTEQU @CurSeg<br />	.data<br />	IF @SizeStr&#40;&lt;sText&gt;&#41; NE 0<br />		szText db sText, 0<br />	ELSE<br />		szText db 0<br />	ENDIF<br />	@CurSeg ENDS<br />	SegName SEGMENT<br />	EXITM &lt;offset szText&gt;<br />ENDM<br /></code></pre><br /><br /><br />Works fine in your code.</div>
+    <div class="meta">Posted on 2001-12-10 10:20:53 by Four-F</div>
+   </div>
+   <div class="post" id="post-14512">
+    <div class="subject"><a href="#post-14512">interesting problem (possibly a masm bug?)</a></div>
+    <div class="body">Four-F, great  :) . Didnt know that predefined @CurSeg &quot;macro&quot;.</div>
+    <div class="meta">Posted on 2001-12-10 11:21:07 by japheth</div>
+   </div>
+  </div>
+ </body>
+</html>

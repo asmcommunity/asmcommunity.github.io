@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Linux: how to allocate memory using syscalls only - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21161" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=21161">Linux: how to allocate memory using syscalls only</a></p>
+   <div class="post" id="post-160204">
+    <div class="subject"><a href="#post-160204">Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Hi, I need urgent help with a Univ assignment today. I have only a simple question: how do I allocate memory using only syscalls (that is, without linking to the C standard library and calling malloc)?<br /><br />I&#39;m porting a Windows assembly program to Linux, all I have left are a bunch of LocalAlloc calls that I don&#39;t know how to translate. :(</div>
+    <div class="meta">Posted on 2005-05-18 14:24:37 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160208">
+    <div class="subject"><a href="#post-160208">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">You could either use brk or mmap/munmap/mremap.<br />brk simply enlarges current process`s heap. First get current top of the bss section (call brk with null in ebx)<br />Than add to the result new desired limit and execute brk once again.<br /><br /><pre><code>mov eax, 45<br />xor ebx, ebx ; current top of the bss section will be returned in eax <br />int 80h<br /><br />mov eax, 45<br />mov ebx, new limit<br />int 80h</code></pre><br /><br />With mmap you could allocate pages directly. Sorry I can&#39;t recall what parameter goes in which register. But usage of this syscall is pretty straightforward. Specify MAP_ANONYMOUS flag and set file descriptor parameter to -1. <br /></div>
+    <div class="meta">Posted on 2005-05-18 15:20:59 by arafel</div>
+   </div>
+   <div class="post" id="post-160210">
+    <div class="subject"><a href="#post-160210">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">The <strong>brk</strong> approach seems cleaner, but I&#39;ll go for <strong>mmap/munmap</strong> just because it&#39;s simpler...<br /><br />Thanks! I was really lost with this one... :)</div>
+    <div class="meta">Posted on 2005-05-18 16:34:28 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160211">
+    <div class="subject"><a href="#post-160211">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Does this make sense?<br /><br />I assumed that mmap would return a pointer on success, or -1 on failure. I&#39;m passing the pointer to a mmap_args_struct with all zeroes, except for the flags (MAP_ANONYMOUS), llen (the amount of bytes to allocate) and fd (-1). Also I&#39;m using the first DWORD to store the memory allocated.<br /><br />Here&#39;s the code:<br /><pre><code><br /><br />;-----------------------------------------------------------------------------<br />; Allocates memory.<br />; Uses stdcall convention.<br />malloc: push&nbsp; &nbsp; ebp<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  ebp,&nbsp; &nbsp; esp<br />&nbsp; &nbsp; &nbsp; &nbsp; sub&nbsp; &nbsp;  esp,&nbsp; &nbsp; 4 * 6<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; ; Stack frame:<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  unsigned long addr&nbsp; &nbsp; &nbsp; \<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  unsigned long len&nbsp; &nbsp; &nbsp;  |<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  unsigned long prot&nbsp; &nbsp; &nbsp; | struct mmap_arg_struct<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  unsigned long flags&nbsp; &nbsp;  |<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  unsigned long fd&nbsp; &nbsp; &nbsp; &nbsp; |<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  unsigned long offset&nbsp; &nbsp; /<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  EBP.<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  Return address.<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  Amount of bytes to alloc.<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  dword&nbsp;  , 0<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  eax,&nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; add&nbsp; &nbsp;  eax,&nbsp; &nbsp; 000001000h + 4<br />&nbsp; &nbsp; &nbsp; &nbsp; and&nbsp; &nbsp;  eax,&nbsp; &nbsp; 0FFFFF000h<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  , eax<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  dword&nbsp;  , 0<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  dword&nbsp;  , 800h&nbsp; &nbsp; &nbsp;  ; MAP_ANONYMOUS<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  dword&nbsp;  , -1<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  dword&nbsp;  , 0<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  eax,&nbsp; &nbsp; 90<br />&nbsp; &nbsp; &nbsp; &nbsp; lea&nbsp; &nbsp;  ebx,&nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;  ecx,&nbsp; &nbsp; ecx<br />&nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;  edx,&nbsp; &nbsp; edx<br />&nbsp; &nbsp; &nbsp; &nbsp; int&nbsp; &nbsp;  80h<br />&nbsp; &nbsp; &nbsp; &nbsp; test&nbsp; &nbsp; eax,&nbsp; &nbsp; eax<br />&nbsp; &nbsp; &nbsp; &nbsp; jns&nbsp; &nbsp;  .ok<br />&nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;  eax,&nbsp; &nbsp; eax<br />&nbsp; &nbsp; &nbsp; &nbsp; jmp&nbsp; &nbsp;  .listo<br />.ok:&nbsp; &nbsp; mov&nbsp; &nbsp;  ecx,&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Keep size in the first DWORD...<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  ,&nbsp; ecx<br />&nbsp; &nbsp; &nbsp; &nbsp; add&nbsp; &nbsp;  eax,&nbsp; &nbsp; 4&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; ...and return ptr to second DWORD.<br />.listo: leave<br />&nbsp; &nbsp; &nbsp; &nbsp; retn&nbsp; &nbsp; 4<br /><br /><br />;-----------------------------------------------------------------------------<br />; Frees the memory.<br />; Uses stdcall convention.<br />mfree:<br />&nbsp; &nbsp; &nbsp; &nbsp; ; Stack frame:<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  Return address.<br />&nbsp; &nbsp; &nbsp; &nbsp; ;&nbsp; &nbsp; &nbsp;  &nbsp; &nbsp;  Pointer to allocated memory.<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  ebx,&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Pointer to second DWORD.<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  ecx,&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Size is on the first.<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  eax,&nbsp; &nbsp; 91<br />&nbsp; &nbsp; &nbsp; &nbsp; sub&nbsp; &nbsp;  ebx,&nbsp; &nbsp; 4&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Pointer to first DWORD.<br />&nbsp; &nbsp; &nbsp; &nbsp; int&nbsp; &nbsp;  80h<br />&nbsp; &nbsp; &nbsp; &nbsp; retn&nbsp; &nbsp; 4<br /></code></pre></div>
+    <div class="meta">Posted on 2005-05-18 16:47:15 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160212">
+    <div class="subject"><a href="#post-160212">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Oh i forgot about mandatory flags. MAP_PRIVATE must be specified along MAP_ANONYMOUS.<br />Also protection must be one or combination of PROT_READ,?PROT_WRITE,?PROT_EXEC.</div>
+    <div class="meta">Posted on 2005-05-18 17:31:49 by arafel</div>
+   </div>
+   <div class="post" id="post-160213">
+    <div class="subject"><a href="#post-160213">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">By the way MAP_ANONYMOUS in mine sys/mman.h defined as 20h. (kernel 2.6)</div>
+    <div class="meta">Posted on 2005-05-18 17:53:40 by arafel</div>
+   </div>
+   <div class="post" id="post-160214">
+    <div class="subject"><a href="#post-160214">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Ok, been reading the HLA standard library, I think I fixed it. Too bad I don&#39;t have a Linux box to test it! :(</div>
+    <div class="meta">Posted on 2005-05-18 18:14:28 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160235">
+    <div class="subject"><a href="#post-160235">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Why not just link against libc? :)</div>
+    <div class="meta">Posted on 2005-05-19 07:44:43 by f0dder</div>
+   </div>
+   <div class="post" id="post-160245">
+    <div class="subject"><a href="#post-160245">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">isn&#39;t it will break the whole point of writing something in assembly?</div>
+    <div class="meta">Posted on 2005-05-19 09:07:28 by arafel</div>
+   </div>
+   <div class="post" id="post-160249">
+    <div class="subject"><a href="#post-160249">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Not really, IMHO - libc is always available on *u*x operating systems, it&#39;s kind of the API there... since those platforms also tend to support dynamic linking most of the time, it isn&#39;t a problem linking to libc. </div>
+    <div class="meta">Posted on 2005-05-19 11:00:04 by f0dder</div>
+   </div>
+   <div class="post" id="post-160252">
+    <div class="subject"><a href="#post-160252">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">I meant it in a sense that linking something that initially was supposed to be written with optimization in mind (hence written in asm) to hll libraries is a kind of perversion? :D.<br />But anyway it&#39;s only my opinion. Of course you are right that dynamic linking to libc could be much more convenient on most cases. </div>
+    <div class="meta">Posted on 2005-05-19 11:18:01 by arafel</div>
+   </div>
+   <div class="post" id="post-160253">
+    <div class="subject"><a href="#post-160253">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">f0dder is being quite modest in his suggestion, Linux without LIBC simply isn&#39;t Linux. However, you should study how LIBC interacts with the kernel to help further your understanding, LIBC isn&#39;t the only way... it is just the most accepted way.</div>
+    <div class="meta">Posted on 2005-05-19 11:22:09 by SpooK</div>
+   </div>
+   <div class="post" id="post-160254">
+    <div class="subject"><a href="#post-160254">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">Well, if you don&#39;t want to use LIBC, you should come up with something that&#39;s better than linking against libc; na?ve schemes based on (s)brk and mmap aren&#39;t... you need to put quite some work into the memory manager (ie: allocate big chunk, manage big chunk *efficiently*).<br /></div>
+    <div class="meta">Posted on 2005-05-19 11:28:03 by f0dder</div>
+   </div>
+   <div class="post" id="post-160264">
+    <div class="subject"><a href="#post-160264">Re: Linux: how to allocate memory using syscalls only</a></div>
+    <div class="body">I agree that using libc is the logical approach. But it&#39;s an assignment for the Univ, so it&#39;s only supposed to be educational - no one said it also had to make sense. ;)</div>
+    <div class="meta">Posted on 2005-05-19 14:59:06 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

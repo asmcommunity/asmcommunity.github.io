@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>UV Mapping a Sphere (Raytrace) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9978" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=9978">UV Mapping a Sphere (Raytrace)</a></p>
+   <div class="post" id="post-74519">
+    <div class="subject"><a href="#post-74519">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Well while developing my free realtime raytracer i reached the point of UV mapping a sphere.<br />I choosed to use a 2048x1024 JPEG from NASA showing Earth... i thought that this code will do:<br /><pre><code><br />;-- -----------------------------<br />; Calculate U,V mapping<br />;-------------------------------<br />	fld	&#91;hit_x&#93;<br />	fsub	&#91;edi.object_x&#93;<br />	fstp	&#91;hit_dx&#93;<br /><br />	fld	&#91;hit_y&#93;<br />	fsub	&#91;edi.object_y&#93;<br />	fstp	&#91;hit_dy&#93;<br /><br />	fld	&#91;hit_z&#93;<br />	fsub	&#91;edi.object_z&#93;<br />	fstp	&#91;hit_dz&#93;<br /><br />	fld	&#91;hit_dx&#93;<br />	fld	&#91;hit_dz&#93;<br />	fabs	<br />	fpatan<br />	fldpi<br />	fdiv<br /><br />	fmul	&#91;texture_xscale&#93;<br />	fistp	&#91;hit_uv_x&#93;<br /><br />	fld	&#91;hit_dy&#93;<br />	fld	&#91;hit_dz&#93;	<br />	fabs<br />	fpatan<br />	fldpi<br />	fdiv<br /><br />	fmul	&#91;texture_yscale&#93;<br />	fistp	&#91;hit_uv_y&#93;<br /><br />	;---------------------------------<br />	; read texture pixel<br />	;---------------------------------<br />	mov	ebx,&#91;lp_texture_pixels&#93;<br />	mov	eax,&#91;hit_uv_y&#93;<br /><br />	add	eax,512<br />	.IF SIGN?<br />		mov	eax,0<br />	.ENDIF<br /><br />	.IF eax&gt;1024<br />		mov	eax,1024<br />	.ENDIF<br />	and	eax,03ffh            ;overkill protection<br />	mov	edx,eax<br />	<br />	shl	eax,&#40;11+2&#41;	;*2048*4<br />	add	ebx,eax<br />	<br />	mov	eax,&#91;hit_uv_x&#93;<br /><br />	add	eax,1024<br />	.IF SIGN?<br />		mov	eax,0<br />	.ENDIF<br />	.IF eax&gt;2048<br />		mov	eax,2048<br />	.ENDIF<br />	and	eax,07ffh                 ;overkill protection<br />	mov	ecx,eax<br /><br />	shl	eax,2		;*4<br />	add	ebx,eax<br />;------------------------------------<br />; here we have got the texel<br />;------------------------------------<br />	mov	eax,&#91;ebx&#93;<br /><br /></code></pre><br /><br />This &quot;almost&quot; works ... it looks well from front view<br /><br />but i have a problem at x=-1024 and x=1024 all texture  colapse down to a single run point<br /><br />i basically use :<br />--------------------------------<br />texture_x=arctan(dx/dz)<br />texture_y=arctan(dy/dz)<br /><br />I must be doing something wrong....<br />But what?</div>
+    <div class="meta">Posted on 2003-01-05 19:42:12 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-74529">
+    <div class="subject"><a href="#post-74529">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Without analyzing in too great detail, I see two similar instructions which may not do what you wanted and could be the source of the problem.<br /><br />.IF eax&gt;1024<br />       mov	eax,1024<br />.ENDIF<br />and	eax,03ffh            ;overkill protection<br /><br />ANDing 1024 (i.e. 400h) with 03ffh will yield 0. So whenever the value in EAX would exceed 1024, the instructions convert it to a zero instead of your &quot;intended&quot; 1024 as indicated in the .IF block.<br /><br />The other one is similar.<br /><br />.IF eax&gt;2048<br />       mov	eax,2048<br />.ENDIF<br />and	eax,07ffh                 ;overkill protection<br /><br />2048 (i.e. 800f) ANDed with 07ffh = 0<br /><br />You may thus want to AND with 07ffh and 0fffh respectively to retain your intended max values.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-01-05 21:01:47 by Raymond</div>
+   </div>
+   <div class="post" id="post-74535">
+    <div class="subject"><a href="#post-74535">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Yeah indeed thank you...<br /><br />But anyway that was just the result of some form of paranoia in the early testing .... when when texture coords went beyond limits way too offten.<br /><br />However this is not the problem here as it whould affect just ONE pixel/texel...<br /><br />My UV mapping start to go down on Y (in texture space) as soon as x angle reaches +/- pi/2 i guess actually i think it is going down as soon as dX in sphere is greater than zero (ie right at the beginning)<br /><br />I must be understanding this UV stuff somehow twisted wrong ... or the fpatan is wrong<br />the problem looks like inside the  arctan() formulae...<br /><br />Strange is that texture_X coords work OK it seems that just texture_Y is affected</div>
+    <div class="meta">Posted on 2003-01-05 21:33:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-74651">
+    <div class="subject"><a href="#post-74651">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Morning BogdanOntanu.<br /><br />I am impressed by your work!<br />Here is how I went about it during the 16 bit era..<br /><br />;Calculate the UV texel of a Ray defined using a vector...<br />;We first convert the vector into 2 angles in 2D, being XY and XZ.<br />;We could have chosen any 2 of the 3 possible component pairs.<br />;Mathematically speaking, it does not matter in this instance.<br />;We simply wish to have XYZ expressed as a PAIR of angles.<br />;Now we can view the UV map in terms of XY,XZ positions,<br />;by rationalizing 360,360 and Xmax,Ymax of the desired texture.<br /><br />Basically I assumed the texture was mapped as angles, so any pixel in the texture could be thought of in terms of a pair of angles. I guess a more modern version would map in radians instead of angles, but what do you think anyway?<br /><br />I've always been more of a hacker than a programmer I guess... don't be put off by the simplicity of my solution, it just occurs to me that you are solving this when it doesn't need to be solved in order to produce the exact same output.</div>
+    <div class="meta">Posted on 2003-01-06 13:10:50 by Homer</div>
+   </div>
+   <div class="post" id="post-74708">
+    <div class="subject"><a href="#post-74708">Well</a></div>
+    <div class="body">Hi,<br /><br />Resolved it this morning just to let you all know, It was a simple error...<br />The right formulae is:<br /><br />texture_y=arctan(dy/sqrt(dx*dx+dz*dz))<br />texture_x=arctan(dz/dx)<br /><br />I use X axis pointing right,Y axis pointing upwards and Z axis pointing away. <br /><br />Please notice the resemblence of the texture_x with my (wrong) first try ... so this explains why i thought it was working. I was drawing things on paper from the wrong &quot;angles&quot; and this was stopping me from seeing the truth :)<br /><br />EvilHomer2k:<br />------------------<br />Are you saying that i can avoid the arctangent calculations? <br /><br />Could be in cylindrical projections but i use &quot;web standard&quot; 2:1 (2048:1024) textures for Earth's spherical mapping...<br /><br />I mean converting from carthezian X,Y,Z coordonates of the point of incidence of the ray on sphere to alpha,beta angles (well theta and phi for english school) requires arctangent() or equivalent arcsin/arccos but <br /><br />FPU has arctangent (wisely) implemented ....<br /><br />BTW most of the C/C++ tutorials i have read on this matter insist on using arcsin(DotProduct()) or even more complicated formulaes... althought correct...  they must be much slower because FPU has ONLY arctangent() implemented<br /><br />Besides this is the natural/simple solution to this problem ... hehe<br /><br />PS. my &quot;realtime&quot; (20 fps) simple (naive asm) raytracer will be ready for you guys to download in a few days now (with sourcecode) ... and will also include the OLE JPEG loading routine (Ernie's i guess) i have promissed before</div>
+    <div class="meta">Posted on 2003-01-06 18:11:16 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-74776">
+    <div class="subject"><a href="#post-74776">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Yep, that's what I was saying, u don't &quot;have&quot; to use arctan to calculate texels, there is a cheaper method which produces accurate results without the heavy math (for sphere, ellipsoid and other shapes besides cylinders), but that was in the days before FPU existed, and the optimized FPU version is probably faster these days, even with the added overhead of trig functions. I was merely pointing out that the UV texel expressed as floats is applicable to any texture size, and that my algo produced them by using only sine and cosine functions, which in those days, I used a lookup table. It would have taken much longer to calculate using arctan without the aid of extended FPU instructions, and I found a cheap way to do just that.<br />As gamecoders, and especially as ASM gamecoders, should we not always seek the cheapest result in terms of cycles? The obvious solution is not always the only solution, and in our terms, may not always be the cheapest, and at the end of the day, what matters is the output of the function, not what form the math takes within that function. I'm a terrible FPU coder, but I'm an excellent problem-solver.</div>
+    <div class="meta">Posted on 2003-01-07 03:05:38 by Homer</div>
+   </div>
+   <div class="post" id="post-74797">
+    <div class="subject"><a href="#post-74797">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Well i am indeed very interested in faster mapping and/or faster ray intersection tests.<br />AFAI Intend to use this tests in two directions:<br /><br />1)game: i hope i will be able to optimize it until i will be able to trace a simple scene for the intro screens, i doubt i will be able to make the first raytraced game arround but i will sure try.<br /><br />However i am using naive FPU code with no optimizations and i am only getting about 20 fps for 2 spheres at 256x256...not enough. <br /><br />So i am interested in hacks to speed it up while retaining most of the features... otherwise i whould just use hardware accelerated scanline algorithms<br /><br />2) making an accurate raytracer but make it as fast as it ca be (by using ASM)<br /><br />Of course for this developement direction i will avoid any hacks that will make it innacurate<br /><br />So tell me : how do you think i could avoid arctangent()? and still get well looking texture mapping of earth surface as anybody will recognize wrong image here...will they?<br /><br />... besides using lookup tables...i will try that anyway</div>
+    <div class="meta">Posted on 2003-01-07 04:53:42 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-74816">
+    <div class="subject"><a href="#post-74816">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Heya.<br />I'll rewrite my old RayToUV function for MASM/DX tonight for u so u see what I mean.<br />It converts a ray defined by a vector from absolute zero (3 floats)<br />into a set of UV texel coordinates (2 floats)<br />which you can then convert into a pixel offset and look up the color.<br /><br />It does so by first converting the XYZ vector into a pair of 2D component angles,<br />and then calculates the UV floats by assuming that the source texture pixels map a complete sphere.<br />It does this by rationalizing (&quot;ratio&quot;) between &lt;(0,0),(1,1)&gt; and &lt;(-pi,-pi),(+pi,+pi)&gt;<br />Why not &lt;(0,0),(2pi,2pi)&gt; ?? Because we also must offset the centre of rotation.<br />That means that when UV is (0.5,0.5) (texture centre), then the rotation component angles = (0,0)<br />This clear as mud? :) I'm not very good at explaining myself to humans :p I do know what I mean though :grin:</div>
+    <div class="meta">Posted on 2003-01-07 07:24:29 by Homer</div>
+   </div>
+   <div class="post" id="post-74897">
+    <div class="subject"><a href="#post-74897">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">It looks  clear to me ...<br />Besides i also offset relative to texture center :)<br /><br />But i wonder how is your uv mapping looking on a sphere... <br /><br />As you can see in my formulae Texture_y depends on Y,X,Z in a rather complex manner; so i wonder IF simple linear interpolation will do here...without visible artefacts.<br /><br />Well texture mapping gives a big slowdown to my render from 35 to 21 fps but from 70fps down to 35 is because of intersection calculations (Earth sphere going bigger on screen) and diffuse+specular shading+shadows</div>
+    <div class="meta">Posted on 2003-01-07 15:54:27 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-75007">
+    <div class="subject"><a href="#post-75007">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Heya..<br />sorry I haven't had much time to translate my old 68k code to masm yet.<br />I did rework the algorithm however.<br />Here is the formulae... note my choice of planes is arbitrary.<br />.<br />.<br />.<br /><br /><br />Phase 1: calculating the XY and XZ component angles...<br />I will outline three possible methods...<br />Methods B and C require calculation of the planar Hypotenuses....<br />Hxy=SQRT(x^2+y^2)<br />Hxz=SQRT(x^2+z^2)<br /><br />Method A) Inverse Tangent<br />@XY = 'tan y/x<br />@XZ = 'tan z/x<br /><br />Method B) Inverse Sine<br />@XY = 'sin y/Hxy<br />@XZ = 'sin z/Hxz<br /><br />Method C) Inverse Cosine<br />@XY = 'cos x/Hxy<br />@XZ = 'cos x/Hxz<br /><br />;--------------------------------------------<br />Phase 2: calculating the UV floats from the planar anglular components<br />U=@XY/2pi<br />V=@XZ/2pi<br /><br />;----------------------------------------------<br />Phase 3: offset the mapping to the texture centre<br />U=U+0.5<br />V=V+0.5      (or simply divide by pi instead of 2pi at phase2)<br /><br />;------------------------------------------------<br />Phase 4: calculating the pixel XY from the UV floats<br />X=U*Xmax<br />Y=V*Ymax<br />where Xmax and Ymax are the dimensions of the source texture.<br /><br />;--------------------------------------------------<br /><br /><br />Have a nice day :)</div>
+    <div class="meta">Posted on 2003-01-08 03:10:57 by Homer</div>
+   </div>
+   <div class="post" id="post-75109">
+    <div class="subject"><a href="#post-75109">Can not see them faster</a></div>
+    <div class="body">Well thank you<br /><br />but your methods look like more complicated than my own :)<br /><br />ie for methods B and C you  calculate 2 SQRTs while i only take one<br />and you also take &quot;inverse sine function&quot; (i guess that is arcsinus()? ) ... however FPU can not do such a function (without breaking it into other aka arctangent() functions).<br /><br />Method A looks  pretty much like my first try ;)<br /><br />But i have noticed that with a bigger Field of View or skewing the camera left/right one can clearely see that it is not ok, only a small area of the sphere is mapped... looks aparently ok seen  from the front of the sphere in a narrow angle.</div>
+    <div class="meta">Posted on 2003-01-08 14:34:30 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-75186">
+    <div class="subject"><a href="#post-75186">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Heya.<br />Let's transpose the function to reduce the math...<br />We'll also use the /pi method to eliminate the +.50 offsetting step...<br />For future reference, inverse functions are simply 1/Fn ...<br />Let's look at a case:<br />U=('tan y/x)/pi<br /><br />We can see 'tan y/x as 1/(tan y/x)<br />Note that rather than calculating tan y/x and then inverting it, we can perform the inversion at the start...<br /><br />therefore U=(x/tan y) /pi<br /><br />Anytime we have 1/A/B we can invert to produce B/A.<br />So my formula for Method A becomes:<br />U=(x/tan y) / pi<br />V=(x/tan z) / pi<br /><br />That looks much nicer, doesn't it? :)</div>
+    <div class="meta">Posted on 2003-01-08 22:31:12 by Homer</div>
+   </div>
+   <div class="post" id="post-75221">
+    <div class="subject"><a href="#post-75221">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Yes much more nicer ;)<br /><br />i did not know that 'tan(x) == 1/tan(x)<br /><br />I will check out how it looks</div>
+    <div class="meta">Posted on 2003-01-09 04:30:52 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-76627">
+    <div class="subject"><a href="#post-76627">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Heya.<br />Just spent a week with the dolphins at the fabulous Monkey Mia resort in Australia.<br />Was wondering if you'd tried out that lil trig hack, and if so, how did it compare speedwise?</div>
+    <div class="meta">Posted on 2003-01-16 07:02:49 by Homer</div>
+   </div>
+   <div class="post" id="post-76861">
+    <div class="subject"><a href="#post-76861">UV Mapping a Sphere (Raytrace)</a></div>
+    <div class="body">Sorry i have not reached that testing phase...since i have fixed my own i used that...<br />But i will ... :P<br /><br />Anyway the source code will be available for you to test your own optimizations soon<br />I just have to arrange it a little (it is a mess)</div>
+    <div class="meta">Posted on 2003-01-17 10:14:39 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

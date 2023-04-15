@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Another stupid question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27219" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27219">Another stupid question</a></p>
+   <div class="post" id="post-195120">
+    <div class="subject"><a href="#post-195120">Another stupid question</a></div>
+    <div class="body">Ok, here we go again...I'm using GlobalAlloc to return a pointer to a buffer of 65536 bytes.
+
+invoke GlobalAlloc,GPTR,65536
+
+I'm putting this data in a dword variable called lpData.
+
+mov lpData,eax
+
+Then I'm using WNetEnumResource to return an array of NETRESOURCE structures into the memory location pointed at by lpData.
+
+I can access the first NETRESOURCE structure fine...
+
+mov edx,lpData
+mov eax,(NETRESOURCE PTR ).dwDisplayType
+.if eax==WHATEVER
+.endif
+
+How would I go about accessing the next NETRESOURCE structure in the array?</div>
+    <div class="meta">Posted on 2001-03-13 18:26:00 by Schwartzteufel</div>
+   </div>
+   <div class="post" id="post-195121">
+    <div class="subject"><a href="#post-195121">Another stupid question</a></div>
+    <div class="body">First off, creating that HUGE chunk of memory is a bit wasteful, besides that API gives you some help there.
+
+Call WNetEnumResource TWICE, first with lpBufferSize set to a dword set NULL. NOT a NULL pointer, a pointer TO a NULL.
+
+<pre><code>
+LOCAL BufSize:DWORD, lpData:DWORD
+  mov BufSize, NULL
+  ; get size of buffer needed for ALL resources
+  invoke WNetEnumResource, hEnum, -1, NULL, ADDR BufSize
+  invoke GlobalAlloc,GPTR, eax 
+  mov lpData, eax
+  invoke WNetEnumResource, hEnum, -1, lpData, ADDR BufSize
+</code></pre>
+
+Now you have the whole array in exactly the size buffer you need.
+
+Accessing each element of the array is simple, as each is a SIZEOF NETRESOURCE big:
+
+<pre><code>
+  mov edx, 0       ; edx == our count stored here
+  mov ecx, lpData  ; ecx == pointer to the returned array
+  .REPEAT
+    ; do something interesting with the NETRESOURCE data
+    ; let's just count how many are disk resources
+    mov eax, .NETRESOURCE.dwType
+    .IF eax == RESOURCETYPE_DISK
+      inc edx
+    .ENDIF
+  add ecx, SIZEOF NETRESOURCE
+  .UNTIL ecx > lpData * BufSize
+</code></pre>
+
+The intersting action here is we start with lpData, a pointer to the FIRST NETRESOURCE structure. Each time we add SIZEOF NETRESOURCE to that, we point to the next struct in turn.
+
+To get into each element of each structure in the array, we just inform the compiler to think of the register as that structure type, and index off it's value for the member we want. So:
+
+<pre><code>
+mov eax, .NETRESOURCE.dwType
+</code></pre>
+
+will be interped as:
+
+<pre><code>
+mov eax,  ; get the dword at address (ecx + 4)
+</code></pre>
+
+This can also be stated as:
+
+<pre><code>
+mov eax, (NETRESOURCE PTR ).dwType
+</code></pre>
+
+I used to use this last syntax, but since learned the first form, and the first is less typing but just as clear to my eyes.
+
+One may also use this syntax:
+
+<pre><code>
+assume ecx:NETRESOURCE
+</code></pre>
+
+and later:
+
+<pre><code>
+assume ecx:NOTHING
+</code></pre>
+
+However, this may cause unexpected things to go wrong later on if you forget you've ASSUMED something. 
+
+(Remember: if you assume you make an ass...)
+
+Plus you have to remember what you assumed, so it's harder to read. So use the first or seccond form to cast the register each line, and save an eventual headache.</div>
+    <div class="meta">Posted on 2001-03-13 19:48:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-195122">
+    <div class="subject"><a href="#post-195122">Another stupid question</a></div>
+    <div class="body">Thanks for the explanation on accessing the NETRESOURCE structures.  I am unclear about the way you allocate memory though.  In the Platform SDK documentation it says specifically, "An application cannot set the lpBuffer parameter to NULL and retrieve the required buffer size from the lpBufferSize parameter".  Not sure how you got this to work, but it wouldn't work for me on Windows 2000.</div>
+    <div class="meta">Posted on 2001-03-13 20:48:00 by Schwartzteufel</div>
+   </div>
+   <div class="post" id="post-195123">
+    <div class="subject"><a href="#post-195123">Another stupid question</a></div>
+    <div class="body">OK, then set it to something else, my copy of MSDN doesn't list such a restriction. You can point it to a single DWORD, then make the buffer size '4'.  That should work as the size is still smaller then a single NETRESOURCE struct.
+
+I Apologise, I should have marked that as "WARINING: UNTESTED CODE"</div>
+    <div class="meta">Posted on 2001-03-14 00:33:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

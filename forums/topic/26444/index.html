@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Checking MACRO parameters - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26444" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26444">Checking MACRO parameters</a></p>
+   <div class="post" id="post-191575">
+    <div class="subject"><a href="#post-191575">Checking MACRO parameters</a></div>
+    <div class="body">I have a macro that takes an arbitrary number of parameters (VARARG). I need to test if any of these parameters happens to be register edx, I need it to hard fail the assembly.
+
+Anyone have any ideas?</div>
+    <div class="meta">Posted on 2000-12-26 19:02:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-191576">
+    <div class="subject"><a href="#post-191576">Checking MACRO parameters</a></div>
+    <div class="body">Why do you need to know if one of the arguments of the macro is edx ?
+If it's solely beacuse you need the value contained in the register,  why not just pushing it before macro code then pop it at the end ?
+Maybe your needs are different and deeper...
+Why not to store edx value (or register values) in memory before macro and than compare edx value (or register values) during macro with the saved one(s) in order to understand if they are changed ?
+I think I am far away from the solution...
+Bye, Saiwa</div>
+    <div class="meta">Posted on 2000-12-27 20:13:00 by Saiwa </div>
+   </div>
+   <div class="post" id="post-191577">
+    <div class="subject"><a href="#post-191577">Checking MACRO parameters</a></div>
+    <div class="body">The macro uses edx itself. It moves a value into edx, pushes all the other params, then it pushes edx last onto the stack. 
+
+Curently, should the macro be given edx as a parameter, it will be overwitten by the macro, producing incorrect results.
+
+To make the a bit more bullit proof, it would be far easier to track down a compile error ("STOP using edx YOU FOOL") then a runtime bad data ("ummm, gee, I wonder why it did that?") error.
+
+Storing the value BEFORE the macro defeats the purpose of the macro: to encapulate some tricky inline code.</div>
+    <div class="meta">Posted on 2000-12-27 23:36:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-191578">
+    <div class="subject"><a href="#post-191578">Checking MACRO parameters</a></div>
+    <div class="body">MACRO_uses_edx MACRO varList:VARARG
+LOCAL x
+ IRP x,<varList>
+  IF ((OPATTR(&x)) AND 10h)
+		IFIDN <&x>,<edx>
+		.err <edx is not allowed !!>
+		ELSE
+		echo accepting CPU register &x...
+		ENDIF
+  ELSE
+  echo accepting not-register-type VAR &x...  
+  ENDIF
+ ENDM
+ENDM
+
+in source:
+
+.CODE
+	MACRO_uses_edx eax,edx,ecx,YourVar1
+
+Cya</div>
+    <div class="meta">Posted on 2000-12-28 14:06:00 by AndyCar </div>
+   </div>
+   <div class="post" id="post-191579">
+    <div class="subject"><a href="#post-191579">Checking MACRO parameters</a></div>
+    <div class="body">Thanks Andy, gave me a nudge in the correct direction. Here's the final version:
+
+coinvoke MACRO pInterface:REQ, Interface:REQ, Function:REQ, args:VARARG
+    LOCAL istatement, arg
+    FOR arg, <args>     ;; run thru args to see 
+                        ;; if edx is lurking in there
+        IFIDNI <&arg>, <edx>
+            .ERR <edx is not allowed as a coinvoke parameter>
+        ENDIF
+    ENDM
+    istatement CATSTR <invoke (Interface PTR).&Interface>,
+                      <_>,<&Function, pInterface>
+    IFNB <args>     ;; add the list of parameter arguments if any
+        istatement CATSTR istatement, <, >, <&args> 
+    ENDIF 
+    mov edx, pInterface
+    mov edx, 
+    istatement
+ENDM
+
+This macro will take a COM interface definition structure and perform calls on it. Interface methods are 'decorated' with the interface name and an underscore in the defining struct to allow for method polymorphism ( two interfaces with identicle method names).
+
+Allowing edx to be used as a parameter would occasionally lead to obecure runtime errors, these are best caught at compile time.
+
+Thanks to Andy and all.</div>
+    <div class="meta">Posted on 2000-12-29 14:27:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

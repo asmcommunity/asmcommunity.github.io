@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>sprintf trouble - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28495" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28495">sprintf trouble</a></p>
+   <div class="post" id="post-201576">
+    <div class="subject"><a href="#post-201576">sprintf trouble</a></div>
+    <div class="body">all,
+
+i'm calling spritf function to convert float to ascii from msvcrt.dll. On a pentium 133 it works fine, on my PII350 it dosen't work, i get an error inside sprintf function, msvcrt.dll, at a line RET 10.
+
+Since i don't think the problem is on the PC/processor, there could be a bad coding problem. I attach the code involved.
+
+<pre><code>
+ASCII to float
+                call    sscanf, offset buffer, offset float_fmt, offset f 
+                add     esp,12
+               
+;               Execute function choosed on edit box (all floating functions !!)
+                finit
+                call    Functions
+                fstp    result 
+
+;               float to ASCII                       
+                call    sprintf, offset buffer, offset float_fmt, result
+                add     esp,16    
+
+ </code></pre>
+
+If som help ...   THX</div>
+    <div class="meta">Posted on 2001-06-22 02:02:00 by angelo</div>
+   </div>
+   <div class="post" id="post-201577">
+    <div class="subject"><a href="#post-201577">sprintf trouble</a></div>
+    <div class="body">The add   esp, 12  might be a problem.  I just happened to read and understand this time Icz's tutorial 1 & 2. Comment out that line and see if that helps.</div>
+    <div class="meta">Posted on 2001-06-22 02:15:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201578">
+    <div class="subject"><a href="#post-201578">sprintf trouble</a></div>
+    <div class="body">Hi angelo,
+
+since your call of sprintf has only 3 parameters, the following "add esp" statement should add 3*4, not 4*4 to esp
+
+<pre><code>
+
+;               float to ASCII                       
+                call    sprintf, offset buffer, offset float_fmt, result
+                add     esp,16    ;<--- change to "add esp,12"
+
+ 
+</code></pre>
+
+japheth</div>
+    <div class="meta">Posted on 2001-06-22 03:29:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201579">
+    <div class="subject"><a href="#post-201579">sprintf trouble</a></div>
+    <div class="body">What version of msvcrt are you using ? Under windows NT there is not ret 10, only a ret. Try add esp, 6 after the sprintf, but it's strange. sprintf accepts a variable number of arguments, so the caller do the stack cleanup, not the function.</div>
+    <div class="meta">Posted on 2001-06-22 03:43:00 by karim</div>
+   </div>
+   <div class="post" id="post-201580">
+    <div class="subject"><a href="#post-201580">sprintf trouble</a></div>
+    <div class="body">if this is your source code, does your assembler accept calls with more than 1 parameter (masm uses invoke instead)?
+and please tell us the type of parameter "result" (real4 or real8)</div>
+    <div class="meta">Posted on 2001-06-22 04:24:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201581">
+    <div class="subject"><a href="#post-201581">sprintf trouble</a></div>
+    <div class="body">FIRST OF ALL THANK YOU ALL FOR THE INTEREST
+
+japheth,
+result is a REAL8, for this reason i do add esp,16 (4+4+8) and this should work correctly
+i can't do INVOKE, i'm using TASM50
+karim,
+msvcrt.dll version that work is 261K, 01-03-99
+
+is possible that i have, on these two w95 systems, differents dll versions ?</div>
+    <div class="meta">Posted on 2001-06-22 06:54:00 by angelo</div>
+   </div>
+   <div class="post" id="post-201582">
+    <div class="subject"><a href="#post-201582">sprintf trouble</a></div>
+    <div class="body">May be it is a link problem. If your app is statically linked to msvcrt by number, this can be a problem, if you have used a "bad" msvcrt.lib for linking. For example, in my msvcrt.dll (08/30/1999) ordinal number for sprintf is 691.</div>
+    <div class="meta">Posted on 2001-06-22 08:23:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201583">
+    <div class="subject"><a href="#post-201583">sprintf trouble</a></div>
+    <div class="body">Under Windows NT, there are two msvcrt.dll, one is 265K and the other is 285K. I've tried both and none of them use ret 10. It's strange. How many msvcrt dlls do you have ?</div>
+    <div class="meta">Posted on 2001-06-22 08:30:00 by karim</div>
+   </div>
+   <div class="post" id="post-201584">
+    <div class="subject"><a href="#post-201584">sprintf trouble</a></div>
+    <div class="body">All the floating point arithmetic inside C runtime libaries are
+done using an 8-bytes format (all parameters and return values -
+of course in FPU stack). When you say
+
+<pre><code>
+	Invoke	sprintf, Offset szBuf, Offset szFmt, float1
+</code></pre>
+
+I think MASM pushes only 4-bytes instead of 8-bytes.
+
+The following code works fine for me.
+
+<pre><code>
+
+	Bits	32
+
+	Segment data Use32
+
+float1	DD	1.234567
+float2	DQ	1.234567
+szFmt	DB	"%f", 0
+
+	Segment bss Use32
+
+szBuf	RESB	80
+
+	Extern	sprintf
+	Extern	printf
+
+	Segment code Use32
+
+..start:
+
+	Push	DWord 
+	Push	DWord 
+	Push	Dword szFmt
+	Push	DWord szBuf
+	Call	sprintf
+	Add	esp, 16
+
+	Push	DWord szBuf
+	Call	printf
+	Add	esp, 4
+
+	Fld	DWord 
+	Fstp	QWord 
+	Push	Dword szFmt
+	Push	DWord szBuf
+	Call	sprintf
+	Add	esp, 16
+
+	Push	DWord szBuf
+	Call	printf
+	Add	esp, 4
+
+	Ret
+
+</code></pre>
+
+Jones</div>
+    <div class="meta">Posted on 2001-06-22 12:37:00 by sjhenry</div>
+   </div>
+   <div class="post" id="post-201585">
+    <div class="subject"><a href="#post-201585">sprintf trouble</a></div>
+    <div class="body">HI ALL !  :)   I'm back @home, sorry but before i was in job-time and i couldn't promptly answer.
+
+I think we're near the solution. 
+Here, @home, i've checked the msvcrt.dll: it have 274K 16/06/01 !
+It's a strange msvcrt, don't you think ? 
+I'had created msvcrt.lib with IMPLIB utility, by borland. And I had created from the other 01-03-99 msvcrt.dll.
+Probably my app linked with oldest .lib don't work with the new.
+But why i have here this new msvcrt ? Maybe som installed program has rewrite it ?
+
+thanks again</div>
+    <div class="meta">Posted on 2001-06-22 17:27:00 by angelo</div>
+   </div>
+  </div>
+ </body>
+</html>

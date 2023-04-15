@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Low-level multithreading - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25423" />
+    <link rel="next" href="../?id=25423&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25423">Low-level multithreading</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=25423&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=25423&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="25423" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=25423&amp;page=2">&gt;</a><a href="../?id=25423&amp;page=2">&raquo;</a></form>   <div class="post" id="post-185869">
+    <div class="subject"><a href="#post-185869">Low-level multithreading</a></div>
+    <div class="body">Hi all,<br /><br />I was wondering if anyone here knows if there are any low-level optimizations for multithreading. I&#39;ve done some experiments with my dual-core Athlon, and the results are rather dissapointing. Using WIN32&#39;s SetEvent and WaitForSingleObject, flipping between two theads takes thousands of clock cycles. Using spin loops is a lot faster, but burns clock cycles even when there is no work.<br /><br />So, are there any faster ways to do synchronization between concurrent threads?<br /><br />Thanks,<br /><br />c0d1f1ed</div>
+    <div class="meta">Posted on 2006-10-12 12:45:19 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185873">
+    <div class="subject"><a href="#post-185873">Re: Low-level multithreading</a></div>
+    <div class="body">You would use InterlockedExchange and InterlockedXXX API&#39;s<br />or<br />just directly use &quot;lock&quot; prefix</div>
+    <div class="meta">Posted on 2006-10-12 14:46:50 by Dite</div>
+   </div>
+   <div class="post" id="post-185876">
+    <div class="subject"><a href="#post-185876">Re: Low-level multithreading</a></div>
+    <div class="body">read up on AMD docs<br />use PAUSE instruction in your spinloops will work on P4 and newer, not sure when AMD support it<br />ensures it doesnt check variable more often than memoryread happens and works as NOP on all systems that doesnt support them<br />can also use OS timing services to check variable more seldom<br />the OS itself can issue a HALT instruction to make the thread not consumed(well you asked for low-level)?<br />when the OS makes the determination the synchronization should be satisfied the thread is wokenup<br />ownership of shared data is for each cacheline and write to that cacheline, the other cpu invalidates that and must re-read that from memory and cachesystem, write data as seldomas possible write data to the other cpu<br />this also means data should be aligned to fit on a cacheline for each cpu and no other data on that<br />so you should extend it with dummy variables<br />also means your spinloopvariable should be alone on a 128byte cacheline, to not cause trouble with false sharing which leads to lots of unesserary load on systembus<br /></div>
+    <div class="meta">Posted on 2006-10-12 15:59:56 by daydreamer</div>
+   </div>
+   <div class="post" id="post-185880">
+    <div class="subject"><a href="#post-185880">Re: Low-level multithreading</a></div>
+    <div class="body">You might want to check out these two links:<br />http://www.mikusite.de/pages/x86.htm<br />http://board.flatassembler.net/topic.php?t=5122<br /><br />Of course this is a VERY specific thing so it won&#39;t work all the time, but it does show how nicely fractal rendering scales with SMP - and how much Core2Duo kicks ass :)<br /></div>
+    <div class="meta">Posted on 2006-10-12 16:13:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-185881">
+    <div class="subject"><a href="#post-185881">Re: Low-level multithreading</a></div>
+    <div class="body"><div class="quote"><br />You would use InterlockedExchange and InterlockedXXX API&#39;s<br />or<br />just directly use &quot;lock&quot; prefix<br /></div><br />Thanks, but that doesn&#39;t halt or resume theads...<br /><br />My problem is this: The bottleneck of my application takes roughly 60% of the total processing time. So with dual-core I can split the job in two and do 30% on the other core (making the application run 43% faster), theoretically. But when using SetEvent/WaitForSingleObject to start the second thread and wait for it to finish the job (to synchronize with the primary thread), there&#39;s a lot of overhead caused by those functions. This is likely because they invoke the kernel. Using spin loops largely removes the overhead and makes me reach the theoretical performance, but the CPU usage is constantly at 100% while it&#39;s only really working 71.5%.<br /><br />This not only causes the CPU to heat up more than it should, it also takes away clock cycles from other applications. While the first problem can apparently be solved by using PAUSE instructions (thanks daydreamer), the second problem can only really be solved by putting the thread in a waiting state at the kernel level. Spin loops are especially nasty when multiple applications use them and hog the entire system.<br /><br />So I was wondering if there&#39;s any alternative to SetEvent/WaitForSingleObject that is quicker to respond (and keeps the overhead in the idle time). What I&#39;m looking at now is asynchronous procedure calls, and altering the thread&#39;s priority to leave &#39;idle&#39; time to other processes. Anyone got some experience with these?</div>
+    <div class="meta">Posted on 2006-10-12 16:39:17 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185882">
+    <div class="subject"><a href="#post-185882">Re: Low-level multithreading</a></div>
+    <div class="body"><div class="quote"><br />You might want to check out these two links:<br />http://www.mikusite.de/pages/x86.htm<br />http://board.flatassembler.net/topic.php?t=5122<br /><br />Of course this is a VERY specific thing so it won&#39;t work all the time, but it does show how nicely fractal rendering scales with SMP - and how much Core2Duo kicks a** :)</div><br />Downloading the code gives me a 404, but I assume Mandelbrod rendering is a highly parallelizable task...<br /><br />My application really only has one central bottleneck that is suited for parallelization. So outside of that bottleneck it would be fair to leave the second core to other processes.</div>
+    <div class="meta">Posted on 2006-10-12 16:45:35 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185883">
+    <div class="subject"><a href="#post-185883">Re: Low-level multithreading</a></div>
+    <div class="body">Too bad it gives 404 (hunt the fasm board for attachments?). But yes, it is *highly* parallelizable - you could do it per-pixel if you want to. No real locking needs to be done, &quot;LOCK XADD&quot; for the &quot;next scanline to render&quot; is all it takes.<br /><br />Anyway, look up CRITICAL SECTIONS - it tries spinlooping for a short time, then uses an event. It&#39;s one of the better generic all-round synchronization primitives in win32.</div>
+    <div class="meta">Posted on 2006-10-12 17:00:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-185884">
+    <div class="subject"><a href="#post-185884">Re: Low-level multithreading</a></div>
+    <div class="body"><div class="quote">Anyway, look up CRITICAL SECTIONS - it tries spinlooping for a short time, then uses an event. It&#39;s one of the better generic all-round synchronization primitives in win32.</div><br />Ah, sounds like exactly what I need! I was already wondering whether there wasn&#39;t any way to &#39;schedule&#39; a sleep operation. This could spin loop till the next time the kernel&#39;s scheduler gets run, and only then stops really executing. Hopefully I can do that with critical sections. Thanks!</div>
+    <div class="meta">Posted on 2006-10-12 17:20:37 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185887">
+    <div class="subject"><a href="#post-185887">Re: Low-level multithreading</a></div>
+    <div class="body">The idea of critsects is of course that it&#39;s cheap to spinlock for a short amount of time (far cheaper than r3-&gt;r0-&gt;r3 and a wait), but that spinlocks are expensive in the long run (hogs up CPU, generates heat, ...).<br /><br />They&#39;re not the end-all-be-all, but it&#39;s definitely worth trying out.<br /><br />I wish all stuff was as easy to parallelize as the mandelbrot, then we&#39;d have really outstanding performance with linear speed increase :)</div>
+    <div class="meta">Posted on 2006-10-12 17:48:02 by f0dder</div>
+   </div>
+   <div class="post" id="post-185897">
+    <div class="subject"><a href="#post-185897">Re: Low-level multithreading</a></div>
+    <div class="body">To the ineffable all,<br /><br />&nbsp; &nbsp;  What is dual core anyway?&nbsp; Is is two CPUs in one chip, or something more than that?&nbsp; A sentence or two explainng it would be nice to read.&nbsp; Ratch</div>
+    <div class="meta">Posted on 2006-10-12 23:50:18 by Ratch</div>
+   </div>
+   <div class="post" id="post-185899">
+    <div class="subject"><a href="#post-185899">Re: Low-level multithreading</a></div>
+    <div class="body"><div class="quote"><br />What is dual core anyway?&nbsp; Is is two CPUs in one chip, or something more than that?&nbsp; A sentence or two explainng it would be nice to read.&nbsp; Ratch<br /></div><br />It&#39;s both :D<br /><br />Intels first dualcore chips basically bolted two full Pentium4 on a single chip, but (iirc) they still used the normal bus to communicate.<br /><br />Then came dualcore AMD64, which uses an internal high-speed bus between the cores for communication.<br /><br />There&#39;s more to it than that, like how is the cache done (how much is per-core, how much is shared, <strong>how</strong> is it shared, etc).<br /></div>
+    <div class="meta">Posted on 2006-10-13 03:36:14 by f0dder</div>
+   </div>
+   <div class="post" id="post-185900">
+    <div class="subject"><a href="#post-185900">Re: Low-level multithreading</a></div>
+    <div class="body">Dual-core is very much like a dual-processor system. The processors are just in one package. So they have to call it dual-core because there&#39;s physically only one processor. It behaves completely like a dual-processor system, except that communication between the cores is a bit faster because they are so close together.</div>
+    <div class="meta">Posted on 2006-10-13 03:39:57 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185901">
+    <div class="subject"><a href="#post-185901">Re: Low-level multithreading</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote"><br />What is dual core anyway?&nbsp; Is is two CPUs in one chip, or something more than that?&nbsp; A sentence or two explainng it would be nice to read.&nbsp; Ratch<br /></div><br />It&#39;s both :D<br /><br />Intels first dualcore chips basically bolted two full Pentium4 on a single chip, but (iirc) they still used the normal bus to communicate.<br /><br />Then came dualcore AMD64, which uses an internal high-speed bus between the cores for communication.<br /><br />There&#39;s more to it than that, like how is the cache done (how much is per-core, how much is shared, <strong>how</strong> is it shared, etc).<br /><br /></div><br />I am working on a dualthread testapp right now, was thinking experiment with different datastructures etc affect things<br /></div>
+    <div class="meta">Posted on 2006-10-13 03:45:03 by daydreamer</div>
+   </div>
+   <div class="post" id="post-185902">
+    <div class="subject"><a href="#post-185902">Re: Low-level multithreading</a></div>
+    <div class="body"><div class="quote">I wish all stuff was as easy to parallelize as the mandelbrot, then we&#39;d have really outstanding performance with linear speed increase :)</div><br />In my experience, finding things that can run in parallel is not that hard. The real problem is fast synchronization. You can often simply select a bunch of calculations that are independent, try to run them on a second thread, and then find that synchronization is taking longer than the calculations themselves. If you&#39;re &#39;lucky&#39;, things are faster, but still far from the theoretical performance.<br /><br />This is getting a very fundamental problem, because in the not so distant future we&#39;ll have quad-core, octa-core, etc. So I believe it&#39;s the responsability of chip makers and O.S. writers to come up with much faster ways to do synchronization. The PAUSE instruction is definitely a step in the right direction. Ideally, the CPU should do thread scheduling in hardware, and synchronization calls should be single instructions...</div>
+    <div class="meta">Posted on 2006-10-13 03:55:25 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185904">
+    <div class="subject"><a href="#post-185904">Re: Low-level multithreading</a></div>
+    <div class="body">by the way - about locking.<br />if it really needed to do locking with (expensive) kernel objects etc?<br /><br />we asm coders can do something like this:<br /><pre><code><br />locked db 0<br />...<br />mov al, 1<br />xchg , al<br />cmp al, 0<br />jne .cant_lock<br />...<br />mov , 0</code></pre><br /><br />is there any problem with that? (except that threads do not get lock in order they tried to take lock, but i don&#39;t see that as some serious problem)</div>
+    <div class="meta">Posted on 2006-10-13 04:09:44 by vid</div>
+   </div>
+   <div class="post" id="post-185905">
+    <div class="subject"><a href="#post-185905">Re: Low-level multithreading</a></div>
+    <div class="body">In case there were multiple processors in system you should do &quot;lock xchg&quot;.</div>
+    <div class="meta">Posted on 2006-10-13 05:59:05 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-185906">
+    <div class="subject"><a href="#post-185906">Re: Low-level multithreading</a></div>
+    <div class="body">According to the Intel docs, XCHG using a memory operand automatically asserts a processer&#39;s LOCK signal.</div>
+    <div class="meta">Posted on 2006-10-13 06:43:31 by sinsi</div>
+   </div>
+   <div class="post" id="post-185907">
+    <div class="subject"><a href="#post-185907">Re: Low-level multithreading</a></div>
+    <div class="body">Sorry, but this thread is not about XCHG at all (unless I&#39;m really missing something). It&#39;s about splitting a task over two threads with minimal overhead.<br /><br />So far, spin looping seems like the best solution even though it burns clock cycles while there is no work. Lowering the thread priority and using PAUSE allows other processes to get some exeuction time and prevents the CPU from heating up unnecessarily.</div>
+    <div class="meta">Posted on 2006-10-13 06:53:58 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-185909">
+    <div class="subject"><a href="#post-185909">Re: Low-level multithreading</a></div>
+    <div class="body">sorry if i off-topic-ed, i was thinking that to split algo to 2 threads, you may also need to synchronize them, and locking is synchronizing mechanism, and locking is done via XCHG ;)</div>
+    <div class="meta">Posted on 2006-10-13 08:11:31 by vid</div>
+   </div>
+   <div class="post" id="post-185910">
+    <div class="subject"><a href="#post-185910">Re: Low-level multithreading</a></div>
+    <div class="body"><strong>vid:</strong> that&#39;s just one way of doing things - spinlock.<br /></div>
+    <div class="meta">Posted on 2006-10-13 08:14:41 by f0dder</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=25423&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=25423&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="25423" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=25423&amp;page=2">&gt;</a><a href="../?id=25423&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

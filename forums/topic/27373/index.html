@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Looking for _fast_ string sorting algorithm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27373" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27373">Looking for _fast_ string sorting algorithm</a></p>
+   <div class="post" id="post-195893">
+    <div class="subject"><a href="#post-195893">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Hi,
+
+I'm currently implementing some compression algorithms in assembly and really need a fast sorting algorithm for my BWT encoder. Decoding is something you might call f___ing fast but encoding is awfully slow cause I'm using a simple quicksort to do the job (to those of you who are not familiar with BWT, I need to sort an array of n strings which are n bytes long, with n being at least 64K in order to achieve a good compression ratio).
+I somewhere read that radix sort would perform quite good but haven't found any <em>good</em> info on the subject. Any hints, links and explanations are appreciated.
+
+Tola</div>
+    <div class="meta">Posted on 2001-03-24 17:36:00 by Tola</div>
+   </div>
+   <div class="post" id="post-195894">
+    <div class="subject"><a href="#post-195894">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Sort them in a linked list of pointers to the strings.  You could easily do (availible memory / 17) size blocks (ie you will need four DWORDs for each byte in the block).  You just need to write the block comparison routine, and I should have the rest done soon :)  I was going to use it for compression as well as other things :)  I think it will be fast.
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-24 18:47:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195895">
+    <div class="subject"><a href="#post-195895">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Of course I'm not moving the strings around when sorting them, I've got an array of dwords to index the strings. It still is way too slow.
+
+This message was edited by Tola, on 3/25/2001 8:34:52 AM</div>
+    <div class="meta">Posted on 2001-03-25 03:59:00 by Tola</div>
+   </div>
+   <div class="post" id="post-195896">
+    <div class="subject"><a href="#post-195896">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Who would have copies of the strings, ouch? :P
+
+A.  Have a better string compare
+B.  Do fewer string comparisons
+
+{A} is not so important because of the type of string comparisons, so work on doing fewer comparisons first :)  Sorting them with a balanced tree insert would take at most the sum of (1+2+3+4+...+N) comparisons, but you can optimise the comparison to only campare bytes that haven't been compared yet within the blocks - so it's faster than bubble sort :)  After they are added to the tree, just do an ordered transversal of the tree to get the sort order.
+
+A faster approach migh be to put the strings in bins (groups) based on the first byte then sort the bins.  And if a bin is two large, then partition it again into another set of bins and sort from there.
+
+I wish I had more time to code!
+Hope that helps.
+bitRAKE
+
+This message was edited by bitRAKE, on 3/25/2001 10:56:43 AM</div>
+    <div class="meta">Posted on 2001-03-25 09:45:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195897">
+    <div class="subject"><a href="#post-195897">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Here is a quicksort routine I just finished, can you test it out with your BWT :P  Let me know if I messed up?
+
+You just have to write a macro that compares your blocks and call it <strong>COMPARE</strong>.
+
+Call it like this:
+<pre><code>    invoke QuickSort ADDR ArrayData, 0, LENGTHOF ArrayData</code></pre>
+
+Hope this helps, it's faster than bubble sort.
+bitRAKE
+
+<pre><code>
+;Here the array is just DWORDs, change this to compare the
+;type of data that you are sorting.
+COMPARE MACRO cARRAY, cIndex1, cIndex2, xREG
+    mov xREG, DWORD PTR 
+    cmp xREG, DWORD PTR 
+  ENDM
+
+
+EXCHANGE MACRO eARRAY, eIndex1, eIndex2
+    push DWORD PTR 
+    push DWORD PTR 
+    pop DWORD PTR 
+    pop DWORD PTR 
+  ENDM
+
+
+MEDIAN MACRO mLOW, mHIGH, mPIVOT
+    mov mPIVOT, mHIGH
+    sub mPIVOT, mLOW
+    shr mPIVOT, 1
+    add mPIVOT, mLOW
+  ENDM
+
+
+;(pHIGH-pLOW)+1 > QuickSortMinimumPartitionSize
+Partition MACRO pARRAY, pLOW, pHIGH, pBOTTOM, pTOP, pPIVOT, xREG
+
+  LOCAL GetHighBottom, GetLowTop, SwapTopBottom, NextPartition
+
+    mov pBOTTOM, pLOW
+    mov pTOP, pHIGH
+
+GetHighBottom:
+    COMPARE pARRAY, pBOTTOM, pPIVOT, xREG
+    jg GetLowTop
+
+    inc pBOTTOM
+    cmp pBOTTOM, pTOP
+    jl GetHighBottom
+    dec pBOTTOM
+    jmp NextPartition
+
+;pARRAY > pARRAY
+GetLowTop:
+    COMPARE pARRAY, pTOP, pPIVOT, xREG
+    jl SwapTopBottom
+
+    dec pTOP
+    cmp pBOTTOM, pTOP
+    jl GetLowTop
+    inc pTOP
+    jmp NextPartition
+
+;pARRAY > pARRAY > pARRAY
+SwapTopBottom:
+    EXCHANGE pARRAY, pTOP, pBOTTOM
+    jmp GetHighBottom
+
+;pivot is sorted and should be placed between pBOTTOM, pTOP
+NextPartition:
+    EXCHANGE pARRAY, pBOTTOM, pPIVOT
+    dec pBOTTOM
+  ENDM
+
+
+xQuickSort: ; PROC xLOW:DWORD, xHIGH:DWORD
+xLOW EQU 8
+xHIGH EQU 4
+
+    mov ecx, xHIGH
+    sub ecx, xLOW
+    jle Done
+
+    cmp ecx, 2
+    jge DoTheQ
+
+    mov ebx, xLOW
+    mov edx, xHIGH
+    COMPARE esi, ebx, edx, eax
+    jle Done
+    EXCHANGE esi, ebx, edx
+    jmp Done
+
+DoTheQ:
+;other pivot options below...
+;    MEDIAN qLOW, qHIGH, ecx ;improves sort preformance on sorted data
+;    mov ecx, qLOW  ;don't have to exchange pivot if it's part the partition
+;    mov ecx, qHIGH ;these might be cheaper codewise?
+;this is the same and MEDIAN
+    shr ecx, 1
+    add ecx, xLOW
+    Partition esi, xLOW, xHIGH, ebx, edx, ecx, eax
+
+    push edx
+    push xHIGH
+
+    push xLOW
+    push ebx
+    call xQuickSort
+
+    call xQuickSort
+    add esp, 16
+Done:
+    ret
+
+
+QuickSort PROC uses esi ebx, qARRAY:DWORD, qLOW:DWORD, qHIGH:DWORD
+    mov esi, qARRAY
+
+    push qLOW
+    push qHIGH
+    call xQuickSort
+;    add esp, 8 ;leave takes care of this
+    ret
+QuickSort ENDP</code></pre>
+
+bitRAKE
+
+This message was edited by bitRAKE, on 3/25/2001 8:41:45 PM</div>
+    <div class="meta">Posted on 2001-03-25 19:28:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195898">
+    <div class="subject"><a href="#post-195898">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">bitRAKE,
+
+I'm currently using a quicksort routine I wrote myself (+ a compare routine that should run pretty fast) but when it comes to sort 100,000 strings of which each one is 100,000 bytes it's way too slow!</div>
+    <div class="meta">Posted on 2001-03-26 06:31:00 by Tola</div>
+   </div>
+   <div class="post" id="post-195899">
+    <div class="subject"><a href="#post-195899">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Each of your string are 100,000 bytes in length? ouch!
+
+I would create a hash key for each one, then sort using the hash key, comparing strings 100,000 bytes in lenght is going to take forever, no matter what algo you use. Use a hashing algo.
+
+let me know here if you want me to explain one :)
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-03-26 09:20:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195900">
+    <div class="subject"><a href="#post-195900">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">umbongo,
+
+  You know hashing? I have NO idea what hashing is (well, a tiny bit). I'd love a nice clear basic definition and illustration of what it is and what it can do for me.
+
+
+
+--------------------------
+"The only danger in space is if we land on the terrible Planet of the Apes...wait a minute...Statue of Liberty ... that was our planet! You maniacs! You blew it up! Damn you! Damn you all to hell!"</div>
+    <div class="meta">Posted on 2001-03-26 10:53:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-195901">
+    <div class="subject"><a href="#post-195901">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Could some people just test the QuickSort routine above.  It would be nice to find bugs in it.  I think that it's a good implementation - I just have to clean it up a little.  It chooses the piviot point from the center, so it will be okay on sorted data even. :)  If <strong>Svin</strong> is reading, could you give me some speed pointers?  <strong>Hutch</strong>, I'd like to make a cleaned up version for the M32LIB - if you don't already have a QuickSort?
+Thanks for everybody's help,
+bitRAKE
+
+The BB-Tree routine is going through a rewrite to try and eliminate errors - I mean accually get it working. :)  I could write a pretty fast string comparison for a custom tree algo that should beat hashing!  Or, maybe I don't understand hashing - <strong>umbongo</strong>.  Will see if I can do it. :P  Give me a week or so to work out the details.
+
+This message was edited by bitRAKE, on 3/26/2001 12:51:11 PM</div>
+    <div class="meta">Posted on 2001-03-26 11:47:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195902">
+    <div class="subject"><a href="#post-195902">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Ernie,
+
+There are lots of different types of hasing, but I'm referring to reading each string, creating a key for it, and then sorting the keys, so you don't have to compare each of the strings. It can get very complicated, and mathematicians love it, the books I have read on hashing, compression, weighted graphs, trees, recursion blah blah blah, melt my brain very quickly.
+
+However it doesn't answer your question. and I'm afraid if you want a good description you're going to have to ask the pro's :(
+
+Try these for descriptions:-
+
+A Compact Guide to Sorting and Searching
+
+(oh and it has a russian version for The Svin! :) )
+
+It has good descriptions on doing very large sorts.
+Along with VB/C/PDF examples, so you can see what goes on. :)
+
+If you feel like some real reading get "Algorithms in C" by Robert Sedgewick (I think they call it "Algorithms in C++" thses days, but it's the same book, with the same examples in it!)
+It's <strong>the</strong> book for algos....
+
+
+Of course, my first question is "why are your sorting strings of 100,000 bytes??????"
+
+Umbongo
+
+This message was edited by umbongo, on 3/26/2001 12:52:22 PM</div>
+    <div class="meta">Posted on 2001-03-26 11:51:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195903">
+    <div class="subject"><a href="#post-195903">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Sorting large strings is part of compressing using <strong>BWT</strong> Burrow-Wheeler Transform.  The strings to sort are the same size as the block size you want to compress, and the number of strings is the same as the number of bytes in the block.  The block wraps around to the start when it reaches the end, and each string starts on each byte of the block.
+
+bitRAKE
+
+My brain feels like mush reading this stuff too :P or even trying to convert C/C++/VB/Pascal to ASM version.  Isn't too bad once you get a feel for it - just trying to understand someone else's explaination.  So, I read all the explainations I can get, until I get it :P
+
+This message was edited by bitRAKE, on 3/26/2001 3:36:40 PM</div>
+    <div class="meta">Posted on 2001-03-26 14:31:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195904">
+    <div class="subject"><a href="#post-195904">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Tola, what are you doing with the data before you send it through the BWT?  If you run a MTF on it that will speed the sort by eliminating runs, but I'm not sure how it will effect your compression.
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-26 14:43:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195905">
+    <div class="subject"><a href="#post-195905">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Thanks rafe,  I'll look into heap sort.  What make you part of the lunitic fringe?
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-26 15:49:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195906">
+    <div class="subject"><a href="#post-195906">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">rafe, we are very much alike, I think. :P  Post away!!!  I was hoping that we'd all work toward coding a very advanced ASM Editor/IDE that uses all the latest bells and whistles.  I'm taking notes on a replacement for MASM as well - it will be MASM compatible or have a conversion program, will be 100% WinASM, and have more advance PROC to make object creation easier.  Far away from a real program - just ideas.</div>
+    <div class="meta">Posted on 2001-03-26 17:44:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195907">
+    <div class="subject"><a href="#post-195907">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">A very good explanation of the radix sort can be found here:
+Radix sort explanation</div>
+    <div class="meta">Posted on 2001-03-26 18:16:00 by death</div>
+   </div>
+   <div class="post" id="post-195908">
+    <div class="subject"><a href="#post-195908">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">First of all, thanks for all your assistance.
+
+@bitRAKE:
+I'm not modifiying the data before using BWT but use a MTF encoder afterwards to get a decent compression ratio. I read somewhere, though, that using a RLE before the BWT to speed up the sorting a bit (didn't try that yet).
+
+regards,
+
+Tola</div>
+    <div class="meta">Posted on 2001-03-28 06:54:00 by Tola</div>
+   </div>
+   <div class="post" id="post-195909">
+    <div class="subject"><a href="#post-195909">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Oh, I meant RLE :)</div>
+    <div class="meta">Posted on 2001-03-28 10:22:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195910">
+    <div class="subject"><a href="#post-195910">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Only thing that I've changed is the EXCHANGE macro to:<pre><code>
+
+EXCHANGE MACRO eARRAY, eIndex1, eIndex2, xREG, yREG
+    mv xREG, DWORD PTR 
+    mv yREG, DWORD PTR 
+    mv DWORD PTR , xREG
+    mv DWORD PTR , yREG
+  ENDM
+</code></pre>
+I'll have to repost the who thing I guess, 'cus this changed a few other things - it's just a little speed up.  Everything is registers - renamed to protect the innocent :P
+
+This message was edited by bitRAKE, on 3/28/2001 4:45:53 PM</div>
+    <div class="meta">Posted on 2001-03-28 14:35:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195911">
+    <div class="subject"><a href="#post-195911">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">bitRAKE,
+
+Thanks for the offer, a reliable and fast sort algorithm would be
+a very useful addition to the MASM32 library and I am sure many
+people would find it very useful. The format I need it in is
+standard library format as a single module, it can contain any
+of its own dependencies without any problems.
+
+It would help if you could comment the code so that it is easier
+to read for someone who is not familiar with algorithms of this
+style. Also the basic technical data on how to use it and what
+the parameters are is necessary as I have to write the help file
+info for it.
+
+What I have to do with contributions to the library is set them up
+and test them and benchmark them which is a bit time consuming so
+if you can make a demo program that shows how it worksm it would be
+most appreciated. I am knee deep in search algorithms at the moment
+so I don't really have enough brain left to do detailed work on
+something else at the moment.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-28 17:13:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-195912">
+    <div class="subject"><a href="#post-195912">Looking for _fast_ string sorting algorithm</a></div>
+    <div class="body">Sure, I have a test program.  I'll email a package to you.  For the lib I'll rework the algorithm to where you pass the compare routine.  Like:
+<pre><code>  invoke QuickSort ADDR MyArray, ADDR MyCompare, 0, ItemCount</code></pre>
+...
+<pre><code>MyCompare PROC Array:DWORD, Item1:DWORD, Item2:DWORD
+    mov edx, Array
+    mov ecx, Item1
+    mov eax, 
+    mov ecx, Item2
+    cmp eax, 
+    ret
+MyCompare ENDP</code></pre>
+It'll be slower, but it'll allow for general use and direct convertion from C code.  Do the flags preserve returning from a PROC?  This is twice the overhead for the comparison, and will impact the speed greatly. :(  Or they could build their own lib function that would be faster?</div>
+    <div class="meta">Posted on 2001-03-28 19:50:00 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

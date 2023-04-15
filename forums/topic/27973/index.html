@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Boyer Moore search algorithm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27973" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27973">Boyer Moore search algorithm</a></p>
+   <div class="post" id="post-198865">
+    <div class="subject"><a href="#post-198865">Boyer Moore search algorithm</a></div>
+    <div class="body">I finally found enough technical data to code a Boyer Moore
+binary search algorithm with the dual heuristics of bad
+character and good suffix shifts. This one has been testing
+up OK for the last week or so so I thought it was fair to post
+it for anyone who needs high speed text or binary search.
+
+On my PIII 600 it is clocking about 220 meg/sec, bit faster on
+my AMD 550. Threshold where it becomes faster that a good brute
+force tests at 6 characters, less than this and the brute force
+algo is usually faster. The Boyer Moore gets progressively faster
+as the search pattern gets longer.
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; #########################################################################
+
+    .486
+    .model flat, stdcall  ; 32 bit memory model
+    option casemap :none  ; case sensitive
+
+    .code
+
+; #########################################################################
+
+BMBinSearch proc startpos:DWORD,
+                 lpSource:DWORD,srcLngth:DWORD,
+                 lpSubStr:DWORD,subLngth:DWORD
+
+    LOCAL cval   :DWORD
+    LOCAL ExitLen:DWORD
+    align 4
+    LOCAL shift_table[256]:DWORD
+
+    push ebx
+    push esi
+    push edi
+
+    cmp subLngth, 1
+    jg @F
+    mov eax, -2                 ; string too short, must be > 1
+    jmp Cleanup
+  @@:
+
+    mov esi, lpSource
+    add esi, srcLngth
+    sub esi, subLngth
+    mov ExitLen, esi            ; set Exit Length
+
+  ; ----------------------------------------
+  ; load shift table with value in subLngth
+  ; ----------------------------------------
+    mov ecx, 256
+    mov eax, subLngth
+    lea edi, shift_table
+    rep stosd
+
+  ; ----------------------------------------------
+  ; load decending count values into shift table
+  ; ----------------------------------------------
+    mov ecx, subLngth           ; SubString length in ECX
+    dec ecx                     ; correct for zero based index
+    mov esi, lpSubStr           ; address of SubString in ESI
+    lea edi, shift_table
+
+    xor eax, eax
+
+  Write_Shift_Chars:
+    mov al,                ; get the character
+    inc esi
+    mov , ecx        ; write shift for each character
+    dec ecx                     ; to ascii location in table
+    jnz Write_Shift_Chars
+
+  ; -----------------------------
+  ; set up for main compare loop
+  ; -----------------------------
+    mov ecx, subLngth
+    dec ecx
+    mov cval, ecx
+
+    mov esi, lpSource
+    mov edi, lpSubStr
+    mov ebx, esi                ; EBX as location pointer
+    add esi, startpos           ; add starting position
+
+  Cmp_Loop:
+    xor eax, eax                ; zero EAX
+    mov al, 
+    cmp al,            ; cmp characters in ESI / EDI
+    jne Set_Shift               ; if not equal, get next shift
+    dec ecx
+    jns Cmp_Loop
+
+  Match:
+    sub esi, lpSource           ; sub source from ESI
+    mov eax, esi                ; put length in eax
+    jmp Cleanup
+
+  Set_Shift:
+    mov edi, lpSubStr           ; restore sub string address
+    mov edx, shift_table ; get char shift value
+    cmp edx, subLngth           ; is it pattern length ?
+    jne Suffix_Shift            ; if not, jump to Suffix_Shift
+
+  Bad_Char_Shift:
+    lea ebx,         ; add bad char shift
+    mov ecx, cval               ; reset counter in compare loop
+    mov esi, ebx
+    cmp esi, ExitLen
+    jle Cmp_Loop
+
+    mov eax, -1
+    jmp Cleanup
+
+  Suffix_Shift:
+    add ebx, edx                ; add suffix shift
+    mov ecx, cval               ; reset counter in compare loop
+    mov esi, ebx
+    cmp esi, ExitLen
+    jle Cmp_Loop
+
+    mov eax, -1                 ; set value for no match
+
+  Cleanup:
+    pop edi
+    pop esi
+    pop ebx
+
+    ret
+
+BMBinSearch endp
+
+; #########################################################################
+
+    end
+</code></pre></div>
+    <div class="meta">Posted on 2001-05-08 08:08:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198866">
+    <div class="subject"><a href="#post-198866">Boyer Moore search algorithm</a></div>
+    <div class="body">Sorry to say <strong>Hutch</strong>, but that's the same algo as Jeremy's.  When there is a bad character, you need to find the maximum of the <em>Bad Char Shift</em> and <em>Good Suffix Shift</em>; then subtract that from the string pointer  (if your starting at the end - add if you start from the begining).  The <em>Good Suffix Table</em> has a dword for each byte in the string  that specifies the number of digits to the next similar suffix (usually just a single character).  Sorry, but I've been getting away for asm lately - don't worry I always come back to my favorite language. :P
+
+This message was edited by bitRAKE, on 5/8/2001 4:02:03 PM</div>
+    <div class="meta">Posted on 2001-05-08 16:00:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198867">
+    <div class="subject"><a href="#post-198867">Boyer Moore search algorithm</a></div>
+    <div class="body">bitRAKE,
+
+What I have done with this algo was what I set out to do with it,
+produce a dual heuristic that calculated both the bad character
+shift and the good suffix shift. I do the good suffix shift in a
+256 member array and I get the bad character shift by using the
+descending loop counter as it is a lot faster that accessing a
+table in memory.
+
+With a test piece,
+<pre><code>
+===========================================
+this is a test of an algorithm in assembler
+algorithm
+</code></pre>
+The effective 2 shift calculation tables are,
+<pre><code>
+algorithm
+87654321    good suffix shift
+123456789   bad character shift
+</code></pre>
+based on the reverse match in the comparison loop. This version
+does its comparisons in reverse without altering the comparison
+order, on mismatch, it tests if the character is within the test
+pattern and does one of the two types of forward shifts, depending
+on if the character is in the pattern or not.
+
+As you would be aware, there are a number of variations of the
+original algorithm and the bulk of analysis related to exact
+pattern matching is based around the character match count, not
+how fast it runs. Acheiving sublinearity is of little value when
+the overhead to acheive it make the algorithm slower than a brute
+force byte scanner.
+
+The technology of PDP-10 machines in 1977 favoured arrays in memory
+and Moore coded the original algorithm in PDP-10 assembler. It has
+been the assumptions of ANSI C that have produced the character match
+count theory that most string matching theory is based on.
+
+I coded this version while testing against both Jeremy's version
+and a number of fast brute force byte scanners and I found that
+in both Boyer Moore algos that a single stall made either of them
+slower than a brute force byte scanner. Put simply the technology
+has changed and the algorithm must be written to match the existing
+technology otherwise it does not perform well.
+
+Testing showed that on an Intel processor that this one is about
+25% faster than Jeremy's version, on an AMD, Jeremy's version is
+about 10% faster. I have opted for code that averages the best across
+both types of machines.
+
+The single biggest bottleneck in this version is the access
+speed to the good suffix shift table. Running the algorithm
+without this code access, even though it does not work
+correctly, forces it through the bad character shift and it
+is something like 40% faster again.
+
+When you get the time, I will be pleased to see the version that
+you write to see if the additional heuristic produces a faster
+version.
+
+Regards,
+
+hutch@pbq.com.au
+
+
+
+
+
+
+
+
+This message was edited by hutch--, on 5/8/2001 10:08:53 PM</div>
+    <div class="meta">Posted on 2001-05-08 22:03:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198868">
+    <div class="subject"><a href="#post-198868">Boyer Moore search algorithm</a></div>
+    <div class="body">I haven't invested the time because most of my string searching has been on smaller strings.  So either I put them in another structure like a tree, or I use brute force. :)  The algo I was working on only would be faster on long strings.  Compression algos would need this, but not much else I've come across.</div>
+    <div class="meta">Posted on 2001-05-09 17:01:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198869">
+    <div class="subject"><a href="#post-198869">Boyer Moore search algorithm</a></div>
+    <div class="body">Have you compared your Boyer Moore code with code from http://www.collakesoftware.com/downloads.htm#CODERS ?</div>
+    <div class="meta">Posted on 2001-05-20 14:31:00 by gvollant</div>
+   </div>
+   <div class="post" id="post-198870">
+    <div class="subject"><a href="#post-198870">Boyer Moore search algorithm</a></div>
+    <div class="body">As I received it in my email this morning, no, i have not had
+time to set it up and benchmark it yet. Next time I am clocking
+some algorithms, I will have a look at it.
+
+Bitrake,
+
+The variant of a Boyer Moore you were describing is basically a
+"Turbo Boyer Moore" which has additional heuristics for determining
+the shift length. It remains to be seen if there is a viable way
+of coding this variation so that the overhead of the additional
+heuristic can be reduced enough to get it up to speed.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-20 20:44:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-198871">
+    <div class="subject"><a href="#post-198871">Boyer Moore search algorithm</a></div>
+    <div class="body">gvollant,
+
+I had a look at the emailed version and the latest one dates
+1st Nov 2000 so its not a new version. This is the version of
+Jeremy's Boyer Moore algo that I tested against. I modified it
+slightly so that it took an extra parameter for the start position
+and I unrolled the loop that loads the shift table.
+
+I sent it to Jeremy for a look and he was happy enough with the
+changes. My testing showed that it was better optimised for an AMD
+than an Intel processor, this has some to do with the pipeline
+length in an AMD being shorter which suited Jeremy's code design.
+
+The version I posted here before is better suited to a late model
+Intel PII / PIII and it is faster on an Intel processor.
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; #########################################################################
+
+    .486
+    .model flat, stdcall  ; 32 bit memory model
+    option casemap :none  ; case sensitive
+
+; -----------------------------------------------------------------------
+; This Boyer Moore binary search algorithm was written by Jeremy Collake
+; -----------------------------------------------------------------------
+
+    .code
+
+; #########################################################################
+
+BMBinBin proc uses ebx edi esi startpos:DWORD, pData1:DWORD, Data1Len:DWORD,
+                               pData2:DWORD, Data2Len:DWORD
+           
+    LOCAL   EndOfData:DWORD
+    align 16
+    LOCAL   bm_table[256]:DWORD
+    
+    mov     eax,pData1          ; load source address in EAX
+    add     eax,Data1Len        ; add its length to the address
+    mov     EndOfData,eax       ; write total to variable
+                               
+    lea     edi,bm_table        ; load table address into EDI           
+    push    edi                 ; preserve EDI
+    mov     eax,Data2Len        ; load target length into EAX
+    mov     ecx,256             ; put count into ECX
+
+  ; ------------------------
+  ;       unroll by 8
+  ; ------------------------
+  stosd_loop:
+    mov     ,eax
+    mov     ,eax
+    mov     ,eax
+    mov     ,eax
+    mov     ,eax
+    mov     ,eax
+    mov     ,eax
+    mov     ,eax
+    add     edi,32
+    sub     ecx, 8
+    jnz     stosd_loop
+    ; ------------------------
+
+    pop     edi     
+    mov     ecx,eax
+    push    eax
+    dec     ecx
+    mov     esi,pData2
+    push    edi
+    xor     eax,eax
+  FillTableLoop:  
+    mov     al,byte ptr 
+    inc     esi
+    mov     dword ptr ,ecx
+    dec     ecx
+    jns     FillTableLoop
+    
+    pop     edi     ; edi->bm_table
+    pop     ecx     ; ecx=size of string
+    mov     esi,pData1
+    mov     ebx,pData2 
+    dec     ecx
+    add     ebx,ecx
+    add     esi,ecx 
+    mov     edx,EndOfData        
+
+  ; -------------------------
+  ; do startpos addition here
+  ; -------------------------
+    add esi, startpos
+
+  MainSearchLoop: 
+    xor     eax,eax                 ; zero EAX
+    mov     al,byte ptr 
+    mov     ecx,dword ptr 
+    test    ecx,ecx
+    jz      strcmp   
+    add     esi,ecx
+  NextIteration:
+    cmp     esi,edx
+    jbe     MainSearchLoop
+    jmp     ReturnNotFound  
+  strcmp:                          
+    push    ebx
+    push    esi
+    mov     ecx,Data2Len
+    dec     ecx
+    jz      RevStrCmpEnd
+  RevStrCmpLoop:  
+    dec     esi
+    dec     ebx     
+    mov     al,byte ptr 
+    cmp     al,byte ptr 
+    jnz     RevStrCmpEnd    
+    dec     ecx
+    jnz     RevStrCmpLoop
+  RevStrCmpEnd:           
+    jz      ReturnFound
+    pop     esi
+    pop     ebx
+    inc     esi     
+    jmp     NextIteration
+  ReturnFound:        
+    pop     ebx
+    mov     eax,esi
+    sub     eax, pData1         ; return zero based offset in eax
+    pop     esi
+    ret
+  ReturnNotFound: 
+    mov     eax, -1             ; return -1 if not found
+    ret
+BMBinBin endp
+
+; ###################################################################</div>
+    <div class="meta">Posted on 2001-05-20 21:04:00 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

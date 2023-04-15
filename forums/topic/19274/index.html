@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Indirect Near Jump &amp; Jump Table implementation in masm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19274" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19274">Indirect Near Jump &amp; Jump Table implementation in masm</a></p>
+   <div class="post" id="post-148812">
+    <div class="subject"><a href="#post-148812">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Hi!<br /><br />I need to implement a indirect near jump with jump table in masm. Here is the code it should generate (I'm converting from C++):<br /><br /><pre><code><br />JMP DWORD PTR &#91;EDX*4+OFFSET jmptable&#93;<br /><br />loc_1&#58;<br />...<br />loc_2&#58;<br />...<br />loc_3&#58;<br />...<br />loc_4&#58;<br />...<br />retn<br /><br />jmptable&#58;<br />loc_1<br />loc_2<br />loc_3<br />loc_4<br /></code></pre><br /><br />How do I implement this?<br />Code sample would be nice...   :? <br /><br /><br />thx for help<br />atz</div>
+    <div class="meta">Posted on 2004-08-31 06:15:22 by atzplzw</div>
+   </div>
+   <div class="post" id="post-148815">
+    <div class="subject"><a href="#post-148815">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Why do you implement an jmp table, normal labels might do it, too!?<br /><br /><pre><code><br />.data?<br />jmpTable dd ?<br /><br />.code<br />Main&#58;<br />;Allocate memory for the Jmp Table &#40;size 80 bytes-&gt;20 addresses&#41;<br />invoke GlobalAlloc, GMEM_FIXED or GMEM_ZEROINIT, 80d<br />mov jmpTable, eax<br /><br />;load the addresses to jmpTable<br />mov edi, jmpTable<br />lea eax, loc_1<br />stosd<br />lea eax, loc_2<br />stosd<br />lea eax, loc_3<br />stosd<br />lea eax, loc_4<br />stosd<br /><br />...<br /><br />;jmp to an addr from jmpTable<br />mov eax, 3d                 ;jmp to the third addr from jmptable, it's loc_3<br />shl eax, 2d                   ;or mul ecx with ecx = 4d<br />add eax, jmpTable        ;make address absolute<br />jmp eax<br /><br />loc_1&#58; <br />... <br />loc_2&#58; <br />... <br />loc_3&#58; <br />... <br />loc_4&#58; <br />... <br />retn<br /><br />end Main<br /></code></pre><br /><br />Hope this is what you need. Can you specify the purpose of your program (the cpp program you translate...)<br /><br />Dom</div>
+    <div class="meta">Posted on 2004-08-31 06:33:41 by Dom</div>
+   </div>
+   <div class="post" id="post-148816">
+    <div class="subject"><a href="#post-148816">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">The code I posted is a disassembly from IDA.<br />I think the c++ source is a switch/case instruction but can't proof it.<br /><br />I just want to reconstruct those instructions and not adding plenty of new ones. But thx anyway...<br /><br /><br />atz</div>
+    <div class="meta">Posted on 2004-08-31 06:56:20 by atzplzw</div>
+   </div>
+   <div class="post" id="post-148817">
+    <div class="subject"><a href="#post-148817">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Ok i wondered why asking for a &quot;jmp table&quot;. a switch/case cpp instruction can be translated as followed:<br /><br /><pre><code><br />.IF eax == ...<br />...<br />.ELSEIF eax == ...<br />...<br />.ELSEIF eax == ...<br />...<br />.ELSE<br />...<br />.ENDIF<br /></code></pre></div>
+    <div class="meta">Posted on 2004-08-31 07:02:03 by Dom</div>
+   </div>
+   <div class="post" id="post-148820">
+    <div class="subject"><a href="#post-148820">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Just did that and it does produce plenty of unnessesary bytes... :o <br /><br />But if there will be no other way to do it, it may be works. Need to test that a bit.<br /><br />I wonder why I just can't use the code I posted  :? <br /><br /><br />atz</div>
+    <div class="meta">Posted on 2004-08-31 07:18:25 by atzplzw</div>
+   </div>
+   <div class="post" id="post-148821">
+    <div class="subject"><a href="#post-148821">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">I'm not sure why you want to use the code from first post. Actually the .IF/.ELSEIF/.ENDIF-directive (though masm-specific i believe) doesn't produce too much byte stuff. Do you want to optimize the directive or what? You might be able to save a few bytes when coding it with a jmp table or something...<br />Could you specify the bytes that are unnecessary?</div>
+    <div class="meta">Posted on 2004-08-31 07:25:59 by Dom</div>
+   </div>
+   <div class="post" id="post-148823">
+    <div class="subject"><a href="#post-148823">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">The .if/.elseif statements generate the following code:<br /><br /><pre><code><br />or edx, edx<br />jnz loc_1<br />...<br /><br />loc_1&#58;<br />cmp edx, 1<br />jnz loc_2&#58;<br />...<br /><br />loc_2&#58;<br />cmp edx, 2<br />jnz<br />...<br /></code></pre><br />And so on...<br /><br />For many values that produces quite much code so a jump table would be the better solution.<br /><br />Can't I just dd the locations. Of course that would imply to know the exact code size of the instructions generated between the locations.<br /><br /><br />atzplzw</div>
+    <div class="meta">Posted on 2004-08-31 07:44:56 by atzplzw</div>
+   </div>
+   <div class="post" id="post-148826">
+    <div class="subject"><a href="#post-148826">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Ok, i'm not sure about your masm skills but normally everyone is using the if directive. There are several other masm32 routines / parts that can be much more optimized. Anyway, this modified version of my previous code snippet should take the jmp table although i did not test if it saves some bytes:<br /><br /><pre><code><br />.data<br />loc_1 dd 0h	;This is your jmp table with relative addresses<br />loc_2 dd 6d<br />loc_3 dd 12d<br />loc_4 dd 18d<br /><br /><br />.code<br />Main&#58;<br /><br />mov edx, 3d                 ;jmp to the third addr of jmptable, it's loc_3<br /><br />xchg eax, edx<br />shl eax, 2d                   ;or mul ecx with ecx = 4d <br />add eax, offset JmpBase  ;make address absolute, add the JmpBase<br />jmp eax<br /><br />JmpBase&#58;<br />loc_1&#58; <br />nop<br />jmp loc_end<br /><br />loc_2&#58; <br />nop<br />jmp loc_end<br /><br />loc_3&#58; <br />nop<br />jmp loc_end<br /> <br />loc_4&#58; <br />nop <br /><br />loc_end&#58;<br />ret<br />end Main<br /></code></pre><br /><br /><br />So your Jmp Table is under .data I remember (maybe wrong) that nop (no operation) takes 1 byte while the &quot;jmp loc_end&quot; takes 5 bytes, so thats how I got the relative addresses within the jmp table. If your Switch/Case part is at the end of a routine you call also replace &quot;jmp loc_end&quot; with &quot;ret&quot;, that should save 4 bytes per loc_...  In order to make your jmp address absolute you have to add the offset from JmpBase because the addresses in the jmp table refer to this base address.<br /><br />Hope it helps, keep up the good...<br />Dom</div>
+    <div class="meta">Posted on 2004-08-31 08:15:46 by Dom</div>
+   </div>
+   <div class="post" id="post-148833">
+    <div class="subject"><a href="#post-148833">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">a side note: switches in C(++) are often translated to jmp tables (where possible and smart) indeed.</div>
+    <div class="meta">Posted on 2004-08-31 09:18:14 by lifewire</div>
+   </div>
+   <div class="post" id="post-148834">
+    <div class="subject"><a href="#post-148834">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Thx for your quick help!<br /><br />I tried some of the stuff you posted and it work's great. Then I tried this:<br /><br /><pre><code><br />JMP DWORD PTR &#91;EDX*4+OFFSET loc_jmptable&#93;<br /><br />loc_s&#58; ...<br /><br />retn<br /><br />loc_jmptable&#58;<br />dd offset loc_1<br />dd offset loc_2<br /></code></pre><br /><br />To my surpise this compiled without intervention. I debuged it quite often with the possible values and I think it works. Any idea why it shouldn't?<br /><br />Thx for the help again!<br />atzplzw</div>
+    <div class="meta">Posted on 2004-08-31 09:19:49 by atzplzw</div>
+   </div>
+   <div class="post" id="post-148901">
+    <div class="subject"><a href="#post-148901">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">Your code should work just fine, atz - you're using standard x86 addressing, nothing fancy there :)</div>
+    <div class="meta">Posted on 2004-09-01 04:38:36 by f0dder</div>
+   </div>
+   <div class="post" id="post-148915">
+    <div class="subject"><a href="#post-148915">Indirect Near Jump &amp; Jump Table implementation in masm</a></div>
+    <div class="body">You should be using call  instead of jmp </div>
+    <div class="meta">Posted on 2004-09-01 07:04:20 by roticv</div>
+   </div>
+  </div>
+ </body>
+</html>

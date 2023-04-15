@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>cmov / branch elimination - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17043" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17043">cmov / branch elimination</a></p>
+   <div class="post" id="post-132248">
+    <div class="subject"><a href="#post-132248">cmov / branch elimination</a></div>
+    <div class="body">Hello,<br /><br />I'm building my raytracer app and using a modified 3d bresenham algo for traversing the ray.  <br />this loop here is the main bottleneck as it is called very often:<br /><br />       for (i = 0; i &lt; l; i++) <br />      {<br />            if (err_1 &gt; 0) {<br />                py += y_inc;<br />                err_1 -= dx2;<br />            }<br />            if (err_2 &gt; 0) {<br />                pz += z_inc;<br />                err_2 -= dx2;<br />            }<br />            err_1 += dy2;<br />            err_2 += dz2;<br />            px += x_inc;<br />        }<br /><br />The problem are the two branches, without them the code is ~6 times faster. I tried to eliminate the branch with a cmovg instruction, however the code became SLOWER (!!) than the one with normal jumps. (is there an explanation for that?)<br />So, do you know any trick which would eliminate that 2 branches? I was thinking about using the fact that the branch only compares with zero but didn't get any solution right now.<br /><br />Sebastian</div>
+    <div class="meta">Posted on 2004-02-01 07:04:58 by lordseppo13</div>
+   </div>
+   <div class="post" id="post-132251">
+    <div class="subject"><a href="#post-132251">cmov / branch elimination</a></div>
+    <div class="body">Sebastian,<br /><br />I have never yet found an algo that goes faster with cmovXX than jXX. It may be worth you trying to rewrite the intensive code directly in assembler and try and make the branches work in their natural prediction direction which is backwards.<br /><br />Regards,<br />http://www.asmcommunity.net/board/cryptmail.php?tauntspiders=in.your.face@nomail.for.you&amp;id=2f46ed9f24413347f14439b64bdc03fd</div>
+    <div class="meta">Posted on 2004-02-01 07:37:10 by hutch--</div>
+   </div>
+   <div class="post" id="post-132252">
+    <div class="subject"><a href="#post-132252">cmov / branch elimination</a></div>
+    <div class="body">I once worked on some encryption bruteforcing, lame custom algorithm. By replacing the conditional in &quot;if (++j &gt; 4) j = 0;&quot; with a CMOV and doing loop unrolling, the algorithm ran significantly faster. I can't remember how much it was, but it was enough that I though &quot;wow&quot; :)</div>
+    <div class="meta">Posted on 2004-02-01 07:43:14 by f0dder</div>
+   </div>
+   <div class="post" id="post-132253">
+    <div class="subject"><a href="#post-132253">cmov / branch elimination</a></div>
+    <div class="body">What is this for anyway? For stepping through an acceleration grid or something? I hope it's not for the ray/object intersection itself, that can be done much faster :)</div>
+    <div class="meta">Posted on 2004-02-01 08:10:12 by Henk-Jan</div>
+   </div>
+   <div class="post" id="post-132254">
+    <div class="subject"><a href="#post-132254">cmov / branch elimination</a></div>
+    <div class="body">it's used for an uniform octree traversal. I don't have objects defined in my scene, instead voxels of size 1, which is actually a *real* 3d pixel.<br />So the octree itself is binary and I'm sending a ray through it, that's all. <br /><br />Sebastian</div>
+    <div class="meta">Posted on 2004-02-01 08:22:03 by lordseppo13</div>
+   </div>
+   <div class="post" id="post-132257">
+    <div class="subject"><a href="#post-132257">cmov / branch elimination</a></div>
+    <div class="body">I'm estimate a little but it definitely should be faster. Using cmovcc could be slightly faster if any. This is just a loop body.<br /><pre><code>	mov edx, y_inc<br />	mov ecx, dx2<br />	mov eax, err1<br />	dec eax<br />	shl eax, 1<br />	sbb eax, eax<br />	and edx, eax<br />	and ecx, eax<br />	add py, edx<br />	sub err1, ecx<br />	<br />	mov edx, z_inc<br />	mov ecx, dx2<br />	mov eax, err2<br />	dec eax<br />	shl eax, 1<br />	sbb eax, eax<br />	and edx, eax<br />	and ecx, eax<br />	add pz, edx<br />	sub err2, ecx<br />	<br />	mov eax, dy2<br />	mov edx, dz2<br />	mov ecx, x_inc<br />	add err1, eax<br />	add err2, edx<br />	add px, ecx</code></pre></div>
+    <div class="meta">Posted on 2004-02-01 10:13:13 by masquer</div>
+   </div>
+   <div class="post" id="post-132263">
+    <div class="subject"><a href="#post-132263">cmov / branch elimination</a></div>
+    <div class="body">Generally cmov can be replaced by a series of cmp, sbb, and, not etc. Agner Fog, AMD and Intel optimization manuals are useful to learn how to avoid unpredictable branches.<br /><br />This code is not tested :<br /><br /><pre><code><br />mov i, L<br />@@&#58;<br />xor eax, eax<br />cmp eax, err_1<br />sbb edx, edx  ; edx = 0 &lt; err_1 ? -1 &#58; 0<br />cmp eax, err_2<br />sbb eax, eax  ; eax = 0 &lt; err_2 ? -1 &#58; 0<br />mov ecx, edx  ; ecx = 0 &lt; err_1 ? -1 &#58; 0<br />and edx, y_inc  ; edx = 0 &lt; err_1 ? y_inc &#58; 0<br />and ecx, dx2  ; ecx = 0 &lt; err_1 ? dx2 &#58; 0<br />add py, edx<br />sub err_1, ecx <br />mov edx, eax<br />and eax, z_inc<br />and edx, dx2<br />add pz, eax<br />sub err_2, edx<br />add err_1, dy2<br />add err_2, dz2<br />add px, x_inc<br />dec I<br />jnz @B<br /></code></pre></div>
+    <div class="meta">Posted on 2004-02-01 12:27:27 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-132264">
+    <div class="subject"><a href="#post-132264">cmov / branch elimination</a></div>
+    <div class="body">Thanks everyone for the answers...<br /><br />the trick with the sbb is really good!<br /><br />thanks!!<br /><br />Sebastian</div>
+    <div class="meta">Posted on 2004-02-01 13:29:46 by lordseppo13</div>
+   </div>
+  </div>
+ </body>
+</html>

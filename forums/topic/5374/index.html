@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CreateProcess  HELP! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5374" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=24">IDE usage &amp; development</a> &raquo; <a href="../?id=5374">CreateProcess  HELP!</a></p>
+   <div class="post" id="post-38213">
+    <div class="subject"><a href="#post-38213">CreateProcess  HELP!</a></div>
+    <div class="body">I need help with a resource leak using multiple CreateProcess's. <br />There was a reported problem with NT 3.5 that was fixed in NT 4.0, <br />which it was. I don't know if its fixed in WinME. <br />I'm assuming that the problem is also in Win9x, because it surely <br />leaks. <br />The following routine is in my Build program that is used to to <br />assemble projects, you can assemble about 20 or 30 times with Win9x <br />before Windows runs out of gas and then you have to restart Windows. <br /><br />I've almost given up trying to fix the problem, but someone said that<br />ketilO has fixed the problem.<br /><br />Does anyone know what the fix is?<br /><br /><pre><code><br />;_____________________________________________________________________<br />;---------- &#91;Executes the batch commands&#93; ----------<br />BuildCmd PROC Input&#58;DWORD<br />LOCAL    sat&#58;SECURITY_ATTRIBUTES<br />LOCAL    stin&#58;STARTUPINFO<br />LOCAL    prin&#58;PROCESS_INFORMATION<br />LOCAL    ft&#58;FINDTEXT<br />LOCAL    hRead&#58;DWORD, hWrite, BytesRead<br />LOCAL    buffer&#91;1024&#93;&#58;byte<br /><br />         mov     sat.nLength, sizeof SECURITY_ATTRIBUTES<br />         mov     sat.lpSecurityDescriptor, NULL<br />         mov     sat.bInheritHandle, TRUE<br />      INVOKE     CreatePipe, addr hRead, addr hWrite, addr sat, NULL<br />      .if eax == NULL<br />         INVOKE     MessageBox, hWnd, addr szError3, addr AppName, MB_ICONERROR or MB_OK<br />      .else<br />            mov     stin.cb, sizeof STARTUPINFO<br />         INVOKE     GetStartupInfo, addr stin<br />            mov     eax, hWrite<br />            mov     stin.hStdOutput, eax<br />            mov     stin.hStdError, eax<br />            mov     stin.dwFlags, STARTF_USESHOWWINDOW or STARTF_USESTDHANDLES<br />            mov     stin.wShowWindow, SW_HIDE<br /><br />;---------- &#91;Multiple CreateProcess's causes a resource leak in Win98, fixed in NT 4.0 &gt;&#93; ----------<br />         INVOKE     CreateProcess, NULL, Input, NULL, NULL, TRUE, NULL,<br />                    NULL, addr szPath, addr stin, addr prin<br />         .if eax == NULL<br />            INVOKE     CloseHandle, hRead<br />            INVOKE     CloseHandle, hWrite<br />            INVOKE     MessageBox, hWnd, addr szError4, addr AppName, MB_ICONERROR or MB_OK<br /><br />         .else<br />            INVOKE     CloseHandle, hWrite<br />            INVOKE     CloseHandle, prin.hProcess<br />            INVOKE     CloseHandle, prin.hThread<br />            .while TRUE<br />               INVOKE     RtlZeroMemory, addr buffer, 1024<br />               INVOKE     ReadFile, hRead, addr buffer, 1023, addr BytesRead, NULL<br />               .if eax == NULL<br />                  .break<br />               .else<br />                  INVOKE     SendMessage, hREdit, EM_SETSEL, -1, 0<br />                  INVOKE     SendMessage, hREdit, EM_REPLACESEL, FALSE, addr buffer<br />                  INVOKE     SendMessage, hREdit, WM_PAINT, 0, 0<br />               .endif<br />            .endw<br />            INVOKE     CloseHandle, hRead<br />         .endif<br />      .endif<br />         ret<br /></code></pre><br /><br />Thanks,<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-14 13:52:07 by Ewayne</div>
+   </div>
+   <div class="post" id="post-38363">
+    <div class="subject"><a href="#post-38363">CreateProcess  HELP!</a></div>
+    <div class="body">Hi,<br /><br />Just a note if the assembled output .exe or .dll<br />is less then 10k there is not a resource leak.<br /><br />By the way ketilO's RadAsm still has a resource<br />leak when assembling using Win9x.<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-15 10:41:54 by Ewayne</div>
+   </div>
+   <div class="post" id="post-38556">
+    <div class="subject"><a href="#post-38556">CreateProcess  HELP!</a></div>
+    <div class="body">Hi,<br /><br />After doing some playing around it appears that<br />the CreateProcess is not causing the resource<br />leak in AsmEdit or RadAsm using Win9x.<br /><br />What I done for a test was to create a batch file<br />for some of my programs and then run the different<br />batch files while monitoring the resources.<br /><br />Some of the compile, assemble, and links leaked<br />resources and some didn't and they were consistent,<br />by that I mean test 1,2 and 3 always leaked and<br />test 4,5, and 6 freed all of the resources no <br />matter what order I ran them in.<br /><br />What was neat about the whole thing was after I<br />would run the test on the batch files that leaked<br />untill the available resources were very low and<br />then ran one of the batch files that freed the<br />resources, it brought back all of the resources.<br /><br />That even worked it I opened and exited one of<br />MS applications that doesn't free all of the resources<br />on exit.<br /><br />It looks like on the batch files that frees all<br />of the resources, during it's execution it drives<br />the available physical memory to zero or near zero.<br /><br />Then after the program is finished Windows must<br />realllocate memory, reset it's control blocks,<br />etc. or whatever it does.<br /><br />Does anyone know of a routine that I can use that<br />will use all of the physical memory for a test?<br /><br />All that I can come up with is routines that drive<br />the CPU to 100%.<br /><br />Thanks,<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-16 07:19:13 by Ewayne</div>
+   </div>
+   <div class="post" id="post-38559">
+    <div class="subject"><a href="#post-38559">CreateProcess  HELP!</a></div>
+    <div class="body">have you pinpointed what causes the resource leaks?</div>
+    <div class="meta">Posted on 2002-05-16 07:26:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-38560">
+    <div class="subject"><a href="#post-38560">CreateProcess  HELP!</a></div>
+    <div class="body">To f0dder,<br /><br />Like I said in my previous post the key thing is<br />when the available physical memory is driven to<br />zero or near zero during the assembly and link<br />and then after the link is finished, Windows gets<br />it act together and puts everything back to where<br />it should be.<br /><br />It doesn't matter if you use a batch file, AsmEdit<br />build, or RadAsm, It's consistent with the same <br />programgs.<br /><br />Thats why I need a routine to temporarily drive<br />the physical memory to zero to test it with the<br />programs where the assembly and link leaks resources.<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-16 07:48:24 by Ewayne</div>
+   </div>
+   <div class="post" id="post-38661">
+    <div class="subject"><a href="#post-38661">CreateProcess  HELP!</a></div>
+    <div class="body">have you looked at the stress test exe that comes with visual studio?</div>
+    <div class="meta">Posted on 2002-05-17 01:36:17 by grv575</div>
+   </div>
+   <div class="post" id="post-38696">
+    <div class="subject"><a href="#post-38696">CreateProcess  HELP!</a></div>
+    <div class="body">To grv575,<br /><br />No I do not have Visual Studio.<br /><br />I have come up with a routine that drives the<br />physical memory to zero, but it has some bad<br />side effects.<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-17 08:46:43 by Ewayne</div>
+   </div>
+   <div class="post" id="post-39030">
+    <div class="subject"><a href="#post-39030">CreateProcess  HELP!</a></div>
+    <div class="body">Hi All,<br /><br />I have come up with a solution, it's kind of<br />Mickey Mouse, but it works.<br /><br />Thanks,<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-20 12:52:03 by Ewayne</div>
+   </div>
+   <div class="post" id="post-39057">
+    <div class="subject"><a href="#post-39057">CreateProcess  HELP!</a></div>
+    <div class="body">Hi Ewayne,<br /><br />Considering that you have conquered a long-standing well-publicized memory leak flaw in Windows 95,98,98se,ME...Mickey Mouse is very welcome on my machine!<br /><br />Congratulations!</div>
+    <div class="meta">Posted on 2002-05-20 16:56:07 by gscundiff</div>
+   </div>
+   <div class="post" id="post-39102">
+    <div class="subject"><a href="#post-39102">CreateProcess  HELP!</a></div>
+    <div class="body">I would love Mickey Mouse to b17xh slap my box when ever it gets cranky.  Would you be willing to release your source?</div>
+    <div class="meta">Posted on 2002-05-21 00:21:03 by eet_1024</div>
+   </div>
+   <div class="post" id="post-39148">
+    <div class="subject"><a href="#post-39148">CreateProcess  HELP!</a></div>
+    <div class="body">To eet_1024,<br /><br />The solution to reclaiming physical is to drive<br />the available physical memory to or near zero.<br /><br />I came up with a couple of routines that would do<br />that, but they would also fill up the swap file,<br />which was not good.<br /><br />So until I or someone can come up with a better<br />way the following code is similar to the code<br />that I'm using in the build program for AsmEdit.<br /><br />I just run the routing after a successful assembly<br />and link of a program and it reclaims all of the<br />physical memory back, when windows does it reclaim<br />it runs in the background so it's not noticable<br />to the user.<br /><br />All it does is assembles AsmEdit, I'm not sure<br />what the magic is, whether it's the number of<br />sections or the size of the .obj files or both.<br />But it drives the available physical memory to or<br />near zero.<br /><br />I'm sure other programs could be substituted.<br /><pre><code><br />szPathA     db  'L&#58;\\MASM32V1\\PROGRAMS\\AsmEdit\\Programs\\AsmEdit',0<br />szRoot      db  'L&#58;\\Masm32V1\\Programs\\AsmEdit',0<br />szAsmbA     db  '\\Bin\\ml /c /coff AsmEdit.asm MRUFiles.asm Treeview.asm Listview.asm MenuMaint.asm',0<br /><br />LOCAL    stin&#58;STARTUPINFO<br />LOCAL    prin&#58;PROCESS_INFORMATION<br />LOCAL    szBuffA&#91;256&#93;&#58;BYTE<br /><br />      INVOKE     lstrcpy, addr szBuffA, addr szRoot<br />      INVOKE     lstrcat, addr szBuffA, addr szAsmbA<br />      INVOKE     RtlZeroMemory, addr stin, sizeof STARTUPINFO<br />         mov     stin.cb, sizeof STARTUPINFO<br />      INVOKE     GetStartupInfo, addr stin<br />         mov     stin.wShowWindow, SW_HIDE<br />      INVOKE     CreateProcess, 0, addr szBuffA, 0, 0, FALSE,\<br />                 NORMAL_PRIORITY_CLASS, 0, addr szPathA, addr stin, addr prin<br />      INVOKE     CloseHandle, prin.hThread<br />      INVOKE     CloseHandle, prin.hProcess<br /></code></pre><br />I don't know if it will work on Win9x, Wim ME<br />machines that have large amounts of RAM (512 -<br />1024 meg).<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-21 07:17:22 by Ewayne</div>
+   </div>
+   <div class="post" id="post-39179">
+    <div class="subject"><a href="#post-39179">CreateProcess  HELP!</a></div>
+    <div class="body">Ewayne, you should make the &quot;fix code&quot; optional... for people who<br />don't have problems, having memory driven near zero sucks.</div>
+    <div class="meta">Posted on 2002-05-21 09:24:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-39195">
+    <div class="subject"><a href="#post-39195">CreateProcess  HELP!</a></div>
+    <div class="body">To f0dder,<br /><br />I don't see what the problem is, because some<br />programs assembled and linked under Win9x, Win ME<br />will already drive the physical memory to or near<br />zero and then Windows will reclaim the memory.<br /><br />If the OS is NT, Win2k, or XP Pro I don't run the<br />routine.<br /><br />I think everyone running Win9x, Win ME, or XP home<br />will have the problem.<br /><br />So why not force it to reclaim the Memory???<br /><br />It's tramsparent to the user and only adds a <br />couple of seconds to the process.<br /><br />I would rather drive the memory to zero that I<br />don't notice then to have to reboot the system<br />after several (Depending on the sizes) assemblies<br />and links.<br /><br />I sure seems nice to be able to assemble all day<br />and half the night and not have to reboot the<br />system because of lack of memory.<br /><br />I may be wrong, but I think the majority of the<br />folks will agree with me.<br /><br />Ewayne</div>
+    <div class="meta">Posted on 2002-05-21 10:07:43 by Ewayne</div>
+   </div>
+  </div>
+ </body>
+</html>

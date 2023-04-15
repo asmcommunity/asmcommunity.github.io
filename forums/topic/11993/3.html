@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>need help w/ Sieve of Eratosthenes algorithm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11993" />
+  <link rel="prev" href="../?id=11993&amp;page=2" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=11993">need help w/ Sieve of Eratosthenes algorithm</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=11993&amp;page=1" style="">&laquo;</a><a href="../?id=11993&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="11993" /><input type="number" name="page" min="1" max="3" step="1" value="3" onchange="this.form.submit();" /></form>   <div class="post" id="post-91990">
+    <div class="subject"><a href="#post-91990">need help w/ Sieve of Eratosthenes algorithm</a></div>
+    <div class="body">err I meant: &quot;Assembly for Intel based computers&quot; by Kip Irvine</div>
+    <div class="meta">Posted on 2003-03-31 01:48:17 by locke</div>
+   </div>
+   <div class="post" id="post-91992">
+    <div class="subject"><a href="#post-91992">need help w/ Sieve of Eratosthenes algorithm</a></div>
+    <div class="body">Ok. While it probably isn't related to your problem, you should get hold of hutch's masm32 package, as that's the includes most members here are using - this might avoid some problems later on. Also, the masm32 package (I _still_ think this is a silly name and is too easy to confuse with masm itself :rolleyes: ) has the most updated windows includes.<br /><br />Your while loop is... &quot;interesting&quot; ;)</div>
+    <div class="meta">Posted on 2003-03-31 01:53:59 by f0dder</div>
+   </div>
+   <div class="post" id="post-91998">
+    <div class="subject"><a href="#post-91998">need help w/ Sieve of Eratosthenes algorithm</a></div>
+    <div class="body">k, I'll check that out.<br /><br />thanx :)</div>
+    <div class="meta">Posted on 2003-03-31 02:15:45 by locke</div>
+   </div>
+   <div class="post" id="post-92190">
+    <div class="subject"><a href="#post-92190">Re: need help w/ Sieve of Eratosthenes algorithm</a></div>
+    <div class="body"><pre><code>&#91;B&#93;.code<br />	main PROC<br /><br />	lea esi, buffer				;Load Effective Address buffer<br />	<br />	mov al, 2 				;counter, should go from 2 to 9<br />	mov dx, 1<br /><br />	<br /><br />	.REPEAT<br /><br />		mov bl, 2<br />		mul bl<br /><br />		.WHILE &#40;ax &lt; lengthof buffer&#41;<br />			push eax<br />			mov ebx,esi<br />			add eax,ebx	; &lt;---- 32-bit values<br />			mov esi,eax	; &lt;----<br />			add &#91;esi&#93;, dx	; &lt;----	<br />			pop eax<br />			pop ebx<br />			inc bl<br />			mul bl<br />		.ENDW<br />	<br />		inc al<br /><br />	.UNTIL&#40;al &gt;= 10&#41;<br />&#91;/B&#93;</code></pre>According to the posted code, you set only 8 bits (AL) at the start of this loop. The multiply provides 16 valid bits.  But there is no guarantee that the upper 16 bits are zeros. Fixing this may solve the addressing problem because the processor is using 32 bits (ESI) for addressing.<br /><br />The easiest way is to start the loop with<br /><br />mov eax,2 ; ***** make sure we know what's in all 32 bits of EAX</div>
+    <div class="meta">Posted on 2003-03-31 17:29:51 by tenkey</div>
+   </div>
+   <div class="post" id="post-92237">
+    <div class="subject"><a href="#post-92237">need help w/ Sieve of Eratosthenes algorithm</a></div>
+    <div class="body">The algo looks fine, however this is &quot;pure&quot; sieve, and you might want to look into some of the variants on this algo which are set up to perform more efficient searches, ranged searches, etc. I am assuming that your goal is to generate Giant Primes, not simply find prime numbers...</div>
+    <div class="meta">Posted on 2003-03-31 20:53:35 by Homer</div>
+   </div>
+   <div class="post" id="post-92905">
+    <div class="subject"><a href="#post-92905">Updated Code...</a></div>
+    <div class="body">With the help of a friend (Scrots), updated the code ... although slow, it's working!<br /><br />=====================================================================<br /><br />; #########################################################################<br />.386                   ; minimum processor needed for 32 bit<br />.model flat, stdcall   ; FLAT memory model &amp; STDCALL calling<br />option casemap :none   ; set code to case sensitive<br /><br />; #########################################################################<br /><br />; ---------------------------------------------<br />; main include file with equates and structures<br />; ---------------------------------------------<br />include \masm32\include\windows.inc<br /><br />include \masm32\include\user32.inc<br />include \masm32\include\kernel32.inc<br /><br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\kernel32.lib<br /><br /><br />; #########################################################################<br /><br />num65000 EQU 65000<br /><br />; #########################################################################<br /><br />.data <br />    szoutputfilename    db      &quot;text.txt&quot; , 0<br />    dwbyteswritten      dd      0<br />    hOutputFile         dd      0<br /><br />    szMyString db 128 DUP (0)<br />    buffer db num65000 DUP (0)<br />    sztemplate  db &quot;%d&quot;,13,10,0<br /><br />; #########################################################################<br /><br />.code<br /><br />start:<br /><br />    invoke CreateFile, ADDR szoutputfilename, GENERIC_WRITE, FILE_SHARE_WRITE,<br />                       NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL<br />                       <br />    mov hOutputFile, eax<br /><br />    <br />    invoke RtlZeroMemory, offset buffer, num65000 <br /><br />;unsigned int a[65000];<br />;for(unsigned int counter=0;counter&lt;65000;counter++)<br />; a=0;<br />;<br />; unsigned int a[65000];<br />; for (counter=2;counter&lt;10;counter++){<br />; unsigned int rotation=2,position=0;<br />; while ((position=rotation*counter)&lt;65000){<br />; a=1;<br />; rotation++;<br />; }<br />; }<br />;<br />;for(counter=0;counter&lt;100;counter++)<br />; if (a==0) cout&lt;&lt;endl&lt;&lt;counter&lt;&lt;&quot; : &quot;&lt;&lt;a;<br />;<br />;return 0;<br /><br /><br />; fill buffer with primes<br />    push edi<br />    lea edi,buffer<br />    <br />    mov ecx, 0<br />    startloop:<br />        push ecx<br />        mov byte ptr ,0<br />    <br />        mov eax,2<br />        mov ecx,2<br />        innerloop:<br />            push ecx<br />        <br />            mov edx, 2      ; rotation<br />            @@:<br />                push edx<br />                mov eax, ecx<br />                mul edx<br />                pop edx<br />                cmp eax, 65000<br />            jae @F<br />                mov byte ptr ,1<br />                inc edx<br />            jmp @B<br />            @@:<br /><br />            pop ecx<br />            inc ecx<br />            cmp ecx, 10<br />        jne innerloop<br />    <br />    <br />        pop ecx<br />        inc ecx<br />        cmp ecx, num65000<br />    jne startloop<br /><br />    mov byte ptr ,1<br />    mov byte ptr ,1<br /><br /><br />    pop edi<br /><br />; print out the primes<br />    push edi<br /><br />    lea edi,buffer<br />    mov ecx,0<br />printloop:<br />    push ecx<br /><br />    xor eax, eax<br />    mov al, byte ptr <br />    cmp eax, 0<br />    jne @F<br />        invoke wsprintf, ADDR szMyString, ADDR sztemplate, ecx<br />        invoke lstrlen, ADDR szMyString<br />        invoke WriteFile, hOutputFile, ADDR szMyString, eax, ADDR dwbyteswritten, 0<br />    @@:<br /><br />    inc edi<br />    <br />    pop ecx<br />    inc ecx<br />    cmp ecx, num65000<br />    jne printloop<br /><br /><br /><br />    pop edi<br /><br />    invoke CloseHandle, hOutputFile<br />    invoke ExitProcess, NULL<br />end start</div>
+    <div class="meta">Posted on 2003-04-03 13:56:53 by locke</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=11993&amp;page=1" style="">&laquo;</a><a href="../?id=11993&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="11993" /><input type="number" name="page" min="1" max="3" step="1" value="3" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

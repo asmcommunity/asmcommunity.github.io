@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Use one Structure for many Listview items? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8918" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8918">Use one Structure for many Listview items?</a></p>
+   <div class="post" id="post-65571">
+    <div class="subject"><a href="#post-65571">Use one Structure for many Listview items?</a></div>
+    <div class="body">I have a structure:<br /><br /><pre><code><br />MRUSTUFF        STRUCT<br />	DisplayName    BYTE    50 dup &#40;?&#41;<br />	MRUPath        BYTE    MAX_PATH dup &#40;?&#41;<br />	ParseType      DWORD   ?<br />	SectionName    BYTE    20 dup &#40;?&#41;<br />	ValueName      BYTE    20 dup &#40;?&#41;<br />	ValueBase      DWORD   ? &#40;0&#41;<br />	Count          BYTE    20 dup &#40;?&#41;<br />	DataType       BYTE    2 dup &#40;?&#41;<br />	ExeName        BYTE    20 dup &#40;?&#41;<br />MRUSTUFF ends<br /><br />MRUInfo             MRUSTUFF &lt;&gt;<br /></code></pre><br /><br />I want to read in a file line by line and parse it and fill each structure item in (done).<br />I associate the structure with a LVITEM.lParam  &lt;-problem sort of - when I get the structure from a selected LVITEM.lParam, it always shows the structure for the last listview item inserted, which makes sense to me now because the memory address of the struct is still filled with the last info I filled it with.  Question is, how can I create a new structure for each listview item so the data is different for each listview item.lParam and when I get a selected LVITEM the structure holds the correct info?<br /><br />I parse a file and fill the structure and listview with the following code:<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=8793">http://www.asmcommunity.net/board/index.php?topic=8793</a><br /><br />I want to create a new structure in memory each time I jump back to the  DisplayName label<br /><br /><br />then when I do:<br /><pre><code><br />&#91;snip&#93;<br />    mov     iStart, -1<br />    @@&#58;<br />        invoke  SendMessage, hListView2, LVM_GETNEXTITEM, iStart, LVNI_ALL or LVNI_SELECTED<br />        cmp     eax, NOMORE<br />        je      Done<br />        mov     iStart, eax<br />        <br />        ; Get select listview items info<br />        mov     lvi.imask, LVIF_PARAM; or LVIF_TEXT<br />        push    iStart<br />        pop     lvi.iItem<br />        mov     lvi.iSubItem, 0<br />        push    MRUInfo<br />        pop     lvi.lParam ;, offset MRUInfo<br />        invoke  SendMessage, hListView2, LVM_GETITEM, 0, addr lvi<br />        PrintString MRUInfo.DisplayName        <br />        jmp     @B<br /></code></pre><br />it always shows the structure for the last item inserted.<br /><br />Did I make sense...</div>
+    <div class="meta">Posted on 2002-11-12 20:01:14 by Gunner</div>
+   </div>
+   <div class="post" id="post-65654">
+    <div class="subject"><a href="#post-65654">Use one Structure for many Listview items?</a></div>
+    <div class="body"><div class="quote"><br />Did I make sense...<br /></div><br /><br />You explained enough that what you wanted could be figured out :grin:<br /><br />Your MRUInfo structure is static.  IE there is only one instance of it in<br />your program.  As such (as you noticed) it does not matter how many<br />items are in your List View.  Each will still be pointing to the same<br />structure which isnt what you need.<br /><br />What you need to do is when a new List View item needs to be filled,<br />create the structure dynamically in memory with HeapAlloc or such.  This<br />will require casting of a register or some other method to access it and<br />fill in the fields.  After the fields are entered, point LVITEM.lParam to the<br />address in memory where it was created.<br /><br />This allows each List View item to have its own structure.<br /><br />When you remove a List View item, dont forget to free the memory :alright:</div>
+    <div class="meta">Posted on 2002-11-13 09:08:30 by Graebel</div>
+   </div>
+   <div class="post" id="post-65728">
+    <div class="subject"><a href="#post-65728">Use one Structure for many Listview items?</a></div>
+    <div class="body">Can anyone give me a little direction?  So far I gotten as far as HeapAlloc passing the heap handle returned from GetProcessHeap and sizeof MRUInfo for the size and gotten a pointer to a memory block.  How do I use this memory block for a dynamically created MRUInfo structure so I can fill in the structure fields?  I did a search for casting and most said basically the same thing for what I want to do so I have tried: ( I added another field to my MRUInfo structure to save the memory pointer so I can free it later.<br /><br />&lt;SNIP&gt;<br />DisplayName:<br />            invoke  HeapAlloc,  hHeap,  HEAP_ZERO_MEMORY, s izeof MRUInfo<br />            PrintDec eax<br />            mov     edx, eax<br />   <br />            mov     .MRUInfo.MemPtr, eax<br />            mov     edi, .MRUInfo.DisplayName <br />        @@:<br />&lt;SNIP&gt;<br /><br />But everytime I try to build I get the following error:<br />error A2166: structure field expected<br /><br />Maybe I misunderstood the posts I read, direct me please :-)<br /><br />I even tried lea instead of mov but still gotten the same error.<br />I am *VERY* confused</div>
+    <div class="meta">Posted on 2002-11-13 23:07:24 by Gunner</div>
+   </div>
+   <div class="post" id="post-65793">
+    <div class="subject"><a href="#post-65793">Use one Structure for many Listview items?</a></div>
+    <div class="body"><div class="quote"><br />mov edx, eax<br /><br />mov .MRUInfo.MemPtr, eax<br />mov edi, .MRUInfo.DisplayName <br />@@:<br />&lt;SNIP&gt;<br /></div><br /><br />I think thats pretty close.  You did not cast the register however...<br />At least not properly.  Try something like this:<br /><br />move edx, eax<br /><br />assume edx:ptr MRUInfo &lt;&lt;-- cast the register<br />mov .MRUInfo.MemPtr, eax<br />mov edi, .MRUInfo.DisplayName<br />@@:<br /><br />When you dont need the cast any more use:<br />assume edx:NOTHING</div>
+    <div class="meta">Posted on 2002-11-14 09:53:42 by Graebel</div>
+   </div>
+   <div class="post" id="post-65820">
+    <div class="subject"><a href="#post-65820">Use one Structure for many Listview items?</a></div>
+    <div class="body">Thank you for the help, but it is still not working, I now get the following error when building:<br />GRiFLE.asm(625) : error A2175: invalid qualified type : MRUInfo<br />GRiFLE.asm(625) : error A2158: type is wrong size for register<br /><br />line 625 is the assume ebx: ptr MRUInfo<br />arrrrgh...</div>
+    <div class="meta">Posted on 2002-11-14 15:54:03 by Gunner</div>
+   </div>
+   <div class="post" id="post-65833">
+    <div class="subject"><a href="#post-65833">Use one Structure for many Listview items?</a></div>
+    <div class="body">Argh, did I say that?  Man im getting senile...<br /><br />Its<br />assume edx:ptr MRUSTUFF</div>
+    <div class="meta">Posted on 2002-11-14 17:23:10 by Graebel</div>
+   </div>
+   <div class="post" id="post-65837">
+    <div class="subject"><a href="#post-65837">Use one Structure for many Listview items?</a></div>
+    <div class="body">Awesome!!!  Finally compiled!  Thank you Graebel.  If you are in my neck of the woods, I will buy you a drink ;) <br />Time to have some fun!  Now I have to read up on this.</div>
+    <div class="meta">Posted on 2002-11-14 18:17:08 by Gunner</div>
+   </div>
+  </div>
+ </body>
+</html>

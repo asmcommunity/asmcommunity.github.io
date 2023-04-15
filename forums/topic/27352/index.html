@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>database - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27352" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27352">database</a></p>
+   <div class="post" id="post-195818">
+    <div class="subject"><a href="#post-195818">database</a></div>
+    <div class="body">Hi all,
+
+I'm planning to make a database engine for my own program. I don't want to use OBDC, and the database doesn't have to be very complicated but it should at least support one table with records, where each record just contains the data of the fields. Now I want to know the best way to implement this. These are my thoughts so far:
+
+<li>The database will be 2 files. One index file and one data file. The index file has fixed size index records that point to the real records in the data file. The index file is kept in memory, the data file is accessed from hard disk. 
+<li>The index records contain a pointer to the record, size of the record, and extra hash info etc.
+
+I'm thinking about how to deal with record deletion, growing/shrinking records, etc. A record can be marked as deleted, and later the database can be cleaned up (removing all 'marked as deleted' records). What about adding data to a record? when a record is somewhere in the data file, and data gets added, should I just move (=copy) the record to the end of the file and later (on cleanup) delete the old record. For strings I was thinking about creating a fixed 'always allocated' size in the records, so they only have to be moved when the string grows bigger than the fixed size. 
+Anyone more good ideas?
+
+Thomas</div>
+    <div class="meta">Posted on 2001-03-23 10:46:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-195819">
+    <div class="subject"><a href="#post-195819">database</a></div>
+    <div class="body">Hello Thomas,
+
+I don't know what exactly you need your database for but I made this choice for mine :
+
+I have a database of a fixed size entry lenght which I access using a struct (50 Bytes).
+
+The first byte is used as Flag for deleted/active, the 49 leftover for the entry.
+If an entry gets deleted all I have to do is to toggle the flag.
+If an entry gets added I search for an deleted flag - if none is found I add it to the end.
+This way my database doesn't need to get cleaned up at all, as every entry gets overwritten once deleted (well, sooner or later)
+
+Later,
+Jimmy
+
+This message was edited by JimmyClif, on 3/23/2001 12:02:32 PM</div>
+    <div class="meta">Posted on 2001-03-23 11:02:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-195820">
+    <div class="subject"><a href="#post-195820">database</a></div>
+    <div class="body">Mirosoft Access keeps full space alloted for expected record size, and when records are deleted, keeps them in the file.  It appears to append them.  It only sorts it when it's prepared to return or display the data.  If you "Compact" it then removes the unused space allocation and removes the deleted records.  That's one of the problems why the database can be 23MB when only a few records exist (all the read writes back and forth insert deletes, as well).  That's also part of why it's a bit slower than other "optimized DB's".
+
+A solution, in your case, if you were to do this the same way (I would use similar technique) is to have a thread which performs optimisation behind the scene.  If you won't thread it, then base it on some condition, to do "garbage collection" before or after a read, write, delete, or whatever... that way it manages itself.  The garbage collection can be specified in the driver to be use idle time, a thread, or to bruteforce itself before a function call returns, or immediately once it's called (this part would degrade performance slightly when maintaining) otherwise, use a thread...
+
+If that's not the technique you're looking for, I'm certain Oracle and SQL Server use similar technique, however, I think they do in-memory-optimization since their DB's appear to be Memory Mapped...
+
+Examples?  I have none... just my thoughts... I've thought about this before and Tried to implement it, in the end, I ended up using someone elses DB since it's easier for me because I have other things to write...
+
+Thanks,
+_Shawn</div>
+    <div class="meta">Posted on 2001-03-23 17:48:00 by _Shawn</div>
+   </div>
+   <div class="post" id="post-195821">
+    <div class="subject"><a href="#post-195821">database</a></div>
+    <div class="body">Thanks everyone for your ideas. The lib and it's source code will be freely available when finished so everyone can use it and modify it for it's own needs.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-03-24 17:31:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-195822">
+    <div class="subject"><a href="#post-195822">database</a></div>
+    <div class="body">Chaining free space works well, until the chain gets long. It is possible to read thru the entire chain, and still not find an empty slot big enough to hold a new or expanded record, If you've got 1000 empty slots in a file, all this I/O could take considerable time! And when you do find a slot big enough, do you just go ahead and use it, no matter how big it is, making that space unavailable to a larger record that may follow? Or do you continue, and try to find a "closer fit" further down the chain?
+
+You can avoid these problems by maintaining an "index" of free space. All that is needed is a pointer to the space (4 or 8 bytes, depending on max file size), and the amount of space at this location (size depends on max supporetd record length, 2 bytes would allow up to 65535 bytes). Let's assume that you go with 4 byte pointers and a 2 byte size (total 6 bytes). If you make each "free space record" 6000 bytes, you can track up to 1000 empty slots in a file, using only 1 record. More than 1000 slots, you allocate a second 6000 byte record, and so on.
+
+If you want to get fancy, maintain the index in decending space sequence. You can also use this trick with chained space. Now you can tell with only 1 compare if you have ANY slots big enough. And if you do, you can continue to search, and STOP at the last slot that is just barely big enough. This one may even be an EXACT fit, or it may have a "few" extra bytes left over. You'll have to deceide if you want to update the space index to account for these left-over bytes, or just consider them "wasted" space, maybe depending on how many bytes there are, and maybe depending on weather or not the record may be updated again, and grow by only a few more bytes...
+
+This is a fair amount of extra work, and requires other housekeeping that I haven't discussed. It may be more than you're looking for. Just thought I'ld mention it, since it's the kind of thing I've been doing for a few decades now...
+
+:)</div>
+    <div class="meta">Posted on 2001-03-24 20:00:00 by S/390</div>
+   </div>
+  </div>
+ </body>
+</html>

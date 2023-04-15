@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to determine if prog is run from login script - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17605" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=17605">How to determine if prog is run from login script</a></p>
+   <div class="post" id="post-136147">
+    <div class="subject"><a href="#post-136147">How to determine if prog is run from login script</a></div>
+    <div class="body">Hi,<br /><br />After two hours of googling without even close matches to what im looking I must give up.<br /><br />Please, tell me if there is some way to determine if my prog is started from login script. I mean that I want that my prog only runs if it is started from login script and if somebody tries to start it manually it refuses to start.<br /><br />We have Win2000 servers and WinXp clients mainly.<br /><br />Regards,<br />Sami</div>
+    <div class="meta">Posted on 2004-03-16 17:06:22 by SamiP</div>
+   </div>
+   <div class="post" id="post-136156">
+    <div class="subject"><a href="#post-136156">How to determine if prog is run from login script</a></div>
+    <div class="body">You can try to just make sure that Explorer.exe is not the application that started your app:<br /><br /><pre><code>GetParentName FRAME pExeName<br />	LOCAL ourPID		&#58;D<br />	LOCAL hModuleSnap	&#58;D<br />	LOCAL hProcessSnap	&#58;D<br />	LOCAL me32		&#58;MODULEENTRY32<br />	LOCAL pe32		&#58;PROCESSENTRY32<br /><br />	/*<br />	Requires a buffer of MAX_PATH length be supplied in order to<br />	copy the executable name. If the buffer is NULL it returns the<br />	PID but no path. If the parent application is Explorer.exe<br />	the returned PID is 0 and the path is not returned<br /><br />	Win9x,WinME,Win2K,WinXP,Win2K3<br />	*/<br /><br />	call GetCurrentProcessId<br />	mov &#91;ourPID&#93;,eax<br /><br />	invoke CreateToolhelp32Snapshot,TH32CS_SNAPPROCESS,0<br />	mov &#91;hProcessSnap&#93;,eax<br /><br />	mov D&#91;pe32.dwSize&#93;,SIZEOF PROCESSENTRY32<br />	invoke Process32First,&#91;hProcessSnap&#93;,addr pe32<br />	or  eax,eax<br />	jz  &gt;W2<br /><br />	W1&#58;<br />	mov eax,&#91;pe32.th32ProcessID&#93;<br />	cmp eax,&#91;ourPID&#93;<br />	mov eax,&#91;pe32.th32ParentProcessID&#93;<br />	je  &gt;W2<br />		invoke Process32Next,&#91;hProcessSnap&#93;,addr pe32<br />		or  eax,eax<br />		jnz &lt;W1<br />	W2&#58;<br /><br />	mov D&#91;me32.dwSize&#93;,SIZEOF MODULEENTRY32<br />	invoke CreateToolhelp32Snapshot,TH32CS_SNAPMODULE,&#91;pe32.th32ParentProcessID&#93;<br />	mov &#91;hModuleSnap&#93;,eax<br />	invoke Module32First,&#91;hModuleSnap&#93;,ADDR me32<br />	invoke CloseHandle,&#91;hModuleSnap&#93;<br />	invoke CloseHandle,&#91;hProcessSnap&#93;<br /><br />	invoke lstrcmpi,OFFSET me32.szModule,&quot;Explorer.exe&quot;<br />	jz &gt;L2<br />		cmp D&#91;pExeName&#93;,0<br />		je &gt;L1<br />			invoke lstrcpyA,&#91;pExeName&#93;,OFFSET me32.szExePath<br />		L1&#58;<br />		mov eax,&#91;me32.th32ProcessID&#93;<br />		ret<br />	L2&#58;<br />	xor eax,eax<br />	ret<br /><br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-03-16 19:35:35 by donkey</div>
+   </div>
+   <div class="post" id="post-136164">
+    <div class="subject"><a href="#post-136164">How to determine if prog is run from login script</a></div>
+    <div class="body">Thanks Donkey. At the moment I cant test the code because im at work, but one more question ;) Is it allways explorer.exe which is parent to program even when the program is commandline one and started by cmd.exe. Well I think I need to test what is parent when the program is run in login script and then check to only run when that is parent. Hopefully in both cases its not cmd.exe!<br /><br />Regards,<br />Sami</div>
+    <div class="meta">Posted on 2004-03-17 00:12:08 by SamiP</div>
+   </div>
+   <div class="post" id="post-136166">
+    <div class="subject"><a href="#post-136166">How to determine if prog is run from login script</a></div>
+    <div class="body">Hi SamiP,<br /><br />No problem, yeah you'll have to check and verify against the name that is returned from the script engine.</div>
+    <div class="meta">Posted on 2004-03-17 00:17:21 by donkey</div>
+   </div>
+   <div class="post" id="post-136287">
+    <div class="subject"><a href="#post-136287">How to determine if prog is run from login script</a></div>
+    <div class="body">It seems that the easyest solutions is to check that there are no explorer.exe process running and userinit.exe is running. This is not a waterproof concept, but I think it is sufficient for me atleast now.<br /><br />Other solution is to check that parent process is userinit.exe before the parent process is explorer.exe. I mean that when the login script is netlogon.bat the parent process of my prog is allways cmd.exe then the parent of the cmd.exe is most likely userinit.exe (or maybe another cmd.exe) depending the scripts.<br />If I start cmd.exe from Start/Run then the parent of my process is again cmd.exe and parent of that is explorer.exe but parent of exeplorer.exe seems to be again userinit.exe.<br />So userinit.exe must come before explorer.exe in parent chain to be sure that the prog is run from login script. Ofcourse this works only for standard installations.... lot more checking is needed to make this really to be waterproof. Weird that there are no readymade flag or something to detect this thing.<br /><br />Regards,<br />Sami</div>
+    <div class="meta">Posted on 2004-03-18 07:04:46 by SamiP</div>
+   </div>
+  </div>
+ </body>
+</html>

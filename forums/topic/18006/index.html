@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Multiple language interface - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18006" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18006">Multiple language interface</a></p>
+   <div class="post" id="post-139023">
+    <div class="subject"><a href="#post-139023">Multiple language interface</a></div>
+    <div class="body">How to implement a multiple language interface? I don't want to make string arrays in asm files. I want to add new languages to resources and switch them when the program is running. Is there any easy way?</div>
+    <div class="meta">Posted on 2004-04-15 02:23:29 by Vaxon</div>
+   </div>
+   <div class="post" id="post-139035">
+    <div class="subject"><a href="#post-139035">Multiple language interface</a></div>
+    <div class="body">The traditional approach is to use a string table resource, and LoadString at runtime. This is somewhat cumbersome in my opinion; it requires you to reserve buffers for each and every string you use, and do LoadString calls to fill them - not to mention that changing languages will involve either updating the main exe (foo!), or supplying/updating language resource DLLs (less foo, but still a bit icky).<br /><br />For an engineering app I worked on with a friend, we chose to do our own language handling. The basic idea wasn't too different from the resource way, we had a list of DWORD string id's and associated stringdata (we used OEM charset, but could as well have used UNICODE). We used our own binary language file format, though.<br /><br />The idea of it is to structure the file as a header with number of strings, then a (sorted by string-id) list of {string-id, offset} pairs. At runtime, the entire file can be loaded into memory, and you add the memory block address to the offsets. Presto, you have very fast lookup of strings from stringids (since the ID's are sorted, a very fast and efficient binary search can be applied).<br /><br />Also, we could directly return string offsets rather than having to fill in buffers. In C code, this means we could  MessageBox(hwnd, string_get(SID_HELLOWORLD), string_get(SID_INFO), MB_OK). In assembly it's still a bit more work than working with normal static strings, but it's less troublesome than the LoadString approach.<br /><br />Globally used strings could of course be loaded into string pointers, so that you don't have to call string_get all the time.<br /><br />The code complexity of using the strings isn't *that* different from the LoadString approach - but with use of some masm macros, you can have easy syntax like in a HLL, and things become a bit simpler than LoadString. The main advantage, however, is still that it's easier working with your own string format than stirng resources, you can do a &quot;string builder&quot; application and send to translators, so they don't have to mess around with resource files or whatever. Also, distribution of language files is a bit easier, and they can be smaller (you can even compress+encrypt the binaries if you want).<br /><br />And no, there isn't any possible memory-overwrite problems even though pointers are returned directly... the string block buffer is VirtualAlloc'ed, and after it's written, VirtualProtect'ed to readonly.</div>
+    <div class="meta">Posted on 2004-04-15 03:45:29 by f0dder</div>
+   </div>
+   <div class="post" id="post-139040">
+    <div class="subject"><a href="#post-139040">Multiple language interface</a></div>
+    <div class="body">Good idea. Thank you. I also thought that messing up with resources was a headache.</div>
+    <div class="meta">Posted on 2004-04-15 04:18:43 by Vaxon</div>
+   </div>
+   <div class="post" id="post-139082">
+    <div class="subject"><a href="#post-139082">Multiple language interface</a></div>
+    <div class="body">My solution is different.<br />I place resources in single localized dll. These dll are reource-only, no code.<br />When I load the program I load this dll, with LoadLibrary.<br />I use load string only for few items, i.e listview column name, localized licence in the about window.<br /><br />Then I have many localized dialog boxes and the localized menu.<br /><br />My solution is easier to create and use than f0dder's solution, but is harder to mantain (I think).<br />Microsoft has a free program (rlman) to syncronize diffrerent localized resources, but it is not very good.<br /><br />I also use a message table for information and errors. I use FormatMessage to load strings from the message table<br /><br /><pre><code><br />HandleError proc hWnd&#58;HWND, bKind&#58;DWORD, ErrorNum&#58;DWORD<br />	LOCAL buffer&#91;1024&#93;	&#58; BYTE<br /><br />	mov eax, bKind<br />	.if al == FROM_SYSTEM<br />		invoke GetLastError<br />		mov ecx, eax<br />		invoke FormatMessage, FORMAT_MESSAGE_FROM_SYSTEM, 0, ecx, 0, addr buffer, sizeof buffer, 0		<br />	.elseif al == FROM_HMODULE<br />		invoke FormatMessage, FORMAT_MESSAGE_FROM_HMODULE, hLang, ErrorNum, 0, addr buffer, sizeof buffer, 0<br />	.endif<br /><br />	.if eax == 0								;Error string not found<br />		invoke GetLastError<br />		invoke wsprintf, addr buffer, addr ErrorNumber, eax <br />		invoke MessageBox, hWnd, addr buffer, addr AppName, MB_OK + MB_ICONERROR<br />		<br />	.else<br />		;Extract severity from the error number<br />		mov eax, ErrorNum<br />		rol eax, 2<br />		and al, 3<br /><br />		.if al == 0								;Success<br />			mov eax, 0<br />		.elseif al == 1							;Informational<br />			mov eax, MB_ICONASTERISK<br />		.elseif al == 2							;Warning<br />			mov eax, MB_ICONWARNING<br />		.else								;Error<br />			mov eax, MB_ICONERROR<br />		.endif<br />		invoke MessageBox, hWnd, addr buffer, addr AppName, eax<br />	.endif<br />	ret<br />HandleError endp<br /></code></pre><br /><br />If you want to download the full code of my program<br /><a target="_blank" href="http://greenant.altervista.org">http://greenant.altervista.org</a><br />Look for <strong>Gremaf</strong></div>
+    <div class="meta">Posted on 2004-04-15 14:17:09 by greenant</div>
+   </div>
+   <div class="post" id="post-139141">
+    <div class="subject"><a href="#post-139141">Multiple language interface</a></div>
+    <div class="body">Good idea also, but changing language at runtime involves recreation of all dialogs and menus.</div>
+    <div class="meta">Posted on 2004-04-16 07:40:06 by Vaxon</div>
+   </div>
+   <div class="post" id="post-139161">
+    <div class="subject"><a href="#post-139161">Multiple language interface</a></div>
+    <div class="body">There is no proble if you don't have active dialog boxes during language switch.<br />The only thing to do is to recreate the menu and recreate listview header. <br /><br />In my program I don't allow switching at runtime. You have to reload the application</div>
+    <div class="meta">Posted on 2004-04-16 14:25:24 by greenant</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>harddisk - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26411" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26411">harddisk</a></p>
+   <div class="post" id="post-191454">
+    <div class="subject"><a href="#post-191454">harddisk</a></div>
+    <div class="body">how do i get the harddisk serial number ...
+what API should i use ...
+
+thanks</div>
+    <div class="meta">Posted on 2000-12-20 15:13:00 by anyone</div>
+   </div>
+   <div class="post" id="post-191455">
+    <div class="subject"><a href="#post-191455">harddisk</a></div>
+    <div class="body">Hi!
+I adapted this source to fork with VWIN32_DIOC_DOS_IOCTL 
+from AbsDisk made by EliCz (which worked with VWIN32_DIOC_DOS_IOCTL)
+(You should visit EliCz's site by ALL MEANS. now.
+This site is VERY interesting. (!Exclamation sign!)
+http://elicz.com
+
+To compile this (.bat) you need at least his APImacro.mac
+found in Eliasm.zip at EXPORTS section.
+
+If this is hard to You (I use only EliASM now - I like it's macros) - I ' ll post ("normal") MASM32 version - it's easy to adapt.
+
+;@goto translate
+.586P
+.MODEL FLAT, STDCALL
+OPTION      CASEMAP:NONE
+UNICODE     = 0
+
+INCLUDE     Windows.INC
+INCLUDE     APImacro.mac
+
+INCLUDELIB  iKERNEL32.LIB
+INCLUDELIB  iUSER32.LIB
+
+
+;from 9xDDK\INC\VWIN32.inc----------------------
+VWIN32_DIOC_DOS_IOCTL	EQU	1       ;INT 21H / AH := 44H automatically
+VWIN32_DIOC_DOS_INT25		EQU	2
+VWIN32_DIOC_DOS_INT26		EQU	3
+VWIN32_DIOC_DOS_INT13		EQU	4       ;YES, you can work with physical
+VWIN32_DIOC_SIMCTRLC		EQU	5       ;                        sectors (MBR)
+VWIN32_DIOC_DOS_DRIVEINFO		EQU	6
+
+DIOCRegs	STRUC
+reg_EBX	DD	?
+reg_EDX	DD	?
+reg_ECX	DD	?
+reg_EAX	DD	?
+reg_EDI		DD	?
+reg_ESI		DD	?
+reg_Flags	DD	?
+DIOCRegs	ENDS
+;-------------------------------------------
+.DATA
+ALIGN BYTE
+MID STRUC
+    midInfoLevel WORD  ?
+    midSerialNum DWORD	? 
+    midVolLabel SIGN 11 dup (?)
+    midFileSysType	SIGN 8 dup (?)
+MID ENDS
+
+nDrive DWORD	3	;Drive C:
+mid	MID <0>
+
+
+InBuffer      DIOCRegs <nDrive, offset mid, 4866h, 440Dh, 0, 0, 0001h>
+;<reg_EBX,reg_EDX,reg_ECX,reg_EAX,reg_EDI,reg_ESI,reg_Flags>
+;reg.reg_EAX = 0x440D;       // IOCTL for block devices 
+;reg.reg_EBX = nDrive;       // zero-based drive identifier 
+;reg.reg_ECX = 0x4866;       // Get Media ID command 
+;reg.reg_EDX = (DWORD) &mid; // receives media identifier information 
+;reg.reg_Flags = 0x0001;     // assume error (carry flag is set) 
+
+
+
+TEXT   zVWin32VxD,        <\\.\VWIN32/0>
+TEXT   zMidTitle,      <              VWIN32 Services:/0>
+
+zFormBuffer		SIGN 60 dup (0)
+TEXT	 zFormString,		<midInfoLevel: /#X/nSerial num: /#X/nVolume label: /#02.11s /nFile System: /#s/0>
+Written       DWORD  ?
+;===============================================================================
+.CODE
+
+;===============================================================================
+
+ALIGN DWORD
+ Start:
+	SUB      EBP, EBP
+	iWin32i CreateFile,  szVWin32VxD, EBP, EBP, EBP, OPEN_EXISTING, FILE_FLAG_DELETE_ON_CLOSE, EBP
+	
+	MOV      EDI, EAX
+	INC      EAX
+	JE       Exitus
+	
+	iWin32   DeviceIoControl, EDI, VWIN32_DIOC_DOS_IOCTL,\
+									 Offset InBuffer, SIZEOF InBuffer,\
+									 Offset InBuffer, SIZEOF InBuffer,\
+									 Offset Written,  EBP
+
+	.if (!eax || (InBuffer.reg_Flags & 0001h))
+    iWin32   CloseHandle, EDI
+	jmp Exitus
+	.endif
+	
+	icWin32i wsprintf, offset zFormBuffer, szFormString,mid.midInfoLevel, mid.midSerialNum, offset mid.midVolLabel,offset mid.midFileSysType
+	iWin32i MessageBox, NULL, offset zFormBuffer, szMidTitle,NULL
+
+  Exitus:
+	iWin32   CloseHandle, EDI
+   	iWin32   ExitProcess, EBP
+
+END Start
+
+:TRANSLATE
+@ECHO OFF
+ML    /c /coff /nologo GetDriveInfo.bat
+LINK GetDriveInfo.obj /nologo /SUBSYSTEM:WINDOWS /RELEASE /ALIGN:0X1000 /MERGE:.text=AbsDisk /SECTION:DrvInfo,RWE /MERGE:.data=Sector  /MERGE:.rdata=DrvInfo /IGNORE:4078,4108
+DEL  GetDriveInfo.obj</div>
+    <div class="meta">Posted on 2000-12-20 17:45:00 by AndyCar </div>
+   </div>
+   <div class="post" id="post-191456">
+    <div class="subject"><a href="#post-191456">harddisk</a></div>
+    <div class="body">Hello,
+
+I did this some time ago. It is placed into a template so it looks ugly but does the job. If you can contact me via E-Mail then I can send the source to you. I have no access to my home computer at the moment so I cannot load the file up to my server. If you don't have an E-Mail then I will see if can manage to get home to load the file up.
+
+But basicly you use get this:
+
+invoke GetVolumeInformationA,NULL,NULL,NULL,ADDR serialnumber1,NULL,NULL,NULL,NULL
+invoke dw2hex,serialnumber1,offset serialnumber2
+
+The second step is necessary because the serial number consists of two parts, or something like this. This should return the Serial Number.
+
+Best regards
+
+Stefan</div>
+    <div class="meta">Posted on 2000-12-20 17:52:00 by Stefan Krause </div>
+   </div>
+   <div class="post" id="post-191457">
+    <div class="subject"><a href="#post-191457">harddisk</a></div>
+    <div class="body">There are two types of HD serial number: hardware and software. Every HD has a permanent serial number embedded in its controller BIOS from the factory. You can't change that number. The other type is the serial number generated when you format the HD. 
+Which type did you speak of?</div>
+    <div class="meta">Posted on 2000-12-21 06:31:00 by Iczelion </div>
+   </div>
+   <div class="post" id="post-191458">
+    <div class="subject"><a href="#post-191458">harddisk</a></div>
+    <div class="body">the permanent serial number embedded in its controller BIOS from
+the factory.
+
+thanks</div>
+    <div class="meta">Posted on 2000-12-28 14:29:00 by anyone </div>
+   </div>
+   <div class="post" id="post-191459">
+    <div class="subject"><a href="#post-191459">harddisk</a></div>
+    <div class="body">Iczelion...
+
+How can we read the HARDWARE serial number from a harddrive in win32asm ....?
+
+I am very interested about this :)
+
+Thx
+Bogdan</div>
+    <div class="meta">Posted on 2000-12-28 20:38:00 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

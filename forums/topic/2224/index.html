@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>allocating mem &amp; execute by apps - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2224" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2224">allocating mem &amp; execute by apps</a></p>
+   <div class="post" id="post-14032">
+    <div class="subject"><a href="#post-14032">allocating mem &amp; execute by apps</a></div>
+    <div class="body">I want to allocate some memory, on that all applications can<br />jump to &amp; execute it's code.<br /><br />I've tried<br /><br />call      VirtualAlloc, 0, filesize, MEM_COMMIT, PAGE_EXECUTE_READWRITE<br /><br /><br />VirtualAlloc succeeds &amp; I fill the new space with my SampleCode.<br /><br />My program, which has allocated Memory can jump to my SampleCode &amp; execute all fine<br />without any Errors/Problems (Seen by tracing around with SoftIce)<br />but jumping out of other apps it crashes. The AllocatedMemorySpace isn't available for other Apps.<br />It's marked with 'INVALID'.<br /><br />Anyone have an idea?<br /><br />thanx<br />:mad:</div>
+    <div class="meta">Posted on 2001-12-05 09:51:23 by CRYO</div>
+   </div>
+   <div class="post" id="post-14033">
+    <div class="subject"><a href="#post-14033">allocating mem &amp; execute by apps</a></div>
+    <div class="body">why not just put your routines in a dll and let your applications load it? :-/</div>
+    <div class="meta">Posted on 2001-12-05 09:59:20 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-14034">
+    <div class="subject"><a href="#post-14034">allocating mem &amp; execute by apps</a></div>
+    <div class="body">VirtualAlloc only allocates memory in your own process. VirtualAllocEx<br />(only available on nt kernels, I believe) allocates memory in <strong>one</strong> other<br />process.</div>
+    <div class="meta">Posted on 2001-12-05 10:03:37 by f0dder</div>
+   </div>
+   <div class="post" id="post-14039">
+    <div class="subject"><a href="#post-14039">allocating mem &amp; execute by apps</a></div>
+    <div class="body">But there must be a way to insert a snippet of Data into Mem or any other Location and after that to execute.<br /><br />I'm programming an API-Replacer. If an Api is called by any Program it executes my code.<br /><br />my program works with Kernel-patching. (Jumpinstruction to SnippetOfDataInMem)<br /><br />after some thinking...<br /> <br />perhaps i should find some free space in Kernel &amp; put my code in it! The kernel could be accessed by all applications.<br />That's what you mean with 'Using DLL's', right?<br /><br />But now a next question!<br />How Windows does putting/loading a Dll into Mem?<br />Hey guys, there must be a way to do it manually!</div>
+    <div class="meta">Posted on 2001-12-05 11:27:05 by CRYO</div>
+   </div>
+   <div class="post" id="post-14101">
+    <div class="subject"><a href="#post-14101">allocating mem &amp; execute by apps</a></div>
+    <div class="body">To your original question, a DLL is the right way to do it. You can make a memory mapped file but that is for data, not code. I have seen specialised tools for adding sections to PE files but they are not for the weak hearted, they involve considerable knowledge of the PE format.<br /><br />Now if you are after doing something sneaky like getting illegal access to operating system function, don't post it here or fearless leader's &quot;furry paw&quot; will come down upon you. :tongue: <br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2001-12-06 00:06:03 by hutch--</div>
+   </div>
+   <div class="post" id="post-14107">
+    <div class="subject"><a href="#post-14107">allocating mem &amp; execute by apps</a></div>
+    <div class="body">I haven't  any bad intention. It's only for educational purposes.<br />Figuring out what's all possible in the system with little tricks &amp; thinking around other solutions.<br />It's not my intention to misuse this wonderful forum.<br /><br />thanks for all replies</div>
+    <div class="meta">Posted on 2001-12-06 01:32:31 by CRYO</div>
+   </div>
+   <div class="post" id="post-14116">
+    <div class="subject"><a href="#post-14116">allocating mem &amp; execute by apps</a></div>
+    <div class="body">I would consider creating a named FileMappingObject, that object could then be made PAGE_EXECUTE_READWRITE by the instance that created it, or by each instance as it opens it.<br /><br />Also one thing to notice with masm, that say if you have the code<br /><pre><code><br />invoke VirtualAlloc ,NULL,4096,MEM_COMMIT,PAGE_EXECUTE_READWRITE<br />mov hMem,eax<br /><br />invoke MemCpy ,MyFunc,hMem,MyFunc_END - MyFunc<br /><br />mov eax,hMem<br />call DWORD PTR &#91;eax&#93;<br /><br />MyFunc PROC<br />invoke MessageBox ,NULL,ADDR text,ADDR title,MB_OK<br /><br />ret<br />MyFunc ENDP<br />MyFunc_END EQU $<br /></code></pre><br /><br />It will cause an exception because masm does not generate direct calls in this situation. It will generate an indirect call which means the processor will read the value pointed to by hMem, which is the code for the message box call.<br /><br /><pre><code><br />00401000 6A00                   push    0<br />00401002 681D304000             push    40301Dh<br />00401007 6818304000             push    403018h<br />0040100C 6A00                   push    0<br />0040100E E80B040000             call    fn_0040141E<br /></code></pre><br /><br />and call the address 1D68006A (Indian reversed push 0, and first two bytes of push 40301Dh)<br /><br />To get around this:<br /><pre><code><br />invoke VirtualAlloc ,NULL,4096,MEM_COMMIT,PAGE_EXECUTE_READWRITE<br />mov hMem,eax<br /><br />invoke MemCpy ,MyFunc,hMem,MyFunc_END - MyFunc<br /><br />;Chane EAX to point to hMem<br />lea eax,hMem ;OR 'mov eax,OFFSET hMem'<br />call DWORD PTR &#91;eax&#93;<br /><br />MyFunc PROC<br />invoke MessageBox ,NULL,ADDR text,ADDR title,MB_OK<br /><br />ret<br />MyFunc ENDP<br />MyFunc_END EQU $<br /></code></pre></div>
+    <div class="meta">Posted on 2001-12-06 04:15:39 by huh</div>
+   </div>
+   <div class="post" id="post-14142">
+    <div class="subject"><a href="#post-14142">allocating mem &amp; execute by apps</a></div>
+    <div class="body">A DLL would work fine under 9x, since all DLLs are loaded in shared<br />memory. However, iirc, on win2k a DLL is *only* mapped in a process<br />if it's used. I think the same goes for filemapping objects. You should<br />have a look at some of the apispy code available (detours by some<br />of the microsoft guys is supposed to work very well).</div>
+    <div class="meta">Posted on 2001-12-06 09:47:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-14147">
+    <div class="subject"><a href="#post-14147">allocating mem &amp; execute by apps</a></div>
+    <div class="body">the apispy examples/progs around working with hooks as far as i know. (except Lucifer48's project)<br /><br />I trying it in my way with Kernel patching.<br />Finding some zerocaves for injecting my code.<br /><br />maybe i have to change the virtualsize of sections to the rawsize of the specific section.<br /><br />Playing around the PE FileFormat :-)<br /><br />Take it affect modifing the PE_OptionalHeader, if a DLL is mapped like Kernel32.dll?<br /><br />Or does Windows all stuff if loading a Dll into Mem<br /><br />If noone knows I'll figure it out!<br /><br />------------------------<br />calculating JMP's &amp; CALL's isn't that hard.<br />But your quite right, JMP CALL &amp; Loading effective Adresses working only if you take use of DeltaOffsets or calculating distance between instructions</div>
+    <div class="meta">Posted on 2001-12-06 10:37:12 by CRYO</div>
+   </div>
+   <div class="post" id="post-14150">
+    <div class="subject"><a href="#post-14150">allocating mem &amp; execute by apps</a></div>
+    <div class="body">Don't even bother messing with files on disk. Windows File Protection<br />makes this a hell, plus you'll have to boot to a dos shell to modify<br />files like kernel32. Second, virtualsize is useless, it's not working<br />the way it's supposed to.</div>
+    <div class="meta">Posted on 2001-12-06 10:44:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-14213">
+    <div class="subject"><a href="#post-14213">allocating mem &amp; execute by apps</a></div>
+    <div class="body">It says that VirtualProtect is availible under all WinNT and Win95 but I dont know about VirtualAllocEx.<br /><br />Im only speculating here, but using unused commited memory in another processes threads stack,GetThreadContext, VirtualProtect, WriteProcessMemory, and SetThreadContext you could figure out where a threads stack is, change some memory on the threads stack to PAGE_EXECUTE_READWRITE, write some code to it using WriteProcessMemory, and the use SetThreadContext, to set the Threads EIP to the new mem.<br /><br />If u kinda get what I mean? If it would work either, im not sure, I havn't ever used any of those functions before????</div>
+    <div class="meta">Posted on 2001-12-07 00:42:32 by huh</div>
+   </div>
+   <div class="post" id="post-14221">
+    <div class="subject"><a href="#post-14221">allocating mem &amp; execute by apps</a></div>
+    <div class="body">hey fodder,you're right.<br />changing the the SectionHeader isn't necessary.<br />seen in SoftIce by writing to Dll in Mem &amp; jumping to it.<br />all works fine. <br /><br />many thanks for all the tips and ideas.<br /><br />Is anyone interrested in my work after completing.<br />...thinking to make it open source. :alright:</div>
+    <div class="meta">Posted on 2001-12-07 03:49:50 by CRYO</div>
+   </div>
+   <div class="post" id="post-14250">
+    <div class="subject"><a href="#post-14250">allocating mem &amp; execute by apps</a></div>
+    <div class="body">Huh, will not work, under NT you have Copy On Write, which means<br />any change you do to a DLL is local to your process only. To avoid<br />copy on write, you have to do the modifications from ring0. And<br />there's still the issue of putting your code in globally available memory<br />(unless you use a cave, which can be a dangerous thing to do).</div>
+    <div class="meta">Posted on 2001-12-07 10:18:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-113677">
+    <div class="subject"><a href="#post-113677">allocating mem &amp; execute by apps</a></div>
+    <div class="body"><div class="quote">(..)<br />virtualsize is useless, it's not working<br />the way it's supposed to. </div><br /><br />what do you mean? \:|</div>
+    <div class="meta">Posted on 2003-08-11 23:44:58 by wicr0s0ft</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>HeapAlloc/Free behavior - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17236" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17236">HeapAlloc/Free behavior</a></p>
+   <div class="post" id="post-133567">
+    <div class="subject"><a href="#post-133567">HeapAlloc/Free behavior</a></div>
+    <div class="body">Hi,<br /><br />Up until recently I always used the GlobalAlloc/GlobalFree etc APIs, but recently I started trying the Heap APIs. I wrote some code that I started testing by trying to get it to crash (maybe not the best testing method, but I've found that it works). With the Globalxxxx APIs, if you allocate some memory, then free it, then try to write to it, you should and DO get an error:<br /><pre><code><br />.386<br />.MODEL FLAT, STDCALL<br />OPTION casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br /><br />includelib \masm32\lib\kernel32.lib<br /><br />.data?<br /><br />pMem		DWORD ?<br /><br />.code<br />start&#58;<br /><br />invoke GlobalAlloc, GMEM_FIXED, 1000h<br />mov pMem, eax<br />invoke GlobalFree, eax<br />mov eax, pMem<br />mov &#91;eax&#93;, edx		; &lt;- This causes the following error &#40;or something like it&#41;<br />					;<br />					;    The instruction at &quot;0x77f58469&quot; referenced memory at &quot;0xfffffff8&quot;. <br />					;    The memory could not be &quot;read&quot;.<br /><br />invoke ExitProcess, 0<br /><br />end start<br /></code></pre><br />But when I tried what I can only assume is the Heap equivalent (if not same) it does not produce any error:<br /><pre><code><br />.386<br />.MODEL FLAT, STDCALL<br />OPTION casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br /><br />includelib \masm32\lib\kernel32.lib<br /><br />.data?<br /><br />pMem		DWORD ?<br />hHeap		DWORD ?<br /><br />.code<br />start&#58;<br /><br />invoke GetProcessHeap<br />mov hHeap, eax<br />invoke HeapAlloc, hHeap, NULL, 1000h<br />mov pMem, eax<br />invoke HeapFree, hHeap, NULL, eax<br />mov eax, pMem<br />mov &#91;eax&#93;, edx		; &lt;- But this does NOT cause any error<br /><br />invoke ExitProcess, 0<br /><br />end start<br /></code></pre><br />Is there any reason that I've missed as to why this doesn't cause any error?<br /><br />(I'm running XP SP1)<br /><br />Thanks,<br />Ossa</div>
+    <div class="meta">Posted on 2004-02-15 05:27:34 by Ossa</div>
+   </div>
+   <div class="post" id="post-133575">
+    <div class="subject"><a href="#post-133575">Don't know whole answer</a></div>
+    <div class="body">Windows has a very complex memory management structure. This is due to the pagefile. Of course you know that few of us have a full 4Gig of physical memory yet we all address and use 4Gig of virtual memory. The time that memory stays active in actual physical memory space is called a Quantum and is based on several variables such as last used, most frequently used and the system timer itself. I can tell you that when GlobalAlloc is freed that it is not erased or written over right away. I have personally tracked the memory then closed the file but with a device driver I can still read and write to it. If I re-open the file I can see the changes that were made with the driver. That means that Windows maintains a pointer to the memory and I guess for sake of speed it does not re-load the file from disk but keeps a cache telling it to load from same memory location.</div>
+    <div class="meta">Posted on 2004-02-15 06:45:18 by mrgone</div>
+   </div>
+   <div class="post" id="post-133621">
+    <div class="subject"><a href="#post-133621">HeapAlloc/Free behavior</a></div>
+    <div class="body">Ossa, I use this trick :)  when an object needs to be locked/unlocked (in multithreaded apps), I place status 2 bytes exactly at the beginning of the object structure:<br /><pre><code><br />MyStruct struct<br />    IsDead   db ? ; means &quot;always fail at locking&quot;<br />    IsLocked db ? ; means &quot;ok, wait max 4 seconds&quot;<br />    ;... more<br />MyStruct ends<br /></code></pre><br />I don't remember my research results on this, but there was some time after you couldn't access more than 20 bytes of the freed memory (or was it 8 bytes). I guess I'll have to redo the experiments with this.</div>
+    <div class="meta">Posted on 2004-02-15 15:47:44 by Ultrano</div>
+   </div>
+   <div class="post" id="post-133874">
+    <div class="subject"><a href="#post-133874">HeapAlloc/Free behavior</a></div>
+    <div class="body">Hi :)<br />AFAIK, heap allocation and freeing functions do not operate on memory. A heap is actually a block of allocated memory, that is divided in small fragments. When you call HeapAlloc or HeapFree, you are simply marking this fragments as used or unused. That's why you can still write to heap memory after freeing it. I'm not too familiar with the details of the heap's implementation, but I guess you can end up messing it's internal structures by writing where you should not, so try to avoid it.</div>
+    <div class="meta">Posted on 2004-02-17 11:29:10 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133879">
+    <div class="subject"><a href="#post-133879">HeapAlloc/Free behavior</a></div>
+    <div class="body">allocated... reserved or reserved+committed though? ^_^<br />Global/LocalAlloc ends up calling HeapAlloc on NT anyway - with a couple of undocumented flags, though. This might result in allocating from a different part of the heap, and perhaps flagging that the memory pages should be de-committed sometime after free?<br /><br />This is speculation, though, and some internal behaviour that you shouldn't depend on as it could change over night with a service pack. It's a valuable debugging tool, but you might as well implement a fully fledged memory tracking system, perhaps relying on VirtualAlloc so you can be 100% sure your memory blocks will be decommitted and flag an exception on further referencing.</div>
+    <div class="meta">Posted on 2004-02-17 11:43:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-133882">
+    <div class="subject"><a href="#post-133882">HeapAlloc/Free behavior</a></div>
+    <div class="body">It could also be that you're writing to a page that has allocated memory, although you are writing to an unallocated part of it.<br />The memory protection works on a per-page level (a page is 4k of memory in the regular case), so if some of the page is in use, all of the page has to be readable and writable.<br />Therefore not all unallocated memory will always cause a pagefault. In fact, I've had some buffer overflow in one of my programs, and I never found out until I ported it to another OS.<br />Remember: working code != bugfree code!</div>
+    <div class="meta">Posted on 2004-02-17 11:50:09 by Henk-Jan</div>
+   </div>
+   <div class="post" id="post-133898">
+    <div class="subject"><a href="#post-133898">HeapAlloc/Free behavior</a></div>
+    <div class="body"><div class="quote"><br />allocated... reserved or reserved+committed though? ^_^</div><br />reserved+commited i guess :)<br /><div class="quote"><strong><br />Global/LocalAlloc ends up calling HeapAlloc on NT anyway - with a couple of undocumented flags, though. This might result in allocating from a different part of the heap, and perhaps flagging that the memory pages should be de-committed sometime after free?<br /><br />This is speculation, though, and some internal behaviour that you shouldn't depend on as it could change over night with a service pack. It's a valuable debugging tool, but you might as well implement a fully fledged memory tracking system, perhaps relying on VirtualAlloc so you can be 100% sure your memory blocks will be decommitted and flag an exception on further referencing. </div><br />From my experience in Win98 (but I never made any serious researching on it :( ) the heap reserves and commits pages, but they never get decommited+released until the heap is destroyed. I also recall reading somewhere in win32.hlp that growable heaps would never decrease in available size. This could mean that memory is never released (but it could be decommited though).<br />I guess the best way to find out is disassembling some system libraries, which I'm not going to do anyway :rolleyes: so who cares? :grin:</div>
+    <div class="meta">Posted on 2004-02-17 13:18:48 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133900">
+    <div class="subject"><a href="#post-133900">HeapAlloc/Free behavior</a></div>
+    <div class="body"><div class="quote"><br />It could also be that you're writing to a page that has allocated memory, although you are writing to an unallocated part of it.<br />The memory protection works on a per-page level (a page is 4k of memory in the regular case), so if some of the page is in use, all of the page has to be readable and writable.<br />Therefore not all unallocated memory will always cause a pagefault. In fact, I've had some buffer overflow in one of my programs, and I never found out until I ported it to another OS.<br />Remember: working code != bugfree code! </div><br />That makes a lot of sense.<br /><br />An unrelated question: is the page size <em>always</em> 4k on Intel platforms? In other words, do I really have to get the page size using the APIs, or simply assume it's 4k to speed up things?</div>
+    <div class="meta">Posted on 2004-02-17 13:20:59 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133910">
+    <div class="subject"><a href="#post-133910">HeapAlloc/Free behavior</a></div>
+    <div class="body">Could be that the heap isn't decreased automatically - but what if you call HeapCompact()? Also, if your program is going to enter an idle state for a longer period of time, calling SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1); might be a nice idea, as it trims the process working set size. I wouldn't do this too often, though, as it might discard stuff that would then need to be reloaded later, or (even worse) page out stuff to the pagefile. But calling it after application initialization and when your application is going to idle for a while - that might be a nice move.<br /><br />The page size can be 4k, 2M or 4M on IA32. Dunno when you'd need to explicitly know the pagesize to speed up stuff, though?</div>
+    <div class="meta">Posted on 2004-02-17 13:48:49 by f0dder</div>
+   </div>
+   <div class="post" id="post-133912">
+    <div class="subject"><a href="#post-133912">HeapAlloc/Free behavior</a></div>
+    <div class="body"><div class="quote"><br />The page size can be 4k, 2M or 4M on IA32. Dunno when you'd need to explicitly know the pagesize to speed up stuff, though? </div><br />I'm writing a heap replacement with FunkyMeister. It's going to be focused on listview controls, and we're using VirtualAlloc. It might be nice to hardcode the page size rather than having to obtain it and place it in a variable (we could use shifts instead of multiplies, and so on) but it's not a significative optimization anyway. :notsure:</div>
+    <div class="meta">Posted on 2004-02-17 13:53:11 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133913">
+    <div class="subject"><a href="#post-133913">HeapAlloc/Free behavior</a></div>
+    <div class="body"><div class="quote"><br />Could be that the heap isn't decreased automatically - but what if you call HeapCompact</div><br />I have <strong>no idea</strong> man, I'm just guessing as always, you should know me by now :grin:</div>
+    <div class="meta">Posted on 2004-02-17 13:56:11 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133914">
+    <div class="subject"><a href="#post-133914">HeapAlloc/Free behavior</a></div>
+    <div class="body">Humm, well, optimizing the memory usage patterns of the memory manager should be a lot more important than replacing mul with shift - so I guess it's nice to play it safe? I'd probably play around with both, though, testing speed and code simplicity and such. I think it's unlikely that VirtualAlloc will operate on anything but 4k pages on IA32, but then again... per-page X permission bits are include in AMD64 in PAE mode (also for 32bit code, right?) - so things *do* change.</div>
+    <div class="meta">Posted on 2004-02-17 13:58:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-133917">
+    <div class="subject"><a href="#post-133917">HeapAlloc/Free behavior</a></div>
+    <div class="body"><div class="quote">I think it's unlikely that VirtualAlloc will operate on anything but 4k pages on IA32, but then again...</div><br /><br />Some Windows versions support PAE, I wonder what VirtualAlloc will do when that is enabled...</div>
+    <div class="meta">Posted on 2004-02-17 14:20:25 by Henk-Jan</div>
+   </div>
+   <div class="post" id="post-133927">
+    <div class="subject"><a href="#post-133927">HeapAlloc/Free behavior</a></div>
+    <div class="body">You need to flag your executable as large-address aware with the linker, and you need to use the special API subset (AWE* I think?) to use the large memory - well, at least to access a lot of memory at once in *one* application. VirtualAlloc might be churning out 4meg chunks in the page table, but I guess this should be &quot;mostly&quot; transparent to user code?</div>
+    <div class="meta">Posted on 2004-02-17 15:17:48 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

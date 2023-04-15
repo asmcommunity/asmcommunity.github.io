@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ComView - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9722" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=9722">ComView</a></p>
+   <div class="post" id="post-72177">
+    <div class="subject"><a href="#post-72177">ComView</a></div>
+    <div class="body">This is mainly to Japheth, but if anyone else can add more light, please speak up ;)<br /><br />Japheth,<br /><br />Im playing around with your COMView app, and i think I've run into a problem with it.  I have a transcribed Acad.inc that works, and i used your tool to make another one for testing sake.  I modified my source to addapt to your calling conventions etc., and the program works as expected.. with one flaw:<br /><br />One interface &quot;IModelSpace&quot; for example, has many &quot;add&quot; methods to insert objects into this drawing 'space'.<br /><br />I was calling the &quot;AddCircle&quot; method in particular, which from my working program required the following params:<br /><br /><strong>center:VARIANT, radius:REAL8, pICircleOut:PTR INTERFACE</strong><br /><br />When compiling this phase, i got a param/proto error, which when i looked into it i realized the last &quot;PTR INTERFACE&quot; param was not transcribed by your program.  I look around and realizes all the &quot;Add&quot; methods failled to include its last output.  I also ran your program to see if it was listed by it, and if showed only:<br /><br /><strong>AddCircle | 0x60A | dispatch, func, sdtcall | Ptr IAcadCircle | Center:VARIANT, Radius:R8 | 136</strong><br /><br />As im seeing thing, the 'rcType' Field is being Ignored for &quot;func, stdcall&quot; typed methods.  My question is: Is this intentional?  Are you expecting the return to be in EAX after the invoke??  I've never seen this before and conceptually it *could* happen, but again, its not standard practice that i am aware of?? (Please correct me if im wrong here).<br /><br />As well, if this is a bug, could you advise me to where in your program it should be fixed, and recompiled..<br /><br />This is still an awesome tool Japheth!<br />Thanx for your help,<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-22 02:51:27 by NaN</div>
+   </div>
+   <div class="post" id="post-72218">
+    <div class="subject"><a href="#post-72218">ComView</a></div>
+    <div class="body">Hi NaN,<br /><br />I cant tell from your infos if this is a bug. From what you have inserted it looks like one.<br /><br />So you may look for the error yourself :) . The place where to look is:<br /><br />file CTypeinfoDlg.asm, proc FunctionsOnInitDialog.<br /><br />look for code like<br /><br /><pre><code><br />	movzx ecx,&#91;esi&#93;.FUNCDESC.cParams<br />                    mov esi,&#91;esi&#93;.FUNCDESC.lprgelemdescParam<br />	mov szStr,0<br />	.while &#40;ecx&#41;          <br /><br />....<br />                   .endw<br /></code></pre><br /><br /><br />In file ComView.asm there is a bug, but it causes too much stuff displayed, not too less<br />(if returned parameter is of type USERDEFINED)<br /><br /><pre><code><br />GetParameterTypeEx proc uses esi pTypeInfo&#58;LPTYPEINFO, pElemDesc&#58;ptr ELEMDESC, pStr&#58;LPSTR, iMax&#58;dword, iMode&#58;dword<br /><br />        mov esi,pElemDesc<br />        movzx eax,&#91;esi&#93;.ELEMDESC.tdesc.vt<br />         .if &#40;eax == VT_USERDEFINED&#41;<br />	mov eax,pStr	;BUG&#58; string should be cleared first<br />	mov byte ptr &#91;eax&#93;,0        ;insert these 2 lines<br />	invoke GetUserDefinedType, pTypeInfo, &#91;esi&#93;.ELEMDESC.tdesc.hreftype, pStr, iMax<br />         .else<br /></code></pre><br /><br />Please tell me the bug(s) you'll find.<br /><br />Japheth</div>
+    <div class="meta">Posted on 2002-12-22 10:00:58 by japheth</div>
+   </div>
+   <div class="post" id="post-72225">
+    <div class="subject"><a href="#post-72225">Just getting started...</a></div>
+    <div class="body">Im havent tracked the above mentioned problem yet, but i did come across this routine which also needs some ammending (CreateInc.asm):<br /><pre><code>;--- avoid some ASM reserved names in declarations<br />;--- by simply add a underscore to it<br /><br />CheckReservedNames	proc uses esi pStr&#58;ptr byte<br /><br />		xor esi,esi<br />		invoke lstrcmpi, pStr, CStr&#40;&quot;invoke&quot;&#41;<br />		.if &#40;eax == 0&#41;<br />			inc esi<br />		.endif<br />		invoke lstrcmpi, pStr, CStr&#40;&quot;name&quot;&#41;<br />		.if &#40;eax == 0&#41;<br />			inc esi<br />		.endif<br />		invoke lstrcmpi, pStr, CStr&#40;&quot;length&quot;&#41;<br />		.if &#40;eax == 0&#41;<br />			inc esi<br />		.endif<br />&#91;b&#93;		invoke lstrcmpi, pStr, CStr&#40;&quot;add&quot;&#41;<br />		.if &#40;eax == 0&#41;<br />			inc esi<br />		.endif<br />		invoke lstrcmpi, pStr, CStr&#40;&quot;offset&quot;&#41;<br />		.if &#40;eax == 0&#41;<br />			inc esi<br />		.endif&#91;/b&#93;<br />		.if &#40;esi&#41;<br />			invoke lstrcat, pStr, CStr&#40;&quot;_&quot;&#41;<br />		.endif<br />		ret<br /><br />CheckReservedNames	endp</code></pre><br /><br />I had to fix these manually, but didnt mention it... (A minor point, but since you asked ;) )<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-22 11:42:09 by NaN</div>
+   </div>
+   <div class="post" id="post-72230">
+    <div class="subject"><a href="#post-72230">ComView</a></div>
+    <div class="body">Havent Tested, since I have to go X-Mas shopping, but i think i found the location where extra stuff should be added (not positive, since i dont fully know the ITypeLib and its structures yet).<br /><br />In the file (CreateInc.asm), lines 390-&gt;401:<pre><code>invoke WriteString, hFile, addr szStr<br /><br />mov szStr,0<br />mov eax,&#91;esi&#93;.FUNCDESC.invkind<br />mov edx,&#91;esi&#93;.FUNCDESC.funckind<br />.if &#40;&#40;eax == INVOKE_PROPERTYGET&#41; &amp;&amp; &#40;edx == FUNC_DISPATCH&#41;&#41;<br />   invoke WriteString, hFile, CStr&#40;&quot;, &#58;ptr &quot;&#41;<br />   invoke GetParameterTypeAsm, pTypeInfo,\<br />          addr &#91;esi&#93;.FUNCDESC.elemdescFunc, addr szStr, sizeof szStr<br />.endif<br /><br />invoke WriteLine, hFile, addr szStr</code></pre><br /><br />Here you have routines to handle the Property Get 'type' method, by as im reading it, simply tacking on the pointer at the end of the STDMETHOD description.  If this if case was modified somehow to be : (Making up some labels here in bold):<br /><pre><code>.if &#40;&#40;edx == FUNC_DISPATCH&#41; &amp;&amp; &#40;&#40;eax == INVOKE_PROPERTYGET&#41; <br />   &#91;b&#93;||&#40;&#40;eax=INVOKE_FUNC&#41; &amp;&amp; &#40;ReturnType != TYPE_VOID&#41; &#41; &#41; &#41;&#91;/b&#93;</code></pre><br /><br />Basically tying to spell out:<br /><br /><strong><em>If  DISPATCH and ( PROPERYGET or ( FUNC and RETURN_NOT_VOID) ) then add tailing ':PTR '</strong></em><br /><br />Let me know if you agree or have further suggestions.<br />Thanx<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-22 12:08:05 by NaN</div>
+   </div>
+   <div class="post" id="post-72241">
+    <div class="subject"><a href="#post-72241">ComView</a></div>
+    <div class="body">NaN,<br /><br />thanks for your improvements. :) <br /><br />And you have found the right place to modify (although I worked hard to get you to absolutely wrong places). Congratulations.<br /><br />I remember the problem now. <br /><br /><pre><code><br />          mov eax,&#91;esi&#93;.FUNCDESC.invkind<br />          mov edx,&#91;esi&#93;.FUNCDESC.funckind<br />         .if &#40;&#40;eax == INVOKE_PROPERTYGET&#41; &amp;&amp; &#40;edx == FUNC_DISPATCH&#41;&#41;<br /></code></pre><br /><br />is definitely not sufficient. I once had tried<br /><br /><pre><code><br />                  movzx eax, &#91;esi&#93;.FUNCDESC.elemdescFunc.tdesc.vt<br />	.if &#40;eax != VT_VOID&#41;<br /></code></pre><br /><br />which at first glance resolves this problem. But if you look again you may realize that now all functions with a return value get this extra parameter. And for functions AddRef() and Release() this is surely wrong (Ok, you will never call AddRef via Invoke_). <br />Up to now I didnt find any flags in typeinfo which provides for a proper solution.<br />So my solution was the one which is implemented now, because it served my purposes.<br />Help here would be very appreciated.<br /><br />Japheth</div>
+    <div class="meta">Posted on 2002-12-22 14:51:27 by japheth</div>
+   </div>
+   <div class="post" id="post-72267">
+    <div class="subject"><a href="#post-72267">ComView</a></div>
+    <div class="body">I will see what the .CHM has to offer that Gunner provided...<br /><br />I would be surprised if there was no clean solution to this.  However, my time is stretched thin as Christmas is here.  I will work on the problem as I can.<br /><br />Thanx again!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-22 21:01:59 by NaN</div>
+   </div>
+   <div class="post" id="post-72275">
+    <div class="subject"><a href="#post-72275">ComView</a></div>
+    <div class="body">Man, i can't cleanly find a way to compile this...<br /><br />Im not dumb, i do know what your doing, its just I *never* go down this road.   I have to compile each object separately, and then link them all to gether.  However, your doing other stuff that i dont practice, which is leaving out all lib definitions (how you make it link with out 'includelib' is i do not know...).  I punched in all the ones needed, but im still getting external protos not declaired like 'Malloc'... i have Oaidl.inc inlcuded... <br /><br />Ahh.. im tire of this for now... too confusing just to get a compile. <br /><br />Here is the *fixed* COMView compile:<pre><code>Microsoft &#40;R&#41; Macro Assembler Version 6.14.8444<br />Copyright &#40;C&#41; Microsoft Corp 1981-1997.  All rights reserved.<br /><br /> Assembling&#58; D&#58;\masm32\_ACTIVE\Comview\COMView.asm<br />Microsoft &#40;R&#41; Incremental Linker Version 5.12.8078<br />Copyright &#40;C&#41; Microsoft Corp 1992-1998. All rights reserved.<br /><br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _g_hWndSB<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _Destroy@CInterfaceList@4<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _Create@COptions@0<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _Destroy@COptions@4<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _Create@CMainDlg@0<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _Destroy@CMainDlg@4<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _InitGlobalCEditDlg@0<br />COMView.obj &#58; error LNK2001&#58; unresolved external symbol _DeinitGlobalCEditDlg@0<br />COMView.exe &#58; fatal error LNK1120&#58; 8 unresolved externals<br />_<br />Link error</code></pre><br /><br />And selecting CProcessDlg for a separate compile i get:<pre><code>Microsoft &#40;R&#41; Macro Assembler Version 6.14.8444<br />Copyright &#40;C&#41; Microsoft Corp 1981-1997.  All rights reserved.<br /><br /> Assembling&#58; D&#58;\masm32\_ACTIVE\Comview\CProgressDlg.asm<br />Microsoft &#40;R&#41; Incremental Linker Version 5.12.8078<br />Copyright &#40;C&#41; Microsoft Corp 1992-1998. All rights reserved.<br /><br />CProgressDlg.obj &#58; error LNK2001&#58; unresolved external symbol _malloc@4<br />CProgressDlg.obj &#58; error LNK2001&#58; unresolved external symbol _free@4<br />CProgressDlg.obj &#58; error LNK2001&#58; unresolved external symbol _CenterWindow@4<br />CProgressDlg.obj &#58; error LNK2001&#58; unresolved external symbol _GetListView@CMainDlg@4<br />LINK &#58; error LNK2001&#58; unresolved external symbol _WinMainCRTStartup<br />CProgressDlg.exe &#58; fatal error LNK1120&#58; 5 unresolved externals<br />_<br />Link error<br /></code></pre><br /><br />All other dialogs are simular (more or less).</div>
+    <div class="meta">Posted on 2002-12-22 23:28:03 by NaN</div>
+   </div>
+   <div class="post" id="post-72281">
+    <div class="subject"><a href="#post-72281">ComView</a></div>
+    <div class="body">NaN,<br /><br />because its xmas I generated  COMView version 1.4.3. Its with your suggestion included.<br />To avoid generationg AddRef/Release with this wrong extra parameter I avoid now generating<br />the IDispatch functions generally. Thats because macro BEGIN_INTERFACE allows an inherit interface as second parameter. So the includes generated all are a bit smaller now.<br /><br />Your link problems: I dont really understand why you get these errors. There is a .MAK file included which should work. includelib statements I dont use normally, I prefer setting LIB= environment var or /LIBPATH: linker option.<br /><br /><a target="_blank" href="http://www.japheth.de/download/COMView.zip">heres the new COMView version</a> <br /><br />Japheth</div>
+    <div class="meta">Posted on 2002-12-23 00:32:14 by japheth</div>
+   </div>
+   <div class="post" id="post-72376">
+    <div class="subject"><a href="#post-72376">Thanx Japheth,</a></div>
+    <div class="body">Thanx alot, i didnt expect this (i was just venting, i dont have the program that uses make files, i learned without it and never found a need for it).<br /><br />Anywho, since you have recompiled it, can you do me one more small favor and recompile it again, except modify it a bit to keep it from crashing ;)<br /><pre><code>;--- avoid some ASM reserved names in declarations<br />;--- by simply add a underscore to it<br /><br />CheckReservedNames	proc uses esi pStr&#58;ptr byte<br /><br />		mov esi, offset ReservedNames<br />		mov ecx, SIZERESERVEDNAMES<br />		.while ecx<br />			push ecx<br />			lodsd<br />			invoke lstrcmpi, pStr, eax<br />&#91;b&#93;			pop ecx<br />			.break .if &#40;eax == 0&#41;&#91;/b&#93;<br />			dec ecx<br />		.endw<br />		.if &#40;ecx&#41;<br />			invoke lstrcat, pStr, CStr&#40;&quot;_&quot;&#41;<br />		.endif<br />		ret<br /><br />CheckReservedNames	endp</code></pre><br /><br />You had it breaking before the pop ( :tongue: ), so i reversed it as shown above.  (It crashed on the first 'add' method, but it did concatenate the underscore nicely.<br /><br />Thanx again for you help...<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-23 17:12:37 by NaN</div>
+   </div>
+   <div class="post" id="post-72384">
+    <div class="subject"><a href="#post-72384">ComView</a></div>
+    <div class="body">Oh yes, one should never do such quick shots. Its &quot;100% positively sure&quot; that you will implement more new bugs than to eliminate :mad: <br /><br />Anyway, the new compiled version is attached.<br /><br />Japheth</div>
+    <div class="meta">Posted on 2002-12-23 18:03:43 by japheth</div>
+   </div>
+   <div class="post" id="post-72385">
+    <div class="subject"><a href="#post-72385">ComView</a></div>
+    <div class="body">Im sorry, i was not trying to take shots at you..  I do appreciate the work you have done with your tool, and the work your doing now..<br /><br />Thank you very much..<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-23 18:06:23 by NaN</div>
+   </div>
+   <div class="post" id="post-72389">
+    <div class="subject"><a href="#post-72389">ComView</a></div>
+    <div class="body">BTW, just to let you know, i the latest version seems to run perfect.  It transcribed the entire AutoCad tupelib and ran fine the first time...<br /><br />I also discovered two more reserved words: &quot;Align&quot; and &quot;Group&quot;  (Didnt know group was a reserved word, but anyways ;) )<br /><br />Thanks again..! <br /><br />(not to learn how you implement your classes ;) )<br /><br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-23 18:49:32 by NaN</div>
+   </div>
+   <div class="post" id="post-72401">
+    <div class="subject"><a href="#post-72401">ComView</a></div>
+    <div class="body">And more found:<br /><br />&quot;Wait&quot;<br /><br />&quot;Goto&quot;<br /><br />&quot;Repeat&quot;<br /><br />&quot;Even&quot;<br /><br />&quot;Rept&quot;<br /><br />&quot;Or&quot;<br /><br />&quot;Name&quot;<br /><br />&quot;Comment&quot;<br /><br />&quot;Union&quot;<br /><br /><br />:rolleyes: :rolleyes: :rolleyes:  NaN :rolleyes: :rolleyes: :rolleyes:</div>
+    <div class="meta">Posted on 2002-12-23 19:57:10 by NaN</div>
+   </div>
+   <div class="post" id="post-72407">
+    <div class="subject"><a href="#post-72407">ComView</a></div>
+    <div class="body">Wow!<br /><br />Man those macros really add up in the end.<br /><br />The AutoCad.inc file comes to : 6,966 Lines of code<br />The Office97.inc file comes to : 2,506 Lines of code<br />The Excel8.inc file comes to : 18,033 Lines of code<br /><br />Plus Windows.inc!<br /><br />Your COMView tool has come thru with flying colors (few extra bumps like above postings, and string too long protos, but these are MASM32 limitations, not your tool!)<br /><br />The compile time on my AMD 800 Duron is Approx 10 sec. :eek: <br /><br />However, these are probably the largest programs i could bring together! So everything should be downhill from here (under 10 seconds ;)  )<br /><br />Thanks for all your help Japheth!  Hope the above reserved words are some help to you!<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-23 20:31:17 by NaN</div>
+   </div>
+   <div class="post" id="post-72550">
+    <div class="subject"><a href="#post-72550">ComView</a></div>
+    <div class="body">Thanks NaN,<br /><br />I'm afraid after some time it ends up having all MASM names in the &quot;reserved&quot; names table :) .<br /><br />Japheth</div>
+    <div class="meta">Posted on 2002-12-24 14:27:44 by japheth</div>
+   </div>
+  </div>
+ </body>
+</html>

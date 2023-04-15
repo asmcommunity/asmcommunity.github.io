@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>USB error rate - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6786" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6786">USB error rate</a></p>
+   <div class="post" id="post-48978">
+    <div class="subject"><a href="#post-48978">USB error rate</a></div>
+    <div class="body">Anyone work with the USB bus much? Here's what I think I'm seeing:<br /><br />I have a small USB development board with a bunch of LEDs connected to a byte of output lines. I'm just incrementing a counter and sending the data, watching the count increment in the lights. It's hand wired, based on a PIC16C765 microcontroller, the code is slightly modified versions of <a target="_blank" href="http://www.lvr.com/usbcode.htm">Jan Axelson's</a> &quot;HID code for the PIC P16C745&quot; and &quot;Visual Basic code for communicating with a custom HID&quot;<br /><br />(BTW, I couldn't get his ActiveX control to work under W98A, abandoned trying it)<br /><br />(That part is pretty cool, the whole thing runs off USB bus power)<br /><br />However, I 'occasionally' notice the count is a digit off. 'Occasionally' meaning pretty often actually, like one out of 16 times. If I resend the same data, the displayed count on the LEDs is correct.<br /><br />That sounds like a horrible error rate to me.  Is this typical?  <br /><br />Should all transfers be done with a write/read verify cycle? Or may I have some sloppy wiring, bad timing crystal,  and or bus read code?</div>
+    <div class="meta">Posted on 2002-07-20 08:59:36 by Ernie</div>
+   </div>
+   <div class="post" id="post-49087">
+    <div class="subject"><a href="#post-49087">USB error rate</a></div>
+    <div class="body">Under HID, every packet has a CRC, so bad packets should be rejected. Every valid packet is replied with an ACK. The host (PC) retries until the device either sends an ACK or STALL. You shouldn't need to verify any transfer with another transaction.</div>
+    <div class="meta">Posted on 2002-07-21 01:49:43 by tenkey</div>
+   </div>
+   <div class="post" id="post-49096">
+    <div class="subject"><a href="#post-49096">USB error rate</a></div>
+    <div class="body">Sounds like TCP/IP</div>
+    <div class="meta">Posted on 2002-07-21 03:03:43 by comrade</div>
+   </div>
+   <div class="post" id="post-49136">
+    <div class="subject"><a href="#post-49136">USB error rate</a></div>
+    <div class="body">tenkey,<br /><br />  Thanks, thats kinda what I expected. USB was designed to be CHEAP to use, with cheap cables, and in such circumstances using error detection/correction is indicated.<br /><br />  I'm using the routines Microchip wrote to run the USB functions. It's very nice from an implimentors perspective, it supplies a few high level APIs to get/send USB data. <br /><br />  However, it appears they possibly skimped on the error corection code. Or there is some hardware problem, like insufficient bypass capacitance to keep the data stable while the relatively high current LEDs change state.<br /><br /><br />  ... back to the drawing board</div>
+    <div class="meta">Posted on 2002-07-21 08:35:04 by Ernie</div>
+   </div>
+   <div class="post" id="post-49246">
+    <div class="subject"><a href="#post-49246">USB error rate</a></div>
+    <div class="body">OK, I tried a few things here:<br /><br />1) Multiple writes (3 in fact) to each output port in turn, assuming power supply glitches in switching the LEDs is causing the port latches to mis-latch.  Errors still result.<br /><br />(assumption:  ports are getting bad data)<br /><br />2) Using the same report byte to 3 ports. Errors are consistant across all 3 ports.<br /><br />(prooves  ports are getting bad data)<br /><br /><br />3) Do a write/read of the report buffer. Errors seen in the port LEDs *ARE* reported back.<br /><br />Proves the device receiving getting bad date. <br /><br />Dang!<br /><br />The firmware is built on the most recent Microsoft reesources... gonna have to do a write/read/verify cycle till Microchip gets its act together.<br /><br />Other hardware developers take careful note!</div>
+    <div class="meta">Posted on 2002-07-21 22:36:59 by Ernie</div>
+   </div>
+   <div class="post" id="post-49465">
+    <div class="subject"><a href="#post-49465">USB error rate</a></div>
+    <div class="body">Another day along, I've noticed the pattern to bad transfers.<br /><br />The transfer obviously fails, and the buffer always full of the previous transfer's data (confirmed both on LEDs and by an IN Report).<br /><br />What didn't fail was the carry bit check for a legal transfer. That should have led to a re-read. Also, the failure was never reported back to the host, so the WriteFile return value was 'success'.<br /><br />Additionally, something goes screwy with the very first write after power up (hot plugging the USB chip). The write looks OK, but it never reads back, instead times out.<br /><br />Seems THAT transfer gets a fail code in the status bit.<br /><br />Interesting...</div>
+    <div class="meta">Posted on 2002-07-22 21:44:08 by Ernie</div>
+   </div>
+   <div class="post" id="post-49656">
+    <div class="subject"><a href="#post-49656">USB error rate</a></div>
+    <div class="body">What are you doing to rearm the endpoint(s)? Do they tell you to return from a function?<br /><br />The USB gets an OUT DATA packet, then it feeds it to you. While you're processing the data, the SIE will NAK the OUT endpoint until it's rearmed. Oh, and most likely an OUT endpoint starts out unarmed because the framework doesn't know if you're going to use it.<br /><br />If you're getting kicked by current overdraw, you'll be getting USB resets. Low power ports can support only 100mA. High power ports can support 500mA.</div>
+    <div class="meta">Posted on 2002-07-23 18:20:09 by tenkey</div>
+   </div>
+   <div class="post" id="post-49661">
+    <div class="subject"><a href="#post-49661">USB error rate</a></div>
+    <div class="body">To start off this project, I'm using slightly modifyed code from the &quot;USB Complete&quot; book and <a target="_blank" href="http://www.lvr.com/usbcode.htm">website.</a>  Simplar problems occure if I use the example code unmodified, so I don't think it's my mods that are causing the trouble.<br /><br />The host is running <a target="_blank" href="http://www.lvr.com/files/usbhidio2.zip">Usbhidio2</a>, a VB program that uses ReadFile and WriteFile to send/receive data. A Write is initiated by a command button push, and it is immediately followed by a read.<br /><br />USB device firmware is very similar to the &quot;<a target="_blank" href="http://www.lvr.com/files/mchpdemo.zip">Firmware for the PIC16C745/765</a>&quot; example. I've modifyed it to NOT set the PORTB bits to the connection state, and to take the data input and send to the output ports. An abbreviated version looks like so:<br /><br />&lt;WARNING:  PIC Code follows, this is not MASM&gt;<br /><br /><pre><code><br />idleloop<br />	bankisel	buffer<br />	movlw	buffer		; point IRP+FSR to destination buffer<br />	movwf	FSR<br />	pagesel	GetEP1		; ensure PCLATH bits are set<br />	call	GetEP1	<br />	pagesel	idleloop<br />	btfss	STATUS,C	                ; was any data copied?<br />	goto	idleloop	                ; no&#58; keep trying<br /><br />; yes&#58; Message received. Send the byte to PORTB back.<br />	banksel	buffer<br />	movf	buffer, w<br />	banksel	PORTB<br />	movwf	POTRTB<br />      <br />retry<br />	bankisel	buffer	; Point IRP+FSR to destination buffer<br />	movlw	buffer<br />	movwf	FSR<br />	movlw	2	; sending 2 bytes<br />	pagesel	PutEP1		<br />	call	PutEP1		<br />	pagesel	retry<br />	btfsc	STATUS,C	; was the put successful?<br />	goto	retry	; no&#58; keep trying<br />	pagesel	idleloop<br />	goto	idleloop	; yes&#58; wait for next buffer<br /></code></pre><br /><br />There is enough error detection in the host around the WriteFile that any error would be displayed. A legal IN transfer has to happen before an OUT can occure, thats why seeing an IN transfer missed, but returning OUT data is so weird. I assume the transfer error isn't being properly flagged by the PIC, or I don't see how to check such an error.<br /><br />I doubt the current consumption is a problem, as the same problems occure when I'm not driving the LEDs. The LEDs are sinking about a mA each, and transfer errors ouuure when drawing much much less current then I'm asking for in the descriptor.</div>
+    <div class="meta">Posted on 2002-07-23 19:29:01 by Ernie</div>
+   </div>
+   <div class="post" id="post-49679">
+    <div class="subject"><a href="#post-49679">USB error rate</a></div>
+    <div class="body">Unless the application detects disconnects, it may hold open a device driver object.  Unless you close the device before you plug the device back in, it may enumerate as another device. That depends on the driver.<br /><br />The code you're using, once the FW and the app disagree on the current state, they'll be stuck waiting for each other.  You may want to rewrite the main loop.<br /><br />The only other thing is the <strong>pagesel bumpit</strong>.  Don't know if that's from editting or what.  Should be <strong>pagesel retry</strong> with what you've shown.</div>
+    <div class="meta">Posted on 2002-07-23 22:29:26 by tenkey</div>
+   </div>
+   <div class="post" id="post-49903">
+    <div class="subject"><a href="#post-49903">USB error rate</a></div>
+    <div class="body"><div class="quote">Unless the application detects disconnects, it may hold open a device driver object. Unless you close the device before you plug the device back in, it may enumerate as another device. That depends on the driver.</div> <br /><br />The host app missed the disconnect However, the Write subsequent to disconnect fails, the app detects this, reenumerates the device, and goes on happily.<br /><br /><div class="quote">The code you're using, once the FW and the app disagree on the current state, they'll be stuck waiting for each other. You may want to rewrite the main loop.</div> <br /><br />This actually occures every time the very first Write after hot plugging it in.  Currently, for debugging, after GetEP1 I'm sending w to PORTA. w should hold the number of bytes received in the OUT report (saw this digging thru the source in usb_ch9.asm). While it holds zero bytes, the C (carry) bit is set (sucess code), and curiously enough, the correct data appears at PORTB.<br /><br />Inside the host code, WriteFile returns success (1) too.<br /><br />However, the next PutEP1 does not work. ReadFile returns a fail code (0). <br /><br />Thats the bug appearing. Soon the host app ReadFile times out, the host detects this, and everything catches up for the next Write/Read.<br /><br />Without any way to trace thru the device code for this, it's kinda hard to debug this. But I think I could do a crude work-around to use it anyway.<br /><br /><div class="quote">The only other thing is the pagesel bumpit. Don't know if that's from editting or what. Should be pagesel retry with what you've shown.</div> <br /><br />My mistake, the actual code I use is identicle in action, but has to do several manipulations to re-arrange the bytes to the ports (which would entail a non relevant digression , this code reflects an earler version of my code that still produced the bug). <br /><br />I've re-edited the code to reflect the actual pagesel.<br /><br /><br /><br />Thanks for your advice.</div>
+    <div class="meta">Posted on 2002-07-24 18:00:34 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

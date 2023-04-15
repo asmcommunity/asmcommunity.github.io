@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Yet Another String Functions... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8330" />
+  <link rel="prev" href="../?id=8330&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=8330">Yet Another String Functions...</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=8330&amp;page=1" style="">&laquo;</a><a href="../?id=8330&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="8330" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-77709">
+    <div class="subject"><a href="#post-77709">Yet Another String Functions...</a></div>
+    <div class="body"><div class="quote"><br />Why do you subtract 1 from each byte in eax???<br />Also what 'sign' are you checking for and why??? I know i look extremly idiotic while saying this but what exactly are signs in chars? After all this is a character array you are scanning?(or not)? </div><br />The stuff about &quot;D0 len=2 p2rEDIwECX  1 mop 1-1-0&quot; im not quite shure about<br />so I wont try to confuse you with what i think. I was rather confused by the strlen()<br />myself. But I think I understand it now so ill try my best to explain the above <br />question.<br /><br />When you subtract 1 from each byte in eax, any byte in eax wich is 0 will then<br />become -1(signed). This is used so that we can find out where and/or if we <br />have found the end of the string. This &quot;and     ecx, 80808080h&quot; checks to see<br />if we have reached the end of the string(check for any -1 bytes in eax). If not<br />it will check the next dword in the string until it finds the end.<br /><br />When we have found the end of the string, we need to find its position: <br />&quot;test eax,000000FFh&quot; here we are trying to findout where the string ends.<br /><br />Hope this helps!</div>
+    <div class="meta">Posted on 2003-01-22 05:10:41 by natas</div>
+   </div>
+   <div class="post" id="post-77869">
+    <div class="subject"><a href="#post-77869">Yet Another String Functions...</a></div>
+    <div class="body">natas,<br />&quot;The stuff about &quot;D0 len=2 p2rEDIwECX 1 mop 1-1-0&quot; im not quite sure about&quot;<br /><br />Let's read the book together:<br /><br />&quot;The comments are interpreted as follows: the MOV EAX, instruction is 2 bytes long, it generates one mop for port 2<br />that reads ESI and writes to (renames) EAX. This information is needed for analyzing the possible bottlenecks.<br /><br />Let's first analyze the instruction decoding (chapter 14): One of the instructions generates 2 mops (MOV ,EAX). <br />This instruction must go into decoder D0. There are three decode groups in the loop so it can decode in 3 clock cycles.<br /><br />For maximum throughput, it is recommended that you order your instructions according to the 4-1-1 pattern:<br />instructions that generate 2 to 4 mops can be interspearsed with two simple 1-mop instructions for<br />free, in the sense that they do not add to the decoding time.&quot; by A.Fog<br /> <br /><br />The comments are interpreted as follows:<pre><code><br />&#91;B&#93;1. 004011A0 8D88FFFEFEFE lea ecx, &#91;eax-1010101h&#93;; D0 len=6 p0rEAXwECX  1 mop  1-1-0&#91;/B&#93;<br /><br />The lea ecx, &#91;eax-1010101h&#93; instruction is 6 bytes long, it generates one mop for port 0<br />that reads EAX and writes to &#40;renames&#41; ECX.<br />This instruction must go into decoder D0.<br /><br />&#91;B&#93;2. 004011A6 42           inc edx  ; D1 len=1 p01rwEDXwF  1 mop&#91;/B&#93;<br /><br />The inc, edx  instruction is 1 byte long, it generates one mop for port 0 or port 1<br />that reads EDX and writes to &#40;renames&#41; EDX and Flags.<br />This instruction must go into decoder D1.<br /><br />In 1. and 2. we use 1-1-0 pattern for generation of two mops <br />&#40;1st mop from D0 and 2nd mop from D1, we don't use D2&#41;,<br />i.e. the generation of the second mop is for free<br /><br />&#91;B&#93;3. 004011A7 23 CB        and ecx, ebx ; D0 len=2 p01rwECXrEBXwF  1 mop 1-1-1&#91;/B&#93;<br />The and ecx, ebx  instruction is 2 bytes long, it generates one mop for port 0 or port 1<br />that reads ECX and EBX and writes to &#40;renames&#41; ECX and Flags.<br />This instruction must go into decoder D0.<br /><br />&#91;B&#93;4. 004011A9 8B 04 96     mov eax, dword ptr &#91;esi+edx*4&#93;; D1 len=3 p2rESIrEDXIwEAX 1 mop&#91;/B&#93;<br /><br />The mov eax, dword ptr &#91;esi+edx*4&#93;  instruction is 3 bytes long,<br />it generates one mop for port 2<br />that reads ESI and EDX and writes to &#40;renames&#41; EAX.<br />This instruction must go into decoder D1.<br /><br /><br />&#91;B&#93;5. 004011AC 74 F2        je 004011A0 ; D2 len=2 p1rF  1 mop&#91;/B&#93;<br /><br />The je 004011A0  instruction is 2 bytes long,<br />it generates one mop for port 1 that reads Flags.<br />This instruction must go into decoder D2.<br /><br />In 3. ,4 and 5. we use 1-1-1 pattern for generation of three mops<br />&#40;1st mop from D0, 2nd mop from D1 and 3rd mop from D2&#41;,<br />i.e. the generation of the second and the third mops are for free</code></pre><br /><br />gladiator,<br /><br />&quot;...and i cant understand most of agner fog's manual.&quot;<br />Just read it again and again and again...<br /><br />&quot;..Although i have never used HLA but i do code in HLLs&quot;<br />What is the difference?<br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-01-22 18:54:12 by lingo12</div>
+   </div>
+   <div class="post" id="post-77903">
+    <div class="subject"><a href="#post-77903">Yet Another String Functions...</a></div>
+    <div class="body"><strong>Thanks Lingo!</strong> :alright:  Well explained once again! I have not yet<br />read all of agners book tho. Actually I hate reading books since it all <br />usually gets dry if its too long. But I think i need to start readin Agners<br />book now(the time has come :grin: ). Dont suppose  you have written <br />some articles within the assembly language? i would love to read em if <br />you have? keep it real!</div>
+    <div class="meta">Posted on 2003-01-22 23:49:27 by natas</div>
+   </div>
+   <div class="post" id="post-77921">
+    <div class="subject"><a href="#post-77921">Thanks :)</a></div>
+    <div class="body">thanks a lot natas and lingo12, i understand perfectly now.<br /><br />Btw, how many books there are by agner fog??<br /><br />I only have one , the 'optimization manual' available on hutch's site.<br /><br />Where can i find the rest of them?</div>
+    <div class="meta">Posted on 2003-01-23 03:12:53 by clippy</div>
+   </div>
+   <div class="post" id="post-77923">
+    <div class="subject"><a href="#post-77923">Yet Another String Functions...</a></div>
+    <div class="body">gladiator,<br /><br />If you don't have them already, download the PIII or PIV manuals directly from the Intel site and make a point of giving them a good read. They are the best that exist and have a depth of detail that is not equalled elsewhere.<br /><br />Agner Fog's manual is very good and addresses stuff that is not obvious in the Intel manuals so don't give up on it either. Importantly, work out a way to benchmak algos in real time as it will tell you if you code is faster as you optimise it.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-01-23 03:28:40 by hutch--</div>
+   </div>
+   <div class="post" id="post-84503">
+    <div class="subject"><a href="#post-84503">Yet Another String Functions...</a></div>
+    <div class="body"><div class="quote"><br /> str_dir_sep:<br />	call 	str_end<br />	dec	edi<br />	mov	al,<br />	cmp	al,5Ch<br />	je	.ready<br />	mov	ax,5Ch<br />	inc	edi<br />	mov	,ax<br />	.ready:<br />	ret<br /></div><br /><br />Try:<br /><pre><code><br />  str_dir_sep&#58;<br />	call 	str_end<br />	cmp byte ptr &#91;edi-1&#93;,5Ch<br />	jne @F<br />	dec edi<br />@@&#58;	mov word ptr &#91;edi&#93;,5ch<br />	ret<br /></code></pre></div>
+    <div class="meta">Posted on 2003-03-02 10:22:27 by The Svin</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=8330&amp;page=1" style="">&laquo;</a><a href="../?id=8330&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="8330" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

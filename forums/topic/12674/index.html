@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Detecting service installation/startup - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12674" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12674">Detecting service installation/startup</a></p>
+   <div class="post" id="post-97967">
+    <div class="subject"><a href="#post-97967">Detecting service installation/startup</a></div>
+    <div class="body">Hi,<br /><br />We have SystemTools Hyena at work and with that tool you can install VNC remote control to another computer. The installation is simple; Hyena just copies VNC files to another computer and then tell the Service Control Maneger to install and start VNC service. This is all nice, when not used wrong. Problem is that VNC doesn't show anything to that remote computers user, so the evil person can monitor what the other user is doing.<br /><br />Because Hyena is, by default, copying VNC files to c:\winnt\system32\rc folder, one weak defense is to deny all access to that folder. This will stop some people, but then some will change the installation folder... and the installation rocks again.<br /><br />So the thing I was wondering is to detect installation of winvnc.exe, which is the VNCs service. This way I can make my own service which get loaded instead of winvnc.exe and then it can start listening port 5900 which the real VNC will listen and then repond something interesting when the connection is made :) Ofcourese I need to make sure the service is some incarnation of VNC and what is the real port to listen, but thats the stage two.<br /><br />The thing is, how to detect when another computer is installing service to yours? It's quite easy if the service is installed locally... but it's no help on this case.<br /><br />I'm very happy (and more secured) if somebody could point me to a right direction about solving this case.<br /><br />Happy easter,<br />Sami</div>
+    <div class="meta">Posted on 2003-04-19 06:09:21 by SamiP</div>
+   </div>
+   <div class="post" id="post-98386">
+    <div class="subject"><a href="#post-98386">Detecting service installation/startup</a></div>
+    <div class="body">Please, if somebody knows something even an idea, I'm very happy to hear it. I am completely lost about this I have tried googleing around, but without any luck and trying to put breakpoints to different service related apis doesn't seem to help either.</div>
+    <div class="meta">Posted on 2003-04-21 10:43:07 by SamiP</div>
+   </div>
+   <div class="post" id="post-98397">
+    <div class="subject"><a href="#post-98397">Detecting service installation/startup</a></div>
+    <div class="body">Hi,<br /><br />Here is a &quot;copy-paste&quot; from one of my proggies that may help you: <br /><br /><pre><code><br />.data<br />enum_service_info       db 0dh,0ah,0dh,0ah,&quot;ServiceName &#58; DisplayName&quot;,0dh,0ah,0dh,0ah,0<br />enum_service_info_len   equ $ - OFFSET enum_service_info<br /><br /><br />.code<br /><br />EnumServices    proc  uses ebx <br />          LOCAL     hSCM    &#58;DWORD<br />          LOCAL     ess     &#58;ENUM_SERVICE_STATUS<br />          LOCAL     Needed  &#58;DWORD<br />          LOCAL     ServicesReturned    &#58;DWORD<br />          LOCAL     ResumeHandle        &#58;DWORD<br />          LOCAL     pESSalloc    &#58;DWORD<br />          LOCAL     localbuf&#91;512&#93;   &#58;BYTE<br /><br />          <br />          ESS_MAX_SIZE      EQU    &#40;&#40;8 + &#40;7 * 4&#41;&#41; * 700 &#41;      <br /><br />          and    ResumeHandle, 0<br />          invoke OpenSCManager, NULL, NULL, SC_MANAGER_ALL_ACCESS<br />          test    eax, eax<br />          jz     @F   <br />          mov    hSCM, eax<br />          invoke VirtualAlloc, NULL, ESS_MAX_SIZE, MEM_COMMIT or MEM_RESERVE, PAGE_READWRITE  <br /><br />          test    eax, eax<br />          jz     @ErrEnumClosehSCM<br />          mov    pESSalloc, eax<br /><br />          invoke EnumServicesStatus, hSCM, ServiceType, \<br />                                     ServiceStatus, pESSalloc, ESS_MAX_SIZE, addr Needed, \<br />                                     addr ServicesReturned,  addr ResumeHandle<br />          test     eax, eax<br />          jz     @ErrEnumClosehSCM<br />          mov    ebx, pESSalloc<br />          assume ebx &#58; ptr ENUM_SERVICE_STATUS<br /><br /><br />         EnumServNext&#58;<br />  <br /><br />          ; &#91;B&#93;compare &#91;ebx&#93;.lpServiceName with the name of your service  &#91;\B&#93;<br /><br />                 <br />          add    ebx, sizeof ENUM_SERVICE_STATUS<br />          cmp    dword ptr &#91;ebx&#93;,0<br />          jnz    EnumServNext<br />          <br />          invoke VirtualFree, pESSalloc, ESS_MAX_SIZE, MEM_DECOMMIT or MEM_RELEASE<br />         @ErrEnumClosehSCM&#58;<br />          invoke CloseServiceHandle, hSCM<br />         @@&#58;<br />          assume ebx &#58; nothing<br />          ret<br />  <br />  EnumServices    endp<br /></code></pre><br /><br />Also, don't forget to check MSDN :)</div>
+    <div class="meta">Posted on 2003-04-21 12:01:49 by Axial</div>
+   </div>
+   <div class="post" id="post-98402">
+    <div class="subject"><a href="#post-98402">Detecting service installation/startup</a></div>
+    <div class="body">Thanks Axial!<br /><br />Sad to say but its no much help on this particular case. By enumerating services I can detect that the service is allready installed, and by choice terminate it, but it still gets installed. The thing I did previously is checking which processes are running and then terminate WinVNC if its running.<br /><br />The thing is that if I install service locally, my prog calls apis like OpenSCManager, CreateService and so on... so I can detect service installation by hooking CreateService api. That way when prog is going to install service and calls CreateService my hook gets that call and I can check which service is going to be installed and do my actions... like install fake VNC service which displays something like &quot;Don't monitor me!&quot; message instead my desktop.<br /><br />But when other computer is installing service on my computer, the CreateService api is called on that other computer so my hook procedure on my computer never gets called. I have tried to put breakpoint on allmost all service related apis and no one gets called on this case in my computer. Still the other computer installs VNC service correctly on my PC, which I try to prevent.<br /><br />So the still remaining question is; what really happens when the computer A installs a service to computer B and how to intercept that?<br /><br />Regards,<br />Sami</div>
+    <div class="meta">Posted on 2003-04-21 12:29:24 by SamiP</div>
+   </div>
+  </div>
+ </body>
+</html>

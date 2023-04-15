@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>compare with mismatch return value - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28256" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28256">compare with mismatch return value</a></p>
+   <div class="post" id="post-200172">
+    <div class="subject"><a href="#post-200172">compare with mismatch return value</a></div>
+    <div class="body">This is a byte data compare that returns the mismatch position or returns
+-1 if the two sections of data match. Normal application would be string
+comparison, binary byte pattern comparison etc...
+
+It changes the sign of ECX and adds ECX to the address of both pieces of
+data being compared so that the comparison loop can use JNZ rather that doing
+and extra comparison. It could be unrolled by 2 easily enough and with a
+bit of testing, the comparison code could probably be expanded up slightly
+to make it run faster on a late pentium but this would probably make it slower
+on most other processors.
+
+Regards,
+
+hutch@pbq.com.au
+<pre><code>
+; ########################################################################
+
+cmpstrb proc lpStr1:DWORD,lpStr2:DWORD,ln:DWORD
+
+    push ebx        ; <<< added
+
+    mov ebx, lpStr1
+    mov edx, lpStr2
+    mov ecx, ln
+    add ebx, ecx
+    add edx, ecx
+    neg ecx         ; change sign so ECX can be incremented
+                    ; up to 0 in following loop
+  @@:
+    mov al, 
+    cmp al, 
+    jne @F
+    inc ecx
+    jnz @B          ; fall through if ECX = 0
+
+    jmp Matched
+
+  @@:               ; mis match location
+    add ecx, ln     ; add length to ECX to get mismatch position
+    mov eax, ecx    ; put mismatch position in EAX
+    jmp @F
+
+  Matched:
+    mov eax, -1     ; else -1 = match
+
+  @@:
+
+    pop ebx         ;<<<<< added
+
+    ret
+
+cmpstrb endp
+
+; ########################################################################
+</code></pre>
+
+This message was edited by hutch--, on 6/5/2001 2:04:23 AM</div>
+    <div class="meta">Posted on 2001-06-03 03:42:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-200173">
+    <div class="subject"><a href="#post-200173">compare with mismatch return value</a></div>
+    <div class="body">Doesn't <em>EBX</em> need to be saved?  Just another version, no benifits to it's use at all. :)
+
+<pre><code>; ########################################################################
+
+cmpstrb proc lpStr1:DWORD,lpStr2:DWORD,ln:DWORD
+
+    push ebx
+
+    mov eax, ln
+    mov ebx, lpStr1
+    mov edx, lpStr2
+    add ebx, eax
+    add edx, eax
+    neg eax         ; change sign so ECX can be incremented
+                    ; up to 0 in following loop
+  @@:
+    mov cl, 
+    cmp cl, 
+    jne @F
+    inc eax
+    jnz @B          ; fall through if ECX = 0
+
+    dec eax
+    sub eax, ln     ; forces EAX = -1
+  @@:               ; mis match location
+    add eax, ln     ; add length to ECX to get mismatch position
+
+    pop ebx
+    ret
+
+cmpstrb endp
+
+; ########################################################################</code></pre>
+
+This message was edited by bitRAKE, on 6/4/2001 11:09:20 PM</div>
+    <div class="meta">Posted on 2001-06-04 13:25:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-200174">
+    <div class="subject"><a href="#post-200174">compare with mismatch return value</a></div>
+    <div class="body">I don't know if the following is faster, but it's as slick as an eel in a pail of snot.
+
+cmpstrb proc lpStr1:DWORD, lpStr2:DWORD, ln:DWORD
+    mov ebx, lpStr1
+    mov edx, lpStr2
+    mov ecx, ln      ;We are assuming that this is not 0.
+  loopit:
+    mov al, 
+    inc edx          ;Pairing should be worth a mip or two here.
+    inc ebx
+    cmp al, 
+    loope loopit     ;I have a vague recollection that loope is slow.
+    xchg eax,ecx
+    je short matched
+    neg eax
+    add eax, ln      ;eax is now the mismatch position, 1-based
+    db 3Ch           ;cmp al,immed8
+  matched: dec eax   ;to -1
+    ret
+cmpstrb endp
+
+I'm having trouble with my browser. Sorry if more than one copy of this masterpiece get's uploaded.
+
+
+This message was edited by Larry Hammick, on 6/4/2001 7:51:34 PM</div>
+    <div class="meta">Posted on 2001-06-04 16:59:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-200175">
+    <div class="subject"><a href="#post-200175">compare with mismatch return value</a></div>
+    <div class="body"><div class="quote">
+slick as an eel in a pail of snot
+</div>
+
+<em>...i believe this is the "phrase-of-the-day"</em> :D</div>
+    <div class="meta">Posted on 2001-06-04 19:10:00 by NaN</div>
+   </div>
+   <div class="post" id="post-200176">
+    <div class="subject"><a href="#post-200176">compare with mismatch return value</a></div>
+    <div class="body">Forgive my ignorance, but what is the <strong>db 3Ch</strong> for?
+Nevermind, I figured it out. <img src=" http://www.hiroshimator.com/asmcommunity/messageboard/images/smiley15.gif
+
+It don't change anything, but you could:<pre><code>
+    dec edx
+loopit:
+    mov al, 
+    inc edx
+    inc ebx
+    cmp al, 
+    loope loopit
+</code></pre>
+
+Respectfully, reposted with <strong><pre><code><pre><code></code></pre></code></pre></strong> tags:
+<pre><code>
+cmpstrb PROC lpStr1:DWORD, lpStr2:DWORD, ln:DWORD
+
+    mov ebx, lpStr1
+    mov edx, lpStr2
+    mov ecx, ln      ;We are assuming that this is not 0.
+loopit:
+    mov al, 
+    inc edx          ;Pairing should be worth a mip or two here.
+    inc ebx
+    cmp al, 
+    loope loopit     ;I have a vague recollection that loope is slow.
+
+    xchg eax,ecx
+    je short matched
+
+    neg eax
+    add eax, ln      ;eax is now the mismatch position, 1-based
+    db 3Ch           ;cmp al,immed8 ; to skip next instruction :P
+matched:
+    dec eax   ;to -1
+    ret
+cmpstrb ENDP</code></pre>
+
+<strong>Very slick indeed!</strong>
+
+This message was edited by bitRAKE, on 6/4/2001 11:32:28 PM</div>
+    <div class="meta">Posted on 2001-06-04 23:19:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-200177">
+    <div class="subject"><a href="#post-200177">compare with mismatch return value</a></div>
+    <div class="body">Bitrake,
+
+You are right, the EBX register should be preserved.
+
+Larry,
+
+The code you wrote is short enough but you are right, the LOOPE
+instruction is very slow on most Intel processors so it defeats
+the purpose of reducing the instruction path.
+
+Good to see the variation, thats how better code gets developed.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-06-05 01:55:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-200178">
+    <div class="subject"><a href="#post-200178">compare with mismatch return value</a></div>
+    <div class="body">I didn't go back to put in code tags, or to fix colon-D,
+because I didn't yet know what I was doing with this new
+browser (Opera 5). But at last I discovered how to make
+a little grinning guy.
+
+Using ecx in both indexes is a nice move. I don't see a
+fix for loope without doing two comparisons, which is
+what we are trying to avoid.
+
+The trick "db 3Ch" bypasses any one-byte instruction, at the
+cost of the arithmetic flags, and is no slower than a jmp. To
+bypass two or four bytes:
+<pre><code>
+db 66h,3Dh    ;cmp ax,immed16 -- same size as "jmp short", but faster
+db 3Dh        ;cmp eax,immed32
+
+ReturnNonzero:
+	db 66h,0B8h  ;mov ax,immed16
+ReturnZero:
+	xor eax,eax
+	ret     ;assembles to several bytes within PROC
+
+ReturnNonzero:
+	db 66h,0Dh   ;or ax,immed16, clearing ZF at the same time
+ReturnZero:
+	xor eax,eax  ;set ZF
+	ret
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-05 09:32:00 by Larry Hammick</div>
+   </div>
+  </div>
+ </body>
+</html>

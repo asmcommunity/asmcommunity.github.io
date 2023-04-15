@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Select socket function - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19772" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=19772">Select socket function</a></p>
+   <div class="post" id="post-152057">
+    <div class="subject"><a href="#post-152057">Select socket function</a></div>
+    <div class="body">From msdn: (about the return value of &quot;select&quot; function):<br /><div class="quote"><br />Upon return, the structures are updated to reflect the subset of these sockets that meet the specified condition.</div><br /><br />What does it mean the structures are updated? How can I find out which sockets meet the conditions?<br /><br />realcr.</div>
+    <div class="meta">Posted on 2004-10-30 16:21:00 by realcr</div>
+   </div>
+   <div class="post" id="post-152058">
+    <div class="subject"><a href="#post-152058">Select socket function</a></div>
+    <div class="body">The fd_set array is updated. Any socket which does not match the state it is supposed to be in (ready for read, write, etc) is removed from the array in which it is initially placed by you using FD_SET.<br />You can then check if it still exists in the array by looping through it, or using __WSAFDIsSet which is exported by wsock32.dll and ws2_32.dll.<br /><br />Note that in many examples in C/C++ you will use use of FD_SET, FD_ISSET. Those are actually standard macros declared in standard Windows includes. Here they are:<br /><pre><code><br />typedef struct fd_set &#123;<br />	u_int   fd_count;<br />	SOCKET  fd_array&#91;FD_SETSIZE&#93;;<br />&#125; fd_set; <br /><br />#define FD_CLR&#40;fd,set&#41; do &#123; u_int __i;\<br />for &#40;__i = 0; __i &lt; &#40;&#40;fd_set *&#41;&#40;set&#41;&#41;-&gt;fd_count ; __i++&#41; &#123;\<br />	if &#40;&#40;&#40;fd_set *&#41;&#40;set&#41;&#41;-&gt;fd_array&#91;__i&#93; == &#40;fd&#41;&#41; &#123;\<br />	while &#40;__i &lt; &#40;&#40;fd_set *&#41;&#40;set&#41;&#41;-&gt;fd_count-1&#41; &#123;\<br />		&#40;&#40;fd_set*&#41;&#40;set&#41;&#41;-&gt;fd_array&#91;__i&#93; = &#40;&#40;fd_set*&#41;&#40;set&#41;&#41;-&gt;fd_array&#91;__i+1&#93;;\<br />		__i++;\<br />	&#125;\<br />	&#40;&#40;fd_set*&#41;&#40;set&#41;&#41;-&gt;fd_count--;\<br />	break;\<br />	&#125;\<br />&#125;\<br />&#125; while &#40;0&#41;<br />#endif <br /><br />#define FD_ISSET&#40;fd, set&#41; __WSAFDIsSet&#40;&#40;SOCKET&#41;&#40;fd&#41;, &#40;fd_set *&#41;&#40;set&#41;&#41; <br /><br />#define FD_SET&#40;fd, set&#41; do &#123; \<br />    if &#40;&#40;&#40;fd_set *&#41;&#40;set&#41;&#41;-&gt;fd_count &lt; FD_SETSIZE&#41; \<br />	&#40;&#40;fd_set *&#41;&#40;set&#41;&#41;-&gt;fd_array&#91;&#40;&#40;fd_set *&#41;&#40;set&#41;&#41;-&gt;fd_count++&#93;=&#40;fd&#41;;\<br />&#125;while &#40;0&#41; </code></pre><br /><br />As you can see, <strong>fd_set</strong> is nothing more, nothing less than an array of <strong>SOCKET</strong> type variables (SOCKET is actually a typedef for <strong>int</strong>) with a counter of how many elements are in that array. FD_SETSIZE is usually equal to 64, but that you can change.<br /><br />So when you call <strong>select<strong>, say with a pointer to &quot;readset&quot;, which will be an fd_set structure, <strong>select</strong> will remove any elements from the array which do not have any data to be read, and will only leave the ones that you can read from.<br /><br />So you would so something like:<br /><pre><code><br />readset dd 4, 0, 0, 0, 0<br /><br />; put four sockets in the array, to be tested for readability<br />mov dword ptr &#91;readset+04h&#93;, handle_of_socket1<br />mov dword ptr &#91;readset+08h&#93;, handle_of_socket2<br />mov dword ptr &#91;readset+0Ch&#93;, handle_of_socket3<br />mov dword ptr &#91;readset+10h&#93;, handle_of_socket4<br /><br />invoke select, 0, OFFSET readfs, 0, 0, 0<br /><br />; loop through readset, and check which sockets can be read<br />lea edx, dword ptr &#91;readset+04h&#93;<br />mov ecx, dword ptr &#91;readset+00h&#93;<br />jecxz quit<br />check&#58;<br /><br />cmp &#91;edx&#93;, handle_of_socket1<br />je readsocket1<br />cmp &#91;edx&#93;, handle_of_socket2<br />je readsocket2<br />cmp &#91;edx&#93;, handle_of_socket3<br />je readsocket3<br />cmp &#91;edx&#93;, handle_of_socket4<br />je readsocket4<br /><br />add edx, 4<br />dec ecx<br />ja check<br />quit&#58;<br /></code></pre><br /><br />something like tat...</div>
+    <div class="meta">Posted on 2004-10-30 18:43:28 by comrade</div>
+   </div>
+   <div class="post" id="post-152078">
+    <div class="subject"><a href="#post-152078">Tnx</a></div>
+    <div class="body">Tnx comrade.<br />Now everything is clear.<br /><br />realcr.</div>
+    <div class="meta">Posted on 2004-10-31 14:53:09 by realcr</div>
+   </div>
+  </div>
+ </body>
+</html>

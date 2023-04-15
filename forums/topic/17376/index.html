@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Accelerators - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17376" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=17376">Accelerators</a></p>
+   <div class="post" id="post-134569">
+    <div class="subject"><a href="#post-134569">Accelerators</a></div>
+    <div class="body">I got this code:<br /><br /><pre><code><br />	w.LoadAccelerators<br />	&#40;<br />		hInst,<br />		string&#40;dword&#40;word&#40;IDR_ACCEL&#41;&#41;&#41;<br />	&#41;;<br />	mov&#40; eax, hAccel &#41;;<br />	<br />	forever<br />	<br />		w.GetMessage&#40; msg, NULL, 0, 0 &#41;;<br />		breakif&#40; !eax &#41;;<br /><br />		w.TranslateAccelerator&#40;<br />			hwnd,<br />			hAccel,<br />			&amp;msg<br />		&#41;;<br />		<br />		if &#40;! eax&#41; then<br />			w.TranslateMessage&#40; msg &#41;;<br />			w.DispatchMessage&#40; msg &#41;;<br />		endif;<br />		<br />	endfor;<br /></code></pre><br /><br />I got this from other threads. The <br /><br /><pre><code>string&#40;dword&#40;word&#40;IDR_ACCEL&#41;&#41;&#41;</code></pre><br /><br />is the MAKEINTRESOURCE macro from VC 6.0. The acceleratortable looks like this:<br /><br /><pre><code><br />IDR_ACCEL ACCELERATORS PRELOAD MOVEABLE PURE <br />BEGIN<br />    &quot;O&quot;,	IDM_FILE_OPEN,	VIRTKEY, CONTROL, NOINVERT<br />END<br /></code></pre><br /><br />But the 'Ctrl+O' combination doesn't work.</div>
+    <div class="meta">Posted on 2004-02-23 09:17:25 by weelink</div>
+   </div>
+   <div class="post" id="post-134580">
+    <div class="subject"><a href="#post-134580">Accelerators</a></div>
+    <div class="body">You must call TranslateAccelerator in your messageloop. If it returns non-zero, the message was a translator thingy and got processed. If it returns zero, it wasn't a translator message thingy, and you must call TranslateMessage + DispatchMessage.<br /><br />Hope this helps.</div>
+    <div class="meta">Posted on 2004-02-23 10:25:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-134603">
+    <div class="subject"><a href="#post-134603">Accelerators</a></div>
+    <div class="body"><pre><code>	w.LoadAccelerators<br />	&#40;<br />		hInst,<br />		string&#40;dword&#40;word&#40;IDR_ACCEL&#41;&#41;&#41;<br />	&#41;;</code></pre><br /><br />This looks more complicated than it needs to be.  You should be able to access it like this (if IDR_ACCEL is defined as a number in your resource).<br /><br />w.LoadAccelerators(hInst, val IDR_ACCEL);<br /><br />In your w.TranslateAccelerator,  you access the address of msg (&amp;msg).  Use the value of msg instead.<br /><br />Below is a sample of how I would have written it.  It should not matter though if your TranslateAccelerator is outside or inside the loop as it returns results in eax.<br /><br /><pre><code>w.LoadAccelerators &#40; hInst, val IDR_ACCEL&#41;; <br />mov&#40; eax, hAccel &#41;;<br /><br /><br />        forever<br />	<br />		w.GetMessage&#40; msg, NULL, 0, 0 &#41;;<br />		breakif&#40; !eax &#41;;<br /><br />		if &#40;! eax&#41; then<br />                        if&#40; ! w.TranslateAccelerator&#40;	hwnd, hAccel, msg &#41; then<br />			        w.TranslateMessage&#40; msg &#41;;<br />			        w.DispatchMessage&#40; msg &#41;;<br />                        endif;<br />		endif;<br />		<br />	endfor;</code></pre><br /><br />If your still having problems, you might want to check out the source code and resources of EditHLA in the HLA Rich Editor thread for a working example of accelerators in HLA:<br /><br /><a target="_blank" href="http://win32asm.cjb.net/">http://win32asm.cjb.net/</a></div>
+    <div class="meta">Posted on 2004-02-23 15:53:43 by Kain</div>
+   </div>
+   <div class="post" id="post-134777">
+    <div class="subject"><a href="#post-134777">Accelerators</a></div>
+    <div class="body">Thank you for your replies. I've copied+pasted almost every HLA-code there is. But nothing worked. In the WinAPI docs I found out that accelerator-messages have the high-order word set to one. If I clear this by doing this:<br /><br /><pre><code><br />elseif&#40; eax = &#40;type MsgProcPtr_t &#91;edx&#93;&#41;.MessageValue &#41; then<br /><br />	// If the current message matches one of the values<br />	// in the message dispatch table, then call the<br />	// appropriate routine.  Note that the routine address<br />	// is still in ECX from the test above.<br />	<br />	/*******************************************************/<br /><br />	push&#40; eax &#41;;			// Save eax<br />	mov&#40; wParam, eax &#41;;		// Move the value of wParam into eax<br />	and&#40;%1111_1111_1111_1111, eax&#41;;	// Clear the upperbits &#40;= only save the lowerbits&#41;<br />	mov&#40; eax, wParam &#41;;		// Move the value back into wParam<br />	pop&#40; eax &#41;;			// Restore eax<br />	<br />	/*******************************************************/<br /><br />	push&#40; hwnd &#41;;	// &#40;type tMsgProc ecx&#41;&#40;hwnd, wParam, lParam&#41;<br />	push&#40; wParam &#41;;	//  This calls the associated routine after<br />	push&#40; lParam &#41;;	//  pushing the necessary parameters.<br />	call&#40; ecx &#41;;<br />	<br />	sub&#40; eax, eax &#41;; // Return value for function is zero.<br />	break;<br /><br />endif;<br /></code></pre><br /><br />in the <pre><code>WndProc</code></pre> procedure it works.</div>
+    <div class="meta">Posted on 2004-02-25 06:43:00 by weelink</div>
+   </div>
+  </div>
+ </body>
+</html>

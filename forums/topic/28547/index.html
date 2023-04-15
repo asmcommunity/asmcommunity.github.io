@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>PE Edit - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28547" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28547">PE Edit</a></p>
+   <div class="post" id="post-201935">
+    <div class="subject"><a href="#post-201935">PE Edit</a></div>
+    <div class="body">Anyone have example code, 
+or can show me an example of how I should edit this PE File?
+
+I am wanting to change it, with an edit PE file.
+From 'Hello' to 'Bye'.
+
+No fancy GUI is needed. Just curious.
+
+Any help is appreciated.
+
+Thanks!
+Jumpsteady
+
+
+
+.Data
+
+Cap   db   "Message...",0
+Hello db   "Hello!",0
+Bye   db   "GoodBye!",0
+
+.Code
+Start:
+
+Invoke MessageBox, NULL, addr Hello, addr Cap, MB_OK
+;I want to change this ---------^   to Bye
+Invoke ExitProcess, NULL
+;How can i edit the Message.exe PE?
+
+End Start</div>
+    <div class="meta">Posted on 2001-06-28 01:39:00 by Jumpsteady44</div>
+   </div>
+   <div class="post" id="post-201936">
+    <div class="subject"><a href="#post-201936">PE Edit</a></div>
+    <div class="body">use a hexeditor</div>
+    <div class="meta">Posted on 2001-06-28 07:42:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-201937">
+    <div class="subject"><a href="#post-201937">PE Edit</a></div>
+    <div class="body">No no, you totally missed what i was saying. 
+
+See, i want to WRITE my own program to do these changes.
+Everyone has seen it done before and know what i'm talking about.
+But i'm curious as to how it's done. ok.
+
+Overall: I want to write a program to change my program after it's
+been assembled. A program that will change something minute like a db
+in the .data section.</div>
+    <div class="meta">Posted on 2001-06-28 10:09:00 by Jumpsteady</div>
+   </div>
+   <div class="post" id="post-201938">
+    <div class="subject"><a href="#post-201938">PE Edit</a></div>
+    <div class="body">Open up your exe in "Quick Editor", and change the value at 00000408 to "12" (instead of "0B").
+
+This will change the value pushed onto the stack from the address of the text "Hello!" to the address of "GoodBye!".
+<pre><code>
+ 00000000                            .Data
+ 00000000 4D 65 73 73 61 67 65       Cap db "Message...",0
+          2E 2E 2E 00
+ 0000000B 48 65 6C 6C 6F 21 00       Hello db "Hello!",0
+ 00000012 47 6F 6F 64 42 79 65       Bye db "GoodBye!",0
+          21 00
+
+ 00000000                            .Code
+ 00000000                            Start:
+
+                                     Invoke MessageBox, 0, addr Hello, addr Cap, 0
+ 00000000   1   6A 00           *     push +000000000h
+ 00000002   1   68 00000000 R   *     push OFFSET Cap
+ 00000007   1   68 0000000B R   *     push OFFSET Hello
+ 0000000C   1   6A 00           *     push +000000000h
+ 0000000E   1   E8 00000000 E   *     call MessageBoxA
+                                     Invoke ExitProcess, 0
+ 00000013   1   6A 00           *     push +000000000h
+ 00000015   1   E8 00000000 E   *     call ExitProcess
+</code></pre>
+
+Mirno
+
+***** Edited so it lined up better (tabs were all messed up) *****
+
+***** Didn't edit it enough last time! *****
+
+
+This message was edited by Mirno, on 6/28/2001 10:56:30 AM</div>
+    <div class="meta">Posted on 2001-06-28 10:49:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201939">
+    <div class="subject"><a href="#post-201939">PE Edit</a></div>
+    <div class="body">hi jumpsteady...
+sorry now i know what you meant.
+your task seems very easy to me - all
+you have to do is learn the pe-header
+basics and find the data section then
+you can change what you want... wait
+two or three hours and i paste the 
+source to do this because now i want
+to watch tv :)</div>
+    <div class="meta">Posted on 2001-06-28 15:31:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-201940">
+    <div class="subject"><a href="#post-201940">PE Edit</a></div>
+    <div class="body">ok i forget that my computer is at work
+right now so i had to write this from mind so
+expect some debugging time =) 
+
+the following prog should do exactly what you
+want it opens your helloworld.exe - searches
+for the data section (if it does not work you
+should search the bug on this pos at first) and
+overwrites your "hello" string with "bye".
+
+<pre><code>
+.486    
+.model      flat, stdcall
+option      casemap:none
+include     \masm32\include\windows.inc
+include     \masm32\include\kernel32.inc
+includelib  \masm32\lib\kernel32.lib
+
+.DATA
+            filename        db "HelloWorld.exe",0
+
+	    string          db "bye",0
+
+	    stringlen	    equ 4 ;len of asciiZ
+.DATA?
+            fHandle         dd ?
+            MapOfs          dd ?
+            FileSize        dd ?
+            mHandle         dd ?
+            
+.CODE                                 
+start:                 
+        invoke  CreateFile,addr filename,GENERIC_READ+GENERIC_WRITE,
+                FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL
+        cmp     eax,-1
+        jz      closef
+        mov     fHandle,eax
+
+        invoke  GetFileSize,fHandle,NULL
+        mov     FileSize, eax          
+
+        invoke  CreateFileMapping,fHandle,NULL,PAGE_READWRITE,0,eax,NULL
+        mov     mHandle,eax
+                                   
+        invoke  MapViewOfFile,eax,FILE_MAP_WRITE,0,0,FileSize
+        mov     MapOfs,eax            
+        mov     edx, eax
+
+        cmp     word ptr ,'ZM' ;executable file?
+        jnz     closef
+
+        add     edx, ;get pe header ofs
+
+        cmp     word ptr ,'EP' ;win32 pe file?
+        jnz     closef
+
+	mov	esi,edx
+    	add     esi,18h ;add len of image file header
+    	add     esi, ;get len of optional header
+
+	mov	ecx, ;get number of sections
+__loop:	cmp	dword ptr ,"tad." ;data section?
+	jz	found
+	add	esi,28h ;next section
+	dec	ecx
+	jnz	_loop
+	jmp	closef
+found:	mov	edi, ;get filebased rva
+	add	edi,edx ;align it to the filebase
+	add	edi,11  ;Cap db "Message...",0 = 11 bytes next one
+			;("Hello",0) should be overwritten with "bye",0
+	mov	esi,offset string
+        or      dword ptr ,0A0000020h ;sec=CERW is think
+	mov	ecx,stringlen
+	rep 	movsb ;write new string to there
+        
+closef:
+        invoke  UnmapViewOfFile,MapOfs
+        invoke  CloseHandle,mHandle
+        invoke  CloseHandle,fHandle
+        invoke ExitProcess,0
+end	start
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-28 16:39:00 by _drcmda</div>
+   </div>
+  </div>
+ </body>
+</html>

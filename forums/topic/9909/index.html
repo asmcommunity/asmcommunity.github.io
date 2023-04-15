@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Wired multithreading problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9909" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9909">Wired multithreading problem</a></p>
+   <div class="post" id="post-73974">
+    <div class="subject"><a href="#post-73974">Wired multithreading problem</a></div>
+    <div class="body">I had a very wired problem and don't know if my solution is right:<br /><br />I have a main program that:<br />- opens a list view control<br />- start a filling thread<br />- wait for thread end<br /><br />the filling thread does:<br />- clear list (LVM_DELETEALLITEMS)<br />- insert new items (LVM_INSERTITEM)<br />- exit if done<br /><br />the effect: if I wait in the main thread with WaitForSingleObject (hThread) the main program AND the thread are blocked.<br />After trying a lot of things, I found out, that the SendMessages from the thread need some feedback from the main <br />program, which waits. So also the thread does not continue.<br /><br />I found a solution at Microsoft, they recommend an own message loop with PeekMessage and MsgWaitForMultipleObjects.<br />Is this a standard way? I also tried PostMessage instead of SendMessage, but this leads to a crash in comctl32.dll</div>
+    <div class="meta">Posted on 2003-01-02 04:51:18 by beaster</div>
+   </div>
+   <div class="post" id="post-73982">
+    <div class="subject"><a href="#post-73982">Wired multithreading problem</a></div>
+    <div class="body">Yes, you have to do that. Or, you could post a message from the other thread when it is done.</div>
+    <div class="meta">Posted on 2003-01-02 06:15:51 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-73995">
+    <div class="subject"><a href="#post-73995">Wired multithreading problem</a></div>
+    <div class="body">Windows:DEVELOPER issue March 2002 under Tech Tips has a article that details the use of this method.  You will need to transcribe it from C, but it's short and sweet and should not be difficult.<br /><br />Enjoy your work,  P1</div>
+    <div class="meta">Posted on 2003-01-02 08:42:07 by Pone</div>
+   </div>
+   <div class="post" id="post-74050">
+    <div class="subject"><a href="#post-74050">Wired multithreading problem</a></div>
+    <div class="body">Why not just let the main program running (don't block) and send a custom message to it from the thread when it's done?  A thread is no use if you wait for it to complete (isn't really multithreading, is it :) ). <br /><br /><div class="quote">I also tried PostMessage instead of SendMessage, but this leads to a crash in comctl32.dll</div><br />Did you by any chance pass pointers as wParam or lParam to PostMessage? IIRC, as PostMessage doesn't wait for the message to be handled it may be handled later, when your pointers have gone invalid. But if you use the above method you can just use SendMessage, it will return fast because nothing is blocking.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-01-02 14:57:57 by Thomas</div>
+   </div>
+   <div class="post" id="post-74131">
+    <div class="subject"><a href="#post-74131">Wired multithreading problem</a></div>
+    <div class="body">in normal case I do not wait for thread.<br />The list shows a directory and if the user decides to choose a different path, the filling should<br />stop immediately and the new path should be displayed. So I set an event to tell the thread to stop,<br />then I wait for the thread to come to and end, and then I start the thread again with the new path.<br /><div class="quote">Did you by any chance pass pointers as wParam or lParam to PostMessage</div>yep - that was the problem with<br />the PostMessage.<br /><br />My final solution looks now like this (Microsoft to asm translated):<pre><code>WaitMessageLoop	PROC	USES edi, hevEvent&#58;DWORD<br /><br />	sub	esp, sizeof MSG<br />	mov	edi, esp<br /><br />wmlLoop&#58;	xor	eax, eax<br />	push	PM_REMOVE<br />	push	eax<br />	push	eax<br />	push	eax<br />	push	edi<br />	call	PeekMessage<br />	test	eax, eax<br />	jz	wmlWait<br /><br />	push	edi<br />	call	DispatchMessage<br /><br />	jmp	wmlLoop<br /><br />wmlWait&#58;	lea	ecx, hevEvent<br /><br />	push	QS_ALLINPUT<br />	push	INFINITE<br />	push	FALSE<br />	push	ecx<br />	push	1<br />	call	MsgWaitForMultipleObjects<br />	cmp	eax, WAIT_OBJECT_0<br />	jne	wmlLoop<br /><br />wmlExit&#58;	add	esp, sizeof MSG<br />	ret<br /><br />WaitMessageLoop	ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-03 10:46:38 by beaster</div>
+   </div>
+  </div>
+ </body>
+</html>

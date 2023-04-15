@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Strange results from FMUL - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10407" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=10407">Strange results from FMUL</a></p>
+   <div class="post" id="post-78146">
+    <div class="subject"><a href="#post-78146">Strange results from FMUL</a></div>
+    <div class="body">I have this bit of code in masm32:<br /><br />;Temp = 256, Cr = -2.0<br /><br />  FLD Temp                       ;store Temp to FP stack<br />  FLD Cr                            ;store Cr to FP stack                          <br />  FMUL                 	            ;ST(0) x ST(1)<br />  FST Temp                       ;store ST(0) to Temp<br />PrintDec Temp                 :DEBUGGER display value of Temp<br /><br />The debugger shows this:<br /><br />Temp = -2<br /><br />Shouldn't this be -512 ?  That is what I was hoping for anyway.  What am I doing wrong?<br />If I use FIST instead of FST it gets even weirder, -214748356.<br /><br />:stupid:</div>
+    <div class="meta">Posted on 2003-01-24 14:41:16 by evanmars</div>
+   </div>
+   <div class="post" id="post-78151">
+    <div class="subject"><a href="#post-78151">Strange results from FMUL</a></div>
+    <div class="body"><div class="quote">;Temp = 256, Cr = -2.0</div><br />did you define temp as 256 oder 256.0? ;)</div>
+    <div class="meta">Posted on 2003-01-24 15:00:41 by Tola</div>
+   </div>
+   <div class="post" id="post-78157">
+    <div class="subject"><a href="#post-78157">RE: Strange .....</a></div>
+    <div class="body">Perhaps I should include a bit more of my code:<br /><br />LOCAL Temp :DWORD<br /><br /> mov edx, 0<br /> mov eax, 0<br /> mov eax, Wwd                          ;store window width in eax    eax = 1024                              <br /> mov Temp, 4                             ;store 4 in Temp                      Temp = 4<br /> div Temp                                   ;divide eax by Temp                 eax = 256<br /> mov Temp, eax                         ;store result in Temp                Temp = 256<br /><br />;everything is fine up to here<br />                             <br /> FLD Temp                                 ;store Temp to FP stack<br /><br />;from FP help: All memory operands are automatically converted to temporary-real numbers before being loaded. <br />;.....can be ... 16-, 32-, or 64-bit integers<br /><br /> FLD Cr                                      ;store Cr to FP stack                          <br /> FMUL                 	                     ; ST(0) x ST(1)   --&gt;  256 *-2<br /> FST Temp<br />PrintDec Temp<br />:confused:</div>
+    <div class="meta">Posted on 2003-01-24 15:14:16 by evanmars</div>
+   </div>
+   <div class="post" id="post-78159">
+    <div class="subject"><a href="#post-78159">Strange results from FMUL</a></div>
+    <div class="body">use<br />FILD Temp<br />since Temp is holding an integer value, not a floating point one.</div>
+    <div class="meta">Posted on 2003-01-24 15:31:08 by Tola</div>
+   </div>
+   <div class="post" id="post-78713">
+    <div class="subject"><a href="#post-78713">Strange results from FMUL</a></div>
+    <div class="body"><pre><code><br />;Temp = 256, Cr = -2.0<br /><br />FILD Temp ;store Temp to FP stack<br />FLD Cr ;store Cr to FP stack <br />FMUL ;ST&#40;0&#41; x ST&#40;1&#41;<br />FIST Temp ;store ST&#40;0&#41; to Temp<br />FSTP Temp2<br /><br />PrintDec Temp &#58;DEBUGGER display value of Temp<br />PrintFloat Temp2<br />The debugger shows this&#58;<br /><br />Temp = -512<br />Temp2 = -512.0<br /></code></pre><br /><br /><br />I have written the PrintFloat macro watching PrintDec from VKDebug's src. Here's it:<br /><pre><code><br />ifndef PRINT_FLOATS_HERE<br /> PRINT_FLOATS_HERE  equ 1<br />PrintFloats proc uses eax Input,Kade<br />	local doub&#58;real8<br />	fld  Input<br />	fstp doub<br />	invoke FloatToStr2,doub,Kade<br />	ret<br />PrintFloats endp	<br />endif<br /><br /><br />PrintFloat macro Var&#58;REQ<br />	local szDN<br />	.data<br />	szDN byte 24 dup&#40;0&#41;<br />	.code<br />	pushad<br />	invoke PrintFloats,Var,addr szDN<br />	invoke lstrlen,addr szDN<br />	add eax,@SizeStr&#40;&amp;Input&#41;+4<br />	invoke GlobalAlloc, GMEM_FIXED+GMEM_ZEROINIT, eax<br />	mov ebx,eax<br />	FillMem ebx,&amp;Var<br />	mov dword ptr &#91;eax+@SizeStr&#40;&amp;Var&#41;&#93;, 203D20h<br />	invoke lstrcat,eax,addr szDN<br />	invoke DebugPrint,ebx<br />	invoke GlobalFree,ebx<br />	popad	<br />endm	<br /><br />PrintDouble macro Var&#58;REQ<br />	local szDN<br />	.data<br />	szDN byte 24 dup&#40;0&#41;<br />	.code<br />	pushad<br />	invoke FloatToStr2,Var,addr szDN<br />	invoke lstrlen,addr szDN<br />	add eax,@SizeStr&#40;&amp;Input&#41;+4<br />	invoke GlobalAlloc, GMEM_FIXED+GMEM_ZEROINIT, eax<br />	mov ebx,eax<br />	FillMem ebx,&amp;Var<br />	mov dword ptr &#91;eax+@SizeStr&#40;&amp;Var&#41;&#93;, 203D20h<br />	invoke lstrcat,eax,addr szDN<br />	invoke DebugPrint,ebx<br />	invoke GlobalFree,ebx<br />	popad	<br />endm	<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-27 23:51:48 by Ultrano</div>
+   </div>
+   <div class="post" id="post-78867">
+    <div class="subject"><a href="#post-78867">Strange results from FMUL</a></div>
+    <div class="body"><strong>Ultrano</strong>,<br />The latest version of VKDEBUG has PrintDouble macro. Please, download the MASM32v8.<br />With best regards, vkim.</div>
+    <div class="meta">Posted on 2003-01-28 21:11:31 by vkim</div>
+   </div>
+   <div class="post" id="post-78923">
+    <div class="subject"><a href="#post-78923">Strange results from FMUL</a></div>
+    <div class="body">Yes, I was going to write about it :), I downloaded masm8 yesterday. But .. the lack of PrintFloat is not good! Please upgrade the macros, I think PrintFloat is a hundred times more important to any masm coder, than PrintDouble. I haven't toyed much with masm8- just saw the new stuff in it. Nice installation :) . I think the TrapException should be made not use external dlls . But everything else is perfect ;) thanks for VKDebug, vkim ;).<br />A little note: I will not &quot;witch&quot; to masm8- all the functions that are new and that I need, I have already made :). The xxBitmap, for instance. But it's just me, I suppose.</div>
+    <div class="meta">Posted on 2003-01-29 05:11:19 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Transcibing Structures and their resulting sizes - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9454" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9454">Transcibing Structures and their resulting sizes</a></p>
+   <div class="post" id="post-69938">
+    <div class="subject"><a href="#post-69938">Transcibing Structures and their resulting sizes</a></div>
+    <div class="body">The above title if for your Huh :grin:<br /><br />Im wondering if anyone knows the rule-of-thumb for transcribing VC++ structures.  We all use Iczelions hard work (windows.inc) but put little thought to the effort taken to do so.  <br /><br />I reciently transcribed a good amount of C++ structures to masm (SAPI.H) and are correct according to their H files, however im learning that the C++ compiler tends to ignore some fields.<br /><br />For example, I have found that some structure entries casts as a CHAR in VC++ (.h file), however, windows actualy uses a DWORD in practice.<br /><br />I found this out by dumpin the memory filled out by windows.  This structure the first cbSize field filled in by the OS to a number that is larger than the amount of bytes the .h file suggests it is to work upon.   Since my mind is focused in assembly, when i read CHAR I write BYTE (not DWORD).   By tediously tracking through the memory dump, and cross referencing it to the structure i came to this discovery.<br /><br />Does anyone know of any other 'types' that are misleading and are viewed as something else by the os??<br /><br />Here is the example Structure:<pre><code>SPPHRASE struc <br />&#91;b&#93;    cbSize           dd ?  ;ULONG &#91;/b&#93;<br />    LangID           dw ?  ;WORD <br />    wReserved        dw ?  ;WORD <br />    ullGrammarID     dq ?  ;ULONGLONG <br />    ftStartTime      dq ?  ;ULONGLONG <br />    ullAudioStreamPosition dq ?  ;ULONGLONG <br />    ulAudioSizeBytes dd ?  ;ULONG <br />    ulRetainedSizeBytes dd ?  ;ULONG <br />    ulAudioSizeTime     dd ?  ;ULONG <br />&#91;b&#93;    Rule                SPPHRASERULE  &lt;&gt; ;SPPHRASERULE &#91;/b&#93;<br />    pProperties         dd ?  ;const SPPHRASEPROPERTY *<br />    pElements           dd ?  ;const SPPHRASEELEMENT *<br />    cReplacements       dd ?  ;ULONG <br />    pReplacements       dd ?  ;const SPPHRASEREPLACEMENT *<br />    SREngineID          GUID &lt;&gt;;<br />    ulSREnginePrivateDataSize dd ?  ;ULONG <br />    pSREnginePrivateData      dd ?  ;const BYTE *<br />SPPHRASE ends</code></pre>The embeded SPPHARERULE structure is defined as:<pre><code>SPPHRASERULE struc <br />    pszName                dd ?  ;const WCHAR *<br />    ulId                   dd ?  ;ULONG <br />    ulFirstElement         dd ?  ;ULONG <br />    ulCountOfElements      dd ?  ;ULONG <br />    pNextSibling           dd ?  ;const SPPHRASERULE *<br />    pFirstChild            dd ?  ;const SPPHRASERULE *<br />    SREngineConfidence     REAL4 ?  ;float <br />&#91;b&#93;    Confidence             dd ?  ;signed char &#40;Modified by NaN Empirically&#41;&#91;/b&#93;<br />SPPHRASERULE   ends</code></pre><br /><br />The size in the sbSize is 120 bytes when a memory pointer is given back by the OS (to be used as a SPPHRASE type structure of memory).  However, when i asked the compiler to echo the SIZEOF( SPPHRASE ) the number origionally was 113 bytes.  I found the char to be a dword and made the changes to the structure, but im still short another 4 bytes.. so im wonderinging what else i can expect.<br /><br />The Rule structure shows up at the correct index into the memory dump, so this tells me that the WORDS for langId and Reserved are truely word types.  And everything else looks un-elusive.  <br /><br />However, I wonder if a type FLOAT is *really* stored as a REAL4.  Or perhaps memory is allocated for a DOUBE (REAL8) and only uses the first 4 bytes.  This would add to 120 then...<br /><br />Anywho, if anyone knows what im talking about and can add to or correct my assumptions, please do... thanx!<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-08 22:43:58 by NaN</div>
+   </div>
+   <div class="post" id="post-69956">
+    <div class="subject"><a href="#post-69956">Transcibing Structures and their resulting sizes</a></div>
+    <div class="body">too lazy to read and think about the whole thread. ;) But I do believe why char(1 byte) is treated as a dword(4 bytes) is because of alignment stuff in memory... ;)<br /><br />it's much better to treat everything in multiples of 4(DWORD size)<br /><br />I don't know. Myabe I'm wrong. :)<br /><br />as for Float, to me that's a DWORD size (4 bytes - REAL4) and Doubles as QWORD size(8 bytes - REAL8).<br /><br />are you sure you didn't left any fields out... maybe you have skipped some of them...</div>
+    <div class="meta">Posted on 2002-12-09 00:24:58 by stryker</div>
+   </div>
+   <div class="post" id="post-69972">
+    <div class="subject"><a href="#post-69972">Transcibing Structures and their resulting sizes</a></div>
+    <div class="body">Hi NaN,<br /><br />A char is still a char.  VC rounds the structure size up to the nearest 2^n byte boundary.  You can change this with the /Zp switch or the pack pragma.<br /><br />Try this:<br /><pre><code>&#91;size=12&#93;#pragma pack&#40; push, 1 &#41;<br />#include &lt;sapi.h&gt;<br />#pragma pack&#40; pop &#41;<br /><br />int main&#40;&#41;<br />&#123;<br />    printf&#40; &quot;SPPHRASE = %i bytes\n&quot;, sizeof&#40; SPPHRASE &#41; &#41;;<br />    printf&#40; &quot;SPPHRASERULE = %i bytes\n&quot;, sizeof&#40; SPPHRASERULE &#41; &#41;;<br />    return 0;<br />&#125;</code></pre></span><br /><br />...and it will report the byte sizes.  :alright:</div>
+    <div class="meta">Posted on 2002-12-09 01:43:10 by iblis</div>
+   </div>
+   <div class="post" id="post-70095">
+    <div class="subject"><a href="#post-70095">Transcibing Structures and their resulting sizes</a></div>
+    <div class="body">The reason for rounding up is for maintaining alignment in arrays of structures.</div>
+    <div class="meta">Posted on 2002-12-09 17:02:37 by tenkey</div>
+   </div>
+   <div class="post" id="post-70100">
+    <div class="subject"><a href="#post-70100">Transcibing Structures and their resulting sizes</a></div>
+    <div class="body">Gotcha...<br /><br />And i agree REAL4 is 4 bytes.. but no, Im not missing anything.  All entries are there and transcribed properly.  I mean its not to hard to check.  After the comment ( ; ) is the C++ discriptor for the tag name.  I used a macro with UltraEdit to do this for me to take the tediousness out, but i still initiated the macro line-by-line and watched it perform, so i wont miss any problem.<br /><br />So thats the C++ stucture,  litterally.  As well, i didnt do the accounting by hand, i had the assembler do it for me:<br /><pre><code><br />   ANum equ SIZEOF&#40; SPPHRASE&#41;<br />   AText TEXTEQU %ANum<br />   %echo SPPHRASE == &amp;AText<br /></code></pre><br /><br />NaN</div>
+    <div class="meta">Posted on 2002-12-09 17:35:54 by NaN</div>
+   </div>
+   <div class="post" id="post-70101">
+    <div class="subject"><a href="#post-70101">Transcibing Structures and their resulting sizes</a></div>
+    <div class="body">Hmmm.. I just accounted by hand the documentation on the structure, and i get 116 bytes as well.   So basically windows is handing out an oversized amount of memory.  I can only assume thats why, and as such it places 120 in the field for the structure size.<br /><br />NaN</div>
+    <div class="meta">Posted on 2002-12-09 17:55:26 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

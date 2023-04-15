@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>floating point masm problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9739" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9739">floating point masm problem</a></p>
+   <div class="post" id="post-72344">
+    <div class="subject"><a href="#post-72344">floating point masm problem</a></div>
+    <div class="body">Is it impossible in masm to assing a value to a local variable as a floating point type?<br /><br />i mean this:<br /><br />fpu_test proc<br />     local Var1:real4<br /><br />     mov Var1, 2.48R     &lt;--- Its not addmited by masm<br />     fld Var1<br /><br />fpu_test endp<br /><br />I thought masm would convert the data to a 32 bit float type and then generate code<br />to load data to Var1 in the form of a 32 bit single precision type.<br />This not happen if we create a global variable i mean:<br />Var1  real4  2.48R<br /><br />does it mean that i have to create only global variables for &quot;dot numbers&quot;?<br /><br />thanks</div>
+    <div class="meta">Posted on 2002-12-23 13:23:21 by IrOn</div>
+   </div>
+   <div class="post" id="post-72350">
+    <div class="subject"><a href="#post-72350">floating point masm problem</a></div>
+    <div class="body">when in doubt use hex. ;)<br /><br />2.48 == 401eb852h<br /><br />here's some c code for you to compile. This will help you convert the floating point value to hex<pre><code>&#91;size=9&#93;#include &lt;stdio.h&gt;<br /><br />int main&#40;&#41;<br />&#123;<br />    float fval = 2.48f;<br />    printf&#40;&quot;%08x \n&quot;, *&#40;&#40;int*&#41;&amp;fval&#41;&#41;;<br /><br />    //test the hex value<br /><br />    _asm<br />    &#123;<br />        mov     fval, 401eb852h<br />    &#125;<br />    printf&#40;&quot;%f\n&quot;, fval&#41;;<br />    return 0;<br />&#125;<br /><br /><br />&#91;b&#93;EDIT POST&#58; Much better&#91;/b&#93; &#58;grin&#58;<br /><br />//float2hex.c<br />//<br />//cl /G3 /MD /c float2hex.c<br />//link /subsystem&#58;console float2hex.obj<br /><br />#include &lt;stdio.h&gt;<br />#include &lt;stdlib.h&gt;<br /><br />int main&#40;int argc, char *argv&#91;&#93;&#41;<br />&#123;<br />    float f;<br />    if&#40;!argv&#91;1&#93;&#41; return 1;<br />    f = &#40;float&#41;atof&#40;argv&#91;1&#93;&#41;;<br />    printf&#40;&quot;%08x\n&quot;, *&#40;&#40;int*&#41;&amp;f&#41; &#41;;<br />    return 0;<br />&#125;<br />&#91;/size&#93;</code></pre>:grin:</div>
+    <div class="meta">Posted on 2002-12-23 14:32:59 by stryker</div>
+   </div>
+   <div class="post" id="post-72391">
+    <div class="subject"><a href="#post-72391">floating point masm problem</a></div>
+    <div class="body">Probably easier to understand if you are going to use the FPU anyway since you need FP variables, and you cannot (or do not want to) use global variables:<br /><br />local var1:real4<br />local var2:dword<br /><br />lea eax,var1<br />mov dword ptr ,248<br />mov var2,100<br />fild dword ptr <br />fidiv var2<br />fstp var1<br /><br /><br />You can change the '248' and the divisor to suit your needs. At least, this lets you see clearly which value gets into var1.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2002-12-23 19:00:32 by Raymond</div>
+   </div>
+   <div class="post" id="post-72396">
+    <div class="subject"><a href="#post-72396">floating point masm problem</a></div>
+    <div class="body">Personally I don't like the REAL4/8/10 notation. I always used D/QWORD or TBYTE. eg<br /><pre><code>fpu_test proc<br />local Var1&#58;DWORD,Var2&#58;QWORD<br /><br />mov Var1, 2.48f<br />fld Var1<br /><br />mov Var2, 2.48f<br />fld Var2<br /><br />fpu_test endp</code></pre><br />That should work with or without the f (If I remember correctly). Personally I never heard of following a floating point number with an R, perhaps thats the problem.<br /><br />Raymond, while there's technicially nothing wrong with your method, it is undenibly slow and bloated :( . If only for the sake of legiable code it'd be hard to justify. But thats just my own personal feelings :) .</div>
+    <div class="meta">Posted on 2002-12-23 19:38:16 by Eóin</div>
+   </div>
+   <div class="post" id="post-72435">
+    <div class="subject"><a href="#post-72435">floating point masm problem</a></div>
+    <div class="body">Eoin<br /><br />I just tried a MOV VAR,2.48 with MASM32, with or without an endinf 'f'. It just returns an error message that floats and bcd's are not allowed in such an instruction. Which assembler are YOU using????<br /><br />Raymond</div>
+    <div class="meta">Posted on 2002-12-23 23:22:36 by Raymond</div>
+   </div>
+   <div class="post" id="post-72501">
+    <div class="subject"><a href="#post-72501">floating point masm problem</a></div>
+    <div class="body">Yep you're right, I'm sorry :( . I've gotten so used to Fasm recently I'd forgotten about that silly limitation in Masm. So my new recommendation ( :grin: ) is to follow Stryker, or use bitRAKEs fpc macro:<br /><span style="font-size:9px><pre><code>fpc MACRO val&#58;REQ<br />	LOCAL w,x,y,z,zz,ww<br /><br />	;; split type and value, defaulting to REAL4<br />	z INSTR 1,&lt;&amp;val&gt;,&lt;! &gt;<br />	IF z EQ 0<br />		y TEXTEQU &lt;REAL4&gt;<br />		x TEXTEQU &lt;&amp;val&gt;<br />	ELSE<br />		y TEXTEQU @SubStr&#40;&lt;&amp;val&gt;,1,z-1&#41;	;; Type<br />		x TEXTEQU @SubStr&#40;&lt;&amp;val&gt;,z+1,&#41;	;; Value<br />	ENDIF<br /><br />	;; replace . with _<br />	z INSTR 1,x,&lt;!.&gt;<br />	IF z EQ 0<br />		w TEXTEQU x<br />		x CATSTR x,&lt;.0&gt; ;; prevent error message<br />	ELSE<br />		w CATSTR @SubStr&#40;%x,1,z-1&#41;,&lt;_&gt;,@SubStr&#40;%x,z+1,&#41;<br />	ENDIF<br /><br />	;; replace - with _<br />	zz INSTR 1,w,&lt;!-&gt;<br />	IF zz EQ 0<br />		ww TEXTEQU w<br />	ELSE<br />		ww CATSTR @SubStr&#40;%w,1,zz-1&#41;,&lt;_&gt;,@SubStr&#40;%w,zz+1,&#41;<br />	ENDIF<br /><br />	;; figure out global name for constant<br />	z SIZESTR y ;; use last char for size distiction<br />	ww CATSTR &lt;__&gt;,ww,&lt;r&gt;,@SubStr&#40;%y,z,1&#41;<br /><br />	IF &#40;OPATTR&#40;ww&#41;&#41; EQ 0 ;; not defined<br />		CONST SEGMENT<br />			ww y x<br />		CONST ENDS<br />	ENDIF<br />	EXITM ww<br />ENDM</code></pre></span>Example Usage:<pre><code>fld fpc&#40;20&#41; ; defaults to REAL4 20.0<br />fld fpc&#40;REAL8 2.5&#41;<br />fld fpc&#40;2.5&#41; ; REAL4</code></pre></div>
+    <div class="meta">Posted on 2002-12-24 09:17:14 by Eóin</div>
+   </div>
+   <div class="post" id="post-72558">
+    <div class="subject"><a href="#post-72558">floating point masm problem</a></div>
+    <div class="body">Eoin,<br /><br />Firstly:<br />I was just wondering if your suggested macro would be that much faster than my &quot;slow and bloated&quot; suggestion??? Furthermore, when you try to read the disassembled code where the entire Macro gets inserted every time it gets used, would it also be much easier to understand than my &quot;bloated&quot; suggestion???<br /><br />Secondly:<br />Any number loaded to the FPU first gets converted to a REAL10. Your Macro does not seem to retain the target value in memory. What would be the purpose of making a choice between a REAL4 or a REAL8 converted value to load to the FPU in such case????<br /><br />Raymond</div>
+    <div class="meta">Posted on 2002-12-24 15:12:43 by Raymond</div>
+   </div>
+   <div class="post" id="post-72567">
+    <div class="subject"><a href="#post-72567">floating point masm problem</a></div>
+    <div class="body">Raymond:<br /><br />I haven't really touched on FP much, but concerning macros: think of them kind of as 'cut and paste'.  What they do to your code is done pre-compile, and so the decompile of it shows nothing but the end result of the macro (cuts your macro lines out and pastes the result).  While a macro would no doubt increased compile time, the program itself would run just dandy :)</div>
+    <div class="meta">Posted on 2002-12-24 16:42:35 by Miko</div>
+   </div>
+   <div class="post" id="post-72574">
+    <div class="subject"><a href="#post-72574">floating point masm problem</a></div>
+    <div class="body">Raymond, I sense a certain anger towards me, I probably offended you calling your method &quot;slow and bloated&quot;, I'm sorry. Its just that in asm we usually aim for the best approach always so I felt this silly urge to express my opinions on your method. Ignore them if they caused offense. :) <br /><br />As for the macro (again it's bitRAKEs he deserves all credit) it works by creating a global variable in a const segment. For example the following two snippets would be identical (except for their segments perhaps but I never fully understood segments so I can't say)<br /><br /><pre><code>.data<br />Twenty REAL4 20.0<br />TwoPt5 REAL8 2.5<br />OnePt5 REAL4 1.5<br /><br />.code<br />fld Twenty<br />fld TwoPt5<br />fld OnePt5</code></pre> <pre><code><br />.code<br />fld fpc&#40;20&#41;<br />fld fpc&#40;REAL8 2.5&#41;<br />fld fpc&#40;1.5&#41;</code></pre>The reason for using REAL4/8 as opposed to REAL10 is both a size and speed issue.</div>
+    <div class="meta">Posted on 2002-12-24 17:40:30 by Eóin</div>
+   </div>
+   <div class="post" id="post-72595">
+    <div class="subject"><a href="#post-72595">floating point masm problem</a></div>
+    <div class="body">Miko,<br /><br />I know pretty well what macros can do. However, when a macro starts looking like a complex procedure and requires too many lines of code, my preference is to write it as a procedure, or a function, or even preferably as a simple routine if I don't think it may be reusable. (I HATE TYPING FOR NOTHING!!!)<br /><br />Maybe this reflects my old schooling when writing in assembler was for highest speed AND smallest size. When large macros are called often in a program, it simply bloats it as compared to a call. (If it's a matter of the 'call' overhead, then all procedures and functions should be written as macros.)<br /><br />Eoin,<br /><br />No anger whatsoever. Sorry if it may have sounded as such. I was only surprised that you would call 5 lines of code &quot;slow and bloated&quot; but suggest someone else's complex macro as an alternative in the same breath.<br /><br />As for REAL4/REAL8 vs REAL10, I do agree that size may be an issue if you have large arrays of FP numbers. But again, this is in the same breath as suggesting a complex macro instead of the bloated (sorry about this again) few lines of code.<br /><br />But for speed, indications are that there is no difference between loading REAL4 or REAL8 to the FPU. Would anybody else on this forum have any factual data on that issue?<br /><br />Raymond</div>
+    <div class="meta">Posted on 2002-12-24 21:00:06 by Raymond</div>
+   </div>
+   <div class="post" id="post-72634">
+    <div class="subject"><a href="#post-72634">floating point masm problem</a></div>
+    <div class="body">Raymond, don't appologise, I still dislike my choice of words when I described your method so and ill feelings were most likely caused by myself :( . But forget that for moment.<br /><br />I take your point about macros. And I've seen too many macros which create terribly bloated code and so I understand your feelings. But this macro is different, it doesn't create any code. Those two examples I gave weren't just functionally identical (i.e at the end of the day doing the same thing) but they they do the same thing the same way. Take this example:<br /><pre><code>.data<br />OnePt5 dq 1.5<br />TwoPt5 dd 2.5<br /><br />.code<br />fld1<br />fld fpc&#40;3.5&#41;	<br />fld fpc&#40;REAL8 4.5&#41;<br />fld TwoPt5<br />fld OnePt5</code></pre><br />Then look at the dissasembly and you see how clean the macro is<br /><pre><code>00401062 D9E8                   fld1<br />00401064 D90530204000           fld     dword ptr &#91;402030h&#93;<br />0040106A DD0534204000           fld     qword ptr &#91;402034h&#93;<br />00401070 D90552304000           fld     dword ptr &#91;403052h&#93;<br />00401076 DD0556304000           fld     qword ptr &#91;403056h&#93;</code></pre><br />My dislike of your method stemmed from the fact that you used two aspects of the FPU which in general one would try to avoid, loading integer instructions and division as both are very slow relative to loading reals and the other arithmatic intructions. But outside of speed critical algos I doubt it would really make any difference.</div>
+    <div class="meta">Posted on 2002-12-25 05:48:22 by Eóin</div>
+   </div>
+   <div class="post" id="post-72651">
+    <div class="subject"><a href="#post-72651">floating point masm problem</a></div>
+    <div class="body">IrOn,<br />     MASM does not float. It sinks and stinks.  It can only drop floaters in your data section.  That means it cannot process instructions like PUSH 5.0.  You must instead use the more expensive data memory referencing instruction PUSH , where F5P0 is defined something like F5P0 DD 5.0 .  What?  You wanna do something like F8P0 DD 4.3+3.7?  Forget it.  MASM is impotent with respect to floating arithmetic.  Only way around that limitation is to manually compute and enter numbers hexually (PUSH 40A00000H).  Other more well endowed assemblers don't have that hang up.  Until his Billness decides to upgrade, you are a floating cripple while you remain in the MASM zone.  Ratch</div>
+    <div class="meta">Posted on 2002-12-25 10:40:51 by Ratch</div>
+   </div>
+  </div>
+ </body>
+</html>

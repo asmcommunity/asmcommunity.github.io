@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>API hook with 100% pure ASM - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19016" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19016">API hook with 100% pure ASM</a></p>
+   <div class="post" id="post-147122">
+    <div class="subject"><a href="#post-147122">API hook with 100% pure ASM</a></div>
+    <div class="body">Hi,<br /><br />let's presume an application makes a GetProcAddress() for MessageBoxA, then it saves the address in a DWORD, now I inject my DLL into that application and want to overwrite the location of MessageBoxA with the offset of my PROC.<br /><br />I want to do this in pure ASM if possible :)</div>
+    <div class="meta">Posted on 2004-07-30 06:56:02 by flapper</div>
+   </div>
+   <div class="post" id="post-147131">
+    <div class="subject"><a href="#post-147131">API hook with 100% pure ASM</a></div>
+    <div class="body">please take a look at GVIHook<br /><a target="_blank" href="http://www.comrade64.com/sources/gvihook.zip">http://www.comrade64.com/sources/gvihook.zip</a></div>
+    <div class="meta">Posted on 2004-07-30 09:42:47 by comrade</div>
+   </div>
+   <div class="post" id="post-147132">
+    <div class="subject"><a href="#post-147132">API hook with 100% pure ASM</a></div>
+    <div class="body">I already did, but I don't really understand it :(<br /><br />Could you give me some example code?<br /><br />I inject my DLL, so I don't have to use WriteProcessMemory, right?</div>
+    <div class="meta">Posted on 2004-07-30 09:44:30 by flapper</div>
+   </div>
+   <div class="post" id="post-147135">
+    <div class="subject"><a href="#post-147135">API hook with 100% pure ASM</a></div>
+    <div class="body"><pre><code><br />	option	epilogue&#58;none<br />	option	prologue&#58;none<br />; IN	ESI	lpFunc<br />; IN	EBP	lpNewFunc<br />Rude_Hook	proc<br />	push edi<br />	push eax<br />	push esp<br />	push PAGE_READWRITE<br />	push 10<br />	push esi<br />	call VirtualProtect<br />	pop eax<br />	push esi<br />	lea edi, oldBYTES<br />	cld<br />	mov ecx, 6<br />	rep movsb<br />	pop esi<br />	mov byte ptr &#91;esi&#93;, 68h		; push<br />	mov dword ptr &#91;esi+1&#93;, ebp		; lpNewFunc<br />	mov byte ptr &#91;esi+5&#93;, 0c3h		; ret<br />	pop edi<br />ret<br />Rude_Hook	endp<br />size_of_rh	=	$-Rude_Hook<br /><br />code_to_alloc	proc<br />	mov eax, &#91;esp+4&#93;<br />	assume eax&#58; PTR SHFILEOPSTRUCT<br />	cmp &#91;eax&#93;.wFunc, FO_DELETE<br />	jnz bye	<br />; Place ur code here<br />         nop<br />         nop<br />         nop<br />	retn 4<br />bye&#58;<br />code_to_alloc	endp<br />goto_orig&#58;<br />oldBYTES		db		6	dup&#40;0&#41;<br />			db		68h<br />orig			dd		0<br />			db		0c3h<br />size_of_code_to_alloc	=	$-Rude_Hook<br /><br />use it like this&#58;<br />	push eax<br />	push esp<br />	push PAGE_READWRITE<br />	push 12+200<br />	push o oldBYTES<br />	call VirtualProtect<br />	pop eax<br />			call @F<br />				db		&quot;SHFileOperationW&quot;,0<br />			@@&#58;<br />			call @F<br />				db		&quot;shell32.dll&quot;,0<br />			@@&#58;<br />			call GetModuleHandleA<br />			push eax<br />			call GetProcAddress<br />			mov esi, eax<br />			add eax, 6<br />			mov &#91;orig&#93;, eax<br />			add ebp, size_of_rh<br />			call Rude_Hook<br /></code></pre><br />Its peace of my source which hooks SHFileOperationW.<br /><br />2comrade:<br />?????? ??????? :)<br />?? :)<br /></div>
+    <div class="meta">Posted on 2004-07-30 11:42:04 by happyfly</div>
+   </div>
+   <div class="post" id="post-147137">
+    <div class="subject"><a href="#post-147137">API hook with 100% pure ASM</a></div>
+    <div class="body">Ouh yeah...<br />It must be buggy sometimes!<br />I guess that 99% of procedures u wanna hook has epilogue, which size is 6 bytes, but if there will be other instructions u can divide 1 instruction in 2 parts =(<br />So watch code of procedure u hook!</div>
+    <div class="meta">Posted on 2004-07-30 12:21:36 by happyfly</div>
+   </div>
+   <div class="post" id="post-147141">
+    <div class="subject"><a href="#post-147141">API hook with 100% pure ASM</a></div>
+    <div class="body">For example the code which hooks ExitProcess will be another:<br />.code<br />; I dont want to use default masm macros for prologue and epilogue<br />; so i do it myself<br />option	epilogue:none<br />option	prologue:none<br />; IN	ESI	lpFunc<br />; IN	EBP	lpNewFunc<br />Rude_Hook	proc<br />; changes the attributes to PAGE_READWRITE<br />; of first bytes of function to hook<br />	push eax<br />	push esp<br />	push PAGE_READWRITE<br />	push 10<br />	push esi<br />	call VirtualProtect<br />	pop eax<br />	push esi<br />; copies first 10 bytes of function to buffer<br />	lea edi, oldBYTES<br />	movsd<br />	movsd<br />	movsw<br />	pop esi		<br />; rewrites the first 6 bytes of function<br />; with push lpNewFunc ret<br />	mov byte ptr , 68h		; push<br />	mov dword ptr , ebp		; lpNewFunc<br />	mov byte ptr , 0c3h		; ret<br />ret<br />Rude_Hook	endp<br />start:<br />; changes the attributes of code.<br />; now we can write in some page <br />; of code section<br />	push eax<br />	push esp<br />	push PAGE_READWRITE<br />	push 12+200<br />	push o oldBYTES<br />	call VirtualProtect<br />	pop eax<br />; Look through ExitProcess<br />; i can use mov eax, ExitProcess<br />; but this code will be more independ ;)<br />	call @F<br />		db		&quot;ExitProcess&quot;,0<br />	@@:<br />	call @F<br />		db		&quot;kernel32.dll&quot;,0<br />	@@:<br />	call GetModuleHandleA	<br />	push eax<br />	call GetProcAddress<br />; Hooks the exitprocess<br />	mov esi, eax<br />	add eax, 10<br />; Address to jump is ExitProcess+10<br />	mov , eax<br />	mov ebp, o hey<br />	call Rude_Hook<br />exit: 	push eax<br />	call ExitProcess<br />hey:<br />; shows messagebox<br />	xor eax, eax<br />	push eax<br />	push eax<br />	call @F<br />		db	&quot;GOTCHA&quot;,0<br />	@@:<br />	push eax<br />	call MessageBoxA<br />; this code (its code!) is first instructions<br />; of function we hook plus push ExitProccess+10et<br />oldBYTES		db		10	dup(0)<br />			db		68h<br />orig			dd		0<br />			db		0c3h<br />end start</div>
+    <div class="meta">Posted on 2004-07-30 12:59:10 by happyfly</div>
+   </div>
+   <div class="post" id="post-147148">
+    <div class="subject"><a href="#post-147148">API hook with 100% pure ASM</a></div>
+    <div class="body">I don't understand this code, isn't there a simpler way?</div>
+    <div class="meta">Posted on 2004-07-30 14:55:20 by flapper</div>
+   </div>
+   <div class="post" id="post-147149">
+    <div class="subject"><a href="#post-147149">API hook with 100% pure ASM</a></div>
+    <div class="body">ive just rewrite first 6 bytes of function to hook with<br />push ADDRESS_OF_NEW_FUNC<br />ret<br />...<br />thats all idea...<br />there is a better way - to change the import table, but its too complicated. I mean u need to hook GetProcAddress too. And there is some problems when u hook function in prog made by &quot;bad&quot; linker like Delphi which has lots of bugs... And nobodie garanties that there will not new bugs in future... So to dispatch all the ways u have to write large function ;)<br /><br />Maybe u dont understand this because of my style? I can help u with this - show me the place u dont understand.</div>
+    <div class="meta">Posted on 2004-07-30 15:37:03 by happyfly</div>
+   </div>
+   <div class="post" id="post-147150">
+    <div class="subject"><a href="#post-147150">API hook with 100% pure ASM</a></div>
+    <div class="body">You asked for a solution in assembly language. If you want a simpler way, use C.</div>
+    <div class="meta">Posted on 2004-07-30 15:37:37 by SpooK</div>
+   </div>
+   <div class="post" id="post-147151">
+    <div class="subject"><a href="#post-147151">API hook with 100% pure ASM</a></div>
+    <div class="body">I'm already capable of API hooking in C++, but I'm writing this program in ASM now<br /><br />First of all I should thank you R4DX :)<br /><br />I'm not advanced in ASM, I would be grateful when you could comment your code a bit more, so a noob like me can understand it :)</div>
+    <div class="meta">Posted on 2004-07-30 15:48:55 by flapper</div>
+   </div>
+   <div class="post" id="post-147153">
+    <div class="subject"><a href="#post-147153">API hook with 100% pure ASM</a></div>
+    <div class="body">There's a much simpler way, the program I inject my DLL to uses GetProcAddress, then saves the pointer in a DWORD, I theoretically just would have to overwrite this DWORDwith a pointer to my function.<br /><br />How would I do that in ASM? I don't want to use WriteProcessMemory.</div>
+    <div class="meta">Posted on 2004-07-30 16:04:19 by flapper</div>
+   </div>
+   <div class="post" id="post-147167">
+    <div class="subject"><a href="#post-147167">API hook with 100% pure ASM</a></div>
+    <div class="body">ure welcome :)<br />i commented the code of ExitProcess hook<br />and what about DWORD u talking about? Do u now its address? If u dont and this is the highlevel application complier can store this DWORD in register...<br />Tell me more about this. What function do u wanna hook (MessageBox?)?</div>
+    <div class="meta">Posted on 2004-07-31 01:39:05 by happyfly</div>
+   </div>
+   <div class="post" id="post-147191">
+    <div class="subject"><a href="#post-147191">API hook with 100% pure ASM</a></div>
+    <div class="body">Hi,<br /><br />yes I know the address, it's a function from a selfmade DLL, no Windows DLL!<br /><br />push edi<br />mov edi, ds:GetProcAddress<br />push offset aMyFunc<br />push eax <br />call edi<br />mov dword_500A4791, eax    &lt;--- I want to write my adress of the function in this DWORD, so the App. will call my func instead</div>
+    <div class="meta">Posted on 2004-07-31 11:55:24 by flapper</div>
+   </div>
+   <div class="post" id="post-147216">
+    <div class="subject"><a href="#post-147216">API hook with 100% pure ASM</a></div>
+    <div class="body">its simple.<br />just use <br />mov dword ptr [500A4791], new_func_address<br />thats all :)</div>
+    <div class="meta">Posted on 2004-08-01 04:15:51 by happyfly</div>
+   </div>
+   <div class="post" id="post-147217">
+    <div class="subject"><a href="#post-147217">API hook with 100% pure ASM</a></div>
+    <div class="body">But when do u inject ur code?<br />Do u sure that u hook this function before app call it?<br />May be u need to suspend the thread, which calls this function?</div>
+    <div class="meta">Posted on 2004-08-01 05:08:37 by happyfly</div>
+   </div>
+   <div class="post" id="post-147220">
+    <div class="subject"><a href="#post-147220">API hook with 100% pure ASM</a></div>
+    <div class="body">I start my APP, it does the GetProcAddress, saves the pointer, then I inject my DLL<br /><br />The method you told me doesn't work :(<br /><br /><strong>error A2048: nondigit in number</strong></div>
+    <div class="meta">Posted on 2004-08-01 05:34:46 by flapper</div>
+   </div>
+   <div class="post" id="post-147224">
+    <div class="subject"><a href="#post-147224">API hook with 100% pure ASM</a></div>
+    <div class="body">Nevermind, it works now :) Thanks r4dx</div>
+    <div class="meta">Posted on 2004-08-01 06:47:56 by flapper</div>
+   </div>
+   <div class="post" id="post-147229">
+    <div class="subject"><a href="#post-147229">API hook with 100% pure ASM</a></div>
+    <div class="body">u had to write smtng like this<br />mov dword ptr [500A4791h], offset NEW_FUNC<br />;)</div>
+    <div class="meta">Posted on 2004-08-01 11:47:52 by happyfly</div>
+   </div>
+  </div>
+ </body>
+</html>

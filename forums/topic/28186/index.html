@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Using RET gives a free LEAVE - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28186" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28186">Using RET gives a free LEAVE</a></p>
+   <div class="post" id="post-199786">
+    <div class="subject"><a href="#post-199786">Using RET gives a free LEAVE</a></div>
+    <div class="body">I used code like this:
+
+Procedure PROC
+...
+call Further
+jmp end
+
+Further:
+...
+ret
+
+end:
+ret
+
+When I compile this both RETs get compiled to LEAVE and then a RET. This causes the RET in Further: to not return to it's call, but to the call that called the procedure.
+
+Is it possible to tell the compiler to not add a LEAVE instruction at specific RETs?</div>
+    <div class="meta">Posted on 2001-05-27 00:11:00 by Issvar</div>
+   </div>
+   <div class="post" id="post-199787">
+    <div class="subject"><a href="#post-199787">Using RET gives a free LEAVE</a></div>
+    <div class="body">Is Further also a PROC? Looks like it should work, if Further is a PROC... :)
+
+
+This message was edited by S/390, on 5/27/2001 1:14:17 AM</div>
+    <div class="meta">Posted on 2001-05-27 01:12:00 by S/390</div>
+   </div>
+   <div class="post" id="post-199788">
+    <div class="subject"><a href="#post-199788">Using RET gives a free LEAVE</a></div>
+    <div class="body">i had the exact same problem with calling a label inside a proc in my pelib (only in my case it was an enumeration proc, but nevermind). i solved it like this:
+<pre><code>
+Procedure PROC
+...
+call Further
+jmp end
+
+Further:
+...
+db 0C3h  ; ret without masm garbage
+
+end:
+ret
+</code></pre>
+
+a bit dirty, but it works :P</div>
+    <div class="meta">Posted on 2001-05-27 04:58:00 by fresh</div>
+   </div>
+   <div class="post" id="post-199789">
+    <div class="subject"><a href="#post-199789">Using RET gives a free LEAVE</a></div>
+    <div class="body">fresh,
+
+you right,
+just replace <strong> ret with retn </strong> it is 
+same as DB 0C3h
+
+Like this:
+Procedure PROC
+...
+call Further
+jmp end
+
+Further:
+...
+retn
+
+end:
+ret
+
+forge</div>
+    <div class="meta">Posted on 2001-05-27 05:20:00 by forge</div>
+   </div>
+   <div class="post" id="post-199790">
+    <div class="subject"><a href="#post-199790">Using RET gives a free LEAVE</a></div>
+    <div class="body">So, would this work:
+
+<pre><code>
+xret MACRO
+db 0C3h
+xret ENDM
+
+xretn MACRO
+DB 0C3h
+xretn ENDM
+</code></pre>
+
+(Forgot code tags :rolleyes:)
+
+
+
+This message was edited by Qweerdy, on 5/27/2001 6:15:22 AM</div>
+    <div class="meta">Posted on 2001-05-27 06:14:00 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-199791">
+    <div class="subject"><a href="#post-199791">Using RET gives a free LEAVE</a></div>
+    <div class="body">Qweerdy,
+
+you have both macros same.
+
+Each of your macro = retn.
+
+Why to write a MACRO it is easier
+to use 
+
+ret ; from your PROC
+
+and
+
+retn ; from your sub.
+
+Masm translate:
+
+ret ; to C2h plus xxxx for LEAVE
+
+and 
+
+retn ; to C3h
+
+It is so simple.
+
+forge</div>
+    <div class="meta">Posted on 2001-05-27 07:55:00 by forge</div>
+   </div>
+   <div class="post" id="post-199792">
+    <div class="subject"><a href="#post-199792">Using RET gives a free LEAVE</a></div>
+    <div class="body">The real problem here is not that MASM aliases ret into a macro. The problem is you're not using PROC as it expects.
+
+If you use PROC (which is already a macro), you can't stuff a seccond PROC inside it. PROCs don't nest.
+
+The solution is to keep seperate procs seperate:
+
+<pre><code>
+Procedure PROC
+  ...
+  call Further
+  ...
+  ret
+Procedure ENDP
+
+
+Further PROC
+  ...
+  ret
+Further ENDP
+</code></pre>
+
+
+
+As seperate procedures, all will work well. Also, nothing forces you to use PROC to define a procedure. You may manually establish your stack frame if you so choose by simply not using  PROC. 
+
+I'd advise not using PROC only in a rare special case, as stack frames are best left to the compiler. Frames are quite exacting in nature and mistakes may cause faults in other routines, are very hard to debug, and for all your trouble you're code will be an exact match to what MASM generates. 
+
+In the anove example, "Further" terminates with a simple "ret" (opcode C3), not with a 'leave,' as MASM understood it didn't create a stack frame in that case.</div>
+    <div class="meta">Posted on 2001-05-27 09:05:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-199793">
+    <div class="subject"><a href="#post-199793">Using RET gives a free LEAVE</a></div>
+    <div class="body">Sorry to say so.
+
+I nested my sub into a procedure like this code,
+and I call it about 20 times and everything is OK.
+To me it better than repeat macro as with macro. 
+
+<pre><code>
+GraphPageGraphTextOut proc hWin :DWORD,hdc1 :DWORD, cxPage:DWORD, cyPage:DWORD
+..........
+..........
+..........
+invoke SendMessage,SheetWHandle,WM_GETTEXT,10,addr SheetWidth_mm
+lea esi,SheetWidth_mm
+mov edi,esi
+
+    call ASCIItoHex     ;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+.if edx!=0          ; If we have HEX
+..........
+..........
+..........
+
+jmp overHEX
+    ASCIItoHex:         ; Convert ASCII to HEX number
+        xor ebx,ebx
+        xor edx,edx
+        ..........
+        ..........
+        ..........
+    retn            ; xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+overHEX:
+
+..........
+..........
+..........
+..........
+..........
+..........
+invoke  RestoreDC, hdc1, -1
+
+ret
+
+GraphPageGraphTextOut endp
+</code></pre>
+
+I may be wrong.
+
+But it work for me.
+
+forge</div>
+    <div class="meta">Posted on 2001-05-27 09:53:00 by forge</div>
+   </div>
+   <div class="post" id="post-199794">
+    <div class="subject"><a href="#post-199794">Using RET gives a free LEAVE</a></div>
+    <div class="body">There is no problem calling an internal proc while within a normal
+MASM proc, as long as you dont try and nest normal procs. You also
+don't have to place a manually coded proc within the same proc that
+calls it if it is just a label followed later by a RET.
+
+You can build MASM library modules within a proc that have no
+parameters passed to them and you can write the code that receives
+the parameters in registers if you need it. I use the normal PROC
+method in most instances because its tidy and works OK but if I
+need code from elsewhere and don't want stack overhead, either writing
+it in a module with no parameters or just setting a location in
+code with a label + code followed by a RET works fine.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-27 10:37:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-199795">
+    <div class="subject"><a href="#post-199795">Using RET gives a free LEAVE</a></div>
+    <div class="body"><div class="quote">
+writing
+it in a module with no parameters or just setting a location in
+code with a label + code followed by a RET works fine.
+</div>
+ 
+I think ???  followed by a <strong>RETN</strong> works fine
+----------------------------------------------------
+
+I'm so confused and disoriented - I have to ask more.
+
+Question 1:
+
+What is a diference in here?
+and not from HLL point.
+<em>
+procedure
+subroutine
+function
+label - (not the keyword)
+</em>
+in disassembly they look the same.
+
+Question 2:
+
+What is a diference in here?
+<em>
+retf
+retf 8
+retn
+retn 8
+ret
+ret 8
+</em>
+
+return 1
+
+forge</div>
+    <div class="meta">Posted on 2001-05-27 20:39:00 by forge</div>
+   </div>
+   <div class="post" id="post-199796">
+    <div class="subject"><a href="#post-199796">Using RET gives a free LEAVE</a></div>
+    <div class="body">For an explanation of the various returns,
+see www.hammick.com/hcs/returns.txt.</div>
+    <div class="meta">Posted on 2001-05-29 15:56:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-199797">
+    <div class="subject"><a href="#post-199797">Using RET gives a free LEAVE</a></div>
+    <div class="body">Thank you disease_2000 for answering question 1.
+Why did you erase your answer???????????????????
+
+And thank you <strong>Larry Hammick</strong> for your
+supperior answer to my question number 2.
+It is a bit of treasure.
+
+Thanks again
+
+forge</div>
+    <div class="meta">Posted on 2001-06-03 06:37:00 by forge</div>
+   </div>
+  </div>
+ </body>
+</html>

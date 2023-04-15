@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Kill explorer code help needed - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22625" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22625">Kill explorer code help needed</a></p>
+   <div class="post" id="post-169683">
+    <div class="subject"><a href="#post-169683">Kill explorer code help needed</a></div>
+    <div class="body">Can I just substitute any .exe name for process here ?<br />The .wap file also is a project file. How do I assemble this code.<br /><br />Thanks.<br /><br /><br />	.data<br /><br />	process db &quot;explorer.exe&quot;,0<br /><br />	<br />	GetProcessID PROTO :DWORD<br />	KillProcess&nbsp; PROTO :DWORD<br />	.code<br />	<br />WinMain PROC hInst:DWORD,hPrev:DWORD,lpCmd:DWORD,nShow:DWORD<br /><br />		LOCAL p :DWORD<br />		<br />		invoke GetProcessID,addr process<br />		invoke KillProcess,eax<br />		invoke ExitProcess,NULL<br />		<br />	ret<br />WinMain ENDP<br /><br />GetProcessID PROC lpszProcessName:DWORD<br />		<br />		LOCAL th32ProcessID :DWORD<br />		LOCAL hSnapshot :DWORD<br />		LOCAL pe :PROCESSENTRY32<br />		<br />		<br />			invoke CreateToolhelp32Snapshot,TH32CS_SNAPPROCESS,th32ProcessID<br />			mov hSnapshot,eax<br />			invoke Process32First,hSnapshot,addr pe<br />			@l1:<br />			lea ebx,pe.szExeFile<br />			invoke lstrcmp,ebx,lpszProcessName<br />			cmp eax,0<br />			je @l2<br />			invoke Process32Next,hSnapshot,addr pe<br />				.if eax == 0<br />					invoke GetLastError<br />					.if eax == ERROR_NO_MORE_FILES<br />						jmp @l3<br />					.else<br />						invoke CreateToolhelp32Snapshot,TH32CS_SNAPPROCESS,th32ProcessID<br />						mov hSnapshot,eax<br />						invoke Process32First,hSnapshot,addr pe<br />						jmp @l1<br />					.endif<br />				.endif	<br />				<br />			jmp @l1<br />		<br />			@l2: ;//the process is found			<br />			<br />			mov eax,pe.th32ProcessID<br />			ret<br />			<br />			@l3: ;//not found<br />			mov eax,FALSE<br />		<br />	ret<br />GetProcessID ENDP<br /><br />	<br />KillProcess PROC prID:DWORD<br />	<br />		LOCAL hPr :DWORD<br />	<br />			invoke OpenProcess,SYNCHRONIZE or PROCESS_TERMINATE,FALSE,prID<br />			invoke TerminateProcess,eax,NULL<br />			.if eax!=0<br />				ret<br />			.else<br />				mov eax,FALSE<br />			.endif<br />	ret<br />KillProcess ENDP<br /></div>
+    <div class="meta">Posted on 2006-01-19 07:34:42 by skywalker</div>
+   </div>
+   <div class="post" id="post-169726">
+    <div class="subject"><a href="#post-169726">Re: Kill explorer code help needed</a></div>
+    <div class="body">I think i&#39;ve already gave you the answer<br /><br />http://www.masmforum.com/simple/index.php?topic=3566.0<br /><br />You can terminate with it any process by it&#39;s name.<br /></div>
+    <div class="meta">Posted on 2006-01-20 04:39:25 by shaka_zulu</div>
+   </div>
+   <div class="post" id="post-169892">
+    <div class="subject"><a href="#post-169892">Re: Kill explorer code help needed</a></div>
+    <div class="body">that&#39;s very easy.because i have made this mistake before.<br /><br />this sentence:<br />invoke TerminateProcess,eax,NULL<br /><br />the second param shouldn&#39;t be NULL,it must be set the value 1:<br /><br />like this:<br />invoke TerminateProcess,eax,1<br /><br />if the second param is NULL,you may find the explorer.exe will be reloaded by system at once.<br /><br /><br /><br /><br />following is my code :)<br /><br />.386<br />.Model Flat,StdCall<br />Option CaseMap :None<br /><br />Include \Masm32\Include\Windows.inc<br />Include \Masm32\Include\User32.inc<br />Include \Masm32\Include\Kernel32.inc<br />Include \Masm32\Include\Advapi32.inc<br /><br />IncludeLib \Masm32\Lib\User32.lib<br />IncludeLib \Masm32\Lib\Kernel32.lib<br />IncludeLib \Masm32\Lib\Advapi32.lib<br /><br />CTEXT	MACRO y:VARARG<br />	LOCAL sym<br />	CONST segment<br />	ifidni &lt;y&gt;,&lt;&gt;			<br />		sym db 0		<br />? ? else			<br />		sym db y,0<br />	endif<br />	CONST ends<br />	exitm &lt;offset sym&gt;<br />ENDM<br /><br />.Data<br />stProcess	db &quot;explorer.exe&quot;,0<br /><br />.Data?<br />tkp		TOKEN_PRIVILEGES&lt;&gt;<br />sdnv		LUID &lt;&gt;<br />hToken		dd ?<br /><br />.Code<br />EnableDebugPriv	Proc<br />	invoke	GetCurrentProcess<br />	invoke	OpenProcessToken,eax,TOKEN_ADJUST_PRIVILEGES or TOKEN_QUERY,addr hToken<br />	invoke	LookupPrivilegeValue,0,CTEXT(&quot;SeDebugPrivilege&quot;),addr sdnv<br />	mov	tkp.PrivilegeCount,1<br />	m2m	tkp.Privileges.Luid.LowPart,sdnv.LowPart<br />	m2m	tkp.Privileges.Luid.HighPart,sdnv.HighPart<br />	mov	tkp.Privileges.Attributes,SE_PRIVILEGE_ENABLED<br />	invoke	AdjustTokenPrivileges,hToken,FALSE,addr tkp,sizeof tkp,0,0<br />	invoke	CloseHandle,hToken<br />	ret<br />EnableDebugPriv	EndP<br /><br />KillProcess	Proc<br />		Local	@stProcess:PROCESSENTRY32<br />		Local	@hSnapShot<br /><br />		invoke	RtlZeroMemory,addr @stProcess,sizeof @stProcess<br />		mov	@stProcess.dwSize,sizeof @stProcess<br />		invoke	CreateToolhelp32Snapshot,TH32CS_SNAPPROCESS,0<br />		mov	@hSnapShot,eax<br />		invoke	Process32First,@hSnapShot,addr @stProcess<br />		.While	eax<br />			invoke	lstrcmpi,addr @stProcess.szExeFile,addr stProcess<br />			.if	eax == 0<br />				invoke	OpenProcess,PROCESS_TERMINATE,FALSE,@stProcess.th32ProcessID<br />				.if	eax<br />					mov	ebx,eax<br />					invoke	TerminateProcess,ebx,1<br />					invoke	CloseHandle,ebx<br />				.endif<br />			.endif<br />			invoke	Process32Next,@hSnapShot,addr @stProcess<br />		.EndW<br />		invoke	CloseHandle,@hSnapShot<br />		ret<br />KillProcess	EndP<br /><br />Start:<br />	invoke	EnableDebugPriv<br />	invoke	KillProcess<br />	invoke	ExitProcess,0<br />End	Start<br /></div>
+    <div class="meta">Posted on 2006-02-13 01:24:47 by MengXP</div>
+   </div>
+   <div class="post" id="post-169893">
+    <div class="subject"><a href="#post-169893">Re: Kill explorer code help needed</a></div>
+    <div class="body">Hello there!<br />My answer is yes, you can substitude any name in my app to terminate the process,<br /><br /> .data<br /><br />&nbsp;  process db &quot;explorer.exe&quot;,0<br /><br />you can replace it whatever you want.</div>
+    <div class="meta">Posted on 2006-02-13 02:30:33 by shaka_zulu</div>
+   </div>
+   <div class="post" id="post-169959">
+    <div class="subject"><a href="#post-169959">Re: Kill explorer code help needed</a></div>
+    <div class="body"><div class="quote"><br />that&#39;s very easy.because i have made this mistake before.<br /><br />this sentence:<br />invoke TerminateProcess,eax,NULL<br /><br />the second param shouldn&#39;t be NULL,it must be set the value -1:<br /><br />like this:<br />invoke TerminateProcess,eax,-1<br /><br />if the second param is NULL,you may find the explorer.exe will be reloaded by system at once.<br /><br /><br /><br /><br />following is my code :)<br /><br />.386<br />.Model Flat,StdCall<br />Option CaseMap :None<br /><br />Include \Masm32\Include\Windows.inc<br />Include \Masm32\Include\User32.inc<br />Include \Masm32\Include\Kernel32.inc<br />Include \Masm32\Include\Advapi32.inc<br /><br />IncludeLib \Masm32\Lib\User32.lib<br />IncludeLib \Masm32\Lib\Kernel32.lib<br />IncludeLib \Masm32\Lib\Advapi32.lib<br /><br />CTEXT	MACRO y:VARARG<br />	LOCAL sym<br />	CONST segment<br />	ifidni &lt;y&gt;,&lt;&gt;			<br />		sym db 0		<br />&nbsp; &nbsp; else			<br />		sym db y,0<br />	endif<br />	CONST ends<br />	exitm &lt;offset sym&gt;<br />ENDM<br /><br />.Data<br />stProcess	db &quot;explorer.exe&quot;,0<br /><br />.Data?<br />tkp		TOKEN_PRIVILEGES&lt;&gt;<br />sdnv		LUID &lt;&gt;<br />hToken		dd ?<br /><br />.Code<br />EnableDebugPriv	Proc<br />	invoke	GetCurrentProcess<br />	invoke	OpenProcessToken,eax,TOKEN_ADJUST_PRIVILEGES or TOKEN_QUERY,addr hToken<br />	invoke	LookupPrivilegeValue,0,CTEXT(&quot;SeDebugPrivilege&quot;),addr sdnv<br />	mov	tkp.PrivilegeCount,1<br />	m2m	tkp.Privileges.Luid.LowPart,sdnv.LowPart<br />	m2m	tkp.Privileges.Luid.HighPart,sdnv.HighPart<br />	<br /><br /></div><br /><br />I am getting a syntax error on the m2m lines. Is there an include file missing ?<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2006-02-15 15:52:09 by skywalker</div>
+   </div>
+   <div class="post" id="post-169963">
+    <div class="subject"><a href="#post-169963">Re: Kill explorer code help needed</a></div>
+    <div class="body"><pre><code><br />m2m MACRO M1, M2<br />&nbsp; push M2<br />&nbsp; pop&nbsp; M1<br />ENDM<br /></code></pre><br /><br />he might have just forgotten to add them, it&#39;s a very commonly used macro.<br /><br />Regards,<br />Bryant Keller</div>
+    <div class="meta">Posted on 2006-02-15 16:15:06 by Synfire</div>
+   </div>
+   <div class="post" id="post-169975">
+    <div class="subject"><a href="#post-169975">Re: Kill explorer code help needed</a></div>
+    <div class="body">thanks to Synfire.<br /> 8)</div>
+    <div class="meta">Posted on 2006-02-16 08:06:12 by MengXP</div>
+   </div>
+  </div>
+ </body>
+</html>

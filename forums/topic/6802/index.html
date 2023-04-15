@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Memory leaks - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6802" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6802">Memory leaks</a></p>
+   <div class="post" id="post-49080">
+    <div class="subject"><a href="#post-49080">Memory leaks</a></div>
+    <div class="body">Hello,<br />  I recently downloaded MemProof to test for memory leaks. So I run it on a program I'm making and it tells me after I close my program that I didn't destroy 2 windows. The layout of my program is one parent window and 4 child windows.<br /><br />After some work I find that the two windows are a listbox and the parent window. To fix the problem I had to put the following two lines in my WM_DESTROY handler of my parent window:<br /><br /><pre><code><br />@@Destroy&#58;              invoke DefWindowProc,hWin,uMsg,wParam,lParam<br />                        invoke DestroyWindow,hListWnd<br /></code></pre><br /><br />followed by the PostQuitMessage,etc.<br /><br />The thing that gets me is this:<br />a) shouldn't the List box be destroyed as all the other children were, sort of automatically?<br />b) Why should I have to call DefWindowProc to completely destroy the parent (I've never seen this documented)<br /><br />Any insight is appreciated<br /><br />--Chorus<br /><br />PS, here's how I create the list box in case someone sees something fishy:<br /><br /><pre><code><br />                        invoke CreateWindowEx,WS_EX_CLIENTEDGE or WS_EX_ACCEPTFILES,<br />                          addr szListClassName,<br />                          NULL,<br />                          WS_VISIBLE or WS_CHILD or<br />                           LBS_NOINTEGRALHEIGHT or<br />                           WS_VSCROLL or<br />                          LBS_OWNERDRAWFIXED or LBS_NOTIFY<br />                          or LBS_NODATA or WS_HSCROLL or<br />                          LBS_WANTKEYBOARDINPUT,<br />                          0,0,100,100,<br />                          hWin,LISTCHILDID,<br />                          hInstance,NULL<br />                        mov hListWnd,eax<br /></code></pre></div>
+    <div class="meta">Posted on 2002-07-20 23:27:28 by chorus</div>
+   </div>
+   <div class="post" id="post-49187">
+    <div class="subject"><a href="#post-49187">Re: Memory leaks</a></div>
+    <div class="body">Have no experience with MemProof yet, but its behaviour looks strange.<br />Don't know why MemProof tells you about not closing windows, but i guess the problem is that MemProof has no asm compilers support.<br /><br />From API ref:<br /><em>The WM_DESTROY message is sent...<br /><br />This message is sent first to the window being destroyed and then to the child windows (if any) as they are destroyed. During the processing of the message, it can be assumed that all child windows still exist.<br />.....<br /></em><br /><br /><em>DestroyWindow....<br />If the specified window is a parent or owner window, DestroyWindow automatically destroys the associated child or owned windows when it destroys the parent or owner window. The function first destroys child or owned windows, and then it destroys the parent or owner window.</em><br /><br /><br />Obtaining WM_DESTROY message means that Windows already has called DestroyWindow for your parent window.<br /><br />As i can see from CreateWindowEx your listbox is child of your main window (hWin).<br />So it destroys automatically. And you shouldn't explicity destroy your childs.<br /><br />You shouldn't put DefWindowProc in WM_DESTROY processing:<br /><em>The DefWindowProc provides default processing for any window messages that an application does not process.</em><br /><br />If listbox is sub/superclassed, check its WM_DESTROY branch.<br />Try to test MemProof with very simple ex - one owner and only one child window.</div>
+    <div class="meta">Posted on 2002-07-21 14:47:03 by Four-F</div>
+   </div>
+   <div class="post" id="post-49194">
+    <div class="subject"><a href="#post-49194">Memory leaks</a></div>
+    <div class="body">chorus,<br /><br />I wouldn't trust MemProof too much; from what I've read in it's help, it was design to test leaks in Delphi programs. <br />Besides, I didn't like it it too much, Numega BoundsChecker is better ;-)<br /><br />Considering your code, I took a straightforward approach and tested it in BC (BoundChecker)<br />Merely inserted your CreateWindowEx for ListBox in WM_CREATE handler.<br />No extra s**t was done in WM_DESTROY handler, only what Procstart puts there, i.e.<br />invoke PostQuitMessage, NULL<br /><br />All went smooth (as it should be) upon exit Program being tested in BC.<br />No errors, etc.<br /><br />So again, summarizing, i think that MemProof is not very well suits regular programs based on WinAPI calls, it is better for Delphi-bloatwares... ;-)</div>
+    <div class="meta">Posted on 2002-07-21 15:27:29 by Andycar</div>
+   </div>
+   <div class="post" id="post-49198">
+    <div class="subject"><a href="#post-49198">Memory leaks</a></div>
+    <div class="body">I've downloaded MemProof and played a bit with it.<br /><br /><br />In one case i loaded icon with LoadIcon func and then sent WM_SETICON to set it to dialog.<br />And MemProof told me that:<br /><em>The returned icon handle must be freed with DestroyIcon when no longer needed.</em><br /><br />But in API reference i read:<br /><em>It is only necessary to call DestroyIcon for icons created with the CreateIconIndirect function.</em><br /><br /><br />In other case i used CreateMenu/SetMenu to assign menu to window.<br />And MemProof told me that:<br /><em>The returned menu handle must be freed with DestroyMenu when no longer needed.</em><br /><br />But API reference tells me that:<br /><em>A menu that is assigned to a window is automatically destroyed when the application closes.</em><br /><br /><br />Every time i call CreateWindowEx to create some window MemProof reports me stupid:<br /><em>The returned window handle must be freed with DestroyWindow or by passing a WM_DESTROY message to the default window procedure.</em><br /><br />And so on....<br />So, IMHO, you shouldn't believe it much.</div>
+    <div class="meta">Posted on 2002-07-21 15:50:56 by Four-F</div>
+   </div>
+   <div class="post" id="post-49204">
+    <div class="subject"><a href="#post-49204">Memory leaks</a></div>
+    <div class="body">Four-F, I'm beginning to think that all MemProof does is count how many times you call, say, LoadIcon and how many times you call the DestroyIcon proc.  But as you pointed out, the win32api and MSDN say you don't need to call DestroyIcon unless you call CreateIconIndirect.<br /><br />However, I thought the strangest thing was that all my other child windows were being (reported as) destroyed but the list box wasn't. It wasn't subclassed either...<br /><br />Whatever... I guess I'll just watch for &quot;important&quot; things like GlobalAllocs, etc.<br /><br />Andycar, I'll take a look into BoundsChecker. Thanks for the idea :)<br /><br />Thanks again guys<br />--Chorus</div>
+    <div class="meta">Posted on 2002-07-21 16:20:30 by chorus</div>
+   </div>
+  </div>
+ </body>
+</html>

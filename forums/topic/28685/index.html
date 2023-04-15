@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Branch prediction - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28685" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28685">Branch prediction</a></p>
+   <div class="post" id="post-202644">
+    <div class="subject"><a href="#post-202644">Branch prediction</a></div>
+    <div class="body">I saw something in linux kernel &quot;if(likely( .... ))&quot; when I search on it I found some thing called &quot;Branch prediction&quot;.<br />So, how can I make my jumps more &quot;predicable&quot; for cpu ?</div>
+    <div class="meta">Posted on 2007-08-17 17:48:33 by Dite</div>
+   </div>
+   <div class="post" id="post-202646">
+    <div class="subject"><a href="#post-202646">Re: Branch prediction</a></div>
+    <div class="body">From C, there are a few guidelines as far as branch prediction performance:<br /><ul><br /><li>reduce the number of branches</li><br /><li>for branches that may occur repeatedly (e.g. in or part of a loop), try to avoid having these branches taken close to 50% of the time</li><br /><li>when using if, including chains of else if, put the most likely conditions first</li><br /><li>use switch for long chains of comparing the same variable against constant integers, especially consecutive integers</li><br /></ul><br /><br />In the first case, removing a branch means that it can&#039;t be mispredicted, avoiding the chance of the penalty for mispredicting.&nbsp; :lol:&nbsp; It also increases the chance of a branch being in the Branch Target Buffer (BTB, see second case), since it has a limited number of entries.<br /><br />In the second case, the BTB keeps track of a (very rough) percentage of times that a branch is taken, and if the percentage is above 50%, it&#039;s predicted as being taken, and if below, it&#039;s predicted as being not taken.&nbsp; There are also two or more levels of prediction (strongly predicted vs. weakly predicted) depending on the percentage.<br /><br />In the third case, if a branch is not in the BTB, there is a specific prediction scheme used (neglecting speculative execution): If a branch is forward (an &quot;if&quot; statement), it is predicted as not being taken (going inside the &quot;if&quot; statement).&nbsp; If a branch is backward (a loop), it is predicted as being taken (looping back to the beginning of the loop).&nbsp; Of course, unconditional branches are predicted to be taken.&nbsp; Variable jumps (not present in C, except for some &quot;switch&quot; implementations) aren&#039;t predicted at all.&nbsp; This suggests that if the most likely case in a chain of &quot;if&quot;/&quot;else if&quot; is first, it will predict that the case is true.&nbsp; It also suggests that small loops (just a few iterations) should be unrolled.<br /><br />In the last case, although variable jumps are difficult to predict, having a variable jump based on a table lookup is better than having a large number of mispredictions from a chain of &quot;if&quot;/&quot;else if&quot;, so switch usually indicates to the compiler to try to do a table or tree lookup for the jump instead of trying each condition sequentially.&nbsp; When the code is not something that works with switch but that still contains a big string of &quot;if&quot;/&quot;else if&quot;, you can still often make a binary search tree in the code of if/else, however, this will usually make the branches be taken close to 50% of the time, so it&#039;s not always a silver bullet.<br /><br />From an assembly point of view it&#039;s a bit easier to see some of these things (well, it&#039;s at least easier to follow), but luckily this is one thing at which you can often trick the compiler into doing a good job.<br /><br />I hope that helps explain it. Cheers! :)<br /><br />Edit: minor clarification on last full paragraph</div>
+    <div class="meta">Posted on 2007-08-18 01:00:58 by hackulous</div>
+   </div>
+   <div class="post" id="post-202652">
+    <div class="subject"><a href="#post-202652">Re: Branch prediction</a></div>
+    <div class="body">There&#039;s some &quot;branch hint&quot; instructions added in recent CPUs - in fact they&#039;re constructed with segment overrides, so they have no effect on older CPUs. Google :)<br /><br />I wonder if the &quot;if(likely(...))&quot; is some GCC extension?<br /></div>
+    <div class="meta">Posted on 2007-08-18 10:19:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-202653">
+    <div class="subject"><a href="#post-202653">Re: Branch prediction</a></div>
+    <div class="body"><div class="quote"><br />There&#039;s some &quot;branch hint&quot; instructions added in recent CPUs - in fact they&#039;re constructed with segment overrides, so they have no effect on older CPUs. Google :)<br /></div><br />I never really looked into them much since they seemed kind of cryptic.&nbsp; Are they easier to use than just reorganizing the jump directions for the BTB initial guess?<br /><div class="quote"><br />I wonder if the &quot;if(likely(...))&quot; is some GCC extension?<br /></div><br />That&#039;s a neat idea.&nbsp; It would be a neat way to indicate to the compiler whether the condition is most likely true so that it can try to do these optimizations a bit.<br /><br />It might also just be some function somewhere else in the code.&nbsp; Putting such an &quot;if&quot; around a very long check for whether the &quot;real&quot; condition is true could save a lot of time.</div>
+    <div class="meta">Posted on 2007-08-18 14:13:11 by hackulous</div>
+   </div>
+   <div class="post" id="post-202665">
+    <div class="subject"><a href="#post-202665">Re: Branch prediction</a></div>
+    <div class="body">Thanks guys.<br /><br /><div class="quote"><br />There&#039;s some &quot;branch hint&quot; instructions added in recent CPUs - in fact they&#039;re constructed with segment overrides, so they have no effect on older CPUs. Google :)<br /><br />I wonder if the &quot;if(likely(...))&quot; is some GCC extension?<br /><br /></div><br />I&#039;ve rechecked that I found this.<br />#define likely(x) __builtin_expect(!! ( x ), 1)<br />#define unlikely(x) __builtin_expect(!! ( x ), 0)<br />It&#039;s definetly a gcc ext.<br /><br />And I googled &quot;branch hint&quot; and found some implemention.<br />http://www.jorgon.freeserve.co.uk/TestbugHelp/Optimisation.htm<br /><div class="quote">2Eh - hint that the branch will not occur most of the time.<br />3Eh - hint that the branch will occur most of the time.</div><br /><br />Thanks</div>
+    <div class="meta">Posted on 2007-08-19 10:18:59 by Dite</div>
+   </div>
+   <div class="post" id="post-202790">
+    <div class="subject"><a href="#post-202790">Re: Branch prediction</a></div>
+    <div class="body">Intel provides branch-prediction instructions for its Pentium-class processors, though there are no mnemonics for them. To indicate a likely branch in your code, precede it with this:<br /><br /><pre><code>db 0x3E ; (or &quot;db 03Eh&quot;, however you prefer to write hex numbers)</code></pre><br /><br />To indicate an unlikely taken branch, precede it with this:<br /><br /><pre><code>db 0x2E ; (or &quot;db 02Eh&quot;)</code></pre><br /><br />Basically, you are just declaring anonymous bytes with the afforementioned values. Not exactly obvious in a quick scan over code. It would probably promote clarity to #define those as macros... something like NEXT_JMP_LIKELY and NEXT_JMP_UNLIKELY, or something more cryptic, but assembly-ish, like NJL and NJU.<br /><br />Modern Intel processors always assume that backward jumps will be taken and forward jumps not, so you really only need include these when the reverse is true for a particular section of code. In other words, if you have a backward jump that is likely to be taken, just let the processor handle it. Preceding it with &quot;db 0x3E&quot; will only force the processor to read that extra byte when it would have predicted correctly anyway.<br /><br />If you are programming in C, there is a good chance that your compiler allows for inline assembly. Consult your compiler&#039;s manual on how to do that, and then the rest is essentially the same. The only caveat there is now you need to learn what assembly your C compiler emits so you know where exactly to place the inline assembly. Do do that, of course, consult the compiler&#039;s manual.</div>
+    <div class="meta">Posted on 2007-08-31 15:16:53 by TheAbysmal</div>
+   </div>
+   <div class="post" id="post-202792">
+    <div class="subject"><a href="#post-202792">Re: Branch prediction</a></div>
+    <div class="body">The branch prediction hints are done as segment overrides, so they decode as harmless no-ops on older processors... so you might be able to use them directly in your current assembler without DBs, depending on how flexible it is wrt. segment override syntax :)<br /><br />Inline assembly == yuck... and for MS 64bit compilers, it&#039;s totally unavailable. If you have routines worthy of optimizing, better write them using an external assembler anyway.</div>
+    <div class="meta">Posted on 2007-08-31 15:42:17 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

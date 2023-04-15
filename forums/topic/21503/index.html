@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Sending Keystrokes to another Process - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21503" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21503">Sending Keystrokes to another Process</a></p>
+   <div class="post" id="post-162409">
+    <div class="subject"><a href="#post-162409">Sending Keystrokes to another Process</a></div>
+    <div class="body">Hi<br />I want to ask if somebody has tied to send keystrokes to calc.exe from another process. My first attempt was to send WM_KEYDOWN / WM_KEYUP messages but I failed. I tried it with the keybd_event api and this seems to work but it has a serious drawback. I had to build in a little sleep delay to make sure that each message reaches the message loop. WaitForInputIdle doesn?t work without this delay! If I call the keybd_event? api too fast, repeated chars go lost. Due to this artefact, I want to know if it is possible to use the SendMessage api with WM_KEYxxx. The code I?m using now is:<br /><br /><pre><code>; Method:? ? REdtIptor.SendToCalc<br />; Purpose:? ?Sends the selected text to the Calc.exe application.<br />; Arguments: None.<br />; Return:? ? Nothing.<br /><br />SendChar macro Char:req<br />? ? .if $invoke(WaitForInputIdle, .hCalcPrc, CALC_KEY_TIMEOUT) != 0<br />? ? ? jmp @@Exit<br />? ? .endif<br />? ? invoke keybd_event, Char, 0, 0, 0? ? ? ? ? ? ? ? ? ? ?;Switch calculator to hexadecimal<br />? ? invoke Sleep, 50? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ;Give Calc enough time to detect Keystroks<br />endm<br /><br />Method REdtIptor.SendToCalc, uses ebx edi esi<br />? ? local dSelBeg:dword, dSelEnd:dword, dCharCount:dword, pBuffer:Pointer, dFlags:dword<br /><br />? ? SetObject esi<br />? ? .if $OCall(esi.OpenCalc) == TRUE<br />? ? ? invoke SetForegroundWindow, .hCalcWnd? ? ? ? ? ;Set as forgound window to enable it<br />? ? ? mov ecx, .pOwner? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;? to receive keyboard strokes<br />? ? ? mov ebx, .ChildTxt.hEdit<br />? ? ? invoke CallWindowProc, .pPrevWndProc, ebx, EM_GETSEL, addr dSelBeg, addr dSelEnd<br />? ? ? mov eax, dSelEnd<br />? ? ? sub eax, dSelBeg<br />? ? ? mov dCharCount, eax<br />? ? ? push eax<br />? ? ? inc eax<br />? ? ? mov pBuffer, $MemAlloc(eax)<br />? ? ? invoke CallWindowProc, .pPrevWndProc, ebx, EM_GETSELTEXT, 0, pBuffer<br /><br />? ? ? pop ebx<br />? ? ? add ebx, pBuffer? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ;ebx -&gt; end of string<br />? ? ? dec ebx? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;Skip terminator zero<br />? ? ? .while ebx &gt;= pBuffer<br />? ? ? ? .if byte ptr  == &quot; &quot;<br />? ? ? ? ? dec ebx<br />? ? ? ? .elseif byte ptr  == &quot;h&quot;<br />? ? ? ? ? SendChar VK_F5? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ;Switch calculator to hexadecimal<br />? ? ? ? ? SendChar VK_F12? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;Switch calculator to qword<br />? ? ? ? ? .break<br />? ? ? ? .elseif byte ptr  == &quot;y&quot;<br />? ? ? ? ? SendChar VK_F8? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ;Switch calculator to binary<br />? ? ? ? ? SendChar VK_F12? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;Switch calculator to qword<br />? ? ? ? ? .break<br />? ? ? ? .else<br />? ? ? ? ? SendChar VK_F6? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ;Switch calculator to decimal<br />? ? ? ? ? .break<br />? ? ? ? .endif<br />? ? ? .endw<br /><br />? ? ? xor eax, eax<br />? ? ? mov dFlags, eax? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;1 if 1st char different from &quot;0&quot;<br />? ? ? mov edi, pBuffer<br />? ? ? add dCharCount, edi<br />? ? ? .while edi &lt; dCharCount<br />? ? ? ? xor ebx, ebx<br />? ? ? ? mov bl, ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;edi -&gt; char buffer<br />? ? ? ? inc edi<br />? ? ? ? .if dFlags == 0? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;Don&#39;t send unnecessary &quot;0&quot; chars<br />? ? ? ? ? .if bl != &quot;0&quot;<br />? ? ? ? ? ? inc dFlags<br />? ? ? ? ? .endif<br />? ? ? ? .endif<br />? ? ? ? .if dFlags != 0<br />? ? ? ? ? .if bl == &quot;.&quot;<br />? ? ? ? ? ? SendChar 00BEh<br />? ? ? ? ? .else<br />? ? ? ? ? ? .if ((bl &gt; &quot;0&quot; - 1) &amp;&amp; (bl &lt; &quot;9&quot; + 1)) || ((bl &gt; &quot;A&quot; - 1) &amp;&amp; (bl &lt; &quot;F&quot; + 1))<br />? ? ? ? ? ? ? SendChar ebx<br />? ? ? ? ? ? .endif<br />? ? ? ? ? .endif<br />? ? ? ? .endif<br />? ? ? .endw<br /><br />? ? ? .if dFlags == 0? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ?;if nothing was sent<br />? ? ? ? SendChar &quot;0&quot;? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ;? send a &quot;0&quot;<br />? ? ? .endif<br /><br />@@Exit:<br />? ? ? MemFree pBuffer<br />? ? .endif<br />MethodEnd</code></pre><br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2005-07-23 16:25:20 by Biterider</div>
+   </div>
+   <div class="post" id="post-162412">
+    <div class="subject"><a href="#post-162412">Re: Sending Keystrokes to another Process</a></div>
+    <div class="body">Both WM_KEYDOWN and WM_KEYUP will send a WM_CHAR. To get WM_KEYxxx to send the WM_CHAR use PostMessage.<br /><br />Regards<br /><br /></div>
+    <div class="meta">Posted on 2005-07-23 17:22:10 by minor28</div>
+   </div>
+   <div class="post" id="post-162588">
+    <div class="subject"><a href="#post-162588">Re: Sending Keystrokes to another Process</a></div>
+    <div class="body">I am not completely sure that sending keystrokes directly will work reliably as the threads inputs are not synchronized. I think that the best idea is to open the process and use AttachThreadInput...<br /><br /><div class="quote">Windows created in different threads typically process input independently of each other. That is, they have their own input states (focus, active, capture windows, key state, queue status, and so on), and they are not synchronized with the input processing of other threads. By using the AttachThreadInput function, a thread can attach its input processing to another thread. This also allows threads to share their input states, so they can call the SetFocus function to set the keyboard focus to a window of a different thread. This also allows threads to get key-state information. These capabilities are not generally possible.</div><br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/attachthreadinput.asp">AttachThreadInput</a></div>
+    <div class="meta">Posted on 2005-07-29 01:51:51 by donkey</div>
+   </div>
+   <div class="post" id="post-162589">
+    <div class="subject"><a href="#post-162589">Re: Sending Keystrokes to another Process</a></div>
+    <div class="body">Hi Donkey<br />Currently I&#39;m still using the Sleep api to delay the SendMessages due to that the sent messages arrive out of order if I don&#39;t do it. I will try AttachThreadInput...&nbsp; Thanks!<br /><br />Biterider</div>
+    <div class="meta">Posted on 2005-07-29 01:54:11 by Biterider</div>
+   </div>
+   <div class="post" id="post-162598">
+    <div class="subject"><a href="#post-162598">Re: Sending Keystrokes to another Process</a></div>
+    <div class="body">Hi Donkey<br />It works perfectly even without delays! Thanks!&nbsp; 8)<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2005-07-29 07:33:29 by Biterider</div>
+   </div>
+   <div class="post" id="post-162677">
+    <div class="subject"><a href="#post-162677">Re: Sending Keystrokes to another Process</a></div>
+    <div class="body">No probs Biterider.</div>
+    <div class="meta">Posted on 2005-07-31 21:56:21 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

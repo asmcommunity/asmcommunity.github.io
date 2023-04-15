@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Best place to store a controls data? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4984" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4984">Best place to store a controls data?</a></p>
+   <div class="post" id="post-35040">
+    <div class="subject"><a href="#post-35040">Best place to store a controls data?</a></div>
+    <div class="body">Hi all<br />I'm working on a custom window control wich will go into a dll file. When my control processes WM_CREATE I will allocate some memory for use by the control. My question is where to store it (or where to store the pointer to the memory) I can't use LOCALs since they will be cleared every time the proc ends and I can't use the data section since my control can be used more then once, so where do controls usually store there data?</div>
+    <div class="meta">Posted on 2002-04-25 10:20:56 by Kudos</div>
+   </div>
+   <div class="post" id="post-35041">
+    <div class="subject"><a href="#post-35041">Best place to store a controls data?</a></div>
+    <div class="body">If storage for one pointer suits your needs, you can use SetWindowLong(hWnd, GWL_USERDATA	, value) and value = GetWindowLong(hWnd, GWL_USERDATA).<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-04-25 10:22:14 by Thomas</div>
+   </div>
+   <div class="post" id="post-35045">
+    <div class="subject"><a href="#post-35045">Best place to store a controls data?</a></div>
+    <div class="body">Storage for one pointer will allways be sufficient :), since you can<br />HeapAlloc a block of memory. However, if you need something like<br />12 or 16 bytes, it might be smarter to specify some bytes in<br />cbWndExtra to avoid doing (possibly) lots of small heap allocs.</div>
+    <div class="meta">Posted on 2002-04-25 11:04:08 by f0dder</div>
+   </div>
+   <div class="post" id="post-35049">
+    <div class="subject"><a href="#post-35049">Best place to store a controls data?</a></div>
+    <div class="body">Exactly, this is one of the points discussed in my tutorial.<br /><br />However, i thought i would point out that you *should* (might get away with not doing so) also specify 4 bytes at the very least if you wish to store the pointer by GWL_USERDATA.<br /><br />I did some research on this and heres what i dug up:<div class="quote">Extra Window Memory<br />The system maintains an internal data structure for each window. When registering a window class, an application can specify a number of additional bytes of memory, called extra window memory. When creating a window of the class, the system allocates and appends the specified amount of extra window memory to the end of the window's structure. An application can use this memory to store window-specific data. <br /><br />Because extra memory is allocated from the system's local heap, an application should use extra window memory sparingly. <strong>With system version 4.0 or later, the RegisterClassEx function fails if the amount of extra window memory requested is greater than 40 bytes. If an application requires more than 40 bytes, it should allocate its own memory and store a pointer to the memory in the extra window memory.</strong><br /><br />The SetWindowLong function copies a value to the extra memory. The GetWindowLong function retrieves a value from the extra memory. The cbWndExtra member of the WNDCLASSEX structure specifies the amount of extra window memory to allocate. An application that doesn't use the memory must initialize cbWndExtra to zero.  <br /></div><br /><br />So you get a few more bytes than 12 or 16 :) , however for my uses 40 was still not enough (Storing Drawing &quot;rects&quot; are 16 bytes a pop!)<br /><br />Hope it helps<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-04-25 11:22:05 by NaN</div>
+   </div>
+   <div class="post" id="post-35051">
+    <div class="subject"><a href="#post-35051">Best place to store a controls data?</a></div>
+    <div class="body">I don't think it's necessary to specify any cbWndExtra to use<br />GWL_USERDATA, I'm pretty sure all windows has these 4 bytes by default.<br />At least I've never run into any trouble using GWL_USERDATA on<br />any flavour of NT or 9x.</div>
+    <div class="meta">Posted on 2002-04-25 11:26:58 by f0dder</div>
+   </div>
+   <div class="post" id="post-35053">
+    <div class="subject"><a href="#post-35053">Best place to store a controls data?</a></div>
+    <div class="body">Thanx for replies<br /><br />I think I'll just use 4 byte and point to a structure containing all of the control's data (not sure of the exact format yet). I had know idea it would work without setting cbWndExtra</div>
+    <div class="meta">Posted on 2002-04-25 11:59:08 by Kudos</div>
+   </div>
+   <div class="post" id="post-35054">
+    <div class="subject"><a href="#post-35054">Best place to store a controls data?</a></div>
+    <div class="body">Just remember to put that struct on the heap, don't use a local struct ;)</div>
+    <div class="meta">Posted on 2002-04-25 12:02:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-35061">
+    <div class="subject"><a href="#post-35061">Best place to store a controls data?</a></div>
+    <div class="body"><div class="quote"><br />Thanx for replies<br />... (not sure of the exact format yet). I had know idea it would work without setting cbWndExtra </div><br /><br />Take a look at my <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4952">custom menu-button control</a> .<br /><br />The way i formatted it is simple and flexible for changes.<br /><ul>[*]First create a Structure that will represent your private memory for the control<br />[*]In the WM_CREATE call HeapAlloc to the size of the structure.  Then take the pointer and store it with SetWindowLong.<br />[*]Before any message is handled, i call GetWindowLong, and retrieve the pointer, and place it in EBX such that is wont be corrupted by API's.  This allows me to treat EBX as the private memory for the control throughout the control.<br />[*]When closing, call HeapFree on the EBX pointer.<br /><br /><br />The advantage to this format is you can make changes to your private memory simply by adding or removing structure entries, as everything else is done dynamically and based on the structure size.<br /><br />Hope this is some help.<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-04-25 14:00:01 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

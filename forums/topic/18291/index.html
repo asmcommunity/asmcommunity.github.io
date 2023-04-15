@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Directory operations - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18291" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18291">Directory operations</a></p>
+   <div class="post" id="post-141542">
+    <div class="subject"><a href="#post-141542">Directory operations</a></div>
+    <div class="body">Are there any API functions to open directory, get file number and all filenames? And other functions to work with directories?</div>
+    <div class="meta">Posted on 2004-05-20 07:18:18 by Vaxon</div>
+   </div>
+   <div class="post" id="post-141545">
+    <div class="subject"><a href="#post-141545">Directory operations</a></div>
+    <div class="body">FindFirstFile(), FindNextFile(), FindClose()</div>
+    <div class="meta">Posted on 2004-05-20 07:46:39 by Scali</div>
+   </div>
+   <div class="post" id="post-141617">
+    <div class="subject"><a href="#post-141617">Directory operations</a></div>
+    <div class="body">The folder apis are a pain in the butt to use.  When using the FindFirst/NextFile apis Windows will return the . and .. folders as well, so don't be suprised if you see those.  If you are doing a folder recursive search, you definatly do not want to process those two folders.<br /><br />The directory APIs are here<br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/fileio/base/directory_management_functions.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/fileio/base/directory_management_functions.asp</a></div>
+    <div class="meta">Posted on 2004-05-20 18:56:01 by Mecurius</div>
+   </div>
+   <div class="post" id="post-141625">
+    <div class="subject"><a href="#post-141625">Directory operations</a></div>
+    <div class="body">This is from my files library, it will allow you to pass the files recursively to a callback one at a time. You have only to pass a root folder and return TRUE to continue the enumeration. It is based on Ketil's TreeViewDir.<br /><br /><pre><code>/*<br />RecurseFolder&#58;<br />	This is a callback function that will list all files in a folder<br />	Parameters&#58;<br />		lpPth = Pointer to a fully qualified path<br />		pCallback = Pointer to a call back function<br />		fRecurse = Set to TRUE to recurse the directory<br />	The function will send the filenames to the callback one at a time<br />	Format for callback&#58;<br />		RecurserFolderProc&#58;<br />			pFileName = A pointer to the filename being enumerated<br />			dwAttributes = File attributes<br />		The callback returns false to stop the enumeration<br />	Returns the count of enumerated files<br />*/<br /><br />.data<br />	rfpszBuffer db MAX_PATH DUP &#40;?&#41;<br />	rfpwfd WIN32_FIND_DATA	&lt;?&gt;<br />	rfpszSearchString db MAX_PATH DUP &#40;?&#41;<br />	rfpfEndProc dd 1<br />	rfpnFileEnum dd 0<br />	rfpBkSColon db &quot;\*&quot;,0<br /><br />.code<br /><br />RecurseFolder FRAME lpPth,pCallback,fRecurse<br /><br />	mov D&#91;rfpfEndProc&#93;,1<br />	mov D&#91;rfpnFileEnum&#93;,0<br />	invoke xRecurseFolder,&#91;lpPth&#93;,&#91;pCallback&#93;,&#91;fRecurse&#93;<br /><br />	mov eax,&#91;rfpnFileEnum&#93;<br />	RET<br />ENDF<br /><br />xRecurseFolder FRAME lpPth,pCallback,fRecurse<br />	LOCAL hwfd	&#58;D<br /><br />	cmp D&#91;rfpfEndProc&#93;,0<br />	je &gt;&gt;E2<br />	invoke lstrcpyA,addr rfpszBuffer,&#91;lpPth&#93;<br />	invoke lstrcatA,addr rfpszBuffer,offset rfpBkSColon<br />	invoke FindFirstFileA,addr rfpszBuffer,addr rfpwfd<br />	cmp eax,INVALID_HANDLE_VALUE<br />	je &gt;&gt;E2<br />		;Save returned handle<br />		mov &#91;hwfd&#93;,eax<br />	  N1&#58;<br />		;Check if found is a dir<br />		mov eax,&#91;rfpwfd.dwFileAttributes&#93;<br />		test eax,FILE_ATTRIBUTE_DIRECTORY<br />		jz &gt;&gt;C1<br />			cmp D&#91;fRecurse&#93;,FALSE<br />			je &gt;&gt;C2<br />			;Do not include '.' and '..'<br />			mov eax,&#91;rfpwfd.cFileName&#93;<br />			and eax,0FFFFFFh<br />			cmp eax,2E2Eh<br />			je &gt;&gt;C2<br />			and eax,0FFFFh<br />			cmp eax,2Eh<br />			je &gt;&gt;C2<br />				invoke lstrlenA,addr rfpszBuffer<br />				mov edx,eax<br />				push edx<br />				dec edx<br />				cmp B&#91;rfpszBuffer+edx&#93;,&quot;\&quot;<br />				jne &gt;<br />					inc edx<br />				&#58;<br />				mov eax,OFFSET rfpszBuffer<br />				add eax,edx<br />				invoke lstrcpyA,eax,addr rfpwfd.cFileName<br />				<br />				inc D&#91;rfpnFileEnum&#93;<br />				push &#91;rfpwfd.dwFileAttributes&#93;<br />				push OFFSET rfpszBuffer<br />				call &#91;pCallback&#93;<br />				mov &#91;rfpfEndProc&#93;,eax<br />				or eax,eax<br />				jz &gt;<br />				invoke xRecurseFolder,addr rfpszBuffer,&#91;pCallback&#93;,&#91;fRecurse&#93;<br />				&#58;<br />				pop edx<br />				mov B&#91;rfpszBuffer+edx&#93;,0<br />				cmp D&#91;rfpfEndProc&#93;,0<br />				je &gt;&gt;E1<br />				jmp &gt;C2<br />		C1&#58;<br />			invoke lstrcpyA,OFFSET rfpszSearchString,OFFSET rfpszBuffer<br />			invoke lstrlenA,OFFSET rfpszSearchString<br />			add eax,OFFSET rfpszSearchString<br />			dec eax<br />			invoke lstrcpyA,eax,addr rfpwfd.cFileName<br />			invoke GetFileAttributesA,ADDR rfpszSearchString<br /><br />			inc D&#91;rfpnFileEnum&#93;<br />			push eax<br />			push ADDR rfpszSearchString<br />			call &#91;pCallback&#93;<br />			mov &#91;rfpfEndProc&#93;,eax<br />			or eax,eax<br />			jz &gt;E1<br />			&#58;<br />		C2&#58;<br />		invoke FindNextFileA,&#91;hwfd&#93;,addr rfpwfd<br />		or eax,eax<br />		jne	&lt;&lt;N1<br />		E1&#58;<br />		invoke FindClose,&#91;hwfd&#93;<br /><br />	E2&#58;<br /><br />	ret<br /><br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-05-20 19:37:55 by donkey</div>
+   </div>
+   <div class="post" id="post-141631">
+    <div class="subject"><a href="#post-141631">Directory operations</a></div>
+    <div class="body"><div class="quote"><br />Windows will return the . and .. folders as well, so don't be suprised if you see those.<br /></div><br />Don't all (related) OS'es? DOS certainly did, and I think linux does too.</div>
+    <div class="meta">Posted on 2004-05-20 19:53:04 by f0dder</div>
+   </div>
+   <div class="post" id="post-141639">
+    <div class="subject"><a href="#post-141639">Directory operations</a></div>
+    <div class="body">The . and .. were introduced with DOS 2.0 and were part of the rip-off of part of the Unix file system by Microsoft in order to allow better handling of heirachical directory structures. My recursion routine handles them and also allows &quot;.&quot; folder names, which f0dder kindly pointed out to me were possible (I didn't know before he mentioned it)</div>
+    <div class="meta">Posted on 2004-05-20 21:14:02 by donkey</div>
+   </div>
+   <div class="post" id="post-141642">
+    <div class="subject"><a href="#post-141642">Directory operations</a></div>
+    <div class="body">And don't forget the super secret ... directory which bestows upon its user absolute wealth and power.</div>
+    <div class="meta">Posted on 2004-05-20 21:31:29 by iblis</div>
+   </div>
+   <div class="post" id="post-141643">
+    <div class="subject"><a href="#post-141643">Directory operations</a></div>
+    <div class="body"><div class="quote"><br />And don't forget the super secret ... directory which bestows upon its user absolute wealth and power. </div><br /><br />:grin: That would be the $HOME directory which I geuss MS did steal after all though they seem to have renamed it.</div>
+    <div class="meta">Posted on 2004-05-20 21:33:22 by donkey</div>
+   </div>
+   <div class="post" id="post-141658">
+    <div class="subject"><a href="#post-141658">Directory operations</a></div>
+    <div class="body">MS-DOS actually ripped off CP/M, I think.<br />And I'm not sure if CP/M ripped off *nix, or the other way around.</div>
+    <div class="meta">Posted on 2004-05-21 03:32:44 by Scali</div>
+   </div>
+   <div class="post" id="post-141670">
+    <div class="subject"><a href="#post-141670">Directory operations</a></div>
+    <div class="body">thanks a lot :)</div>
+    <div class="meta">Posted on 2004-05-21 06:07:50 by Vaxon</div>
+   </div>
+   <div class="post" id="post-141671">
+    <div class="subject"><a href="#post-141671">Directory operations</a></div>
+    <div class="body">In Windows 9X, ... refers to the directory two levels up, .... refers to the one three levels up and so on. I bet there weren't many of you who knew about that.</div>
+    <div class="meta">Posted on 2004-05-21 06:08:49 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-141689">
+    <div class="subject"><a href="#post-141689">Directory operations</a></div>
+    <div class="body"><div class="quote">MS-DOS actually ripped off CP/M, I think.<br />And I'm not sure if CP/M ripped off *nix, or the other way around.</div><br /><br />CP/M does not have heirarchical directory structures and certainly does not have &quot;. and ..&quot;. MSDOS 1.0 was based on QDOS (Quick and Dirty Operating system) not CP/M though QDOS was loosely based on CP/M as it was originally intended to be replaced by it. Beginning with PCDOS (or MSDOS) 2.0 Microsoft broke from the QDOS model in an attempt not to live up to it's royalty agreement with SCP (the makers of QDOS). DOS 2.0 was a complete rewrite and got rid of the CP/M like crap and replaced it with Unix like commands</div>
+    <div class="meta">Posted on 2004-05-21 10:03:47 by donkey</div>
+   </div>
+   <div class="post" id="post-141699">
+    <div class="subject"><a href="#post-141699">Directory operations</a></div>
+    <div class="body">If QDOS is based on CP/M, and MS-DOS is based on QDOS, then MS-DOS is based on CP/M.<br />I am not sure about the royalty thing with QDOS either. I thought they bought all rights to QDOS (<a target="_blank" href="http://inventors.about.com/library/weekly/aa033099.htm">http://inventors.about.com/library/weekly/aa033099.htm</a>).<br />Wikipedia actually claims that QDOS was a &quot;16-bit clone&quot; of CP/M (<a target="_blank" href="http://en.wikipedia.org/wiki/QDOS">http://en.wikipedia.org/wiki/QDOS</a>).<br />So I wonder how 'loosely' it was based on CP/M.<br /><br />I am not too sure about MS-DOS 2.0 differencing that much from MS-DOS 1.0 though.<br />I would guess that would break compatibility in a nasty way.</div>
+    <div class="meta">Posted on 2004-05-21 10:29:30 by Scali</div>
+   </div>
+   <div class="post" id="post-141703">
+    <div class="subject"><a href="#post-141703">Directory operations</a></div>
+    <div class="body">Wel, anyone old enough to remember the change from 1.0 to 2.0 also remembers the wholesale scrapping of most of their disks. DOS 1.0 was broken with DOS 2.0, the last time that happened. The license agreement is a matter of public record and MS was sued for violating the terms of the agreement and lost. They had agreed to allow SCP to distribute MSDOS royalty free in perpetuity with all available upgrades, they had argued that MSDOS 2.0 was completely new and unrelated to MSDOS 1.0 and therefore not covered by the license agreement they signed, the judge sided with SCP and MS was forced to buy the complete rights to QDOS in order to stop SCP from distributing free of charge. The original QDOS was developped because DR was not ready with CP/M and it was an interrim patch, it can hardly be said to be a CP/M clone when CP/M did not even exist when it was written, it was loosely based on the proposed design of CP/M. Yes, I have used CP/M and QDOS and though they are obviously based on the same root concepts, they are different beasts.</div>
+    <div class="meta">Posted on 2004-05-21 10:54:48 by donkey</div>
+   </div>
+   <div class="post" id="post-141705">
+    <div class="subject"><a href="#post-141705">Directory operations</a></div>
+    <div class="body">Ah, so eventually MS did get the exclusive rights.<br />I've never used CP/M, so I have no idea what it looks like. I don't think I want to know either.<br /><br />And I didn't use PCs in the early days. I used real computers. My first PC had MS-DOS 3.21 on it.<br /><br />PS: your ignore is not working</div>
+    <div class="meta">Posted on 2004-05-21 11:03:38 by Scali</div>
+   </div>
+   <div class="post" id="post-141706">
+    <div class="subject"><a href="#post-141706">Directory operations</a></div>
+    <div class="body"><div class="quote">PS: your ignore is not working</div><br /><br />Turned it off, it was childish.</div>
+    <div class="meta">Posted on 2004-05-21 11:12:39 by donkey</div>
+   </div>
+   <div class="post" id="post-141710">
+    <div class="subject"><a href="#post-141710">Directory operations</a></div>
+    <div class="body">Just something along the lines, in the good old dos days I used to install on every computer I used/maintained a folder named (ALT-255) where I kept personal stuff, and some goodies (like games). Windows never seemed to be able to open those and refused to display its contents. Wonder if that has changed... Nowadays, I just dump my stuff inside any System folder and can be sure people won't find it :tongue: <br /><br />And yes, Ignore would be better if you couldn't see the ignored member at all. I mean who wants to see  The click here is just so damn hard to resist :)</div>
+    <div class="meta">Posted on 2004-05-21 11:48:54 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-141727">
+    <div class="subject"><a href="#post-141727">Directory operations</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by donkey </em><br />The original QDOS was developped because DR was not ready with CP/M and it was an interrim patch, it can hardly be said to be a CP/M clone when CP/M did not even exist when it was written, it was loosely based on the proposed design of CP/M. Yes, I have used CP/M and QDOS and though they are obviously based on the same root concepts, they are different beasts. </div><br /><br />Technically, CP/M-86 was not around yet. But CP/M-80, of course, had been around for a couple of years at that point.  DOS 1.0 was a repackaged QDOS, which of course, was based on the CP/M user interface (this was back in the days before doing stuff like that got you sued). But the underlying structure of the two OSes was completely different. They shared a common user interface and the APIs were *very* similar, but that was about it.<br /><br />Little known fact: CP/M was based on Intel's ISIS OS for their 8080/8085 development systems and anyone who has ever used DEC's RT-11 OS will also recognize an uncanny resemblance. Gary Kildall (founder of DR and author of CP/M) did contract work for Intel just prior to developing CP/M (he wrote their PL/M compiler, IIRC). I don't know of any OSes on which RT-11 was based, that's getting back a little before my time.<br /><br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2004-05-21 14:49:39 by rhyde</div>
+   </div>
+   <div class="post" id="post-141737">
+    <div class="subject"><a href="#post-141737">Directory operations</a></div>
+    <div class="body">As I recall, there were some features in DOS that came from supporting CP/M. For example the &quot;call 0&quot; way to exit do DOS, and some obsolete &quot;int 21&quot; calls. It's all in Ralph Brown's interrupt list. :)</div>
+    <div class="meta">Posted on 2004-05-21 15:54:41 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-141765">
+    <div class="subject"><a href="#post-141765">Directory operations</a></div>
+    <div class="body">Well, the first 30 or so INT 21h functions mirror the BDOS calls for CP/M-80.<br /><br />INT 21h, AH=9 is BDOS func. 9, complete with '$' to terminate the displayed string.<br /><br />The PSP is similar to CP/M &quot;page 0&quot;, with command tail at offset 80h.<br /><br />So, yes, the QDOS/MS-DOS <strong>interface</strong> was originally copied from CP/M. Tim Paterson, who created QDOS, made no secret of this.<br /><br />Incidentally, a company called Cromemco made a CP/M-80 clone called CDOS. A major difference was the use of Z80 instructions. Cromemco made hardware, and they never built an 8080 board. They created CDOS to support their Z80 board. <br /><br />There were quite a number of minicomputer systems that had similar looking file structures (flat directory with two part file names and separate volume name). Some of the microcomputers OS's happily made their systems look like this. <br /><br />Eventually, the spread in C language usage brought along its Unix culture, resulting in desire for and acceptance of hierarchial directory structures.</div>
+    <div class="meta">Posted on 2004-05-21 18:42:34 by tenkey</div>
+   </div>
+  </div>
+ </body>
+</html>

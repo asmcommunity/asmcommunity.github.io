@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>FPU x:=x+sin(a)*r - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14470" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=14470">FPU x:=x+sin(a)*r</a></p>
+   <div class="post" id="post-111963">
+    <div class="subject"><a href="#post-111963">FPU x:=x+sin(a)*r</a></div>
+    <div class="body"><pre><code><br /><br />HitX proc		; Calculate a= rot * &#40;3.14/180&#41;<br />;// a&#58;=rot*PI/180<br />;// r&#58;=sqrt&#40;lbr*lbr&#41;.<br />;// hitx&#58;=round&#40;x+sin&#40;a&#41;*r&#41; Used to count X, for Y change it to Cos.<br />;// The parameter are, &#91;ebp&#93;= PosX, &#91;ebp+4&#93;=Width/lbr&#40;lebar&#41;,<br />;// &#91;ebp+8&#93;=Rotation/angle<br /><br />fclex<br />finit			; a&#58;=rot*&#40;pi/180&#41;<br />fldpi			; st&#40;0&#41;=3.14<br />mov eax,#180		; 180 decimal<br />mov &#91;ebp+#100&#93;,eax	; mov it to local variable<br />fild &#91;ebp+#100&#93;		; st&#40;0&#41;=180,st&#40;1&#41;=3.14<br />fdiv st&#40;1&#41;,st		; st&#40;1&#41;=3.14 / st&#40;0&#41;=180<br />fxch 			; st&#40;0&#41;=st&#40;1&#41;<br />fild &#91;ebp+8&#93;		; Parameter Degree/rot<br />fmul st,st&#40;1&#41;		; st&#40;0&#41;=st&#40;0&#41;*st&#40;1&#41;<br />fsin			; sin&#40;a&#41;. a=st&#40;0&#41;<br />;// The result are at st&#40;0&#41;. Now we push another.<br />fild &#91;ebp+4&#93;		; This is the Widht<br />fmul st,st&#40;1&#41;		; Mul it, store it at st&#40;0&#41;<br />;// Its Done, what's more?<br />mov eax,&#91;ebp&#93;		; Get X value to eax<br />fist &#91;ebp+#100&#93;		; store integer dword value at &#91;ebp+64h&#93;<br />add eax,&#91;ebp+#100&#93;	; Done.<br /><br />ret<br />HitX endp<br /><br /><br /></code></pre><br /><br />Is it Right? I have not Test It</div>
+    <div class="meta">Posted on 2003-07-26 10:15:32 by realvampire</div>
+   </div>
+   <div class="post" id="post-111966">
+    <div class="subject"><a href="#post-111966">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">What about hardcoding the pi/180? That would save some instructions.</div>
+    <div class="meta">Posted on 2003-07-26 11:00:46 by roticv</div>
+   </div>
+   <div class="post" id="post-111967">
+    <div class="subject"><a href="#post-111967">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">Your assembler would spit back a few errors. When you use memory operands by reference, you MUST specify the size. Otherwise, the assembler cannot know if it's a WORD, a DWORD, a QWORD, and therefore which opcode to generate.<br /><br />Storing something somewhere on the stack is not a good idea. You may be overwriting something useful.<br /><br />You could also simplify a few things. Your RED, my BLUE.<br /><pre><code><br />&#91;COLOR=red&#93;fclex<br />;this is useless since finit clears ALL exceptions&#91;/COLOR&#93;<br />finit			; a&#58;=rot*&#40;pi/180&#41;<br />fldpi			; st&#40;0&#41;=3.14<br />&#91;COLOR=red&#93;mov eax,#180		; 180 decimal<br />mov &#91;ebp+#100&#93;,eax	; mov it to local variable<br />fild &#91;ebp+#100&#93;		; st&#40;0&#41;=180,st&#40;1&#41;=3.14&#91;/COLOR&#93;<br />&#91;COLOR=blue&#93;pushd 180               ; this won't do any harm<br />fidiv dword ptr&#91;esp&#93;    ; you can divide directly by a memory operand<br />                        ; st&#40;0&#41;=3.14/180&#91;/COLOR&#93;<br />&#91;COLOR=red&#93;fdiv st&#40;1&#41;,st		; st&#40;1&#41;=3.14 / st&#40;0&#41;=180<br />fxch 			; st&#40;0&#41;=st&#40;1&#41;<br />fild &#91;ebp+8&#93;		; Parameter Degree/rot<br />fmul st,st&#40;1&#41;		; st&#40;0&#41;=st&#40;0&#41;*st&#40;1&#41;&#91;/COLOR&#93;<br />&#91;COLOR=blue&#93;fimul dword ptr&#91;ebp+8&#93; ; st&#40;0&#41;=Degree*3.14/180&#91;/COLOR&#93;<br />fsin			; sin&#40;a&#41;. a=st&#40;0&#41;<br />;// The result are at st&#40;0&#41;. Now we push another.<br />&#91;COLOR=red&#93;fild &#91;ebp+4&#93;		; This is the Widht<br />fmul st,st&#40;1&#41;		; Mul it, store it at st&#40;0&#41;&#91;/COLOR&#93;<br />&#91;COLOR=blue&#93;fimul dword ptr&#91;ebp+4&#93;  ; st&#40;0&#41;=Width*sin&#40;a&#41;&#41;&#91;/COLOR&#93;<br />;// Its Done, what's more?<br />&#91;COLOR=red&#93;mov eax,&#91;ebp&#93;		; Get X value to eax<br />fist &#91;ebp+#100&#93;		; store integer dword value at &#91;ebp+64h&#93;<br />add eax,&#91;ebp+#100&#93;	; Done.&#41;&#91;/COLOR&#93;<br />&#91;COLOR=blue&#93;fistp dword ptr&#91;esp&#93;    ; overwrite the pushed 180<br />                        ; AND empties the FPU register<br />pop eax                 ; get it in EAX and clean the stack<br />add eax,&#91;ebp&#93;	        ; Done.&#41;&#91;/COLOR&#93;<br /></code></pre><br /><br />Enjoy<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-07-26 11:16:59 by Raymond</div>
+   </div>
+   <div class="post" id="post-112110">
+    <div class="subject"><a href="#post-112110">Hi</a></div>
+    <div class="body">Thanks Raymond. I'll use it.</div>
+    <div class="meta">Posted on 2003-07-27 22:10:04 by realvampire</div>
+   </div>
+   <div class="post" id="post-112303">
+    <div class="subject"><a href="#post-112303">Hi</a></div>
+    <div class="body">Hope it usefull.<br /><br /><pre><code><br />GetDeltaXY proc<br /><br />mov eax,&#91;ebp+8&#93;		; x2-x<br />sub &#91;ebp&#93;,eax		;<br />mov eax,&#91;ebp+#12&#93;	; y2-y<br />sub &#91;ebp+#12&#93;,eax	;<br /><br />ret<br />GetDeltaXY endp<br /><br />GetHypot proc	; Basic Function.<br />; Parameter are &#91;ebp&#93;=dx, &#91;ebp+4&#93;=dy.<br /><br />mov eax,&#91;ebp&#93;	; Delta X<br />mul eax		; delta x^2<br />mov &#91;ebp&#93;,eax	;<br /><br />mov eax,&#91;ebp+4&#93;	; Delta Y<br />mul eax		; Delta Y^2<br /><br />add &#91;ebp&#93;,eax	; &#40;dx^2&#41; + &#40;dy^2&#41;<br /><br />finit		; Initialize<br />fild d.&#91;ebp&#93;	; Load integer at &#91;ebp&#93;<br />fsqrt		; square root it<br />fist d.&#91;ebp&#93;	; Store it to ebp back<br />mov eax,&#91;ebp&#93;	; Return it to Reg a32<br /><br />ret<br />GetHypot endp<br /><br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-07-29 04:43:15 by realvampire</div>
+   </div>
+   <div class="post" id="post-112321">
+    <div class="subject"><a href="#post-112321">Re: Hi</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by realvampire </em><br />Hope it usefull.<br /><br /><pre><code><br />GetDeltaXY proc<br /><br />mov eax,&#91;ebp+8&#93;		; x2-x<br />sub &#91;ebp&#93;,eax		;<br />mov eax,&#91;ebp+#12&#93;	; y2-y<br />sub &#91;ebp+#12&#93;,eax	;<br /><br />ret<br />GetDeltaXY endp<br /><br />GetHypot proc	; Basic Function.<br />; Parameter are &#91;ebp&#93;=dx, &#91;ebp+4&#93;=dy.<br /><br />mov eax,&#91;ebp&#93;	; Delta X<br />&#91;COLOR=red&#93;xor edx, edx&#91;/COLOR&#93; ;you HAVE to clear edx in order to prevent an overflow exception<br />mul eax		; delta x^2<br />mov &#91;ebp&#93;,eax	;<br /><br />mov eax,&#91;ebp+4&#93;	; Delta Y<br />&#91;COLOR=red&#93;xor edx, edx&#91;/COLOR&#93;<br />mul eax		; Delta Y^2<br /><br />add &#91;ebp&#93;,eax	; &#40;dx^2&#41; + &#40;dy^2&#41;<br /><br />finit		; Initialize<br />fild d.&#91;ebp&#93;	; Load integer at &#91;ebp&#93;<br />fsqrt		; square root it<br />fist d.&#91;ebp&#93;	; Store it to ebp back<br />mov eax,&#91;ebp&#93;	; Return it to Reg a32<br /><br />ret<br />GetHypot endp<br /></code></pre></div><br /><br />and what about just using only the fpu (created on the fly)<br /><pre><code><br />GetHypot proc<br />  fild dword &#91;ebp&#93; ;delta x<br />  fmul st0<br />  fild dword &#91;ebp+4&#93; ;delta y<br />  fmul st0<br />  fadd<br />  fsqrt<br />  fistp dword &#91;esp-4&#93; ;just a temporary place<br />  mov eax,&#91;esp-4&#93;<br />  ret<br />GetHypot endp<br /></code></pre></div>
+    <div class="meta">Posted on 2003-07-29 07:51:11 by hartyl</div>
+   </div>
+   <div class="post" id="post-112333">
+    <div class="subject"><a href="#post-112333">FPU x:=x+sin(a)*r</a></div>
+    <div class="body"><div class="quote">mov eax,	; Delta X<br />xor edx, edx ;you HAVE to clear edx in order to prevent an overflow exception<br />mul eax		; delta x^2</div>There is NO need to clear EDX before a multiplication. You could even use EDX as the multiplier.<pre><code>mov  eax,deltax<br />mov  edx,deltay<br />mul  edx       ;EDX&#58;EAX = deltax*deltay</code></pre>The only time it is necessary to clear EDX is before dividing a number in EAX by another number.<br /><br />The suggestion of using the FPU for the entire computation could simplify the coding whenever the squared values would exceed the range of the 32-bit registers. <br /><br />The only advantage in using FPU instructions for this kind of computation is the reduction in code size. Even the square root of a 64-bit integer can be extracted with CPU instructions with similar speed as the FPU.<br /><br />realvampire:<div class="quote">mov eax,	; y2-y<br />sub ,eax	;</div>It's again obvious you have not tested your code. You will NEVER get your deltaY into  that way.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-07-29 09:16:04 by Raymond</div>
+   </div>
+   <div class="post" id="post-112354">
+    <div class="subject"><a href="#post-112354">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">replace:<br /><pre><code><br />  fldpi<br />  pushd 180<br />  fidiv dword ptr&#91;esp&#93;<br /></code></pre><br /><br />with:<br /><pre><code><br />  fldpi<br />  db 68h<br />  REAL4 180.0<br />  fdiv REAL4 PTR &#91;esp&#93;<br /></code></pre><br /><br />It should save a clock or two.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-07-29 13:24:14 by Mirno</div>
+   </div>
+   <div class="post" id="post-112356">
+    <div class="subject"><a href="#post-112356">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">@<strong>Mirno</strong>: and what instruction's behind that db 0x68?<br /><br />@<strong>Raymond</strong>: do you have a reference to a 64bit integer-sqrt using the cpu only?</div>
+    <div class="meta">Posted on 2003-07-29 13:38:21 by hartyl</div>
+   </div>
+   <div class="post" id="post-112360">
+    <div class="subject"><a href="#post-112360">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">68h is the full 4 byte immediate push<br />6Ah is a one (signed) byte expanded to 4 push...<br /><br />So by using 68h, followed by the REAL4 declaration, the data being pushed is the floating point version of 180. This saves the integer to float conversion.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-07-29 14:04:18 by Mirno</div>
+   </div>
+   <div class="post" id="post-112373">
+    <div class="subject"><a href="#post-112373">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">The Mixlib library contains two square root functions, one for 32-bit unsigned integers and one for 64-bit unsigned integers. You can find the zipped file (which also contains all the source code) at the bottom of the page at:<br /><br /><a target="_blank" href="http://www.movsd.com/source.htm">http://www.movsd.com/source.htm</a><br /><br />The library is designed to perform fixed point maths with an accuracy of 5 decimal places using strictly CPU instructions. The integer portion is limited to +/-32767, which should generally be good enough for screen displays.<br /><br />The library is NOT designed for highly accurate scientific computations.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-07-29 18:25:25 by Raymond</div>
+   </div>
+   <div class="post" id="post-112493">
+    <div class="subject"><a href="#post-112493">Hi</a></div>
+    <div class="body">Thanks all,<br /><br />1. If I fild dword 1.0, what is the hex value?<br />2. If I FIST, does the FPU stack decremented? whats the different with fistp?<br /><br /><br /><pre><code><br />line proc<br />;ebp=x, ebp+4=y, ebp+8=x2, ebp+#12=y2<br />;ebp+#16=color<br /><br />push ebp<br />	push d.&#91;ebp&#93;<br />	push d.&#91;ebp+4&#93;<br />	push d.&#91;ebp+8&#93;<br />	push d.&#91;ebp+#12&#93;<br />	add ebp,#16<br />	pop d.&#91;ebp+#12&#93;<br />	pop d.&#91;ebp+#8&#93;<br />	pop d.&#91;ebp+#4&#93;<br />	pop d.&#91;ebp&#93;<br />	call deltaxy<br />pop ebp<br />; ebp+#20=deltaX, ebp+#24=DeltaY<br />push ebp<br />	push d.&#91;ebp+#20&#93;<br />	push d.&#91;ebp+#24&#93;<br />	add ebp,#24<br />	pop d.&#91;ebp+#4&#93;<br />	pop d.&#91;ebp&#93;<br />	call gethypot<br />pop ebp<br />; ebp+#28=Hypotenusa<br /><br /><br />ret<br />line endp<br /></code></pre><br /><br />That is my line function, I have not finiished it.</div>
+    <div class="meta">Posted on 2003-07-30 22:00:51 by realvampire</div>
+   </div>
+   <div class="post" id="post-112507">
+    <div class="subject"><a href="#post-112507">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">2. <strong>all</strong> instructions have kinda same format. the only thing i still remember is that if a fpu-instruction has a 'p' at the end of it st0 ist poped off the fpu-stack after the operation.<br />so, fist just stores (st) st0 as integer (i) and rounds according to the smw.<br />fist<strong>p</strong> stores st0 as integer but poppes it off the stack.<br /><br />and in your line-proc, i don't know what u're doing with the stack before calling the procs...</div>
+    <div class="meta">Posted on 2003-07-31 02:32:32 by hartyl</div>
+   </div>
+   <div class="post" id="post-112546">
+    <div class="subject"><a href="#post-112546">Hi hartyl</a></div>
+    <div class="body"><div class="quote"><br />I dont know... </div><br /><br /><br />Here is the complete file.</div>
+    <div class="meta">Posted on 2003-07-31 08:17:14 by realvampire</div>
+   </div>
+   <div class="post" id="post-112547">
+    <div class="subject"><a href="#post-112547">Re: Hi</a></div>
+    <div class="body">h?? what are you quoting?!<br /><br /><div class="quote"><em>Originally posted by hartyl</em><br /><strong><br />i don't know what u're doing with the stack before calling the procs...<br /></strong><br /></div><br /><br /><div class="quote"><em>Originally posted by realvampire </em><br /><pre><code><br />push ebp<br />	push d.&#91;ebp&#93;<br />	push d.&#91;ebp+4&#93;<br />	push d.&#91;ebp+8&#93;<br />	push d.&#91;ebp+#12&#93;<br />	add ebp,#16<br />	pop d.&#91;ebp+#12&#93;<br />	pop d.&#91;ebp+#8&#93;<br />	pop d.&#91;ebp+#4&#93;<br />	pop d.&#91;ebp&#93;<br />	call deltaxy<br />pop ebp<br /></code></pre><br /></div><br /><br />my sentence sould say that i don't believe that this routine for pushing parameters on the stack works - or: this is a every bad way to push parameters on the stack.<br />the better (correct one)<br /><br /><pre><code><br />function proc<br />  push ebp<br />  mov ebp, esp ;build up stack frame<br />  mov eax, &#91;esp+8&#93; ;param0<br />  mov eax, &#91;esp+12&#93; ;param1<br />  mov eax, &#91;esp+16&#93; ;param2<br />  &#58;<br />  &#58;<br />  &#58;<br />  pop ebp ;resore old basepointer<br />  ret 12 ;correct the 12 bytes of params on the stack<br />function endp<br /><br />and the way to call it&#58;<br /> <br />  push param2<br />  push param1<br />  push param0<br />  call function<br /></code></pre></div>
+    <div class="meta">Posted on 2003-07-31 08:33:06 by hartyl</div>
+   </div>
+   <div class="post" id="post-112553">
+    <div class="subject"><a href="#post-112553">FPU x:=x+sin(a)*r</a></div>
+    <div class="body">realvampire,<br /><br />You may get answers to many of your questions related to the FPU in the tutorial (still in progress but almost completed) at:<br /><br /><a target="_blank" href="http://www.masmforum.com/website/tutorials/fptute/index.html">http://www.masmforum.com/website/tutorials/fptute/index.html</a><br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-07-31 10:15:56 by Raymond</div>
+   </div>
+  </div>
+ </body>
+</html>

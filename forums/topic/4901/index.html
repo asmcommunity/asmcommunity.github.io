@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GDI and DC question.. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4901" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4901">GDI and DC question..</a></p>
+   <div class="post" id="post-34382">
+    <div class="subject"><a href="#post-34382">GDI and DC question..</a></div>
+    <div class="body">I have a question for those expert GDI people.<br /><br />Im 99% done my custom control example, but i would like to know what (in your opinion) is better:<br /><br /><ul><strong>BACKGROUND</strong><br />[*]My control is a child window design.<br />[*]I have 5 graphical states to display on the custom control.<br />[*]The control itself is typically no bigger than say 30x30 (but user defined).<br />[*]The display states are being back buffered, and bitblt copied to the DC for the WM_PAINT.<br /><br /><strong>WHICH IS BETTER</strong><br />a)  Using parent DC (CS_PARENTDC) when defining the class (what i think is better, but would like to hear pros/cons)<br />b) Using a private DC (CS_OWNDC)<br /><br /><strong>WHICH IS BETTER</strong><br />a) Creating 5 private DC's and predrawing the 5 static display images on bitmaps for each.  Then simply bltblt the proper DC when needed.  Means i keep the DC's/Bitmaps created for the life of the control.<br />b) Create 1 private DC, and draw and copy images needed in real-time, as the drawing state demands.  Thus using it only as a generic back buffer.  (Overhead is drawing 3D boarders and copying icon images)<br /><br />Im currently using 5 private DC's that are predrawn and left static.  However, im wondering if the savings in GDI draw API times is worth the overhead of hanging on to 5 small DC's for each control instance.<br /><br />Remember, this is a custom control, and there could be 10 or more instances.  Meaning 50 or more private DC's in total!<br /><br />Hope you can shed some good reasoning on this, thanx!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-04-21 22:56:56 by NaN</div>
+   </div>
+   <div class="post" id="post-34384">
+    <div class="subject"><a href="#post-34384">GDI and DC question..</a></div>
+    <div class="body">Nevermind the DC question. I realized Im making a very big and dumb error here :rolleyes: .<br /><br />However, i would like to know if this is ok (in the sense of not making memory leaks).<br /><pre><code>     ; Create Needed DC Stuff<br />     mov DC,        $invoke&#40; GetDC, _hWnd &#41;                 ; Build Back Buffer Bitmaps<br />     mov DCUP,      $invoke&#40; CreateCompatibleDC, DC &#41;       ; Make the new DC<br />     mov hBitUp,    $invoke&#40; CreateCompatibleBitmap, DC, WinData.lx, WinData.ly &#41;<br />     invoke ReleaseDC, _hWnd, DC              ; Release original DC &#40;done with this&#41;<br />     mov Brush,     $invoke&#40; CreateSolidBrush, $invoke&#40; GetSysColor, COLOR_BTNFACE    &#41; &#41;<br />     invoke SelectObject, DCUP, hBitUp<br />     invoke SelectObject, DCUP, Brush<br />&#91;b&#93;     invoke DeleteObject, eax&#91;/b&#93;</code></pre><br />Basically, can i axe the Brush that comes with the private DC right away, and later only axe my 'Brush' followed by 'hBitUp' and then 'UPDC' ???<br /><br />The API ref, does say that a private DC doesnt have a bitmap within it, so im not saving the return when the bitmap is selected into it, but it doesnt say anything about pens/brushes, so im assuming there is &quot;something&quot; there and i dont care for it.  This is why im killing it right off the bat.  Is windows going to get all screwed up from this?<br /><br /><br />Thanx!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-04-21 23:55:01 by NaN</div>
+   </div>
+   <div class="post" id="post-34513">
+    <div class="subject"><a href="#post-34513">GDI and DC question..</a></div>
+    <div class="body">Common! :)<br /><br />Someone's gotta know if its alright to destroy returns from a DC before you destroy the DC itslef.....<br /><br />Im concerned about memory leaks here and i dont know if i should 'back up' whatever it had when i destroy the DC.<br /><br />(Forget the top post ~ i figured it out on my own :grin: )<br /><br />Thanx!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-04-22 16:40:18 by NaN</div>
+   </div>
+   <div class="post" id="post-34517">
+    <div class="subject"><a href="#post-34517">GDI and DC question..</a></div>
+    <div class="body">Nan,<br />in all the GDI samples/tuts i have seen, they *never* mentioned destroying the default brushes immediately after inserting your own, they always save the original brush then restore it just before destroying the DC. They do say that if you do not restore the original brushes etc then you will get memory leaks, so there are obviously real objects on the ends of those handles.  OTTOMH, Win9x and WinNT handle this issue differently; on one system the DC is returned to you with a copy of the handle to a *global*    pen/brush etc, while in the other (NT i think) every DC gets new objects. I do know that if you do a DeleteObject on a bull**** handle then nothing will happen, you can safely ignore the error returned. So, my guess is that if you try to destroy the handle to one of those global objects, Win ignores it because there are still outstanding handles in other processes.<br /><br />I really would recommend you do a trawl thru the microsoft.public.win32.programmer.gdi newsgroup, there is a lot of in-depth hardcore knowledge in there, and many noted people (like Feng Yuan) answer questions there. Worth a look.</div>
+    <div class="meta">Posted on 2002-04-22 16:57:24 by sluggy</div>
+   </div>
+   <div class="post" id="post-34518">
+    <div class="subject"><a href="#post-34518">GDI and DC question..</a></div>
+    <div class="body">i do it like this<br />GetDC<br />CreateCompatibel DC<br />....<br /><br />after that i delete all Objects<br />and destroy the bitmaps and dc<br />at least i release the window dc</div>
+    <div class="meta">Posted on 2002-04-22 16:58:37 by adapix</div>
+   </div>
+   <div class="post" id="post-34546">
+    <div class="subject"><a href="#post-34546">GDI and DC question..</a></div>
+    <div class="body">Geese, take an afternoon nap and the guy goes ballistic.  ;-)<br /><br /><br /><br />As far as I understand them, the rules for handling GDI stuff are identical to kindergarten play etiquette.<br />If you borrow a toy, put it back when done.<br />If you make a mess, clean it up before you leave.<br /><br /><br />Applying these concepts to GDI means I always save the default objects it has when created, restore them when I'm done, and then delete/release the DC.<br /><br />For a control such as yours, I wouldn't think it be too hoggish to create two DCs, one for the back buffer, one for the 'blit from' image, and hang onto them. In fact, I'd keep the bitmap on the back buffer as I painted it for simple re-paint ops. I'd also hang onto any frequently used bitmaps, and select them as needed.<br /><br />If defining a bitmap as infrequent isn't obvious, define it as frequent.</div>
+    <div class="meta">Posted on 2002-04-22 19:04:42 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Dialogs and Accelerators - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12402" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12402">Dialogs and Accelerators</a></p>
+   <div class="post" id="post-95679">
+    <div class="subject"><a href="#post-95679">Dialogs and Accelerators</a></div>
+    <div class="body">Hello,<br /><br />How could I use an accelerator in a main dialog window ?<br />the dialog is the main window created with DialogBoxParam()<br />and the accelerator is inside a resource file.<br />I have load it with LoadAccelerators()<br />I have seen examples where TranslateAccelerator is called inside a loop when they use WNDCLASSEX but how to do it with a dialog ?<br />thank you</div>
+    <div class="meta">Posted on 2003-04-11 21:05:24 by Jnrz</div>
+   </div>
+   <div class="post" id="post-95682">
+    <div class="subject"><a href="#post-95682">Dialogs and Accelerators</a></div>
+    <div class="body">You have to use them in a message loop or they don't work at all. At least that's how I understand it<pre><code>invoke LoadAccelerators,hInst,200<br />mov hAccel,eax<br /><br />.WHILE TRUE<br />	invoke GetMessage, ADDR msg,NULL,0,0<br />	.BREAK .IF &#40;!eax&#41;<br />	invoke TranslateAccelerator,hDlg,hAccel,ADDR msg<br />	.IF &#40;!eax&#41;<br />		invoke IsDialogMessage, hDlg, ADDR msg<br />		.IF &#40;!eax&#41;<br />			invoke TranslateMessage,addr msg<br />			invoke DispatchMessage,addr msg<br />		.ENDIF<br />	.ENDIF<br />.ENDW<br />mov eax,msg.wParam</code></pre>Put your accelerators in the RC file like this<pre><code>#define IDR_MAINACCEL 	200<br />IDR_MAINACCEL ACCELERATORS DISCARDABLE <br />BEGIN<br />  VK_F1,IDM_HELP,VIRTKEY,NOINVERT<br />END</code></pre></div>
+    <div class="meta">Posted on 2003-04-11 21:07:47 by donkey</div>
+   </div>
+   <div class="post" id="post-95782">
+    <div class="subject"><a href="#post-95782">Dialogs and Accelerators</a></div>
+    <div class="body">:( does not work<br /><br /><pre><code><br />WinMain proc Handle&#58;DWORD, uMsg&#58;DWORD, wParam&#58;DWORD, lParam&#58;DWORD<br />    LOCAL hAccel&#58; DWORD<br />    LOCAL msg&#58; MSG<br />    <br />    mov eax, uMsg<br />    .if eax == WM_INITDIALOG<br />    invoke LoadAccelerators, g_hInstance, 4000<br />        mov hAccel,eax<br /><br />    .while TRUE<br />        invoke GetMessage,  addr msg, 0, 0, 0<br />        . break .if &#40;!eax&#41;<br />        invoke TranslateAccelerator, Handle, hAccel, addr msg<br />        .if &#40;!eax&#41;<br />            invoke IsDialogMessage,  Handle, addr msg<br />            .if &#40;!eax&#41;<br />                invoke TranslateMessage, addr msg<br />                invoke DispatchMessage, addr msg<br />            .endif<br />         .endif<br />    .ednw<br />    mov eax, msg.wParam<br />    .elseif eax == WM_COMMAND<br />        ...<br />    .endif<br />    return 0<br />WinMain endp<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-12 01:45:18 by Jnrz</div>
+   </div>
+   <div class="post" id="post-95783">
+    <div class="subject"><a href="#post-95783">Dialogs and Accelerators</a></div>
+    <div class="body">No, I explained it badly. They are the message loop. You cannot use the accelerators in a standard dialog, only in a dialog as window type program i.e.<pre><code>start&#58;<br />	invoke	GetModuleHandle, NULL<br />	mov hInst,eax<br />	invoke	GetCommandLine<br />	mov CommandLine,eax<br />	invoke	WinMain, hInst, NULL, CommandLine, SW_SHOWDEFAULT<br />	invoke	ExitProcess,eax<br /><br />WinMain proc hInstance&#58;HINSTANCE, hPrevInst&#58;HINSTANCE, CmdLine&#58;LPSTR, CmdShow&#58;DWORD<br />	LOCAL	msg			&#58;MSG<br />	LOCAL	wc			&#58;WNDCLASSEX<br /><br />	mov	wc.cbSize,SIZEOF WNDCLASSEX<br />	mov	wc.style, CS_HREDRAW or CS_VREDRAW<br />	mov	wc.lpfnWndProc, OFFSET WindowProc<br />	mov	wc.cbClsExtra,NULL<br />	mov	wc.cbWndExtra,DLGWINDOWEXTRA<br />	mov	eax,hInst<br />	mov	wc.hInstance,eax<br />	mov	wc.hbrBackground,COLOR_BTNFACE + 1<br />	mov	wc.lpszMenuName,IDR_MENU<br />	mov	wc.lpszClassName,OFFSET ClassName<br />	invoke	LoadIcon,hInst,ICO_APPICON<br />	mov	wc.hIcon,eax<br />	mov	wc.hIconSm,eax<br />	invoke	LoadCursor,NULL,IDC_ARROW<br />	mov	wc.hCursor,eax<br />	invoke	RegisterClassEx, addr wc<br /><br />	invoke	CreateDialogParam, hInst, ADDR DlgName, NULL, NULL, NULL<br />	mov	hDlg,eax<br /><br />	invoke ShowWindow, hDlg, CmdShow<br /><br />	invoke LoadAccelerators,hInst,200<br />	mov hAccel,eax<br />	.WHILE TRUE<br />		invoke GetMessage, ADDR msg,NULL,0,0<br />		.BREAK .IF &#40;!eax&#41;<br />		invoke TranslateAccelerator, hDlg, hAccel, ADDR msg<br />		.IF &#40;!eax&#41;<br />			invoke IsDialogMessage, hDlg, ADDR msg<br />			.IF &#40;!eax&#41;<br />				invoke TranslateMessage, addr msg<br />				invoke DispatchMessage, addr msg<br />			.ENDIF<br />		.ENDIF<br />	.ENDW<br />	mov eax,msg.wParam<br /><br />	ret<br />WinMain endp<br /><br />WindowProc proc hWnd&#58;HWND, uMsg&#58;UINT, wParam&#58;WPARAM, lParam&#58;LPARAM<br /><br />	.IF uMsg == WM_CREATE<br /><br />	.ELSE<br />		; Let the default window proc to handle unprocessed messages<br />		invoke DefWindowProc, hWnd, uMsg, wParam, lParam<br />		ret<br /><br />	.ENDIF<br /><br />	xor eax,eax<br />	ret<br />WindowProc endp</code></pre></div>
+    <div class="meta">Posted on 2003-04-12 01:59:14 by donkey</div>
+   </div>
+   <div class="post" id="post-95838">
+    <div class="subject"><a href="#post-95838">Dialogs and Accelerators</a></div>
+    <div class="body">you may emulate DialogBoxParam function by:<br /><br />invoke CreateDialogParam<br />invoke EnableWindow, hWndOwner, FALSE<br />&lt;manually coded message loop&gt;<br />invoke EnableWindow, hWndOwner, TRUE<br /><br />in the message loop you can use your accelerators. Dont forget to call IsDialogMessage.<br />Possibly you have to do a &quot;invoke PostQuitMessage&quot; when receiving WM_DESTROY message</div>
+    <div class="meta">Posted on 2003-04-12 04:51:48 by japheth</div>
+   </div>
+  </div>
+ </body>
+</html>

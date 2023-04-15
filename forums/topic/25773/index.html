@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Keyboard Descriptor Table - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25773" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25773">Keyboard Descriptor Table</a></p>
+   <div class="post" id="post-188030">
+    <div class="subject"><a href="#post-188030">Keyboard Descriptor Table</a></div>
+    <div class="body">This is a fancy name I made up (KDT) for handling keystrokes in the console of the test OS that I am writing. Basically, I wanted to know how I could create some kind of a Lookup Table for handling keystrokes and extended keys and I thought of a table identical to IDTs and GDTs. Each descriptor which basically is in charge of handling one key or a range of keys is made of 8 bytes. The first byte is the flags, the second is reserved, the third is the upper case key and the fourth is the lower. The next four bytes can be used as a pointer to a key handler.<br /><br />What I have coded so far is given below. What I want to ask is whether or not this design is good or bad. I know that the size of the table can get extremely large but I couldn&#39;t think of a better way that can reduce the size of the code:<br /><br /><pre><span style="font-size:2><br />&nbsp; ; --------------------------------<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KDT_ENTRY_LEN&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x08<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KDT_LENGTH&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; (KDT_END - KDT)<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KDT_ENTRY_COUNT&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;KDT_LENGTH / KDT_ENTRY_LEN<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KDT_RESERVED&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0x00<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KDT_NULLHANDLER&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0x00000000<br />&nbsp; ; --------------------------------<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KBD_HASHANDLER&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 00000001b<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KBD_ISRANGE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;00000010b<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KBD_ISEXTENDED&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 00000100b<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KBD_ISHANDLED&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;00001000b<br />&nbsp; ; --------------------------------<br />&nbsp; %IDEFINE&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; KDT_ENTRY_FLAG_ALPHAKEY&nbsp; &nbsp; &nbsp;KBD_ISHANDLED<br />&nbsp; ; --------------------------------<br />&nbsp; %MACRO KDT_ENTRY 4<br />&nbsp; &nbsp; DB&nbsp; &nbsp; &nbsp; %1<br />&nbsp; &nbsp; DB&nbsp; &nbsp; &nbsp; KDT_RESERVED<br />&nbsp; &nbsp; DB&nbsp; &nbsp; &nbsp; %2<br />&nbsp; &nbsp; DB&nbsp; &nbsp; &nbsp; %3<br />&nbsp; &nbsp; DD&nbsp; &nbsp; &nbsp; %4<br />&nbsp; %ENDMACRO<br />&nbsp; ; --------------------------------<br />&nbsp; KDT:<br />&nbsp; &nbsp; KDT_ENTRY&nbsp; &nbsp; &nbsp; &nbsp;KDT_ENTRY_FLAG_ALPHAKEY, &#39;A&#39;, &#39;a&#39;, KDT_NULLHANDLER<br />&nbsp; &nbsp; KDT_ENTRY&nbsp; &nbsp; &nbsp; &nbsp;KDT_ENTRY_FLAG_ALPHAKEY, &#39;B&#39;, &#39;b&#39;, KDT_NULLHANDLER<br />&nbsp; &nbsp; ;~<br />&nbsp; KDT_END:<br />&nbsp; ; --------------------------------<br />&nbsp; KDTR:<br />&nbsp; &nbsp; DW&nbsp; &nbsp; &nbsp; KDT_ENTRY_COUNT<br />&nbsp; &nbsp; DD&nbsp; &nbsp; &nbsp; KDT<br />&nbsp; ; --------------------------------</span></pre></div>
+    <div class="meta">Posted on 2007-02-08 03:38:18 by XCHG</div>
+   </div>
+   <div class="post" id="post-188032">
+    <div class="subject"><a href="#post-188032">Re: Keyboard Descriptor Table</a></div>
+    <div class="body">Mimicking the xDT names is a bad idea, imho - there&#39;s a world of difference between the descriptor tables and your keytable. Second, unless you want to support only a single keyboard layout, you&#39;ll want the table to be dynamically loaded - and you might want to consider things like unicode as well.<br /><br />You can start with something simple, like a scancode-&gt;ascii translation table, but eventually you&#39;ll have to ask yourself how you want keys represented later on in the system.<br /><br />Do you want SHIFT,ALT,CTRL available only as &quot;states&quot;/&quot;modifiers&quot;, or do you want to register them as individual keypresses/releases? Do you want unicode support? And what about special characters like ~?`^? which can act as combiners in some languages? et cetera.<br /></div>
+    <div class="meta">Posted on 2007-02-08 04:16:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-188049">
+    <div class="subject"><a href="#post-188049">Re: Keyboard Descriptor Table</a></div>
+    <div class="body">I just created the first test version of this KDT thing (What a name, huh?) and I put it into test and it worked okay but I really am concerned about the size. A simple LUT for keystrokes could be a lot of work because of the extended keys and the state of the shift and other modifier keys. I really don&#39;t know what design would be good for a simple preemptive multitasking environment so if you could give me more insights on this, I would appreciate it. Oh and yeah UNICODE is a must.</div>
+    <div class="meta">Posted on 2007-02-09 04:11:42 by XCHG</div>
+   </div>
+  </div>
+ </body>
+</html>

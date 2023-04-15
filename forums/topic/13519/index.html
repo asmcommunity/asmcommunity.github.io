@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>timing algorithm (how to get cpu cycles)? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13519" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=13519">timing algorithm (how to get cpu cycles)?</a></p>
+   <div class="post" id="post-104740">
+    <div class="subject"><a href="#post-104740">timing algorithm (how to get cpu cycles)?</a></div>
+    <div class="body">hello all,<br />i'm going to try a project where i have to optimize code for speed - therefore i need a nice testbed so that i can time blocks of code - as there will be little to no difference in time when just changing some commands in an inner loop (queryperformancecounter... timing the code in the loop and not outside the loop) i'd need the possibility to actually measure the cpu cycles i gain through my optimizations.<br />is there any nice example on how to do that, any links? is it possible? :)<br />thx a lot in advance</div>
+    <div class="meta">Posted on 2003-05-25 12:30:34 by BugByter</div>
+   </div>
+   <div class="post" id="post-104749">
+    <div class="subject"><a href="#post-104749">timing algorithm (how to get cpu cycles)?</a></div>
+    <div class="body">When testing code for speed I usually use this instruction sequence:<br />I only use the lower 32-bits of the TSC because my CPU is 900Mhz AMD Athlon and 2^32 is ~4 billion. That is like what 4 seconds on my AMD CPU quite a long delay. I assume that EAX is treated as an unsigned integer<br /><pre><code><br /><br />rdtsc<br />push eax<br />......Code to be tested.....<br />rdtsc<br />pop ebx<br />sub eax,ebx<br /><br />;Now EAX contains the amount of clk cycles it took to execute the tested code.<br /><br /></code></pre><br /><br />I believe someone here might have a better way, but this seems to work fine for my purposes/</div>
+    <div class="meta">Posted on 2003-05-25 14:25:16 by x86asm</div>
+   </div>
+   <div class="post" id="post-104751">
+    <div class="subject"><a href="#post-104751">timing algorithm (how to get cpu cycles)?</a></div>
+    <div class="body">Taking cycles is very tricky, as I found. <br /><pre><code><br />  ; first, try to switch to another thread, <br />  ; so that next time we have a longer timeslice of cpu<br />invoke Sleep,0<br /><br />  ; now save register ESI, otherwise your program<br />  ; might crash if you use a window loop later.<br />push esi<br /><br />mov ecx,500 ; give it 500 tries to improve itself &#40;cache and stuff&#41;<br />mov esi,-1<br />_do_it_again&#58;<br />push ecx<br />RDTSC<br />push eax<br />;===&#91;&#91; Your code here &gt;&gt;===\<br /><br /><br /><br />;=====================/<br />RDTSC<br />pop edx<br />sub eax,edx<br />.if eax&lt;esi  ; unsigned compare<br />  mov esi,eax  ; in ESI, we have the minimum cycles count that the code ever took.<br />.endif<br />pop ecx<br />dec ecx<br />jnz _do_it_again<br />mov eax,esi<br />pop esi  ; restore important register<br /><br />sub eax,9 ; exclude additional time that the two 'RDTSC' and the 'push eax' took<br /><br />PrintText &quot;Count of cycles the code takes&#58;&quot;<br />PrintDec  eax<br /><br /></code></pre><br /><br />Now. This will work fine. That &quot;sub eax,9&quot; might need fine-tuning according to your cpu. If you use the FPU inside your tested code, you will get awful results, like 3000 cycles taken for &quot;fadd&quot;. If you are gonna test FPU code, use this before all code above (before the &quot;invoke Sleep,0&quot;)  :<br /><pre><code><br />.data<br />f_temp1003 real4 1.03<br />.code<br />xor ecx,ecx<br />.while ecx&lt;100<br />; start using random fxxx commands, and some memory, including local variables !<br />; here, I use no local vars , but you should<br />fld f_temp1003<br />fld ST <br />fmul <br />fld1<br />fadd<br />fstp f_temp1003<br />inc ecx<br />.endw<br /></code></pre><br /><br />I am with k6-2 450MHz and 64MB @ 66 MHz<br />on my PC, accessing a byte, that isn't in cache, takes 6.5 cycles. If you access randomly, the cycle count is greater, but if you access an array of bytes, this is the approximate 'penalty' at my PC.</div>
+    <div class="meta">Posted on 2003-05-25 14:58:53 by Ultrano</div>
+   </div>
+   <div class="post" id="post-104754">
+    <div class="subject"><a href="#post-104754">timing algorithm (how to get cpu cycles)?</a></div>
+    <div class="body"><div class="quote"><br />Taking cycles is very tricky, as I found. <br /><pre><code><br />  ; first, try to switch to another thread, <br />  ; so that next time we have a longer timeslice of cpu<br />invoke Sleep,0<br /><br />  ; now save register ESI, otherwise your program<br />  ; might crash if you use a window loop later.<br />push esi<br /><br />mov ecx,500 ; give it 500 tries to improve itself &#40;cache and stuff&#41;<br />mov esi,-1<br />_do_it_again&#58;<br />push ecx<br />RDTSC<br />push eax<br />;===&#91;&#91; Your code here &gt;&gt;===\<br /><br /><br /><br />;=====================/<br />RDTSC<br />pop edx<br />sub eax,edx<br />.if eax&lt;esi  ; unsigned compare<br />  mov esi,eax  ; in ESI, we have the minimum cycles count that the code ever took.<br />.endif<br />pop ecx<br />dec ecx<br />jnz _do_it_again<br />mov eax,esi<br />pop esi  ; restore important register<br /><br />sub eax,9 ; exclude additional time that the two 'RDTSC' and the 'push eax' took<br /><br />PrintText &quot;Count of cycles the code takes&#58;&quot;<br />PrintDec  eax<br /><br /></code></pre><br /><br />Now. This will work fine. That &quot;sub eax,9&quot; might need fine-tuning according to your cpu. If you use the FPU inside your tested code, you will get awful results, like 3000 cycles taken for &quot;fadd&quot;. If you are gonna test FPU code, use this before all code above (before the &quot;invoke Sleep,0&quot;)  :<br /><pre><code><br />.data<br />f_temp1003 real4 1.03<br />.code<br />xor ecx,ecx<br />.while ecx&lt;100<br />; start using random fxxx commands, and some memory, including local variables !<br />; here, I use no local vars , but you should<br />fld f_temp1003<br />fld ST <br />fmul <br />fld1<br />fadd<br />fstp f_temp1003<br />inc ecx<br />.endw<br /></code></pre><br /><br />I am with k6-2 450MHz and 64MB @ 66 MHz<br />on my PC, accessing a byte, that isn't in cache, takes 6.5 cycles. If you access randomly, the cycle count is greater, but if you access an array of bytes, this is the approximate 'penalty' at my PC. </div><br /><br /><br />Cool I'm going to use this from now on ;)</div>
+    <div class="meta">Posted on 2003-05-25 15:25:56 by x86asm</div>
+   </div>
+   <div class="post" id="post-104757">
+    <div class="subject"><a href="#post-104757">timing algorithm (how to get cpu cycles)?</a></div>
+    <div class="body">hello, thanks a lot for your ideas!<br /><br />actually i'm going to use inline asm in a c++ dll, how would i have to change the code to make use of it?<br />i'm going to take the asm output of msvc  for a very often called function and put all of it into an __asm statement - then i will try to make use of mmx/3dnow optimizations to try and get a real boost (of course using the c source to easier identify spots to optimize, eg matrix transformations et al).<br />by the way: are there any special things i have to look after when using __asm in msvc? does it do something bad, set up a frame or something like that?<br /><br />thanks a lot for your help!</div>
+    <div class="meta">Posted on 2003-05-25 15:55:30 by BugByter</div>
+   </div>
+   <div class="post" id="post-104758">
+    <div class="subject"><a href="#post-104758">timing algorithm (how to get cpu cycles)?</a></div>
+    <div class="body"><div class="quote"><br />hello, thanks a lot for your ideas!<br /><br />actually i'm going to use inline asm in a c++ dll, how would i have to change the code to make use of it?<br />i'm going to take the asm output of msvc  for a very often called function and put all of it into an __asm statement - then i will try to make use of mmx/3dnow optimizations to try and get a real boost (of course using the c source to easier identify spots to optimize, eg matrix transformations et al).<br />by the way: are there any special things i have to look after when using __asm in msvc? does it do something bad, set up a frame or something like that?<br /><br />thanks a lot for your help! </div><br /><br />I havent encountered a problem while using __asm keyword under MSVC. The syntax is the same no different,  except just define all the REAL4's that Ultrano defined as floats in your C code.</div>
+    <div class="meta">Posted on 2003-05-25 15:57:52 by x86asm</div>
+   </div>
+  </div>
+ </body>
+</html>

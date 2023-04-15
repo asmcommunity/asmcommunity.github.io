@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>bitmap saving - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17752" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17752">bitmap saving</a></p>
+   <div class="post" id="post-137051">
+    <div class="subject"><a href="#post-137051">bitmap saving</a></div>
+    <div class="body">Hello to all,<br /><br />i have a jpg that i want to set as wallpaper. I am using masm32 libs BitmapFromFile and i get a handle to the generated bitmap.<br />The call to set the wallpaper (SystemParametersInfo) wants the full path to the bitmap and not a handle.<br />so i thought to save the bitmap to a temp dir and use that!<br />But, how can i save the bitmap generated from BitmapfromFile ??</div>
+    <div class="meta">Posted on 2004-03-26 08:30:59 by Ray</div>
+   </div>
+   <div class="post" id="post-137057">
+    <div class="subject"><a href="#post-137057">bitmap saving</a></div>
+    <div class="body">You will need to GetObject() on the bitmap handle, and use the BITMAP structure parameters (width, height, pointer to data) to construst .bmp file. BMP file is BITMAPFILEHEADER structure, BITMAPINFOHEADER and structure, followed by data.</div>
+    <div class="meta">Posted on 2004-03-26 09:46:03 by comrade</div>
+   </div>
+   <div class="post" id="post-137060">
+    <div class="subject"><a href="#post-137060">bitmap saving</a></div>
+    <div class="body">Pain in the arse those bitmaps :) This code will work.<br /><br /><pre><code>SaveBitmap Proc hBitmap&#58;DWORD,hFile&#58;DWORD<br />	LOCAL cbWrite				&#58;DWORD<br />	LOCAL bmp				&#58;BITMAP<br />	LOCAL dwNumColors			&#58;DWORD<br />	LOCAL hDC				&#58;DWORD<br />	LOCAL hDC_DIB				&#58;DWORD<br />	LOCAL hDC_DDB				&#58;DWORD<br />	LOCAL pBMI				&#58;DWORD<br />	LOCAL RGBQuadSize			&#58;DWORD<br />	LOCAL DataSize				&#58;DWORD<br />	LOCAL pBFH				&#58;DWORD<br />	LOCAL pData				&#58;DWORD<br />	LOCAL pRGBQuad				&#58;DWORD<br />	LOCAL imgX				&#58;DWORD<br />	LOCAL imgY				&#58;DWORD<br />	LOCAL OldObj				&#58;DWORD<br />	LOCAL hNewBmp				&#58;DWORD<br />	LOCAL cClrBits				&#58;DWORD<br /><br />	invoke GetObject,hBitmap,SIZEOF BITMAP,ADDR bmp<br />	mov eax,bmp.bmWidth<br />	mov imgX,eax<br />	mov eax,bmp.bmHeight<br />	mov imgY,eax<br /><br />	mov eax,bmp.bmBitsPixel<br />	mov cClrBits,eax<br /><br />	; Calculate size of RGBQUAD array<br />	mov ecx,cClrBits<br />	mov eax,1<br />	shl eax,cl<br />	mov dwNumColors,eax<br />	mov edx,SIZEOF RGBQUAD<br />	imul edx<br />	mov RGBQuadSize,eax<br /><br />;	Calculate Data size<br />	mov eax,imgX<br />	imul cClrBits<br />	add eax,31<br />	and eax,-31<br />	shr eax,3<br />	imul imgY<br />	mov DataSize,eax<br /><br />	; Create a memory buffer<br />	mov eax,RGBQuadSize<br />	.IF cClrBits == 24 ; There is no RGBQUAD array for 24 bit<br />		mov dwNumColors,0<br />		mov RGBQuadSize,0<br />		mov eax,0<br />	.ENDIF<br />	add eax,SIZEOF BITMAPINFOHEADER<br />	add eax,SIZEOF BITMAPFILEHEADER<br />	add eax,DataSize<br />	invoke GlobalAlloc,GMEM_FIXED,eax<br />	mov pBFH,eax<br /><br />	add eax,SIZEOF BITMAPFILEHEADER<br />	mov pBMI,eax<br />	add eax,SIZEOF BITMAPINFOHEADER<br />	mov pRGBQuad,eax<br />	add eax,RGBQuadSize<br />	mov pData,eax<br /><br />	; The bitmap must be a compatible bitmap<br />	; so bitblt the DIB into a new compatible bitmap<br />	invoke GetDC,hDlg<br />	mov hDC,eax<br />	invoke CreateCompatibleDC,hDC<br />	mov hDC_DIB,eax<br />	invoke CreateCompatibleDC,hDC<br />	mov hDC_DDB,eax<br />	invoke CreateCompatibleBitmap,hDC,imgX,imgY<br />	mov hNewBmp,eax<br />	invoke ReleaseDC,hDlg,hDC<br /><br />	invoke SelectObject,hDC_DDB,hNewBmp<br />	mov OldObj,eax<br />	invoke SelectObject,hDC_DIB,hBitmap<br />	invoke BitBlt,hDC_DDB,0,0,imgX,imgY,hDC_DIB,0,0,SRCCOPY<br />	invoke SelectObject,hDC_DDB,OldObj<br />	invoke SelectObject,hDC_DIB,OldObj<br />	invoke DeleteDC,hDC_DIB<br /><br />	invoke GetObject,hNewBmp,SIZEOF BITMAP,ADDR bmp<br /><br />	mov edi,pBMI<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biXPelsPerMeter,0<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biYPelsPerMeter,0<br />	mov eax,dwNumColors<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biClrUsed,eax<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biClrImportant,0<br /><br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biSize,SIZEOF BITMAPINFOHEADER<br />	mov eax,bmp.bmWidth<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biWidth,eax<br />	mov eax,bmp.bmHeight<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biHeight,eax<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biPlanes,1<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biCompression,BI_RGB<br />	mov eax,cClrBits<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biBitCount,ax<br />	mov eax,DataSize<br />	mov &#91;edi&#93;.BITMAPINFO.bmiHeader.biSizeImage,eax<br /><br />	invoke GetDIBits, hDC_DDB, hNewBmp, 0, imgY, pData, pBMI, DIB_RGB_COLORS<br /><br />	mov esi,pBFH<br />	mov &#91;esi&#93;.BITMAPFILEHEADER.bfType,&quot;MB&quot;<br />	mov eax,RGBQuadSize<br />	add eax,DataSize<br />	add eax,SIZEOF BITMAPINFOHEADER + SIZEOF BITMAPFILEHEADER<br />	mov &#91;esi&#93;.BITMAPFILEHEADER.bfSize,eax<br />	mov &#91;esi&#93;.BITMAPFILEHEADER.bfReserved1,0<br />	mov &#91;esi&#93;.BITMAPFILEHEADER.bfReserved2,0<br />	mov eax,RGBQuadSize<br />	add eax,sizeof BITMAPFILEHEADER<br />	add eax,sizeof BITMAPINFOHEADER	<br />	mov &#91;esi&#93;.BITMAPFILEHEADER.bfOffBits,eax<br /><br />	mov ecx,SIZEOF BITMAPFILEHEADER<br />	add ecx,sizeof BITMAPINFOHEADER<br />	add ecx,DataSize<br />	add ecx,RGBQuadSize<br />	invoke WriteFile,hFile,pBFH,ecx,ADDR cbWrite,NULL<br /><br />	invoke DeleteDC,hDC_DDB<br />	invoke GlobalFree,pBFH<br />	invoke DeleteObject,hBitmap<br />	invoke DeleteObject,hNewBmp<br /><br />	ret<br />SaveBitmap endp</code></pre></div>
+    <div class="meta">Posted on 2004-03-26 10:08:08 by donkey</div>
+   </div>
+   <div class="post" id="post-137067">
+    <div class="subject"><a href="#post-137067">bitmap saving</a></div>
+    <div class="body">Btw, you should fix up the BitmapFromFile (and friends) from masm32, they have a couple of quirks.<br /><br />First, they call CoInitialize and CoUninitialize every time they are called. I guess this is okay to have the very self-contained and makes everybody able to use it - it's more efficient to call CoInitialize and CoUninitialize once at program startup.<br /><br />Next, at least BitmapFromMemory has a bug: it uses CreateStreamOnHGlobal with &quot;fDeleteOnRelease&quot; set to true - but it still frees the memory itself (CoTaskMemFree near the end). This is a double free, and while it only causes crashes on some win32 problems, it's a nasty bug (double frees are sometimes used in malicious exloits). Besides, if you want to be really safe, you should use the icky GlobalAlloc for the memory.<br /><br />Other than that, I guess they're okay.</div>
+    <div class="meta">Posted on 2004-03-26 11:18:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-137121">
+    <div class="subject"><a href="#post-137121">bitmap saving</a></div>
+    <div class="body">Thanks guys,<br />donkey, thanks for the code, i will use it:)<br /><br />f0dder: hmm, ok, coInit and coUnInit its clear..<br />the other bug you mentioned about freeing the mem, which call of the 2 u think should i comment out?<br /><br />:stupid:</div>
+    <div class="meta">Posted on 2004-03-27 04:50:37 by Ray</div>
+   </div>
+   <div class="post" id="post-137124">
+    <div class="subject"><a href="#post-137124">bitmap saving</a></div>
+    <div class="body">You should remove the final CoTaskMemFree and leave fDeleteOnRelease set to TRUE - this way you don't have to keep the memory pointer around. Not very important in this example, since everything is included in one PROC, but in more advanced applications where the lifetime of the istream is longer, this makes resource management easier.<br /><br />And you really ought to use GlobalAlloc for the memory :), just to follow the PlatformSDK nazi-ishly and be sure that there's no problems whatsoever with your code, even theoretical problems ^_^</div>
+    <div class="meta">Posted on 2004-03-27 05:04:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-137128">
+    <div class="subject"><a href="#post-137128">bitmap saving</a></div>
+    <div class="body">damned you f0dder !<br /><br />you always find problems where there aren't! hehe..<br /><br />donkey: the code works just fine :)<br /><br />:alright:</div>
+    <div class="meta">Posted on 2004-03-27 06:15:05 by Ray</div>
+   </div>
+   <div class="post" id="post-137129">
+    <div class="subject"><a href="#post-137129">bitmap saving</a></div>
+    <div class="body"><div class="quote"><br />you always find problems where there aren't! hehe..<br /></div><br />Well, the double free problem is real enough, although it only causes problems on some windows versions (NT4, I think). The memory allocation thing *shouldn't* really matter, but I'd rather be safe than sorry. Especially because I've had some weird problems with the clipboard API when not using GlobalAlloc, as the PlatformSDK says you should.</div>
+    <div class="meta">Posted on 2004-03-27 06:30:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-137172">
+    <div class="subject"><a href="#post-137172">bitmap saving</a></div>
+    <div class="body">indeed !<br /><br />After some time of debugging, i traced a bug back to that function ! (BitmapFromFile). After a few repeative calls it exits with an INVALID_FILE_NAME ! Yikes! Even though the file ptr is just fine! <br /><br />I dont want to dig in more that this,,, but has anyone  witnessed similar behaviour?</div>
+    <div class="meta">Posted on 2004-03-28 01:44:04 by Ray</div>
+   </div>
+   <div class="post" id="post-137186">
+    <div class="subject"><a href="#post-137186">bitmap saving</a></div>
+    <div class="body">Somebody had crashes on NT4. I don't know how bad the bug is on later NT's, but double frees can lead to heap corruption, which is a thing you definitely don't want. And the constant COM init/deinit it a bit silly (but given the context: &quot;code snippet that everybody should be able to use without having even an understanding of programming&quot;, it's fair enough, I guess).</div>
+    <div class="meta">Posted on 2004-03-28 05:04:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-137187">
+    <div class="subject"><a href="#post-137187">bitmap saving</a></div>
+    <div class="body">Yup,<br /><br />Watch for GDI leaks as well, I remember QvasiModo and I pointed a couple out in BitmapFromPicture a while back, I think they were fixed in the new version but I haven't updated MASM in some time so I am not sure. If I recall correctly it was a problem with a bitmap not being selected out of it's DC and the DC not being released.</div>
+    <div class="meta">Posted on 2004-03-28 05:21:00 by donkey</div>
+   </div>
+   <div class="post" id="post-137295">
+    <div class="subject"><a href="#post-137295">bitmap saving</a></div>
+    <div class="body">got it.<br />thanks!</div>
+    <div class="meta">Posted on 2004-03-29 07:49:03 by Ray</div>
+   </div>
+  </div>
+ </body>
+</html>

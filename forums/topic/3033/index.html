@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Disk changes via Int 21h - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3033" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3033">Disk changes via Int 21h</a></p>
+   <div class="post" id="post-19851">
+    <div class="subject"><a href="#post-19851">Disk changes via Int 21h</a></div>
+    <div class="body">Hi, I'm a newbie to ASM and could do with some help getting my first project going.<br /><br />I'm trying to monitor file changes per drive and get the filenames of those files which have been modified, created or deleted. In the MSDN Library there are 2 functions discussed which should achieve this. One polls for changes to the drive, the other enumerates the changes.<br /><br />Could anybody please tell me how to use these examples from MSDN in a working example? I can't figure it out.<br /><br />The URLs are these, but I have copied the info in below too.<br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/en-us/win32/95func_9s14.asp">http://msdn.microsoft.com/library/en-us/win32/95func_9s14.asp</a><br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/en-us/win32/95func_9s2w.asp">http://msdn.microsoft.com/library/en-us/win32/95func_9s2w.asp</a><br /><br /><br />Here's function 1:<br /><br />-------------------------------------------<br />Interrupt 21h Function 440Dh Minor Code 6Ch<br />Polls the state of the access flag on a volume to determine if a write operation (for example, deleting or renaming a file or writing to a file) or a new file mapping has occurred since the last poll.<br /><br />mov ax, 440Dh        ; generic IOCTL<br /><br />mov bl, DriveNum     ; see below<br /><br />mov ch, 08h          ; device category (must be 08h)<br /><br />mov cl, 6Ch          ; Get Lock Flag State<br /><br />int 21h<br /><br /><br /><br />jc error<br /><br />mov , ax  ; state of access flag<br />Parameters<br />DriveNum Drive to poll. This parameter can be 0 for the default drive, 1 for A, 2 for B, and so on.<br /><br />Return Values<br /><br />Clears the carry flag and sets the AX register to one of the following values if successful.<br />Value	Meaning<br />0	No write operations or file mappings have occurred since the last poll.<br />1	A write operation has occurred since the last poll (clears the volume access flag).<br />2	A file mapping has occurred since the last poll, or a 32-bit Windows-based DLL or executable has been opened (clears the volume access flag).<br /><br />Otherwise, the function sets the carry flag and sets the AX register to an error value.<br /><br />Remarks<br /><br />Only the current lock owner may poll the access flag. The system fails other processes with ERROR_ACCESS_DENIED error value. Write operations performed by the lock owner do not cause a change in the state of the access flag.<br /><br />When a lock is obtained that allows write operations or new file mappings, the system sets a flag whenever one of these operations happens on the volume. If a write operation or new file mapping has occurred since the last poll, Get Lock Flag State returns 1 or 2 respectively in the AX register and clears the volume access flag. If the swap file has grown or shrunk since the last poll, Get Lock Flag State returns 1. Note that write operations to the swap file that do not cause a change in size do not cause a change in the state of the access flag. If a 32-bit Windows-based DLL or executable has been opened since the last poll, Get Lock Flag State returns 2.<br />----------------------------------------------------------<br /><br /><br />and this is 2:<br /><br />------------------------------------------<br />Interrupt 21h Function 440Dh Minor Code 6Dh<br /><br />Enumerates open files on the specified drive.<br />mov ax, 440Dh           ; generic IOCTL<br /><br />mov bx, DriveNum        ; see below<br /><br />mov ch, 08h             ; device category (must be 08h)<br /><br />mov cl, 6Dh             ; Enumerate Open Files <br /><br />mov dx, seg PathBuf     ; see below<br /><br />mov ds, dx<br /><br />mov dx, offset PathBuf<br /><br />mov si, FileIndex       ; see below<br /><br />mov di, EnumType        ; see below<br /><br />int 21h<br /><br /><br /><br />jc  error<br /><br />mov , ax      ; mode file was opened in<br /><br />mov , cx      ; normal file or memory-mapped file<br />Parameters<br />DriveNum Drive on which to enumerate the files. This parameter can be 0 for the default drive, 1 for A, 2 for B, and so on. PathBuf Pointer to a buffer that receives the path of the open file. The length of the buffer varies depending on the volume. Get Volume Information (Interrupt 21h Function 71A0h) is used to determine the maximum allowed length of a path for the volume. FileIndex Index of the file to retrieve the path for. EnumType Kind of file to enumerate. This parameter can be 0 to enumerate all open files or 1 to enumerate only open unmovable files, including open memory-mapped files and other open unmovable files (32-bit Windows-based DLLs and executables).<br /><br />Return Values<br /><br />Clears the carry flag, copies the path of an open file to the given buffer, and sets the AX and CX registers to the following values if successful:<br />Register	Value<br />AX	Mode that the file was opened in, which is a combination of access mode, sharing mode, and open flags. It can be one value each from the access and sharing modes and any combination of open flags.<br />Access modes<br />OPEN_ACCESS_READONLY (0000h)<br />OPEN_ACCESS_WRITEONLY (0001h)<br />OPEN_ACCESS_READWRITE (0002h)<br />OPEN_ACCESS_RO_NOMODLASTACCESS (0004h)<br />Share modes<br />OPEN_SHARE_COMPATIBLE (0000h)<br />OPEN_SHARE_DENYREADWRITE (0010h)<br />OPEN_SHARE_DENYWRITE (0020h)<br />OPEN_SHARE_DENYREAD (0030h)<br />OPEN_SHARE_DENYNONE (0040h)<br />Open flags<br />OPEN_FLAGS_NOINHERIT (0080h)<br />OPEN_FLAGS_NO_BUFFERING (0100h)<br />OPEN_FLAGS_NO_COMPRESS (0200h)<br />OPEN_FLAGS_ALIAS_HINT (0400h)<br />OPEN_FLAGS_NOCRITERR (2000h)<br />OPEN_FLAGS_COMMIT (4000h)<br />CX	File type. It can be one of the following values:<br />0	For normal files<br />1	For a memory-mapped files (memory-mapped files are unmovable)<br />2	For any other unmovable files (32-bit Windows-based DLLs and executables)<br />4	For the swap file<br /><br />Note that if a memory-mapped file is returned (CX = 1), the value returned in the AX register is limited to the following values:<br /><br />OPEN_ACCESS_READONLY (0000h)<br />OPEN_ACCESS_READWRITE (0002h)<br /><br />Otherwise, the function sets the carry flag and sets the AX register to the following error value.<br />Value	Meaning<br />ERROR_ACCESS_DENIED	The value of FileIndex exceeds the number of open files on the drive.<br /><br />Remarks<br /><br />This function returns information about one file at a time. To enumerate all open files, the function must be called repeatedly with FileIndex set to a new value for each call. FileIndex should be set to zero initially and then incremented by one for each subsequent call. The function returns the ERROR_NO_MORE_FILES error value when all open files on the volume have been enumerated.<br /><br />This function may return inconsistent results when used to enumerate files on an active volume ? that is, on a volume where other processes may be opening and closing files. Applications should use Lock Logical Volume (Interrupt 21h Function 440Dh Minor Code 4Ah) to take a level 3 lock before enumerating open files.<br />Platform SDK Release: November 2001<br />---------------------------------------------------------<br /><br /><br />Many Thanks,<br /><br />nibl~</div>
+    <div class="meta">Posted on 2002-01-18 10:53:02 by nibl</div>
+   </div>
+   <div class="post" id="post-19866">
+    <div class="subject"><a href="#post-19866">Disk changes via Int 21h</a></div>
+    <div class="body">I think you should be writing vxd's or similar to that. You can't do interrupts on purely win32asm. Oops, maybe i'm wrong. Check Iczelions tuts on vxd's. :)</div>
+    <div class="meta">Posted on 2002-01-18 12:44:58 by stryker</div>
+   </div>
+   <div class="post" id="post-19881">
+    <div class="subject"><a href="#post-19881">Disk changes via Int 21h</a></div>
+    <div class="body">nibl,<br /><br />Look at FindFirstChangeNotification in the SDK or win32.hlp  It may be what you're looking for.<br /><br />hth<br /><br />farrier</div>
+    <div class="meta">Posted on 2002-01-18 14:30:53 by farrier</div>
+   </div>
+   <div class="post" id="post-19958">
+    <div class="subject"><a href="#post-19958">Disk changes via Int 21h</a></div>
+    <div class="body"><div class="quote"><br />Look at FindFirstChangeNotification in the SDK or win32.hlp  It may be what you're looking for.<br /></div><br /><br />I have used FindFirstChangeNotification, but the problem is that it only tells you there was a change, but does not report the file. Getting the filename then requires checking every file. If you watch the C: drive, then you have to traverse all subdirectories checking the archive attribute to find out which file(s) changed.<br /><br />So, speed is the main problem here. Any suggestions?<br /><br />I guess an ASM routine to do the above would help alot, but I'd need to ask for help on that.<br /><br />Thanks,<br /><br />nibl</div>
+    <div class="meta">Posted on 2002-01-19 08:29:54 by nibl</div>
+   </div>
+   <div class="post" id="post-19959">
+    <div class="subject"><a href="#post-19959">Disk changes via Int 21h</a></div>
+    <div class="body">The links you gave are to be used for windows-aware dos applications.<br />And they're 9x-only, as far as I can tell.<br /><br />An ASM routine to scan your harddrive for changed files wont be<br />any faster than a C routine, as you're limited by IO speed and not<br />processor speed.<br /><br />I think the File*ChangeNotification are mainly to be used in things<br />like exlorer windows, where you just need to refresh the view, but<br />don't need to get filenames and such.<br /><br />I don't really know how to watch and get filenames... perhaps you<br />have to code a VxD/KMD after all...</div>
+    <div class="meta">Posted on 2002-01-19 08:42:43 by f0dder</div>
+   </div>
+   <div class="post" id="post-19963">
+    <div class="subject"><a href="#post-19963">Disk changes via Int 21h</a></div>
+    <div class="body">So, basically you would need a VxD for 9x and a KMD for NT,XP etc, right? Is it a difficult task?<br /><br />Do you know where I can find more info on the subject, hopefully examples, a how-to?<br /><br />Thanks,<br /><br />nibl</div>
+    <div class="meta">Posted on 2002-01-19 09:03:48 by nibl</div>
+   </div>
+   <div class="post" id="post-19966">
+    <div class="subject"><a href="#post-19966">Disk changes via Int 21h</a></div>
+    <div class="body">If you're lucky, you can find the information in the freely available<br />9x, 2k and XP DDK's. If you're unlucky, you need to get the IFS kit,<br />which costs big money.</div>
+    <div class="meta">Posted on 2002-01-19 09:10:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-19969">
+    <div class="subject"><a href="#post-19969">Disk changes via Int 21h</a></div>
+    <div class="body">there is an undocumented API called SHChangeNotifyRegister<br />do a search on google or check my post in the COM section related to OLE DragDrop and how to retrieve the destination directory of a drop<br /><br />cheers<br />Random</div>
+    <div class="meta">Posted on 2002-01-19 10:13:36 by random</div>
+   </div>
+   <div class="post" id="post-20030">
+    <div class="subject"><a href="#post-20030">Disk changes via Int 21h</a></div>
+    <div class="body">Thanks Random, that's good news :-)<br />I tried your getdropdir proggy and it worked great (NT).<br /><br />Is this a GUI only function or would this API call also pick up file actions by applications or from the command line?<br />I need it to sit in the background and monitor any type of change.<br /><br />I'm quite new to Win API stuff, so excuse if this seems obvious.<br /><br />Thanks,<br /><br />nibl</div>
+    <div class="meta">Posted on 2002-01-20 03:40:17 by nibl</div>
+   </div>
+   <div class="post" id="post-20107">
+    <div class="subject"><a href="#post-20107">Disk changes via Int 21h</a></div>
+    <div class="body"><a target="_blank" href="http://www.sysinternals.com">http://www.sysinternals.com</a><br /><br />Here is a site that has source code for 'Filemon'<br />Although it is written in C, it should help some  :)</div>
+    <div class="meta">Posted on 2002-01-20 14:58:01 by mcderek7</div>
+   </div>
+  </div>
+ </body>
+</html>

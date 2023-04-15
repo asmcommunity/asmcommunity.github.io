@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ph3ar my hard to maintain, error prone MsgProc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6603" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6603">ph3ar my hard to maintain, error prone MsgProc</a></p>
+   <div class="post" id="post-47672">
+    <div class="subject"><a href="#post-47672">ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body">Since I often see a thread where someone asks about using esp, removing the leave instruction, no stack-frames, no-locals etc.  I present the  no stack-frame, no locals, no proc MsgProc!!<br /><br /><pre><code><br />MsgProc&#58;<br />	<br />	mov eax, &#91;esp+8&#93;   ;uMsg<br /><br />	.IF eax==WM_DESTROY<br />		invoke PostQuitMessage,NULL<br />	.ELSE<br /><br />	mov edi, &#91;esp&#93;				;save esp top contents from being trashed.They will be trashed<br />	add esp,4 ;	mov esp, esi                ;advance esp to address of hWnd<br />	call DefWindowProc	<br />		sub esp,20			;fix esp, 16 for parms, 4 for advance<br />		mov &#91;esp&#93;,edi		;restore trashed esp top contents<br />		ret			;jumps somewhere, probably kernerl32, but hey, it works...<br /> 	.ENDIF<br /><br />	xor eax,eax					;dont think we ever get here<br />	ret <br /></code></pre><br /><br />Since the parameters where already on the stack, I just set esp to the right place before the call.  Reused stack space.<br /><br />I don't advocate programming this way.  I did it just to see if I could.<br /><br />Discuss amongst yourselves...</div>
+    <div class="meta">Posted on 2002-07-15 08:35:46 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-47674">
+    <div class="subject"><a href="#post-47674">Re: ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body"><pre><code><br />	ret			;jumps somewhere, probably kernerl32, but hey, it works...<br /></code></pre><br /><br />I like this line :)</div>
+    <div class="meta">Posted on 2002-07-15 08:45:06 by bazik</div>
+   </div>
+   <div class="post" id="post-47752">
+    <div class="subject"><a href="#post-47752">ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body">If you want a shorter one:<br /><br />For Frame-Based Procedure:<br /><br />pop ebp<br />jmp DefWindowProc<br /><br />For Non-Frame-Based Procedure:<br /><br />jmp DefWindowProc<br /><br />:grin:</div>
+    <div class="meta">Posted on 2002-07-15 13:41:28 by stryker</div>
+   </div>
+   <div class="post" id="post-47759">
+    <div class="subject"><a href="#post-47759">ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body"><pre><code>MsgProc&#58;<br />	cmp &#91;esp+8&#93;, WM_DESTROY ; uMsg<br />	je @F<br />	jmp DefWindowProc<br />@@&#58;	invoke PostQuitMessage, NULL<br />	ret 4*4 ; be nice &#58;&#41;</code></pre></div>
+    <div class="meta">Posted on 2002-07-15 13:58:55 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47830">
+    <div class="subject"><a href="#post-47830">ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body">bAZiK,<br /><br />The only lib I had included was kernel32.  The ret whent to an address like 77de****,  so I'd say kernel32.<br /><br />I have been spending alot of time lately trying to figure out a coding style that fits how I think.  I think it is PROCless.<br /><br />No more prototypes, no more inc file of prototypes.  Easy use of public and extern.  Now I set up my proc like this:<br /><pre><code><br />...all the lib includes, .686 etc.<br /><br />public &#40;procname&#41;<br />public &#40;procdata&#41;<br /><br />.data<br />&#40;procdata&#41; label dword<br /><br />data1 dword 0<br />data2 dword 0<br /><br />.code<br />&#40;procname&#41; dd offset @&#40;procname&#41;;pointer for indirect call to proc<br />@&#40;procname&#41;&#58;<br />	pop esi<br />	<br />....do stuff here  <br /><br />	jmp esi<br />end<br /><br />Prototype to make calls work&#58;<br />LCALL			TYPEDEF proto;label call<br />PLCALL			TYPEDEF PTR LCALL<br /><br />extern &#40;procname&#41;&#58;proc<br />extern &#40;procdata&#41;&#58;dword   ;public and extern are now easy!!<br /><br />call PLCALL &#40;procname&#41;<br /></code></pre><br /><br />I spent alot of effort to find a way that would give me informative diassembly when debugging.<br /><br />My PLCALL will dissassemble to:<br /><br />call [_procname(0000000)]<br /><br />not call ($$$0001)<br /><br />Declaring (procdata) pubilc, makes all data below public with just one extern.  In an alternate file, I will still get real names.<br /><br />mov eax, data1<br /><br />will stay the same not<br /><br />mov eax, procname+4<br /><br />THe above was just a quick(first draft) test with something I didn't write.</div>
+    <div class="meta">Posted on 2002-07-15 22:15:53 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-47854">
+    <div class="subject"><a href="#post-47854">ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body">You really thing your code is still readable for human beeing? :rolleyes: <br /><br /><br /><br />:grin:</div>
+    <div class="meta">Posted on 2002-07-16 01:03:01 by bazik</div>
+   </div>
+   <div class="post" id="post-47861">
+    <div class="subject"><a href="#post-47861">ph3ar my hard to maintain, error prone MsgProc</a></div>
+    <div class="body">Sorry, dont have time to type nicely right now:<br /><pre><code><br />------------------------------------------------------------------------<br />...all the lib includes, .686 etc.<br /><br />public fooproc<br />public foodata<br /><br />.data<br />foodata label dword<br />data1 dword 0<br />data2 dword 0<br /><br />.code<br />fooproc dd offset @fooproc    ;pointer for indirect call to proc<br />@fooproc&#58;<br />	pop esi<br />	<br />....do stuff here  <br /><br />	jmp esi<br />end<br />-----------------------------------------------------------------------------<br />In another file&#58;<br /><br />extern fooproc&#58;proc<br />extern foodata&#58;dword   ;public and extern are now easy!!<br /><br />.code<br />call PLCALL fooproc<br />-----------------------------------------------------------------------------<br />Prototype to make calls work&#58;<br />LCALL			TYPEDEF proto           ;label call<br />PLCALL			TYPEDEF PTR LCALL<br /></code></pre><br />Hope this is a little easier to read.</div>
+    <div class="meta">Posted on 2002-07-16 01:59:41 by ThoughtCriminal</div>
+   </div>
+  </div>
+ </body>
+</html>

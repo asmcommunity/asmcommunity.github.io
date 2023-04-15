@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Merging REG files - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17156" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=17156">Merging REG files</a></p>
+   <div class="post" id="post-133024">
+    <div class="subject"><a href="#post-133024">Merging REG files</a></div>
+    <div class="body">For a program that I am working on I had to be able to silently merge a file to the registry. I wanted a reliable way to do it and because of the annoying &quot;Are you sure&quot; dialog I opted not to use the ShellExecute with the &quot;open&quot; verb. I also wanted to have some control over whether I waited for RegEdit to finish or not. Well after trying a few things I came up with this solution. It uses CreateProcess and the /s (silent) switch, you must always put the switch first for RegEdit or it will assume it is a file and try to merge it.<br /><br />This procedure will verify that the filename is quoted and add quotes if not, it will append the silent switch and do a bit of error checking along the way. It is very stable and will return an application defined error code if there is a problem executing or setting up for RegEdit and the exit code of RegEdit otherwise (0 = success).<br /><br />ZeroMem zeros a range of memory, the other functions act like their MASM32 counterparts. The code is fairly straight forward and should be easy enough to translate from GoAsm to any other assembler. Note that in MASM some of the OFFSET directives will have to be changed to ADDR or the LEA equivalent.<br /><br /><pre><code>MergeToRegistry FRAME pRegFile<br />	uses ebx<br />	LOCAL RegExitCode		&#58;D<br />	LOCAL RegCmdLine&#91;MAX_PATH&#93;	&#58;B<br /><br />	invoke ZeroMem,OFFSET RegCmdLine,MAX_PATH<br /><br />	invoke GetWindowsDirectory,OFFSET RegCmdLine,MAX_PATH<br />	<br />	invoke szCatStr,OFFSET RegCmdLine,OFFSET RegString<br />	mov al,&#91;pRegFile&#93;<br />	cmp al,22h<br />	je &gt;<br />		invoke StrLen,OFFSET RegCmdLine<br />		lea edx,RegCmdLine<br />		add eax,edx<br />		mov B&#91;eax&#93;,22h<br />	&#58;<br />	invoke szCatStr,OFFSET RegCmdLine,&#91;pRegFile&#93;<br />	invoke StrLen,OFFSET RegCmdLine<br />	lea edx,RegCmdLine<br />	add eax,edx<br />	mov cl,&#91;eax-1&#93;<br />	cmp cl,22h<br />	je &gt;<br />	mov B&#91;eax&#93;,22h<br />	&#58;<br />	mov D&#91;sui.cb&#93;,SIZEOF STARTUPINFO<br />	invoke GetStartupInfo,OFFSET sui<br />	xor eax,eax<br />	invoke CreateProcess,NULL,OFFSET RegCmdLine,eax,eax,\<br />			TRUE,eax,eax,eax,OFFSET sui,OFFSET pi<br />	or eax,eax<br />	jz &gt;.ERROR<br /><br />	; wait until the app has finished before continuing<br />	; Hopefully RegEdit will never return STILL_ACTIVE as<br />	; a valid exit code<br />	&#58;<br />	invoke GetExitCodeProcess,&#91;pi.hProcess&#93;,OFFSET RegExitCode<br />	or eax,eax<br />	jz &gt;.ERROR2<br />	cmp D&#91;RegExitCode&#93;,STILL_ACTIVE<br />	je &lt;<br /><br />	invoke CloseHandle,&#91;pi.hProcess&#93;<br />	invoke CloseHandle,&#91;pi.hThread&#93;<br /><br />	mov eax,&#91;RegExitCode&#93;<br />	ret<br />	.ERROR<br />	mov eax,-0B0h<br />	ret<br />	.ERROR2<br />	invoke CloseHandle,&#91;pi.hProcess&#93;<br />	invoke CloseHandle,&#91;pi.hThread&#93;<br />	mov eax,-0B1h<br />	ret<br /><br />	RegString&#58; DB	&quot;\RegEdit.exe /S &quot;,0<br /><br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-02-09 15:33:53 by donkey</div>
+   </div>
+   <div class="post" id="post-133119">
+    <div class="subject"><a href="#post-133119">Merging REG files</a></div>
+    <div class="body">That's some impressive work, donkey, but... I'm afraid it's reinventing the wheel... :(<br /><br /><a target="_blank" href="">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/sysinfo/base/regloadkey.asp</a><br /><a target="_blank" href="">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/sysinfo/base/regsavekey.asp</a><br /><a target="_blank" href="">http://msdn.microsoft.com/library/en-us/sysinfo/base/regrestorekey.asp</a></div>
+    <div class="meta">Posted on 2004-02-10 15:47:21 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133123">
+    <div class="subject"><a href="#post-133123">Merging REG files</a></div>
+    <div class="body">Problem is that RegRestoreKey only works under NT and the others require that you know the name of the destination key and subkey before you restore it. That requires parsing the file (it is only a unicode text file). I needed something that would restore an to an <strong>unknown</strong> subkey under an unknown key. Using those APIs I would have to first find out which main key it is stored under, find the actual subkey name and then restore the values. I had started an application like this but it quickly got out of hand with all the permutations that could arise and I could not get the key sent to the right spot. Though they are fine if you know exactly where the key has to end up, in my case I do not. Also please note that all but a couple of lines are gauranteeing the file name format meets specifications, it is just CreateProcess that actually restores the key.</div>
+    <div class="meta">Posted on 2004-02-10 16:15:35 by donkey</div>
+   </div>
+   <div class="post" id="post-133124">
+    <div class="subject"><a href="#post-133124">Merging REG files</a></div>
+    <div class="body">You're right of course, I didn't think of that problem... :o <br />It just bothers me that there's no way to do this without launching an external program. And because of Unicode files, we can't just use the GetPrivateProfile* APIs either... :sweat:<br /><br />EDIT: How about converting Unicode files to plain text, and <strong>then</strong> parsing it like an INI file? It might work (or I might be missing something, as usual :grin: )</div>
+    <div class="meta">Posted on 2004-02-10 16:26:33 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133127">
+    <div class="subject"><a href="#post-133127">Merging REG files</a></div>
+    <div class="body">Well, you know the API is just another external program, only in DLL instead of EXE format. For me as long as it is a base utility of Windows I have no problem with it. For such a minor function, though it is critical that my app can do this, it is easier to let the dedicated Windows app do the work. Also it allows me to restore to HKEY_CURRENT_USER without backup priviledges, this is not allowed with the API at all. GetPrivateProfileStringW does do a fine job of reading it and since I use GoAsm unicode is not a problem at all, but the keys are in the format:<br /><br /><pre><code>Windows Registry Editor Version 5.00<br /><br />&#91;HKEY_CURRENT_USER\Software\Donkey\UpdateManager&#93;<br /><br />&#91;HKEY_CURRENT_USER\Software\Donkey\UpdateManager\Options&#93;<br />&quot;WindowPos&quot;=hex&#58;39,00,00,00,54,00,00,00,db,02,00,00,f6,01,00,00<br />&quot;HeaderOrder&quot;=hex&#58;00,00,00,00,04,00,00,00,01,00,00,00,02,00,00,00,03,00,00,00<br />&quot;HeaderWidth&quot;=hex&#58;61,00,00,00,54,00,00,00,63,00,00,00,63,00,00,00,64,00,00,00<br />&quot;TVRatio&quot;=dword&#58;00000022<br />&quot;DefKey&quot;=dword&#58;00000004<br />&quot;MRU&quot;=&quot;C&#58;\\MyApplication\\InternetUpdates\\01012004\\MyApp01012004.udp&quot;<br />&quot;Preferences&quot;=dword&#58;000001be</code></pre><br /><br />So they are a pain to parse.</div>
+    <div class="meta">Posted on 2004-02-10 16:47:07 by donkey</div>
+   </div>
+   <div class="post" id="post-133133">
+    <div class="subject"><a href="#post-133133">Merging REG files</a></div>
+    <div class="body">Yeah, we <em>could</em> hack REG files, and if MS ever changes the file format we would loose compatibility; but one can expect regedit.exe to be always there. So I guess it's fine to do it that way.<br />(It still seems more &quot;elegant&quot; to parse the files ourselves, but who cares anyway ;) )</div>
+    <div class="meta">Posted on 2004-02-10 17:14:05 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-133135">
+    <div class="subject"><a href="#post-133135">Merging REG files</a></div>
+    <div class="body">That's pretty much how I feel about it. I had gotten to the point where I had all the main keys and subkey names and was about to start doing the merge when I realized I was at 100 lines of code for a simple convenience in my app. The only thing I didn't want was to use ShellExecute, I was afraid that some of the third party registry editors would not react as I wanted so I used CreateProcess and forced the file to RegEdit.exe</div>
+    <div class="meta">Posted on 2004-02-10 17:30:58 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

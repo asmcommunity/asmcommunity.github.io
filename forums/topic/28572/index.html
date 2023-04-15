@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>IAT Entry and communicating with an exe. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28572" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28572">IAT Entry and communicating with an exe.</a></p>
+   <div class="post" id="post-202079">
+    <div class="subject"><a href="#post-202079">IAT Entry and communicating with an exe.</a></div>
+    <div class="body">I'm writing a part of the LithTech game engine in Assembly, but I'm not sure how yet. I have the C++ source, and also the disassembly, but I am still not sure what to do.
+
+Lemme give you a quick background:
+LithTech.exe loads cshell.dll, and calls the following to make the shell...
+<pre><code>
+10071F20 8B442404               mov     eax,
+10071F24 8B4C2408               mov     ecx,
+10071F28 C700601F0710           mov     dword ptr ,offset CreateClientShell
+10071F2E C701B01F0710           mov     dword ptr ,offset DeleteClientShell</code></pre>
+
+Here is CreateClientShell:
+The problem is that I think the DLL is talking to the exe, or using some sort of extern, so I have no idea what I'm looking for. 
+<pre><code>
+10071F60 56                     push    esi              ;CreateClientShell
+10071F61 E89A50FDFF             call    fn_10047000
+10071F66 8B442408               mov     eax,
+10071F6A A36CBF1210             mov     [1012BF6Ch],eax
+10071F6F E82CEA0000             call    fn_100809A0
+10071F74 8BF0                   mov     esi,eax
+10071F76 A16CBF1210             mov     eax,[1012BF6Ch]
+10071F7B 6800000042             push    42000000h
+10071F80 8D4804                 lea     ecx,
+10071F83 890DD8B31210           mov     [1012B3D8h],ecx
+10071F89 8B5010                 mov     edx,
+10071F8C 8915DCB31210           mov     [1012B3DCh],edx
+10071F92 8B4814                 mov     ecx,
+10071F95 890DE0B31210           mov     [1012B3E0h],ecx
+10071F9B 8B400C                 mov     eax,
+10071F9E A3E4B31210             mov     [1012B3E4h],eax
+10071FA3 8BC8                   mov     ecx,eax
+10071FA5 8B10                   mov     edx,
+10071FA7 FF5248                 call    dword ptr 
+10071FAA 8BC6                   mov     eax,esi
+10071FAC 5E                     pop     esi
+10071FAD C3                     ret
+</code></pre>
+Now none of the addresses that the CreateClientShell are called even exist in the DLL. That brings me to my next point. There is a HUGE IAT Entry in the dll, and I don't know what it is, what is it, and does it pertain to my problem?
+
+Here is the C++ code:
+<pre><code>
+#define SETUP_CLIENTSHELL()\
+		void *g_hLTDLLInstance=0;\
+		ILTClient *g_pLTClient=0;\
+		BEGIN_EXTERNC() \
+			__declspec(dllexport) void GetClientShellFunctions(CreateClientShellFn *pCreate, DeleteClientShellFn *pDelete);\
+			__declspec(dllexport) int GetClientShellVersion();\
+			__declspec(dllexport) void SetInstanceHandle(void *handle);\
+		END_EXTERNC()\
+		void GetClientShellFunctions(CreateClientShellFn *pCreate, DeleteClientShellFn *pDelete)\
+		{\
+			*pCreate = CreateClientShell;\
+			*pDelete = DeleteClientShell;\
+		}\
+		int GetClientShellVersion()\
+		{\
+			return CLIENTSHELL_VERSION;\
+		}\
+		void SetInstanceHandle(void *handle)\
+		{\
+			g_hLTDLLInstance = handle;\
+		}
+
+
+
+IClientShell* CreateClientShell(ILTClient *pClientDE)
+{
+	// Hook up the AssertMgr
+
+	CAssertMgr::Enable();
+
+	// Get our ClientDE pointer
+
+    g_pLTClient  = pClientDE;
+    _ASSERT(g_pLTClient);
+
+	CGameClientShell* pShell = debug_new(CGameClientShell);
+	_ASSERT(pShell);
+
+	// Init our LT subsystems
+
+    g_pMathLT = g_pLTClient->GetMathLT();
+    g_pModelLT = g_pLTClient->GetModelLT();
+    g_pTransLT = g_pLTClient->GetTransformLT();
+    g_pPhysicsLT = g_pLTClient->Physics();
+	g_pBaseLT = static_cast<ILTCSBase*>(g_pLTClient);
+
+	g_pPhysicsLT->SetStairHeight(DEFAULT_STAIRSTEP_HEIGHT);
+
+    return ((IClientShell*)pShell);
+}
+</code></pre>
+I know that C++ is really vague, that's why I'm asking your help. If you could hint where to look, or tell me what I'm foing wrong, it would be GREAT :)
+
+This message was edited by Kenny, on 6/30/2001 12:11:59 AM</div>
+    <div class="meta">Posted on 2001-06-29 22:29:00 by Kenny</div>
+   </div>
+   <div class="post" id="post-202080">
+    <div class="subject"><a href="#post-202080">IAT Entry and communicating with an exe.</a></div>
+    <div class="body">I assume by IAT you don't mean the whole import table, but just the "FirstThunk" dwords -- one dword per symbol plus one terminator per dll. But in a DLL or any other PE <em>file</em>, these dwords are just debris, and have no meaning. (Actually the IAT doesn't need an image in the PE file at all.) Also, an imported symbol need not be a function; it may be an address of data, such as a jump table. The programmer seems to be very expert.
+Gawd, C++ is ugly! It looks like the exe is indeed communicating with the dll in an unusual way; i.e. it is not just calling dwords in the IAT.
+[1012B3D8h] seems to be "MathLT", LT for "lookup table"?
+likewise:
+[1012B3DCh] ModelLT
+[1012B3E0h] TransformLT
+[1012B3E4h] Physics</div>
+    <div class="meta">Posted on 2001-06-30 05:18:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-202081">
+    <div class="subject"><a href="#post-202081">IAT Entry and communicating with an exe.</a></div>
+    <div class="body">Kenny,
+
+the source code you supply is only a fragment. The interesting parts are in structure/class ILTClient, which is a parameter to function CreateClientShell and already setup on entry.
+
+in the function itself there is only one (external) call:
+<pre><code>
+   g_pPhysicsLT->SetStairHeight(DEFAULT_STAIRSTEP_HEIGHT);
+
+or in ASM:
+10071F7B 6800000042             push    42000000h
+10071FA3 8BC8                   mov     ecx,eax
+10071FA5 8B10                   mov     edx,
+10071FA7 FF5248                 call    dword ptr 
+
+this is a call of a function/member in a vft (microsoft style with ecx as a pointer to the instance), but the class pointer (or here maybe "interface") is also already defined in 
+ILTClient. So further infos are required.
+
+japheth</div>
+    <div class="meta">Posted on 2001-06-30 10:02:00 by japheth</div>
+   </div>
+   <div class="post" id="post-202082">
+    <div class="subject"><a href="#post-202082">IAT Entry and communicating with an exe.</a></div>
+    <div class="body">Larry,
+Thanks for your reply. I'm pretty sure the LT in the MathLT stands for "LithTech," which is the name of the game engine.
+
+Yes, these programmers are very skilled, and they communicate with the exe in a very pecuiliar way (which I haven't figured out yet).
+
+Do you think I should just hardcode the Math, and Physics things so I can communicate with them? I don't know of a place in the code where they give the addresses. Are some of them externs or something... I don't get it...
+
+Japheth, I could post both the ILTClient and ILTCSBase classes, but they are HUGE! Maybe I will just post them somewhere and provide a link...
+
+<a href="http://www.planetquake.com/nsq3/personals/real_man/iltclient.h">iltclient.h</a>
+<a href="http://www.planetquake.com/nsq3/personals/real_man/iltcsbase.h">iltcsbase.h</a>
+
+I think what you are looking for is in iltcsbase.h, however I really don't know. I can't FIND anything at all. Maybe you can...</div>
+    <div class="meta">Posted on 2001-06-30 14:43:00 by Kenny</div>
+   </div>
+   <div class="post" id="post-202083">
+    <div class="subject"><a href="#post-202083">IAT Entry and communicating with an exe.</a></div>
+    <div class="body">Hi again,
+There must be one or more jump tables in there someplace, e.g. for call dword ptr . I would take a look at the export table of the DLL. Seems the dll has only one, or few, exported functions, which return the bases of jump tables for all the other functions, plus a version number. It could be that the programmer was specifically out to make the DLL hard to disassemble.</div>
+    <div class="meta">Posted on 2001-07-01 01:29:00 by Larry Hammick</div>
+   </div>
+  </div>
+ </body>
+</html>

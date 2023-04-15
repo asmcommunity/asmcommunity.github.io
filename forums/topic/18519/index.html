@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>SetClassLong fails == No Small Icon - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18519" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18519">SetClassLong fails == No Small Icon</a></p>
+   <div class="post" id="post-143353">
+    <div class="subject"><a href="#post-143353">SetClassLong fails == No Small Icon</a></div>
+    <div class="body"><div class="quote">just change the hIconSm using the SetClassLong API</div> <br /><br />Hi QvasiModo<br /><br />I tried using the SetClassLong, but it fails :( <br /><br />What have I done wrong with the parameters :confused:</div>
+    <div class="meta">Posted on 2004-06-10 01:11:40 by The SharK</div>
+   </div>
+   <div class="post" id="post-143355">
+    <div class="subject"><a href="#post-143355">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">First off you should not be changing global classes like #32770. If you really want to put an icon in a message box just use a hook...<br /><br /><pre><code>invoke LoadIconA, NULL, IDI_HAND<br />mov &#91;hIcon&#93;, eax<br /><br />invoke MessageBoxIcon,NULL,&#91;hIcon&#93;,&quot;Hello&quot;,NULL,MB_OK<br /><br />invoke DestroyIcon, &#91;hIcon&#93;<br />invoke ExitProcess, 0<br /><br />MessageBoxIcon FRAME hWnd,hMBIcon,lpText,lpCaption,uType<br />	.data<br />		hMsgBoxIcon DD ?<br />		hMsgBoxHook DD ?<br />	.code<br /><br />	/*<br />	If hWnd is supplied and hMBIcon is NULL<br />	the icon is loaded from hWnd, if both are<br />	NULL the message box is displayed normally<br />	*/<br /><br />	mov eax, &#91;hMBIcon&#93;<br />	mov &#91;hMsgBoxIcon&#93;, eax<br />	or eax,eax<br />	jnz &gt;<br />	cmp &#91;hWnd&#93;,eax<br />	je &gt;.NORMAL<br />		invoke SendMessageA, &#91;hWnd&#93;, WM_GETICON, ICON_SMALL, 0<br />		mov &#91;hMsgBoxIcon&#93;, eax<br />	&#58;<br />	invoke GetCurrentThreadId<br />	invoke SetWindowsHookExA, WH_CALLWNDPROC, offset WndProcHook, NULL, eax<br />	mov &#91;hMsgBoxHook&#93;, eax<br />	.NORMAL<br />	invoke MessageBoxA, &#91;hWnd&#93;, &#91;lpText&#93;, &#91;lpCaption&#93;, &#91;uType&#93;<br />	RET<br />ENDF<br /><br />WndProcHook FRAME icode,wParam,lParam<br /><br />	invoke CallNextHookEx, &#91;hMsgBoxHook&#93;, &#91;icode&#93;, &#91;wParam&#93;, &#91;lParam&#93;<br />	push eax<br /><br />	mov eax,&#91;lParam&#93;<br />	cmp D&#91;eax+CWPSTRUCT.message&#93;,WM_INITDIALOG<br />	jne &gt;<br />		invoke SendMessageA, &#91;eax+CWPSTRUCT.hwnd&#93;, WM_SETICON, ICON_SMALL, &#91;hMsgBoxIcon&#93;<br />		invoke UnhookWindowsHookEx,&#91;hMsgBoxHook&#93;<br />	&#58;<br />	pop eax<br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-06-10 02:07:17 by donkey</div>
+   </div>
+   <div class="post" id="post-143360">
+    <div class="subject"><a href="#post-143360">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">Here is the compiled example for GoAsm, RadASM project format. Tested with WinNT4, Win95 and Win2K :</div>
+    <div class="meta">Posted on 2004-06-10 03:28:17 by donkey</div>
+   </div>
+   <div class="post" id="post-143388">
+    <div class="subject"><a href="#post-143388">SetClassLong fails == No Small Icon</a></div>
+    <div class="body"><div class="quote"><br />First off you should not be changing global classes like #32770. If you really want to put an icon in a message box just use a hook...</div><br />IMHO it's much easier to change the global class, consumes less resources too.<br />Under Win9X (I haven't tested other platforms) such changes are always local so there should be no problems.</div>
+    <div class="meta">Posted on 2004-06-10 12:20:39 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-143393">
+    <div class="subject"><a href="#post-143393">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">@Shark: Ok, I've found the problem in your code :). SetClassLong takes a window handle, not instance handle. I know it sound a bit strange :/ but you have to actually create a window of that class in order to change it's properties. Also there's a call to SendMessage passing the hInstance as well, this won't work either.</div>
+    <div class="meta">Posted on 2004-06-10 12:30:30 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-143402">
+    <div class="subject"><a href="#post-143402">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">Seems to work fine under Win98. Could anyone please test it on other platforms? :)</div>
+    <div class="meta">Posted on 2004-06-10 13:27:57 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-143403">
+    <div class="subject"><a href="#post-143403">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">Hi QvasiModo,<br /><br />I don't think the hook consumes alot of resources, and it only exists for an instant until just before the message is displayed and then it is unhooked and the resource is freed. It also allows you to quickly switch icons for different message boxes, not easily done with the SetClassLong method. The reason I don't believe it is a good idea to change global classes is that it may adversely affect other parts of your program and in the case of #32770 you have to consider it when creating any type of dialog or displaying any common dialog. System global classes are copied to your process in all versions of Windows so there is no cross-process contamination, but the in-process one is more than enough for me. As you said he will have to include code to create a window of the class and destroy it after he sets the class icon, he will have to do this everytime he wants to change the icon or leave a window of that class open for the entire run of his application, I personally believe this is a much greater waste of resources.</div>
+    <div class="meta">Posted on 2004-06-10 13:29:40 by donkey</div>
+   </div>
+   <div class="post" id="post-143517">
+    <div class="subject"><a href="#post-143517">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">I agree that it's not the cleanest way to do it :grin: but adding your app's icon to all these dialog boxes could be desired as well (or might not matter for <em>very</em> small apps).<br /><br />Leaving a window open for the entire run of the program is not always bad, it could be your main window ;)<br /><br />All in all I guess  it depends heavily on what kind of program you're writing. :)</div>
+    <div class="meta">Posted on 2004-06-11 17:22:25 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-143561">
+    <div class="subject"><a href="#post-143561">SetClassLong fails == No Small Icon</a></div>
+    <div class="body">Hi QvasiModo<br /><br /><br />It works on Win2K, I see your icon on both the main window, and the messagebox !<br />Both are of the class #32770.<br /><br /><br />I thought that while I didn't have any real window created with CreateWindowEx (only a messagebox),<br />I could use a instance handle (hInstance).<br /><br />But i sure was wrong about that :( <br /><br /><br />Well, we all learn something new all the time ;)<br /><br /><br />Nice work QvasiModo :alright:<br /><br /><br />Well donkey<br />next time I'll fill out the hIconSm member of the WNDCLASSEX<br />register the class, and then CreateWindowEx, that the correct<br />way (normal way) of making an Icon ;)</div>
+    <div class="meta">Posted on 2004-06-12 06:28:09 by The SharK</div>
+   </div>
+  </div>
+ </body>
+</html>

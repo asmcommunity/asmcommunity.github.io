@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DWORD to STRING - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8007" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8007">DWORD to STRING</a></p>
+   <div class="post" id="post-58480">
+    <div class="subject"><a href="#post-58480">DWORD to STRING</a></div>
+    <div class="body">Hello,<br />  I need to convert a variable of type DWORD in a String. I know there are functions in the masm32.lib that do this, as I have searched the board and read about it. However, I want to know how it works and what it does (since I want to learn) - can't simply open the lib...<br />  Does anyone know a proc that does this, that I can look at? I coulddn't find any on the board and I'm not sure how to go about it.<br />Thanks,<br />~Adam</div>
+    <div class="meta">Posted on 2002-09-18 09:01:33 by adamjjackson</div>
+   </div>
+   <div class="post" id="post-58481">
+    <div class="subject"><a href="#post-58481">DWORD to STRING</a></div>
+    <div class="body">It is a FAQ :  <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=1123">http://www.asmcommunity.net/board/index.php?topic=1123</a><br /><br />IIRC the complete source code to the MASM32 library is available with it (I even think the lib is self-generated during the MASM32 setup from the source).</div>
+    <div class="meta">Posted on 2002-09-18 09:07:25 by JCP</div>
+   </div>
+   <div class="post" id="post-58483">
+    <div class="subject"><a href="#post-58483">DWORD to STRING</a></div>
+    <div class="body">Hi,<br />  Thanks, I've found it, should have just looked harder! Just got to understand it now. I'll post it here too:<br /><pre><code><br /><br />    ; -----------------------------------------<br />    ; This procedure was written by Tim Roberts<br />    ; -----------------------------------------<br /><br />      .386<br />      .model flat, stdcall  ; 32 bit memory model<br />      option casemap &#58;none  ; case sensitive<br /><br />    .code<br /><br />; ##################################################<br /><br />atodw proc uses edi esi String&#58;PTR BYTE<br /><br />      ;----------------------------------------<br />      ; Convert decimal string into dword value<br />      ; return value in eax<br />      ;----------------------------------------<br /><br />      xor eax, eax<br />      mov esi, &#91;String&#93;<br />      xor ecx, ecx<br />      xor edx, edx<br />      mov al, &#91;esi&#93;<br />      inc esi<br />      .if al == '-'<br />        mov edx, -1<br />	mov al, &#91;esi&#93;<br />	inc esi<br />      .endif<br />      .while al != 0<br />	sub al, '0'	; convert to bcd<br />	lea ecx, &#91;ecx+ecx*4&#93;	; ecx = ecx * 5<br />	lea ecx, &#91;eax+ecx*2&#93;	; ecx = eax + old ecx * 10<br />	mov al, &#91;esi&#93;<br />	inc esi<br />      .endw<br /><br />      lea eax, &#91;ecx+edx&#93;	; move to eax and negate<br />      xor eax, edx<br /><br />      ret<br /><br />atodw endp<br /><br />; #########################################################################<br /><br />end<br /></code></pre></div>
+    <div class="meta">Posted on 2002-09-18 09:16:11 by adamjjackson</div>
+   </div>
+   <div class="post" id="post-58484">
+    <div class="subject"><a href="#post-58484">DWORD to STRING</a></div>
+    <div class="body">Sorry, I mean:<br /><pre><code><br />; #########################################################################<br /><br />    ; -----------------------------------------<br />    ; This procedure was written by Tim Roberts<br />    ; -----------------------------------------<br /><br />      .386<br />      .model flat, stdcall  ; 32 bit memory model<br />      option casemap &#58;none  ; case sensitive<br /><br />    .code<br /><br />; #########################################################################<br /><br />dwtoa proc public uses esi edi dwValue&#58;DWORD, lpBuffer&#58;PTR BYTE<br />	<br />    ; -------------------------------------------------------------<br />    ; convert DWORD to ascii string<br />    ; dwValue is value to be converted<br />    ; lpBuffer is the address of the receiving buffer<br />    ; EXAMPLE&#58;<br />    ; invoke dwtoa,edx,ADDR buffer<br />    ;<br />    ; Uses&#58; eax, ecx, edx.<br />    ; -------------------------------------------------------------<br /><br />    mov	eax, dwValue<br />    mov edi, &#91;lpBuffer&#93;<br /><br />  .if &#40;eax != 0&#41;<br /><br />    ; Is the value negative?<br /><br />    .if	&#40;sdword ptr eax &lt; 0&#41;<br />      mov byte ptr &#91;edi&#93;, '-'	; store a minus sign<br />      inc edi<br />      neg eax			; and invert the value<br />    .endif<br /><br />    mov esi, edi		; save pointer to first digit<br /><br />    mov ecx, 10<br />    .while &#40;eax &gt; 0&#41;		; while there is more to convert...<br />      xor edx, edx<br />      div ecx			; put next digit in edx<br />      add dl, '0'		; convert to ASCII<br />      mov &#91;edi&#93;, dl		; store it<br />      inc edi<br />    .endw<br /><br />    mov byte ptr &#91;edi&#93;, 0	; terminate the string<br /><br />    ; We now have all the digits, but in reverse order.<br /><br />    .while &#40;esi &lt; edi&#41;<br />      dec edi<br />      mov al, &#91;esi&#93;<br />      mov ah, &#91;edi&#93;<br />      mov &#91;edi&#93;, al<br />      mov &#91;esi&#93;, ah<br />      inc esi<br />    .endw<br /><br />  .else<br />    mov word ptr &#91;edi&#93;, 0030H     ; string &quot;0&quot;, 0 in little endian<br />  .endif<br /><br />    ret<br /><br />dwtoa endp<br /><br />; #########################################################################<br /><br />end<br /></code></pre></div>
+    <div class="meta">Posted on 2002-09-18 09:24:50 by adamjjackson</div>
+   </div>
+  </div>
+ </body>
+</html>

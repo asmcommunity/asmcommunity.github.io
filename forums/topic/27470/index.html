@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. ex. #5.LAST - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27470" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27470">Basics of Asm32 in opt. ex. #5.LAST</a></p>
+   <div class="post" id="post-196429">
+    <div class="subject"><a href="#post-196429">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">I got a little bit tired commenting my code
+in English and decided submit the whole a little
+optimized code.
+It'll be more interesting for you to compare it
+to original and figure out why I change some parts.
+I don't post rc file 'cause it's the same.
+And it's noway super optimization. Not even close
+Basics! Common uneffective and unlogical part optimized.
+Common to 90 % of asm source code I saw.
+May be we'll discuss some this later in details.
+<pre><code>
+; #########################################################################
+;
+; The framing affects are drawn on the client area by a single procedure,
+; "Frame3D". In the WmdProc message handling Proc, the WM_PAINT message
+; calls another Proc called "Paint_Proc" which contains the procedure calls
+; to "Frame3D".
+;
+; #########################################################################
+
+      .386
+      .model flat, stdcall
+      option casemap :none   ; case sensitive
+
+; #########################################################################
+
+      include C:\masm32\include\windows.inc
+      include C:\masm32\include\user32.inc
+      include C:\masm32\include\kernel32.inc
+      include C:\masm32\include\gdi32.inc
+      
+      includelib user32.lib
+      includelib kernel32.lib
+      includelib gdi32.lib
+
+; #########################################################################
+
+      ;=============
+      ; Local macros
+      ;=============
+
+      szText MACRO Name, Text:VARARG
+        LOCAL lbl
+          jmp lbl
+            Name db Text,0
+          lbl:
+        ENDM
+
+        ;=================
+        ; Local prototypes
+        ;=================
+        WinMain PROTO 
+        WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
+        Paint_Proc PROTO :DWORD, hDC:DWORD
+        Frame3D PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+        PushButton PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+
+    .data
+
+        szDisplayName db "3D Frames",0
+        hWnd          dd 0
+        hInstance     equ 400000h
+
+wc WNDCLASSEX <sizeof WNDCLASSEX, CS_HREDRAW or CS_VREDRAW or CS_BYTEALIGNWINDOW,\
+		offset WndProc,0,0,400000h,0,0,COLOR_BTNFACE+1,0,offset szClassName,0>
+    .code
+
+start:
+
+        invoke WinMain
+;        invoke ExitProcess,eax - it's for exit code to communicate
+; between processes if you don't write code for multy process you may don't care of
+; exit code. and just call ExitProcess
+         call ExitProcess
+
+; #########################################################################
+
+WinMain proc
+
+        ;====================
+        ; Put LOCALs on stack
+        ;====================
+
+        LOCAL msg  :MSG
+
+        ;==================================================
+        ; Fill WNDCLASSEX structure with required variables
+        ;==================================================
+        xor ebx,ebx
+        invoke LoadIcon,hInstance,500    ; icon ID
+        mov wc.hIcon,          eax
+        invoke LoadCursor,ebx,IDC_ARROW
+        mov wc.hCursor,        eax
+
+
+        invoke RegisterClassEx, ADDR wc
+        push eax
+
+        ;================================
+        ; Centre window at following size
+        ;================================
+
+        invoke GetSystemMetrics,SM_CXSCREEN
+        mov esi,eax ;esi == screen X
+        invoke GetSystemMetrics,SM_CYSCREEN ;       eax == screen Y
+        mov ecx,eax
+        shr esi,1
+        shr ecx,1
+        sub esi,500/2
+        sub ecx,350/2
+        
+        szText szClassName,1 ;1 byte for class name :)
+        pop edx ;edx = atom ID
+        invoke CreateWindowEx,WS_EX_LEFT,
+                              edx,
+                              ADDR szDisplayName,
+                              WS_OVERLAPPEDWINDOW or WS_VISIBLE,
+                              esi,ecx,500,350,
+                              ebx,ebx,
+                              hInstance,ebx
+        mov   hWnd,eax
+
+        invoke LoadMenu,hInstance,600  ; menu ID
+        invoke SetMenu,hWnd,eax</div>
+    <div class="meta">Posted on 2001-03-30 16:28:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196430">
+    <div class="subject"><a href="#post-196430">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">Alex,
+
+There are two problems with the approach you have taken to this
+piece of example code. Writing structures in the DATA section
+is a bad practice, you can get away with it in a small test app
+but if you wrote a larger app with all of the structures loaded
+into the .DATA section, you will blow the size of the app out
+for no purpose.
+
+If speed matters with the structure which it rarely does, having
+it on the stack increases the access speed as the stack is faster
+access than the .DATA section. I am simply citing the Intel data
+here where stack data is in cache in most instances where .DATA
+section data is a longer and slower fetch.
+
+With the framing procedure, optimisation at close range with assembler
+mnemonics is a waste of time that makes the code a lot harder to
+read. Include one API call in an algorithm and all of the speed
+optimisations are lost, that algorithm has multiple recursive API
+calls so the gain is of no use but the loss of readability is a
+sizeable loss.
+
+I agree with you approach when it comes to designing assembler algorithms
+as there is very good performance advantages in doing so but with
+API code, its a waste of time that leaves the code much more difficult
+to read.
+
+Regards,
+
+hutch@pbq.com.au
+
+This message was edited by hutch--, on 3/30/2001 7:49:19 PM</div>
+    <div class="meta">Posted on 2001-03-30 18:47:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196431">
+    <div class="subject"><a href="#post-196431">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body"><pre><code>
+Well let's see figures.
+Let them judge us.
+To put structures in .DATA section is a good practice.
+1. Cause it faster
+2. Cause it DECREASE size NOT INCREASE.
+Compile my example and you'see that it is 1 kb less than yours.
+Size of apps is sum of all in the file data + code.
+Look at the code needed TO FILL WNDCLASSEX in locals:
+It's from your exe
+start address
+.004010B3: C745D030000000               mov       d,[-0030],000000030
+.004010BA: C745D403200000               mov       d,[-002C],000002003
+.004010C1: C745D8F5114000               mov       d,[-0028],0004011F5
+.004010C8: C745DC00000000               mov       d,[-0024],000000000
+.004010CF: C745E000000000               mov       d,[-0020],000000000
+.004010D6: FF7508                       push      d,[00008]
+.004010D9: 8F45E4                       pop       d,[-001C]
+.004010DC: C745F010000000               mov       d,[-0010],000000010
+.004010E3: C745F400000000               mov       d,[-000C],000000000
+.004010EA: C745F856114000               mov       d,[-0008],000401156
+.004010F1: 68F4010000                   push      0000001F4 ;"  ??"
+.004010F6: FF7508                       push      d,[00008]
+.004010F9: E83E050000                   call     .00040163C   -------- (1)
+.004010FE: 8945E8                       mov       [-0018],eax
+.00401101: 68007F0000                   push      000007F00 ;"  ¦ "
+.00401106: 6A00                         push      000
+.00401108: E829050000                   call     .000401636   -------- (2)
+.0040110D: 8945EC                       mov       [-0014],eax
+.00401110: C745FC00000000               mov       d,[-0004],000000000
+-----------------------
+here we pass parameter to RegisterClassEx - end address
+.00401117: 8D45D0                       lea       eax,[-0030]
+
+117h - 0B3h = 64h = 100 bytes!
+You need 100 bytes to fill it in the stack
+
+I put it in .data section
+You can see in the code above SIZEOF WNDCLASSEX = 30h (first line)
+And I need just feel a few members in code:
+start address:
+¦.0040107E: 68F4010000                   push      0000001F4 ;"  ??"
+¦.00401083: 6800004000                   push      000400000 ;" @  "
+¦.00401088: E87D040000                   call     .00040150A   -------- (3) ;call for LoadIcon
+¦.0040108D: A326204000                   mov       [000402026],eax
+¦.00401092: 68007F0000                   push      000007F00 ;"  ¦ "
+¦.00401097: 53                                   push      ebx
+¦.00401098: E867040000                   call     .000401504   -------- (4) ;call for LoadCursor
+¦.0040109D: A32A204000                   mov       [00040202A],eax
+------------------------------------------
+here we pass parameter to RegisterClassEx - address
+¦.004010A2: 680E204000                   push      00040200E ;" @ ?"
+A2 - 7E = 29h
+29h(code) + 30h(data) = 59h = 89 bytes
+</code></pre>
+That's why all those big C procs so fatty.
+My proc lost 11 bytes in one structure.
+And with every structure it will loose more bytes against some prog which fill the same struct in the locals.
+For the rest I write later, I'm tired for my English today :)
+
+Steve, Is it possible to make Frame3D round or oval?
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-30 20:14:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196432">
+    <div class="subject"><a href="#post-196432">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">Alex,
+
+Here is where I see the problem with the approach you are using,
+to get the size reduction, you have used a constant for the
+preferred load address of a PE EXE file but it will not work in
+a DLL for the obvious reason.
+
+<pre><code>
+wc WNDCLASSEX <sizeof WNDCLASSEX, CS_HREDRAW or CS_VREDRAW or CS_BYTEALIGNWINDOW,\
+                    offset WndProc,0,0,400000h,0,0,COLOR_BTNFACE+1,0,offset szClassName,0>
+</code></pre>
+
+Next you have not loaded the class cursor or the application's Icon
+which is a reduction in code size but a reduction in performance
+as well.
+
+The approach I take to get the most efficient use of repeated
+structures is used in the template generated by the latest version
+of Prostart, it writes a procedure that receives different parameters
+that are loaded into a WNDCLASSEX structure to register as many
+classes as you require.
+
+You will not see it with one structure but you will see it with
+multiple structures loaded statically in the .DATA section, once
+you get past the original 512 byte section size, it will start to
+blow out in size.
+
+I am guilty of size optimisation in a toy like TheGun which has
+been hammered to death to keep its size down but it is done at the
+level of architecture, you simply cannot get the size reduction
+by close range mnemonic selection.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-31 00:29:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196433">
+    <div class="subject"><a href="#post-196433">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">Steve,
+1.I have size decreased for simple reason - in any situation it shorter in size
+to initialize data already in the compile stage than in run time.
+I say it again size of data + code with struct in data section will be less
+than just size of code to init this struct. in the stack.
+2. 400000h is default image based for .exe files, it's not preffered loading address
+it's image base wich is known in link stage.
+For DLL the default will be 1000000h.
+Anyway you can change it with BASE option anytime.
+But it will be you not black magic who changes it, so it'll be the same guy who writes
+the code and if he know what he is doing he sets appropriate constant to the hInstance according
+what kind of image BASE is suppouse to be with his tipe of PE and BASE options he 
+sets for link.
+3. I DID load cursor and icon. I loaded it in run time. Loaded everything what you do
+in loading WNDCLASSEX in your prog. And while comparing I counted (added) both size of code
+I need and size in .data section and use the sum against your size of code.
+4. You write about 512 bytes gran. but the same rule uplies to .code section and
+with every new class filling you'll get the same result, the only difference will be that
+my code will grou 'cause of .data section, yours - because of .code section.
+5. You can reuse the structure in .data too.
+6. Anyway I this particular prog, I factualy optimize size and speed.
+And while optimizing we do not optimize ALL THE PROGS we optimize this particular one.
+And facts are - it becomes shorter and faster.
+You are not sure that it maybe useful with some multyclassing progs?
+Let's check it out then!
+We both take knowledge and facts above anything else. I'll be glad if we prove me wrong -
+I'll take my advantages in any case.
+So give me source where putting class structures in locals IS MATTER, and
+I try to do the same with them in .data section.
+Result will judge us.
+
+
+I hope we respect each other well enough to keep our fillings out of business.
+At least I do.
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-31 02:26:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196434">
+    <div class="subject"><a href="#post-196434">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">Swin
+
+
+Any test will show that accessing data is *not* slower in .data
+than it is when Data are on the Stack.
+
+There is no reason to declare Data on Stack when they can be declared
+in .data, out of saving Data room in PE file (the namings conflicts is
+a pure theorical stupidity).
+
+Declaring Structures Data on the Stack is: 
+
+   . Waste of time
+   . Unreadable
+   . Longer to write (initialising)
+   . Slower to run (initialising)
+
+The only one case when declaring Structures on the Stack have some
+advantages is when the Structure is not to be initialized by your
+app but to be initialized by Win to give you informations.
+
+This is the case, for example, with the PAINTSTRUCT required for
+BeginPaint calls (these cases are not many...).
+
+For the data size spoiling, this is *not* a problem as Structures,
+in a uge PE are usually only a very tiny part among the lot of other
+data you will usually have to stand up, whereas the spoiled code size
+is a problem because it turn Asm another C inefficient coding.
+
+The reason why we can see so many Asm examples with Stack Structures
+is that 1) they are often translated from C, 2) they are often
+written by people who first learned C, and do not ask themself if
+this is accurate or not. Trying to prove them that they are wrong is, 
+usually waste of time too... As you can see upper, after you prove
+that 1+1=2.
+
+
+betov.</div>
+    <div class="meta">Posted on 2001-03-31 06:00:00 by Betov</div>
+   </div>
+   <div class="post" id="post-196435">
+    <div class="subject"><a href="#post-196435">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">Alex,
+
+I have a very different approach to size optimisation that is based on the
+architecture of the EXE file, change the .DATA section to a .DATA? section
+
+<pre><code>
+    .data?
+        CommandLine   dd ?
+        hWnd          dd ?
+        hInstance     dd ?
+</code></pre>
+
+Put the string data in the code section,
+
+<pre><code>
+    jmp @F
+      szDisplayName db "3D Frames",0
+    @@:
+</code></pre>
+
+And voila ! it drops by one section in size.
+
+Build it with this batch file and it drops another section in size,
+
+<pre><code>
+@echo off
+
+if exist 3dframes.obj del 3dframes.obj
+if exist 3dframes.exe del 3dframes.exe
+
+\masm32\bin\rc /v rsrc.rc
+\masm32\bin\cvtres /machine:ix86 rsrc.res
+
+\masm32\bin\ml /c /coff /nologo 3dframes.asm
+\masm32\bin\Link /SUBSYSTEM:WINDOWS /MERGE:.rdata=.text 3dframes.obj rsrc.obj > nul
+
+dir 3dframes.*
+
+pause
+</code></pre>
+
+And this is so far without any internal code size reduction. The next trick
+is to write the complete text data into one of the spaces between sections
+and address the offset manually.
+
+Targetting an introductory example that is written as simply as possible is
+not really were the action is, a complete rewrite with size in mind would
+drop its size further but the intelligibility would reduce to ZERO.
+
+Rene,
+
+I am glad you have risen from the dead, if it was not after midnight I would
+find you the reference in the Intel data about why you prefer stack to
+global data in the data section but you are a big boy now and can look it up
+yourself. If you are into SIMD instructions, you could fix the speed of global
+access if it bothered you by using the "prefetch" mnemonics.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-31 08:15:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196436">
+    <div class="subject"><a href="#post-196436">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">to bitov:
+Well said, thanks. I had the same thoghts but no words to express.
+Though, I beleave Steve is sencable man and some day may consider it
+worthy to study the issue a little bit more carefully.
+to Steve:
+Yes, I know these teqs. I wouldn't call it different aproach 'cause they doesn't
+exclude each other.
+In particular progs I use some of them or all of them.
+Some times I put all data and code in one section and make it EWR.
+Though I would'n put WR data in critical section of code (critical in hence of speed,
+not as thread issue).
+Mind - Pentium has separated code and data caches 1 and 2 level. Separated prefetch
+ques for them, and if don't balance data and code between them, it may harm performance.
+Prefetch is not stack issue it's data usage frequency issue.
+For ex. - change your stack pointer to address of .data section -
+What now is data in the .data section? data in .data section? data in stack ? prefetched? not prefetched?
+both? :)
+Remember, we discuss RevStr? And while we work together on your libraries?
+There were some strange results. And all of it was explained by testing as read or not read data
+effect. In other words - is data in cache or not.
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-31 09:23:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196437">
+    <div class="subject"><a href="#post-196437">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">May i point out something, what the bloody hell is thepoint of all of this, I mean, windows is slow, the only point of optimization is to save speed and size. Optimization of registering a window class is really up to you.
+
+But while we are on this topic: szText = BAD
+
+lets look at 'szText'
+<pre><code>
+szText SumText,"Declared"
+
+jmp @F         ;Extra bytes just to declare in Jmp instruction
+ SumText BYTE "Declared",0
+@@:
+
+</code></pre>
+Whereas you could you segemnts to achive the same thing:
+<pre><code>
+
+.data
+ SumText BYTE "Declared",0
+.code
+
+</code></pre>
+The String is appended onto the end of the data section, which no extra overheads etc which is where dsText comes in</div>
+    <div class="meta">Posted on 2001-03-31 23:17:00 by George</div>
+   </div>
+   <div class="post" id="post-196438">
+    <div class="subject"><a href="#post-196438">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">!!! DO NOT HARDCODE THE INSTANCE HANDLE OF A DLL !!!
+
+The hInstance of a DLL is the starting location of the DLL in memory.  If you load two DLL's (without unloading them) with the same base address, one of them will be relocated, and the hInstance's will be different.
+
+To be safe, if you hardcode the EXE hInstance, you must remove ALL relocating information.  I don't know if there is a flag in the EXE for signalling a non-relocatable executable.</div>
+    <div class="meta">Posted on 2001-04-02 18:21:00 by tank</div>
+   </div>
+   <div class="post" id="post-196439">
+    <div class="subject"><a href="#post-196439">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">There is no real speed loss in initializing a PAINTSTRUCT, because the initialization is performed in all cases by BeginPaint.
+
+If we want to truly save space, allocate PAINTSTRUCT on the stack only when we receive a WM_PAINT message.
+
+Reason:
+DefWindowProc will use SendMessage on some messages and cause recursion.
+
+For example, WM_CLOSE will call DestroyWindow which will SendMessage(WM_DESTROY) to the same window.  In this case, if you allocate a PAINTSTRUCT before dispatching the messages, you will create (at least) two instances which are not used.</div>
+    <div class="meta">Posted on 2001-04-02 19:02:00 by tank</div>
+   </div>
+   <div class="post" id="post-196440">
+    <div class="subject"><a href="#post-196440">Basics of Asm32 in opt. ex. #5.LAST</a></div>
+    <div class="body">to Tank:
+1. About relocation - it's stript by default.
+2. You right about DLL relocation. BUT it's me who coded it. And not black magic.
+I such a case I wouldn't define hInstance of DLL as constance.
+The matter is that while doing a wonderfull job to show how easy it is to code in Win32 ASM
+we are stealing from begginer (who get used to copy - paste, coping meanwhile some
+"safe" nonesence from our example as hPrevInst for example) oppotunity to understand
+what and why they are coding. They are compiling some progs wich do controls, looks nice
+.ect and at the same time the authors have no idea what is going on on low level and some
+of them don't even know basic opcodes.
+And all advaneges of low level coding - 1. Clear understanding 2. Speed 3.Size
+eventually disappear from their creations.
+I'm glag that I wrote something that make us discuss something that is usually out of sight.
+My job involes a lot of multyprocessing and multythreding, so I wouldn't get caught by
+incorrect usage of this kernel mode object.
+And I write for those who want to understand, not just copy - paste my code.
+So I'm not going to give templates for anything and everything.
+I'll help those who want to become creators. And don't care for the rest.
+So one of the rule if you want to optimize your code - while 
+finding common parts and formilizing them in procs and macros, don't make
+uniform for everything purpose. It's the same as blinders.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-02 19:35:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

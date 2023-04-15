@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Mike - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26357" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26357">Mike</a></p>
+   <div class="post" id="post-191237">
+    <div class="subject"><a href="#post-191237">Mike</a></div>
+    <div class="body">I have written a small text editor based RichEdit control (see text below). Program can open and save any file but when I open some large file (size > 32K) I can't insert into the text any symbol (but can delete and replace text!).
+May be somebody know what I am doing wrong and what's my problem?
+
+Thanks, Mike.
+
+**************** The beginning of RichEdit.asm *********************************
+.386
+.model flat,stdcall
+option casemap:none
+WinMain proto :DWORD,:DWORD,:DWORD,:DWORD
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\gdi32.inc
+include \masm32\include\comdlg32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\gdi32.lib
+includelib \masm32\lib\comdlg32.lib
+
+EditML        PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+
+.const
+IDM_OPEN 	equ 1
+IDM_SAVE 	equ 2
+IDM_EXIT 	equ 9
+MAXSIZE 	equ 260
+MEMSIZE 	equ 65535
+EditID 	equ 1
+CFM_BACKCOLOR	equ	04000000h
+
+.data
+ClassName 	 db "Win32ASMEditClass",0
+AppName  	 db "Small Text Editor",0
+EditClass 	 db "edit",0
+MenuName 	 db "FirstMenu",0
+ofn   	 OPENFILENAME <>
+FilterString db "All files",0,"*.*",0
+             db "Text files",0,"*.txt",0,0
+buffer 	 db MAXSIZE dup(0)
+bytesread    dd      0
+
+.data?
+hInstance 	 HINSTANCE ?
+CommandLine  LPSTR ?
+hREdit 	 HWND ?
+hFile 	 HANDLE ?
+hMemory 	 HANDLE ?
+pMemory 	 DWORD ?
+SizeReadWrite DWORD ?
+EditS        EDITSTREAM      <?>
+cf		 CHARFORMAT2	<>
+
+
+.code
+start:
+	invoke GetModuleHandle, NULL
+	mov    hInstance,eax
+	invoke GetCommandLine
+	invoke WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT
+	invoke ExitProcess,eax
+
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
+	LOCAL wc:WNDCLASSEX
+	LOCAL msg:MSG
+	LOCAL hwnd:HWND
+	mov   wc.cbSize,SIZEOF WNDCLASSEX
+	mov   wc.style, CS_HREDRAW or CS_VREDRAW
+	mov   wc.lpfnWndProc, OFFSET WndProc
+	mov   wc.cbClsExtra,NULL
+	mov   wc.cbWndExtra,NULL
+	push  hInst
+	pop   wc.hInstance
+	mov   wc.hbrBackground,COLOR_WINDOW+1
+	mov   wc.lpszMenuName,OFFSET MenuName
+	mov   wc.lpszClassName,OFFSET ClassName
+	invoke LoadIcon,NULL,IDI_APPLICATION
+	mov   wc.hIcon,eax
+	mov   wc.hIconSm,eax
+	invoke LoadCursor,NULL,IDC_ARROW
+	mov   wc.hCursor,eax
+	invoke RegisterClassEx, addr wc
+	INVOKE CreateWindowEx,WS_EX_CLIENTEDGE,ADDR ClassName,ADDR AppName,\
+           WS_OVERLAPPEDWINDOW,\
+           100,100,600,400,\
+           NULL,NULL,hInst,NULL
+	mov   hwnd,eax
+	INVOKE ShowWindow, hwnd,SW_SHOWNORMAL
+	INVOKE UpdateWindow, hwnd
+	.WHILE TRUE
+                INVOKE GetMessage, ADDR msg,NULL,0,0
+                .BREAK .IF (!eax)
+                INVOKE TranslateMessage, ADDR msg
+                INVOKE DispatchMessage, ADDR msg
+	.ENDW
+	mov     eax,msg.wParam
+	ret
+WinMain endp
+
+WndProc proc uses ebx hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	.IF uMsg==WM_CREATE
+		invoke EditML,NULL,0,30,300,200,hWnd,700,0
+		mov hREdit, eax
+
+		invoke SetFocus,hREdit
+		mov ofn.lStructSize,SIZEOF ofn
+		push hWnd
+		pop  ofn.hwndOwner
+		push hInstance
+		pop  ofn.hInstance
+		mov  ofn.lpstrFilter, OFFSET FilterString
+		mov  ofn.lpstrFile, OFFSET buffer
+		mov  ofn.nMaxFile,MAXSIZE
+
+	.ELSEIF uMsg==WM_SIZE
+		mov eax,lParam
+		mov edx,eax
+		shr edx,16
+		and eax,0ffffh
+		invoke MoveWindow,hREdit,0,0,eax,edx,TRUE
+
+	.ELSEIF uMsg==WM_DESTROY
+		invoke PostQuitMessage,NULL
+
+	.ELSEIF uMsg==WM_COMMAND
+		mov eax,wParam
+		.if lParam==0
+			.if ax==IDM_OPEN
+                        call OpenF
+
+			.elseif ax==IDM_SAVE
+				call SaveF
+
+			.else
+				invoke DestroyWindow, hWnd
+			.endif
+		.endif
+	.ELSE
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam
+		ret
+	.ENDIF
+	xor    eax,eax
+	ret
+WndProc endp
+
+EditML proc szMsg:DWORD,tx:DWORD,ty:DWORD,wd:DWORD,ht:DWORD,
+            hParent:DWORD,ID:DWORD,Wrap:DWORD
+
+    LOCAL hCtl   :DWORD
+    LOCAL hFnt   :DWORD
+    LOCAL eStyle :DWORD
+
+	jmp @F
+richedit     db      'RICHEDIT',0
+RichEdDLL    db      'RICHED</div>
+    <div class="meta">Posted on 2000-12-19 11:28:00 by Mike Kiriushkin</div>
+   </div>
+   <div class="post" id="post-191238">
+    <div class="subject"><a href="#post-191238">Mike</a></div>
+    <div class="body">After you create your Edit control you need to set the text size.
+
+      INVOKE     SendMessage, hREdit, EM_EXLIMITTEXT, 0, 2000000 ; Or to whatever size you want.
+
+Ewayne</div>
+    <div class="meta">Posted on 2000-12-19 13:58:00 by Ewayne</div>
+   </div>
+   <div class="post" id="post-191239">
+    <div class="subject"><a href="#post-191239">Mike</a></div>
+    <div class="body">Hi,
+
+be careful with the maximum size, there are some riched20.dll
+versions, which are limited to 1MByte size. The INFINITE constant
+described in some documentation doesnt work with all dll 
+versions.
+
+beaster.</div>
+    <div class="meta">Posted on 2000-12-20 13:24:00 by beaster</div>
+   </div>
+   <div class="post" id="post-191240">
+    <div class="subject"><a href="#post-191240">Mike</a></div>
+    <div class="body">Many people also include an updated dll with there programs. Remember windows always searches for Dll's in the application directory first, then \Program Files\Common\ then in \windows\system\ then in all of the directories in the path variable.
+
+So if you place the newest RichEdit.Dll in your app's directory it will use that one first, just make sure it works on all OS's (Does nt or 2k require a special DLL? I'm not sure.)
+
+See ya,
+Ben</div>
+    <div class="meta">Posted on 2000-12-20 20:31:00 by cyberben </div>
+   </div>
+  </div>
+ </body>
+</html>

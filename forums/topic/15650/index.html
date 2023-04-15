@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Improperly coded Align (16) using -sf -fasm option causes cr - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15650" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=15650">Improperly coded Align (16) using -sf -fasm option causes cr</a></p>
+   <div class="post" id="post-121365">
+    <div class="subject"><a href="#post-121365">Improperly coded Align (16) using -sf -fasm option causes cr</a></div>
+    <div class="body">I have tried using FASM instead of MASM32 (default), in order to get all MMX instructions assembled properly. I compile with -sf and -fasm options.<br /><br />It works except if I use the align (16); directive to align loops for increased speed.<br /><br />A simple test. Use the testtimer.hla example. It compiles with -sf -fasm, and testtimer.exe executes normally.<br /><br />Then, insert;<br /><br /><pre><code>nop;<br />//align &#40;16&#41;;</code></pre><br /><br />right after begin testtimer; and before <br /><pre><code>	alarm.create&#40;&#41;;<br />	alarm.start&#40;&#41;;</code></pre><br /><br />HLA inserts the following macro at the start of testtimer.asm<br /><br /><pre><code>macro align v <br />&#123;<br />	rb &#40;v-1&#41;-&#40;$+v-1&#41; mod v<br />&#125;</code></pre><br /><br />and the alarm functions are translated thus:<br /><br /><pre><code>		nop<br />		lea	esi,  &#91;ebp-42&#93;	; alarm<br />		call	timer_create	; create<br />		lea	esi,  &#91;ebp-42&#93;	; alarm<br />		mov	edi, dword ptr &#91;esi+0&#93;<br />		call	dword ptr &#91;edi+0&#93;</code></pre><br /><br /><br /><pre><code>04001070  |. 90             nop;<br />04001071  |. 8D75 D6        lea&#40;ESI,&#91;TYPE DWORD EBP-2A&#93;&#41;;<br />04001074  |. E8 C7100000    call TESTTIME.04002140;<br />04001079  |. 8D75 D6        lea&#40;ESI,&#91;TYPE DWORD EBP-2A&#93;&#41;;<br />0400107C  |. 8B3E           mov&#40;&#91;TYPE DWORD ESI&#93;,EDI&#41;;<br />0400107E  |. FF17           call&#40;&#91;TYPE DWORD EDI&#93;&#41;;</code></pre><br /><br />If you uncomment the align directive, HLA puts the following code after the nop (at the start of the program right after initialization of esp and ebp)<br /><br /><pre><code>rb 15 - &#40;&#40;$-_origin___hla_+17&#41; mod 16&#41; ;align 16</code></pre><br /><br />Three problems:<br />1) FASM encodes this as several bytes of zero,<br />2) the 8D75 etc of the LEA is incorporated into another instruction<br />3) IT IS NOT ALIGNED TO 16 BYTES!!!!! The instruction code - 8D75 is two bytes early!!!<br /><br /><pre><code>04001070  |. 90             nop;<br />04001071  |. 0000           add&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />04001073  |. 0000           add&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />04001075  |. 0000           add&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />04001077  |. 0000           add&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />04001079  |. 0000           add&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />0400107B  |. 0000           add&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />0400107D  |. 008D 75D6E8BA  add&#40;CL,&#91;TYPE BYTE EBP+BAE8D675&#93;&#41;;<br />04001083  |. 1000           adc&#40;AL,&#91;TYPE BYTE EAX&#93;&#41;;<br />04001085  |. 008D 75D68B3E  add&#40;CL,&#91;TYPE BYTE EBP+3E8BD675&#93;&#41;;<br />0400108B  |. FF17           call&#40;&#91;TYPE DWORD EDI&#93;&#41;;<br />0400108D  |. BB 00000000    mov&#40;0,EBX&#41;;<br /></code></pre><br /><br />Help please.</div>
+    <div class="meta">Posted on 2003-10-14 21:29:31 by V Coder</div>
+   </div>
+   <div class="post" id="post-121429">
+    <div class="subject"><a href="#post-121429">Improperly coded Align (16) using -sf -fasm option causes cr</a></div>
+    <div class="body">Alignment is one of those things that is problematic under FASM.<br />A while back, Thomasz gave me the macro you're seeing to use.<br />As you've discovered, it doesn't always work. I'd asked for a generic<br />align directive in FASM, but Thomasz gave some technical reason<br />for not providing it.  Never gave it much thought after that.<br />If anyone has any ideas how to create a generic align directive<br />in FASM, I'm all ears.<br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2003-10-15 12:07:06 by rhyde</div>
+   </div>
+   <div class="post" id="post-121450">
+    <div class="subject"><a href="#post-121450">Improperly coded Align (16) using -sf -fasm option causes cr</a></div>
+    <div class="body"><div class="quote">Three problems:<br />1) FASM encodes this as several bytes of zero,<br />2) the 8D75 etc of the LEA is incorporated into another instruction<br />3) IT IS NOT ALIGNED TO 16 BYTES!!!!! The instruction code - 8D75 is two bytes early!!!</div><br /><br />I have solved problem 3. It seems HLA's code is wrong:<br /><br />rb 15 - (($-_origin___hla_+17) mod 16) ;align 16<br /><br />should be<br /><br />rb 15 - (($-_origin___hla_+15) mod 16) ;align 16<br /><br />[]<br /><br />I intended to search through your code so I could tell you exactly where the problem is, but I slept...<br /><br />In relation to problems 1 &amp; 2, it seems <strong>rb</strong> is intended to reserve data bytes (by putting zeroes), not align code. Maybe you can encourage Thomasz to put a similar instruction to align code by inserting $90s (NOP) instead of $00s.</div>
+    <div class="meta">Posted on 2003-10-15 21:39:49 by V Coder</div>
+   </div>
+   <div class="post" id="post-121451">
+    <div class="subject"><a href="#post-121451">Improperly coded Align (16) using -sf -fasm option causes cr</a></div>
+    <div class="body">I got what should be the solution from comrade over at the FASM Board.<br /><br /><pre><code>macro aligncode value &#123;<br />  times &#40;&#40;value-1&#41; - &#40;rva $ + value-1&#41; mod value&#41; nop<br />&#125;</code></pre><br /><br />Well, I'll give it a try.<br /><br />Randy would you be able to incorporate both this and the fix for rb in 1.58?</div>
+    <div class="meta">Posted on 2003-10-15 22:42:20 by V Coder</div>
+   </div>
+   <div class="post" id="post-121511">
+    <div class="subject"><a href="#post-121511">Improperly coded Align (16) using -sf -fasm option causes cr</a></div>
+    <div class="body"><div class="quote"><br />I got what should be the solution from comrade over at the FASM Board.<br /><br /><pre><code>macro aligncode value &#123;<br />  times &#40;&#40;value-1&#41; - &#40;rva $ + value-1&#41; mod value&#41; nop<br />&#125;</code></pre><br /><br />Well, I'll give it a try.<br /><br />Randy would you be able to incorporate both this and the fix for rb in 1.58? </div><br /><br />No. v1.58's already out the door.<br />But I look into it for v1.59 (there's another outstanding problem in the tables module,<br />so 1.59 will probably appear in a week or so).<br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2003-10-16 21:26:36 by rhyde</div>
+   </div>
+  </div>
+ </body>
+</html>

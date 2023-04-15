@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Creating procedures dynamically? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19789" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19789">Creating procedures dynamically?</a></p>
+   <div class="post" id="post-152138">
+    <div class="subject"><a href="#post-152138">Creating procedures dynamically?</a></div>
+    <div class="body">I'm wondering if there is a way to create and call a procedure dynamically in Win32.  Not just load it dynamically like with DLLs, but actually create/modify it.  I've tried this:<br /><br /><pre><code><br />include masm32.inc<br />includelib masm32.lib<br /><br />; ...<br /><br />.code<br /><br />; ...<br /><br />funcMem db 512 dup &#40;0&#41;<br /><br />; ...<br /><br />testProc proc param1&#58;DWORD, param2&#58;DWORD<br />	LOCAL buf&#91;80&#93;&#58;BYTE<br />	<br />	invoke dwtoa,param1,addr buf<br />	invoke MessageBox,NULL,addr buf, addr buf, MB_OK<br />	invoke dwtoa,param2,addr buf<br />	invoke MessageBox,NULL,addr buf, addr buf, MB_OK<br />	ret<br />testProc endp<br />__testProcEnd&#58;<br /><br />	; ...<br /><br />	mov eax,offset __testProcEnd<br />	sub eax,offset testProc<br />	mov funcLen,eax<br />		<br />	; ...<br />		<br />		; funcLen holds length of the function<br />	invoke MemCopy,addr testProc,addr funcMem,funcLen<br />	lea eax,funcMem<br />	push &#40;DWORD PTR 6&#41;<br />	push &#40;DWORD PTR 5&#41;<br />	call eax <br /></code></pre><br /><br />The idea is to copy the testProc procedure to a new memory location and call it from that location, but when I run the code the program crashes.  What am I missing?  Can this be done?</div>
+    <div class="meta">Posted on 2004-11-01 22:25:22 by sirchess</div>
+   </div>
+   <div class="post" id="post-152144">
+    <div class="subject"><a href="#post-152144">Creating procedures dynamically?</a></div>
+    <div class="body">MASM creates a jump table...</div>
+    <div class="meta">Posted on 2004-11-02 00:36:39 by roticv</div>
+   </div>
+   <div class="post" id="post-152157">
+    <div class="subject"><a href="#post-152157">Creating procedures dynamically?</a></div>
+    <div class="body"><div class="quote">MASM creates a jump table...</div><br /><br />that means, that a call messagebox is not a call dword  where some_address is an address inside your .exe which is filled in by the module loader, but it creates a<br /><br /><pre><code><br />call some_offset<br /><br />some_offset&#58; jmp &#91;some_address&#93;<br /></code></pre><br /><br />pair. since calls use relative addressing, you can't move code containg such calls (without relocating the calls which is quite much work). Actually, I didn't know that MASM creates jump tables, since I always used TASM, but if roticv says so, I believe him immediately :)</div>
+    <div class="meta">Posted on 2004-11-02 04:48:19 by lifewire</div>
+   </div>
+   <div class="post" id="post-152160">
+    <div class="subject"><a href="#post-152160">Creating procedures dynamically?</a></div>
+    <div class="body">lifewire is correct, if you can force MASM to call the api directly calling api is not a problem (It is possible, Vortex posted some marcos on how to do it).<br /><br />However there should not be any calls to any address such as your call to dwtoa. Instead do something like<br /><pre><code><br />mov eax, dwtoa<br />push xx<br />push xx<br />...<br />call eax<br /></code></pre></div>
+    <div class="meta">Posted on 2004-11-02 05:57:57 by roticv</div>
+   </div>
+   <div class="post" id="post-152181">
+    <div class="subject"><a href="#post-152181">Creating procedures dynamically?</a></div>
+    <div class="body">Those macros can be found at:<br /><br />http://www.asmcommunity.net/board/viewtopic.php?t=17566</div>
+    <div class="meta">Posted on 2004-11-02 09:49:36 by Vortex</div>
+   </div>
+   <div class="post" id="post-152205">
+    <div class="subject"><a href="#post-152205">Creating procedures dynamically?</a></div>
+    <div class="body">something to the effect of<br /><pre><code><br />lea eax,MessageBoxA<br />mov eax,&#91;eax+2&#93;<br />mov eax,&#91;eax&#93;<br /></code></pre><br />would work to the effect.<br /><br /><strong>however</strong>, beware of such on 9x system. on 9x, the kernel has a &quot;feature&quot; that &quot;obfuscates&quot; API addresses, by providing a &quot;thunk&quot; to that certain API address (even if you use GetProcAddress). I can't recall completely, but Matt Pietrek describes this in his Undoc. 9x (or was it 95 programming secrets - can't remember). so the most reliable way to retreive an accurate address of the API would be to iterate through the EAT, and such.</div>
+    <div class="meta">Posted on 2004-11-02 16:42:53 by Drocon</div>
+   </div>
+   <div class="post" id="post-152215">
+    <div class="subject"><a href="#post-152215">Creating procedures dynamically?</a></div>
+    <div class="body">Hello all,<br /><br />  Didn't get a chance to read this until just now.  So what you all are saying is that it was calling the function, but the function calls inside the function were causing problems.  I didn't even think to check that  :oops: <br /><br /><div class="quote">  since calls use relative addressing, you can't move code containg such calls (without relocating the calls which is quite much work).</div><br />I'm not sure if I understand this exactly.  Are you saying that the address used for normal calls is relative to the call location?  And &quot;call eax&quot; is not relative?  Could someone elaborate on this a little please (or point to a tut)?<br /><br />Drocon:<br />  As I am on Win98, this sounds interesting, but I'm afraid you lost me with &quot;iterate through the EAT, and such&quot; :P  What does EAT stand for, and how would one &quot;iterate through&quot; it?<br /><br />Thanks!</div>
+    <div class="meta">Posted on 2004-11-02 19:04:22 by sirchess</div>
+   </div>
+   <div class="post" id="post-152247">
+    <div class="subject"><a href="#post-152247">Creating procedures dynamically?</a></div>
+    <div class="body"><div class="quote">I'm not sure if I understand this exactly. Are you saying that the address used for normal calls is relative to the call location? And &quot;call eax&quot; is not relative? Could someone elaborate on this a little please (or point to a tut)? </div><br />Go do some disassembling and you will discover that call xxx where xx is a label is actually encoded as E8 followed by a dword. The dword is displacement from the end of the opcode.<br /><br />Get the kernel32.dll base and search for the api you need aka GetProcAddress and LoadLibrary and you can get any function.<br /><br />Drocon,<br />That looks like the kind of code Elicz uses if I remember correctly.</div>
+    <div class="meta">Posted on 2004-11-03 04:51:06 by roticv</div>
+   </div>
+   <div class="post" id="post-152301">
+    <div class="subject"><a href="#post-152301">Creating procedures dynamically?</a></div>
+    <div class="body">I took out the API and dword calls in the proc, but it still crashes when I try to call a copy.  It appears to crash when it tries to return...if I put an infinite loop in the function, it just sits there, instead of giving the usual &quot;illegal operation&quot; message.<br /><br />From this I would guess that maybe somehow the wrong code address gets popped when the function returns???<br /><br />Here is the function as I have it now:<br /><pre><code><br />testProc proc param1&#58;DWORD, param2&#58;DWORD<br />	ret<br />testProc endp<br />__testProcEnd&#58;<br /></code></pre><br />When I look at the .exe with a hex editor, the function is 7 bytes long, those bytes being &quot;55 8B EC C9 C2 08 00&quot;<br /><br />C2 is the near ret with the 08 following to fix the stack (is the 00 part of this too, or not even part of the function?)<br />What does the &quot;55 8B EC C9&quot; signify?  I couldn't find an instruction code for 55...8B could be a mov, but then again since I don't know what 55 is it could be anything...<br /><br />I'm afraid I don't have much experience with disassembling :( any help would be appreciated.</div>
+    <div class="meta">Posted on 2004-11-03 17:53:51 by sirchess</div>
+   </div>
+   <div class="post" id="post-152305">
+    <div class="subject"><a href="#post-152305">Creating procedures dynamically?</a></div>
+    <div class="body"><pre><code><br />push ebp ; 55h<br />mov ebp, esp ; 8Bh ECh<br />leave ; C9h<br />retn 8 ; C2h 08 00<br /></code></pre></div>
+    <div class="meta">Posted on 2004-11-03 20:42:14 by roticv</div>
+   </div>
+   <div class="post" id="post-152310">
+    <div class="subject"><a href="#post-152310">Creating procedures dynamically?</a></div>
+    <div class="body">Thanks all for the help, I got it working finally.  More importantly though I know how it works :)</div>
+    <div class="meta">Posted on 2004-11-03 22:41:13 by sirchess</div>
+   </div>
+  </div>
+ </body>
+</html>

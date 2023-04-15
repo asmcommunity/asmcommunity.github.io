@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>inline assembly - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29147" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29147">inline assembly</a></p>
+   <div class="post" id="post-205877">
+    <div class="subject"><a href="#post-205877">inline assembly</a></div>
+    <div class="body">Hi All,<br />I have the following code, and I need to make some changes so save is called inline. Any idea?<br />Thanks<br /><pre><code><br />call&nbsp; &nbsp; save<br />push&nbsp; &nbsp; (_irq_handlers+4*irq)<br />call&nbsp; &nbsp; _intr_handle<br />pop&nbsp; &nbsp;  ecx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  <br />cmp&nbsp; &nbsp;  (_irq_actids+4*irq), 0<br />jz&nbsp; &nbsp; &nbsp; 0f&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />inb&nbsp; &nbsp;  INT_CTLMASK<br />orb&nbsp; &nbsp;  al, [1&lt;&lt;irq]<br />outb&nbsp; &nbsp; INT_CTLMASK<br />0:&nbsp; &nbsp; &nbsp; movb&nbsp; &nbsp; al, END_OF_INT<br />&nbsp; &nbsp; &nbsp; &nbsp; outb&nbsp; &nbsp; INT_CTL&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  <br />&nbsp; &nbsp; &nbsp; &nbsp; ret&nbsp; &nbsp; &nbsp; &nbsp;  <br /></code></pre><br /></div>
+    <div class="meta">Posted on 2008-09-06 14:02:03 by faris05</div>
+   </div>
+   <div class="post" id="post-205881">
+    <div class="subject"><a href="#post-205881">Re: inline assembly</a></div>
+    <div class="body">it&#039;s seem you want to make a macro&nbsp; :D</div>
+    <div class="meta">Posted on 2008-09-07 12:49:31 by secmask</div>
+   </div>
+   <div class="post" id="post-205882">
+    <div class="subject"><a href="#post-205882">Re: inline assembly</a></div>
+    <div class="body">it is a macro, hHere is the complete code. hwint_master needs to call save inline <br /><pre><code><br /><br />#define hwint_master(irq)&nbsp; &nbsp; &nbsp;  \<br />call&nbsp; &nbsp; save&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* save interrupted process state */;\<br />push&nbsp; &nbsp; (_irq_handlers+4*irq)&nbsp;  /* irq_handlers&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; */;\<br />call&nbsp; &nbsp; _intr_handle&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* intr_handle(irq_handlers) */;\<br />pop&nbsp; &nbsp;  ecx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ;\<br />cmp&nbsp; &nbsp;  (_irq_actids+4*irq), 0&nbsp; /* interrupt still active?&nbsp; &nbsp; &nbsp; &nbsp; */;\<br />jz&nbsp; &nbsp; &nbsp; 0f&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;\<br />inb&nbsp; &nbsp;  INT_CTLMASK&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  /* get current mask */&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;\<br />orb&nbsp; &nbsp;  al, [1&lt;&lt;irq]&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; /* mask irq */&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;\<br />outb&nbsp; &nbsp; INT_CTLMASK&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  /* disable the irq&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; */;\<br />0:&nbsp; &nbsp; &nbsp; movb&nbsp; &nbsp; al, END_OF_INT&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;\<br />outb&nbsp; &nbsp; INT_CTL&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  /* reenable master 8259&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  */;\<br />ret&nbsp; &nbsp; &nbsp;  <br /></code></pre><br /><br />below is the code for save<br /><pre><code><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; .align&nbsp; 16<br /> save:<br />&nbsp; &nbsp; &nbsp; &nbsp;  cld&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ! set direction flag to a known value<br />&nbsp; &nbsp; &nbsp; &nbsp;  pushad&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! save &quot;general&quot; registers<br />&nbsp;  o16 push&nbsp; &nbsp; ds&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! save ds<br />&nbsp; o16 push&nbsp; &nbsp; es&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! save es<br />&nbsp; o16 push&nbsp; &nbsp; fs&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! save fs<br />&nbsp; o16 push&nbsp; &nbsp; gs&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! save gs<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov&nbsp; &nbsp;  dx, ss&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! ss is kernel data segment<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov&nbsp; &nbsp;  ds, dx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! load rest of kernel segments<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov&nbsp; &nbsp;  es, dx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ! kernel does not use fs, gs<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov&nbsp; &nbsp;  eax, esp&nbsp; &nbsp; &nbsp; &nbsp; ! prepare to return<br />&nbsp; &nbsp; &nbsp; &nbsp;  incb&nbsp; &nbsp; (_k_reenter)&nbsp; &nbsp; ! from -1 if not reentering<br />&nbsp; &nbsp; &nbsp; &nbsp;  jnz&nbsp; &nbsp;  set_restart1&nbsp; &nbsp; ! stack is already kernel stack<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov&nbsp; &nbsp;  esp, k_stktop<br />&nbsp; &nbsp; &nbsp; &nbsp;  push&nbsp; &nbsp; _restart&nbsp; &nbsp; &nbsp; &nbsp; ! build return address for int handler<br />&nbsp; &nbsp; &nbsp; &nbsp;  xor&nbsp; &nbsp;  ebp, ebp&nbsp; &nbsp; &nbsp; &nbsp; ! for stacktrace<br />&nbsp; &nbsp; &nbsp; &nbsp;  jmp&nbsp; &nbsp;  RETADR-P_STACKBASE(eax)<br /> <br />&nbsp; &nbsp; &nbsp; &nbsp;  .align&nbsp; 4<br /> set_restart1:<br />&nbsp; &nbsp; &nbsp; &nbsp;  push&nbsp; &nbsp; restart1<br />&nbsp; &nbsp; &nbsp; &nbsp;  jmp&nbsp; &nbsp;  RETADR-P_STACKBASE(eax) <br /><br /><br /></code></pre></div>
+    <div class="meta">Posted on 2008-09-07 13:11:35 by faris05</div>
+   </div>
+   <div class="post" id="post-205884">
+    <div class="subject"><a href="#post-205884">Re: inline assembly</a></div>
+    <div class="body">I believe what <strong>secmask</strong> tried to say is that you want to make the <em>save</em> routine a macro as well - assemblers generally don&#039;t do automatic inlining of functions, that&#039;s a HLL compiler&#039;s job.</div>
+    <div class="meta">Posted on 2008-09-07 16:44:51 by f0dder</div>
+   </div>
+   <div class="post" id="post-205886">
+    <div class="subject"><a href="#post-205886">Re: inline assembly</a></div>
+    <div class="body">Thats the Rule, not the Exception - OA32 supports inline methods - and yes, they are.<br /></div>
+    <div class="meta">Posted on 2008-09-08 11:41:17 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

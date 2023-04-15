@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>why this bmp as a background is not working ?? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11915" />
+  <link rel="prev" href="../?id=11915&amp;page=2" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=11915">why this bmp as a background is not working ??</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=11915&amp;page=1" style="">&laquo;</a><a href="../?id=11915&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="11915" /><input type="number" name="page" min="1" max="3" step="1" value="3" onchange="this.form.submit();" /></form>   <div class="post" id="post-119897">
+    <div class="subject"><a href="#post-119897">why this bmp as a background is not working ??</a></div>
+    <div class="body">Hi,<br />     There are a few more tweaks you need. Have a look at the following code:<br /><br />invoke BeginPaint, hDlg, ps<br />mov hdc, eax<br />invoke CreateCompatibleDC, hdc<br />mov hMemDC, eax<br />invoke SelectObject, hMemDC, hBitMap<br />mov hOldBitmap, eax                                ; &lt;-------<br />invoke GetClientRect, hDlg, rect<br />invoke BitBlt, hdc, 0, 0, rect.right, rect.bottom, hMemDC, 0, 0, SRCCOPY<br />invoke SelectObject, hMemDC, hOldBitMap  ; &lt;----- Resource leak otherwise<br />invoke DeleteDC, hMemDC<br />                <br />; Text Colors  <br />invoke SelectObject, hdc, hFont;<br />mov hOldFont, eax<br />invoke SetTextColor, hdc, 0DFBAA2h<br />mov rgbPrevText, eax<br />invoke SetBkMode, hdc, TRANSPARENT<br />mov rect.top, ........ ; top coordinate for area you want text drawn to<br />mov rect.right, ........ ; right coordinate for area you want text drawn to<br />mov rect.bottom, ........ ; bottom coordinate for area you want text drawn to<br />mov rect.left, ........ ; left coordinate for area you want text drawn to<br />invoke ExtTextOut, hdc, 10, 41, ETO_CLIPPED, addr rect, addr MsgSobre2, NumberOfCharactersInString, NULL<br />invoke SelectObject, hdc, hOldFont ; &lt;------ Select the Old Font back in<br />invoke SetTextColor, hdc, rgbPrevText<br />invoke SetBkMode, hdc, OPAQUE<br />; invoke DeleteObject, hFont &lt;---- Commented out because you don't want<br />; to delete this here - you will need to use it again the next time<br />; your window is painted. Delete this when the window is destroyed<br /><br /><br />A couple of other things I would look at are contained in the following lines:<br /><br />invoke PostQuitMessage, NULL<br />mov eax, FALSE<br />       <br />invoke DefWindowProc, hWin, uMsg, wParam, lParam<br /><br />There is no need to call DefWindowProc in a dialog box procedure. These procedures generally just return TRUE if they process a message and FALSE otherwise. However WM_PAINT is one of the few exceptions to this. Unless you paint every part of your application (titlebar, the works) you should do whatever painting you need to do and then return FALSE so that windows does its thing.<br /><br />You also don't need to call PostQuitMessage for a dialog based application. EndDialog does everything you need.</div>
+    <div class="meta">Posted on 2003-09-28 18:30:37 by andrew_k</div>
+   </div>
+   <div class="post" id="post-119903">
+    <div class="subject"><a href="#post-119903">why this bmp as a background is not working ??</a></div>
+    <div class="body">HmmmI did the modifications, and still not working...The text continues to show on a single line.<br /><br />I adapted to fit on the area of the static control....(Not used, but needs to be on the same coordinates), but nothing....<br /><br /><div class="quote"><br /><br />                call 'GDI32.SetBkMode' D@hdc &amp;TRANSPARENT<br /><br />                ; Area of the static box in the resource file xpos 10 ; ypos 31; width 163; height 173<br />                <br />                mov rect.top 0 ; top coordinate for area you want text drawn to<br />                mov rect.right 300 ; right coordinate for area you want text drawn to<br />                mov rect.bottom 213 ; bottom coordinate for area you want text drawn to<br />                mov rect.left 0 ; left coordinate for area you want text drawn to<br />                invoke ExtTextOut hdc 15 45 ETO_CLIPPED rect OurText OurTextLen NULL<br /></div><br /><br />Best Regards,<br /><br />Guga</div>
+    <div class="meta">Posted on 2003-09-28 20:25:01 by Beyond2000!</div>
+   </div>
+   <div class="post" id="post-119904">
+    <div class="subject"><a href="#post-119904">why this bmp as a background is not working ??</a></div>
+    <div class="body">Hi,<br /><br />You can try this, does word wrap or CRLF.<br /><pre><code>.ELSEIF uMsg==WM_PAINT<br />	mov eax,hWin<br />	.IF eax == hDlg<br />		invoke BeginPaint,hDlg,addr ps<br />		mov    hdc,eax<br />		invoke CreateCompatibleDC,hdc<br />		mov    hMemDC,eax<br />		invoke SelectObject,hMemDC,hBitMap<br />		mov OldObject,eax<br />		invoke GetClientRect,hDlg,addr rect<br /><br />		invoke SetBkMode,hMemDC,TRANSPARENT<br />		invoke SetTextColor,hMemDC,0<br />		invoke GetObject,hBitMap,SIZEOF BITMAP,ADDR bmp<br />		mov rect.left,0<br />		mov rect.top,0<br />		mov eax,bmp.bmWidth<br />		mov rect.right,eax<br />		mov eax,bmp.bmHeight<br />		mov rect.bottom,eax<br />		invoke DrawText,hMemDC,OFFSET Text,-1,ADDR rect,DT_NOCLIP or DT_LEFT or DT_WORDBREAK<br />		<br />		invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY<br />		invoke SelectObject,hMemDC,OldObject<br />		invoke DeleteDC,hMemDC<br />		invoke EndPaint,hDlg,addr ps<br />	.ENDIF</code></pre></div>
+    <div class="meta">Posted on 2003-09-28 20:28:41 by donkey</div>
+   </div>
+   <div class="post" id="post-119905">
+    <div class="subject"><a href="#post-119905">why this bmp as a background is not working ??</a></div>
+    <div class="body">Here's a demo program for it. The test program will measure the bitmap and confine the text to the bitmap automatically. This is the preferable way to do this as you have no constant data to pass to the procedure it allows you to have variable size drawing areas handled automatically.<br /><br />Hi Guga,<br /><br />This one is a little better, it doesn't need alot of the extra painting...</div>
+    <div class="meta">Posted on 2003-09-28 20:46:34 by donkey</div>
+   </div>
+   <div class="post" id="post-119915">
+    <div class="subject"><a href="#post-119915">why this bmp as a background is not working ??</a></div>
+    <div class="body">Hi Donkey<br /><br />Great, this is exactly what i'm testing...<br /><br /><br />I'm testing your  above routine, and the new you posted.</div>
+    <div class="meta">Posted on 2003-09-29 00:21:46 by Beyond2000!</div>
+   </div>
+   <div class="post" id="post-120014">
+    <div class="subject"><a href="#post-120014">why this bmp as a background is not working ??</a></div>
+    <div class="body"><div class="quote"><br />Hi QvasiModo,<br />Do you mean something other than using:<br />Invoke SetBkMode, hDC, TRANSPARENT<br />with ExtTextOut? </div><br />Yes, that's what I meant.<br />Anyway, I see since my last visit to the board the problem was solved. :)<br />BTW, donkey's test proggy works just fine under Windows Millenium (4.90.3000).</div>
+    <div class="meta">Posted on 2003-09-29 17:15:50 by QvasiModo</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=11915&amp;page=1" style="">&laquo;</a><a href="../?id=11915&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="11915" /><input type="number" name="page" min="1" max="3" step="1" value="3" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

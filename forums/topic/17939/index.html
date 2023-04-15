@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>VirtualListView and many data to show - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17939" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17939">VirtualListView and many data to show</a></p>
+   <div class="post" id="post-138518">
+    <div class="subject"><a href="#post-138518">VirtualListView and many data to show</a></div>
+    <div class="body">I use a virtual list view to show data from a database.<br /><br />This is now the structure of the &quot;refresh&quot; procedure<br /><ul><br />[*]Empty listview<br />[*]Select data from the database<br />[*]Create an array of structures, to hold the data from the database<br />[*]Fill the array with the data from the database<br /><br />If the database is large ( &gt; 1000 rows) it takes some seconds to show the data.<br /><br />Since I have a virtual listview I can show the data as soon as I read them from the database.<br />But to do this I have to create a separate thread.<br /><br />I want to create a procedure like this<br /><ul><br />[*]Empty listview<br />[*]Select data from the database<br />[*]Create an array of structures, to hold the data from the database<br />[*]Create a thread that read data from the database and fill the array<br /><br />This structure seems ok but I have to syncronize the 2 thread.<br /><br />My idea is this:<br />I add a byte to each structure that holds data.<br />In the beginning this byte is zero. When the worker thread retrieve a row from the database, it writes this row in the structure and set the <br /><br />special byte to ONE.<br /><br />When the main thread get LVN_GETDISPINFO, it checks the special byte and enter in a loop until this byte is ONE<br /><pre><code>@@&#58;<br />invoke SwitchToThread<br />cmp special_byte, 1<br />jne @B</code></pre><br />But SwitchToThread exist only in NT/2k/Xp, and I need a program that works also under 9x/Me<br /><br />Any idea????</div>
+    <div class="meta">Posted on 2004-04-10 10:16:50 by greenant</div>
+   </div>
+   <div class="post" id="post-138531">
+    <div class="subject"><a href="#post-138531">VirtualListView and many data to show</a></div>
+    <div class="body">use events, sleep, and waitforsingleobject</div>
+    <div class="meta">Posted on 2004-04-10 12:36:48 by comrade</div>
+   </div>
+   <div class="post" id="post-138538">
+    <div class="subject"><a href="#post-138538">VirtualListView and many data to show</a></div>
+    <div class="body">Yes, I can use <strong>Sleep, 1</strong>, but I don't like it<br /><br />How can I use events?<br />I mean, how should I use events in my situation?</div>
+    <div class="meta">Posted on 2004-04-10 14:03:18 by greenant</div>
+   </div>
+   <div class="post" id="post-138543">
+    <div class="subject"><a href="#post-138543">VirtualListView and many data to show</a></div>
+    <div class="body">okay, I thought a bit about your problem, and I'm not sure I understand it entirely - but I assume you're reacting to the virtual callbacks and don't want the UI to block while waiting for 1000 results to be returned from the database, and that you can't cache results?<br /><br />Perhaps something like this, then... create an array to hold your data items, plus a dword to indicate how many items in the array are valid. Create a CRITICAL_SECTION object to protect access to this structure. Also, create an EVENT object to signal &quot;data is ready&quot;.<br /><br />When you're about to refresh the view, start the worker thread before sending the repaint to the listview. The worker thread wait for data from the database, and as soon as some is received, it enters the critical section, adds the items to the array, updates the ValidItems counter, and leaves the critical section. Then it signals the data-ready event, and waits for more data from the database.<br /><br />When your wndproc receives a listview virtual message:<br />LOOP:<br />Enter the critical section for the array. If the requested index lies within the valid range, it can be served. Leave critical section. If the requested item was NOT within the valid range, you'll have to WaitForSingleObject on the data-ready even, and JMP LOOP.<br /><br />Of course this is just one way of doing it, it might not work, it might not be what you want, and there might be better methods :) - but it was what I could come up with off the top of my head.</div>
+    <div class="meta">Posted on 2004-04-10 14:44:26 by f0dder</div>
+   </div>
+   <div class="post" id="post-138587">
+    <div class="subject"><a href="#post-138587">VirtualListView and many data to show</a></div>
+    <div class="body">I don't need the critical_section to protect the array.<br /><br />I have found the bottleneck, it isn't in the database fetch routine.<br />I don't need anymore this help.<br />Thanks</div>
+    <div class="meta">Posted on 2004-04-11 03:57:18 by greenant</div>
+   </div>
+   <div class="post" id="post-138595">
+    <div class="subject"><a href="#post-138595">VirtualListView and many data to show</a></div>
+    <div class="body"><div class="quote"><br />I don't need the critical_section to protect the array.<br /></div><br />If you are doing multithreaded programming with two threads accessing the array, you need either a CRITICAL_SECTION or another synchronization primitive. Don't even doubt it.<br /><br />But well, nice that you found the bottleneck - what was it?</div>
+    <div class="meta">Posted on 2004-04-11 06:47:47 by f0dder</div>
+   </div>
+   <div class="post" id="post-138596">
+    <div class="subject"><a href="#post-138596">VirtualListView and many data to show</a></div>
+    <div class="body">Repainting of listview I guess.</div>
+    <div class="meta">Posted on 2004-04-11 06:57:13 by roticv</div>
+   </div>
+   <div class="post" id="post-138623">
+    <div class="subject"><a href="#post-138623">VirtualListView and many data to show</a></div>
+    <div class="body">events for synchronization of threads, as opposed to &quot;special_byte&quot;<br />CreateEvent, SetEvent, ResetEvent<br /><br />Sleep(0) is actually used to switch threads, it is not a hack, so there is no reason for dislike</div>
+    <div class="meta">Posted on 2004-04-11 12:36:30 by comrade</div>
+   </div>
+   <div class="post" id="post-138669">
+    <div class="subject"><a href="#post-138669">VirtualListView and many data to show</a></div>
+    <div class="body">In my database I have 3 tables.<br />In the main table, 2 columns are 2 foreign key.<br />When I read from the database, I keep two representation of my data, one is numeric and the other is string.<br />Imagine 2 array, one that contains number (the ones read from the database) and the other is the &quot;printable&quot; rapresentation of the first array. When I get LVN_GETDISPINFO i read from the second array.<br /><br />This is the list of things I do when I read from the database<br />[*] Read database<br />[*] Populate first array (numeric)<br />[*] Convert first array (numeric) into second array (string)<br /><br />My two foreing key are ID (dword values) that I use as Primary Key into other two different tables to retrieve the associated string.<br />So I use &quot;SELECT name FROM name_table WHERE ID = ?&quot;<br />And I should execute this query twice (one time for each foreing key) for every row. If I have 1000 rows I waste so much time.<br />So I cached the query response. <br />Sice name_table has only a few rows (about ten), I have created a cache.<br />When I have to translate ID into a name, first I look into the cache. If I find it I read the name from tha cache, but if I have a cache miss, I execute the SQL query on the database and then I insert the value into the cache.<br />Now I have no delay.<br /><br />-------<br /><br />I can't replace &quot;special bytes&quot; with Events or Critical Sections, because I need a special byte for each row.<br />If I had 1000 rows, I should create 1000 critical sections or 1000 events, and this is a waste of CPU time, memory and handles<br /><br />-------<br /><br />If I use special byte I don't need critial sections to syncronize two threads, because one thread (the worker thread) has a WRITE-ONLY access to this special byte, while the other thread (the one that reply to LVN_GETDISPINFO) has a READ-ONLY access.<br />I don't have race conditions.<br /><br />In the beginning the special byte is zero.<br />The GETDISPINFO thread enter a loop and wait for the byte becoming one.<br />The worker thread have exclusive access to the piece of array to update, because the GETDISPINFO is locked.<br />Then is read from the database, insert data into the array, and then, at the end of the update, when it doesn't need anymore exclusive access to that piece of the array, it set the special byte.<br /><br />Doing so, GETDISPINFO thread &quot;wakes up&quot; and read the data from that row.<br /><br />I cannot have race conditions</div>
+    <div class="meta">Posted on 2004-04-12 03:02:47 by greenant</div>
+   </div>
+  </div>
+ </body>
+</html>

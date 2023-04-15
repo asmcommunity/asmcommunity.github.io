@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Converting UTF-8 -&gt; ASCII  and back ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25203" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25203">Converting UTF-8 -&gt; ASCII  and back ?</a></p>
+   <div class="post" id="post-184475">
+    <div class="subject"><a href="#post-184475">Converting UTF-8 -&gt; ASCII  and back ?</a></div>
+    <div class="body">hello everybody here! i found this nice forum and read some posts of this great comunity - sadly my first posting here starts with a question&nbsp; :lol:<br /><br />As the topic say it, i am looking for two routines to convert UFT-8 to ASCII and converting it from ASCII to UTF-8 back. I know this can be done with the Win32 API calls MultiByteToWideChar() and WideCharToMultiByte() ! So far so good&nbsp; ;)<br /><br />Is there any faster way to do it? Thanks in advance.</div>
+    <div class="meta">Posted on 2006-08-14 18:06:14 by Ralf</div>
+   </div>
+   <div class="post" id="post-184480">
+    <div class="subject"><a href="#post-184480">Re: Converting UTF-8 -&gt; ASCII  and back ?</a></div>
+    <div class="body">Essentially, you can simply ignore any value over 0x7F (or 0xFF if you want full 8-bit ASCII), though actual implementation is a little more complex.<br /><br />If the string/text only has ASCII-based characters (i.e. Latin letters/numbers), no conversion will be needed. However, if you want to support extended Latin characters (0x80 - 0xFF), it involves a little more checking.<br /><br />Check out the some <a target="_blank" href="http://en.wikipedia.org/wiki/UTF-8"><u>Wiki Info</u></a> on the subject, the tables there are pretty good.<br /><br />Here is a quick-n-dirty (i.e. unoptimized for code clarity) example of converting UTF-8 to ASCII. This code pertains to 7-bit ASCII (0x00 - 0x7F), converting 8-bit ASCII would involve a little more code.<br /><br /><pre><code><br />;Note: NASM Syntax<br /><br />;* UTF-8 to ASCII *<br />Conversion:<br />&nbsp; mov esi,UTF_String&nbsp;  ;Pointer to UTF-8 String (Source)<br />&nbsp; mov edi,ASCII_String ;Pointer to ASCII String (Destination)<br /><br />.convert:<br />&nbsp; mov al,BYTE ;Retreive UTF-8 Byte<br />&nbsp; inc esi&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Increment the UTF-8 String Pointer by one byte<br />&nbsp; cmp al,0x80&nbsp; &nbsp; &nbsp; ;Is the Byte within 7-Bit ASCII?<br />&nbsp; jl .ASCII&nbsp; &nbsp; &nbsp; &nbsp; ;If so, process byte as ASCII...<br /><br />&nbsp; ;... * Otherwise, skip this UTF-8 Sequence *<br />&nbsp; shr al,4&nbsp; &nbsp;  ;Get the High 4 bits of the UTF-8 Byte<br />&nbsp; and al,7&nbsp; &nbsp;  ;Ignore the highest bit (one is already accounted for by &quot;inc esi&quot; above)<br />.count:<br />&nbsp; cmp al,0&nbsp; &nbsp;  ;Have we processed this Sequence???<br />&nbsp; je .convert&nbsp; ;If so, continue processing UTF-8 String<br />&nbsp; shr al,1&nbsp; &nbsp;  ;Subtract 1 from UTF-8 Sequence Indication bits<br />&nbsp; inc esi&nbsp; &nbsp; &nbsp; ;Increment UTF-8 Pointer by one byte for Sequence bypassing<br />&nbsp; jmp .count&nbsp;  ;Continue processing Sequence bits...<br /><br />&nbsp; ;* Process ASCII Byte *<br />.ASCII:<br />&nbsp; mov BYTE,al ;If not, store the byte to the ASCII String<br />&nbsp; inc edi&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Increment the ASCII String Pointer by one byte<br />&nbsp; cmp al,0x00&nbsp; &nbsp; &nbsp; ;Have we reached the null-terminator in the string?<br />&nbsp; je .end&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;If so, end conversion<br />&nbsp; jmp .convert&nbsp; &nbsp;  ;Continue Conversion...<br /><br />&nbsp; ;* End of Conversion *<br />.end:<br />&nbsp; ret ;Return from function<br /></code></pre><br /><br />If you have no need/goal for optimization, API calls will do.<br /><br />Hope this gives you some idea of what to do :)</div>
+    <div class="meta">Posted on 2006-08-14 21:41:57 by SpooK</div>
+   </div>
+   <div class="post" id="post-184481">
+    <div class="subject"><a href="#post-184481">Re: Converting UTF-8 -&gt; ASCII  and back ?</a></div>
+    <div class="body">@SpooK:<br />Thanks for the very fast reply :) We will try to convert the source to work with FASM and maybe we are able to optimize it. Btw, the API stuff is to slow for us :) </div>
+    <div class="meta">Posted on 2006-08-14 23:05:20 by Ralf</div>
+   </div>
+   <div class="post" id="post-184593">
+    <div class="subject"><a href="#post-184593">Re: Converting UTF-8 -&gt; ASCII  and back ?</a></div>
+    <div class="body"><div class="quote"><br />I know this can be done with the Win32 API calls MultiByteToWideChar() and WideCharToMultiByte() !</div><br />You could convert from UTF-8 to UTF-16 or vice versa by shifting and ORing bits. See the table in the Wikipedia article mentioned by SpooK or <a target="_blank" href="http://ftp://www.unicode.org/Public/PROGRAMS/CVTUTF/ConvertUTF.c">the ready C function</a> at the official Unicode site; <a target="_blank" href="http://www.unicode.org/unicode/faq/utf_bom.html">UTF and BOM FAQ</a> is also worth reading.<br /><br />After that, you could use MultiByteToWideChar with CP_ACP for converting UTF-16 to ASCII. For reverse convertion (ASCII to UTF-8), call WideCharToMultiByte first, then convert UTF-16 to UTF-8 with your own function.<br /><br /><strong>SpooK</strong>&#39;s code will work only for English language, so it&#39;s fast but incorrect, because <a target="_blank" href="http://www.internetworldstats.com/stats7.htm">English is not the only language in the world</a>.</div>
+    <div class="meta">Posted on 2006-08-19 22:56:38 by Peter</div>
+   </div>
+  </div>
+ </body>
+</html>

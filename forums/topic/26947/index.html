@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>This is driving me nuts - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26947" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26947">This is driving me nuts</a></p>
+   <div class="post" id="post-193756">
+    <div class="subject"><a href="#post-193756">This is driving me nuts</a></div>
+    <div class="body">This is a cut-down version of something bigger, just to demonstrate the problem.
+I spent ages just staring at it, debugging it, etc .... doesn't help much.
+So if anyone can see what the problem is, I'd be grateful.
+
+This code is compilable, so you can see how it goes wrong:
+(don't worry about the funny winmain or anything, it's all fine - see the *'s for the problem :))
+
+<pre><code>
+.386
+.model flat, stdcall
+option casemap:none
+include \Masm32\include\windows.inc
+include \Masm32\include\kernel32.inc
+includelib \Masm32\lib\kernel32.lib
+include \Masm32\include\user32.inc
+includelib \Masm32\lib\user32.lib
+
+WinMain proto
+
+.data
+EditClass       db "edit",0
+StaticClass     db "static",0
+NameLabel       db "Input :",0
+RegLabel        db "Output :",0
+AppName         db "Testme!",0
+hello           db "Hello",0
+
+
+.data?
+hInstance HINSTANCE ?
+hWnd HWND ?
+hInput HWND ?
+hOutput HWND ?
+
+.code
+start:
+        invoke GetModuleHandle, NULL
+        mov hInstance,eax
+        invoke WinMain
+        invoke ExitProcess, NULL
+
+        WinMain proc
+                LOCAL wc:WNDCLASS
+                LOCAL msg:MSG
+                mov wc.style, CS_HREDRAW or CS_VREDRAW
+                mov wc.lpfnWndProc, OFFSET WndProc
+                mov wc.cbClsExtra, NULL
+                mov wc.cbWndExtra, NULL
+                push hInstance
+                pop wc.hInstance
+                mov wc.hbrBackground, COLOR_BTNFACE+1
+                mov wc.lpszMenuName, NULL
+                mov wc.lpszClassName, OFFSET AppName
+                mov wc.lpszMenuName, NULL
+                invoke LoadIcon, NULL,IDI_APPLICATION
+                mov wc.hIcon, eax
+                invoke LoadCursor, NULL,IDC_ARROW
+                mov wc.hCursor,eax
+                invoke RegisterClass, addr wc
+                invoke CreateWindowEx, NULL,ADDR AppName,ADDR AppName,WS_SYSMENU,CW_USEDEFAULT,CW_USEDEFAULT,210,80,NULL,NULL,hInstance,NULL
+                mov hWnd, eax
+                push eax
+                invoke ShowWindow, eax,SW_SHOWNORMAL
+                pop eax
+                invoke UpdateWindow, eax
+                .WHILE TRUE
+                        invoke GetMessage, ADDR msg,NULL,0,0
+                        .BREAK .IF(!eax)
+                        invoke TranslateMessage, ADDR msg
+                        invoke DispatchMessage, ADDR msg
+                .ENDW
+                mov eax,msg.wParam
+                ret
+        WinMain endp
+
+        WndProc proc hwnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+                .IF (uMsg==WM_COMMAND)
+                    mov eax,wParam  ; ax  = identifier of edit control
+                    mov ecx,lParam  ; ecx = handle of edit control
+                    mov edx,eax
+                    shr edx,16      ; dx  = message
+                    .IF (dx==EN_CHANGE)                     
+                        invoke SetWindowText, hOutput,ADDR hello
+                         ;;**Stack is wrong after returning (usually about 80h pushes out!!!!)
+                         ;;**also, EIP=addr (invoke line)
+                         ;;** ... which causes a recursion and fills the stack
+                         ;;** .... causing a stack fault in KERNEL32.DLL
+                         ;;**NOTE: this doesn't occur with some other function - eg GetWindowText is fine!!!
+                    .ENDIF
+                .ELSEIF (uMsg==WM_CREATE)
+                    invoke CreateWindowEx, NULL,ADDR StaticClass,ADDR NameLabel,WS_VISIBLE or WS_CHILD or SS_SIMPLE,5,5,60,20,hwnd,0,hInstance,NULL
+                    invoke CreateWindowEx, NULL,ADDR StaticClass,ADDR RegLabel,WS_VISIBLE or WS_CHILD or SS_SIMPLE,5,30,60,20,hwnd,0,hInstance,NULL
+                    invoke CreateWindowEx, WS_EX_CLIENTEDGE,ADDR EditClass,NULL,WS_VISIBLE or WS_CHILD or ES_AUTOHSCROLL or ES_LEFT or ES_NOHIDESEL,65,5,130,20,hwnd,2,hInstance,NULL
+                    mov hInput,eax
+                    invoke SetFocus</div>
+    <div class="meta">Posted on 2001-02-19 07:58:00 by Tedd</div>
+   </div>
+   <div class="post" id="post-193757">
+    <div class="subject"><a href="#post-193757">This is driving me nuts</a></div>
+    <div class="body">Well, it ain't your code, it's your logic.
+
+You're trying to use EN_CHANGE to detect when the edit control is typed into, then set it's text to something.
+
+But setting the text to something generates...  EN_CHANGE !!!!
+
+Round and round we go, stuck in an infinate loop until the stack overflows.
+
+Try adding a button to say HELLO.</div>
+    <div class="meta">Posted on 2001-02-19 10:00:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-193758">
+    <div class="subject"><a href="#post-193758">This is driving me nuts</a></div>
+    <div class="body"><pre><code>
+.IF (uMsg==WM_COMMAND) 
+   mov eax,wParam  ; ax  = identifier of edit control 
+   mov ecx,lParam  ; ecx = handle of edit control 
+   mov edx,eax 
+   shr edx,16      ; dx  = message 
+   .IF (dx==EN_CHANGE)                      
+      invoke SetWindowText,hOutput,ADDR hello 
+   .ENDIF
+</code></pre>
+You are trapping all EN_CHANGE messages, when you invoke SetWindowText, you are generating another EN_CHANGE.
+You should change it to something like (corrected):
+<pre><code>
+.IF (dx==EN_CHANGE)
+   mov eax,lParam 
+   .IF eax == hInput
+      invoke SetWindowText,hOutput,ADDR hello
+   .ENDIF
+.ENDIF
+</code></pre>
+Sorry, I always forget you can't compare 2 variables !
+
+This message was edited by anon, on 2/19/2001 1:00:42 PM
+
+This message was edited by anon, on 2/19/2001 1:03:30 PM</div>
+    <div class="meta">Posted on 2001-02-19 10:04:00 by anon</div>
+   </div>
+   <div class="post" id="post-193759">
+    <div class="subject"><a href="#post-193759">This is driving me nuts</a></div>
+    <div class="body">yeah, thanks
+
+....can't beleive i overlooked that
+-- just forget one little thing and .... BOOM!
+
+(actually i did think about that..... obviously not enough :->)</div>
+    <div class="meta">Posted on 2001-02-19 10:20:00 by Tedd</div>
+   </div>
+   <div class="post" id="post-193760">
+    <div class="subject"><a href="#post-193760">This is driving me nuts</a></div>
+    <div class="body">To Ernie and anone:
+actually it's possible to use the same window in the case
+on EN_CHANGE handler.
+We need just set a trigger to 0 and xor it by 1 at
+the beginning of the EN_CHANGE handler
+then if it's 1 proceed with SetWindowText otherwise exit handler
+in "clear" coding :) it will be someting like
+.data
+changetrig dd 0
+.code
+.IF (dx==EN_CHANGE)                      
+ xor changetrig,1
+ .IF changetrig == TRUE
+ invoke SetWindowText, hOutput,ADDR hello 
+ .ENDIF
+.ELSEIF
+ ...
+better:
+.IF (dx==EN_CHANGE)
+ xor changetrig,1
+ .IF !ZERO
+ invoke SetWindowText, hOutput,ADDR hello
+ .ENDIF
+.ELSEIF
+...</div>
+    <div class="meta">Posted on 2001-02-19 18:57:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

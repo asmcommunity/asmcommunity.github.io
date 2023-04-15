@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>What Masm can and can't do? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2002" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2002">What Masm can and can't do?</a></p>
+   <div class="post" id="post-12844">
+    <div class="subject"><a href="#post-12844">What Masm can and can't do?</a></div>
+    <div class="body">I have this code which I think is from C.<br /><br /><pre><code><br />SetRect&#40;&amp;rc, 0, 0, rect-&gt;right-rect-&gt;left, rect-&gt;bottom-rect-&gt;top&#41;;<br />SetWindowOrgEx&#40;hdc, -rect-&gt;left, -rect-&gt;top, &amp;pt&#41;;<br /></code></pre><br /><br />How I can change this two lines that MASM will know what to do?<br /><br />I have the source in ASM, but to rewrite it from ASM dump,<br />seems to me a very primitive way. Please note as well<br />the minus sign in front of rect.<br /><br />Thanks for any help.<br /><br />forge</div>
+    <div class="meta">Posted on 2001-11-23 06:55:24 by forge</div>
+   </div>
+   <div class="post" id="post-12846">
+    <div class="subject"><a href="#post-12846">What Masm can and can't do?</a></div>
+    <div class="body"><pre><code> SetRect&#40;&amp;rc, 0, 0, rect-&gt;right-rect-&gt;left, rect-&gt;bottom-rect-&gt;top&#41;;<br />SetWindowOrgEx&#40;hdc, -rect-&gt;left, -rect-&gt;top, &amp;pt&#41;;<br /></code></pre><br /><br />-&gt; is the c operator for indirectly referencing structure/union members.<br />&amp; is the address of operator<br /><br />rect is a pointer to a structure ...four of the structure members are left ,right, top and bottom.  this line passes the width and height  of a rectangle by width=(rect-&gt;right-rect-&gt;left), height=(rect-&gt;bottom-rect-&gt;top). these values are contained in a structure of type RECT<br /><br />//the c declares for the variables would be something like:<br /> <pre><code><br />main&#40;&#41;<br />&#123;<br />struct RECT &#123;<br />            left;<br />            top;<br />            right;<br />            bottom;<br />            &#125;myrect;<br /><br />Struct RECT *rect<br /><br />rect=&amp;myrect;<br /><br />&#125;  <br /></code></pre><br /><br />From what i said above then<br /><br />rect-&gt;bottom ==myrect.bottom<br />rect-&gt;top==myrect.top<br />etc<br /><br />and -rect-&gt;left ==-(myrect.left)<br /><pre><code><br />&#91;U&#93;C                         masm equivalent&#91;/U&#93;<br />&amp;rc                       addr rc<br />rect-&gt;left                &#40;RECT ptr&#91;eax&#93;.left&#41;; if eax is a RECT pointer<br />-rect-&gt;left               mov ecx,&#40;RECT ptr&#91;eax&#93;&#41;.left<br />                          neg ecx<br />rect-&gt;bottom-rect-&gt;top    mov ecx,&#40;RECT ptr&#91;eax&#93;&#41;.bottom<br />                          mov edx,&#40;RECT ptr&#91;eax&#93;&#41;.top<br />                          sub ecx,edx<br /></code></pre><br /><br />i hope that helps<br />note that RECT is a structure defined in windows.inc<br />the Martial</div>
+    <div class="meta">Posted on 2001-11-23 08:08:43 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-12848">
+    <div class="subject"><a href="#post-12848">What Masm can and can't do?</a></div>
+    <div class="body">I think this'll do it (not in the normal MASM way), but I am assuming <strong>SetRect</strong> doesn't effect the contects of the <em>rect</em> variable.<br /><br /><pre><code><br />lea eax, pt  ; Can replace these two lines with OFFSET if<br />push eax     ; var is not on the stack &#40;local&#41;<br />             ; push OFFSET pt<br /><br />mov eax, rect<br />mov ecx, RECT ptr&#91;eax&#93;.top<br />neg ecx<br />mov edx, RECT ptr&#91;eax&#93;.left<br />neg edx<br /><br />push ecx<br />push edx<br />push hdc<br /><br />add ecx, RECT ptr&#91;eax&#93;.bottom<br />add edx, RECT ptr&#91;eax&#93;.right<br />push ecx<br />push edx<br />push 0<br />push 0<br />lea eax, rc  ; Can replace these two lines with OFFSET if<br />push eax     ; var is not on the stack &#40;local&#41;<br />             ; push OFFSET rc<br /><br />call SetRect<br />call SetWindowOrgEx<br /></code></pre><br /><br />Its kind of messy though, and much more difficult to follow than a more obvious way of doing it (but it avoids recalculation of &quot;-rect-&gt;left&quot; and &quot;-rect-&gt;top&quot; values).<br />To be honest its an optimisation at the expense of clarity where an optimisation is unnecessary!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-11-23 08:36:34 by Mirno</div>
+   </div>
+   <div class="post" id="post-12852">
+    <div class="subject"><a href="#post-12852">What Masm can and can't do?</a></div>
+    <div class="body">What about something like:<br /><br />............<br />.DATA?<br />rc      RECT &lt;&gt;<br />pt      POINT &lt;&gt;<br />............<br /><br />.CODE<br /><br />...........<br /><br />        ;//SetRect(&amp;rc, 0, 0, rect-&gt;right-rect-&gt;left, rect-&gt;bottom-rect-&gt;top);<br />        mov     .left,0<br />        mov     .top,0<br />        mov     eax,.right<br />        mov     edx,.left<br />        neg     edx<br />        add     eax,edx<br />        mov     .right,eax<br />        mov     eax,.bottom<br />        mov     ecx,.top<br />        neg     ecx<br />        add     eax,ecx<br />        mov     .bottom,eax<br />        ;//SetWindowOrgEx(hdc, -rect-&gt;left, -rect-&gt;top, &amp;pt)<br />        invoke  SetWindowOrgEx,,edx,ecx,ADDR pt<br /><br />........<br /><br /><br />Random</div>
+    <div class="meta">Posted on 2001-11-23 10:08:29 by random</div>
+   </div>
+   <div class="post" id="post-12903">
+    <div class="subject"><a href="#post-12903">What Masm can and can't do?</a></div>
+    <div class="body">Hi,<br />and thanks to MArtial_Code,Mirno and random.<br /><br />You definitely know what you are talking about, but<br />I think that my question was not so clear.<br />I asked: What Masm can and can't do?<br />Below is a complete picture.<br />The source is in C and below is the exact disassembly.<br />It will assemble without any problem, but the assembly code<br />is so primitive. I think that MASM-6.15 should be able to<br />do it a bit better.<br />The Compiler can do it in 4 lines and produce a not so bad code.<br />I just wonder how many lines one has to write for MASM ?<br />In here are 35 lines.<br />How could I change CALL into INVOKE.<br />Perhaps the only way is to use more registers and not<br />only eax and esi.<br />Does the compiler know only these registers?<br />-----------------------------------------------------------<br /><pre><code><br />// Draw the specified metafile<br /><br />static void DrawMetaFile&#40;HDC hdc, HENHMETAFILE hemf, RECT *rect&#41;<br />&#123;<br />    RECT rc;<br />    POINT pt;<br /><br /><br />    SetRect&#40;&amp;rc, 0, 0, rect-&gt;right-rect-&gt;left, rect-&gt;bottom-rect-&gt;top&#41;;<br />    SetWindowOrgEx&#40;hdc, -rect-&gt;left, -rect-&gt;top, &amp;pt&#41;;<br />    PlayEnhMetaFile&#40;hdc, hemf, &amp;rc&#41;;<br />    SetWindowOrgEx&#40;hdc, pt.x, pt.y, 0&#41;;<br />&#125;<br /></code></pre><br />-----------------------------------------------------------<br /><pre><code><br /> DrawMetaFile   proc hdc &#58;DWORD, hemf&#58;DWORD, rect&#58;DWORD<br /><br />LOCAL rc &#58;RECT<br />LOCAL pt &#58;POINT<br /><br />        push    esi<br /><br />        mov     esi, rect<br />        mov     eax, &#91;esi+0Ch&#93;  ; rect-&gt;bottom<br />        sub     eax, &#91;esi+4&#93;    ;-rect-&gt;top<br />        push    eax<br />        mov     eax, &#91;esi+8&#93;    ; rect-&gt;right<br />        sub     eax, &#91;esi&#93;      ;-rect-&gt;left<br />        push    eax<br />        push    0<br />        lea     eax,    rc      ; ADDR rc<br />        push    0<br />        push    eax<br />        call    SetRect         ; ADDR rc,xLeft, yTop, xRight, yBottom<br />        lea     eax,    pt<br />        push    eax             ; ADDR pt<br />        mov     eax, &#91;esi+4&#93;    ; rect-&gt;top<br />        neg     eax             ;-rect-&gt;top<br />        push    eax             ;-rect-&gt;top<br />        mov     eax, &#91;esi&#93;      ; rect-&gt;left<br />        mov     esi, dword ptr SetWindowOrgEx ; imp<br />        neg     eax<br />        push    eax             ;-rect-&gt;left<br />        push    hdc<br />        call    esi ;SetWindowOrgEx     , hdc, x-origin, y-origin, ADDR pt<br /><br />        lea     eax,    rc      ; ADDR rc<br />        push    eax<br />        push    hemf            ; handle to an enhanced metafile<br />        push    hdc<br />        call    PlayEnhMetaFile ; hdc, hemf, ADDR rc<br /><br />        push    0<br />        push        pt.y<br />        push        pt.x<br />        push    hdc<br />        call    esi ;SetWindowOrgEx     , hdc, x-origin, y-origin, null<br /><br />        pop esi<br /></code></pre><br /><br />Thanks again.</div>
+    <div class="meta">Posted on 2001-11-24 04:39:38 by forge</div>
+   </div>
+   <div class="post" id="post-12904">
+    <div class="subject"><a href="#post-12904">What Masm can and can't do?</a></div>
+    <div class="body">forge,<br /><br />It depends if you need to preserve the values in the RECT that is passed to the procedure. If you don't, you can bypass the &quot;SetRect&quot; function to save some code and use the passed structure directly.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2001-11-24 04:56:21 by hutch--</div>
+   </div>
+   <div class="post" id="post-12906">
+    <div class="subject"><a href="#post-12906">What Masm can and can't do?</a></div>
+    <div class="body">The last two can be changed to:<pre><code>invoke PlayEnhMetaFile,hdc,hemf,ADDR rc<br />invoke pr4 PTR esi,hdc,pt.x,pt.y,0 ;SetWindowOrgEx</code></pre>But the others are too mixed up - that's the bad thing about INVOKE.  :)  You are right - MASM certainly has it's limitations, but then so does the compiler - as you see above.  ;)</div>
+    <div class="meta">Posted on 2001-11-24 05:02:44 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-12907">
+    <div class="subject"><a href="#post-12907">What Masm can and can't do?</a></div>
+    <div class="body">Thanks hutch--<br /><br />I want to keep the code unchanged.<br />I just want to write it for Masm in most appropriate way.<br />For instance to write uses esi instead of push esi - pop esi.</div>
+    <div class="meta">Posted on 2001-11-24 05:09:58 by forge</div>
+   </div>
+   <div class="post" id="post-12962">
+    <div class="subject"><a href="#post-12962">What Masm can and can't do?</a></div>
+    <div class="body">Thanks bitRAKE I can't agree with you more.<br /><br /><br />IMO below is the shortest code MASM could understand and interpret.<br />It is 12 lines long as opposed to 4 lines in C.<br />Please correct me if I'm wrong as this is the best I can do.<br /><br /><pre><code><br />DrawMetaFile    PROTO &#58;DWORD,&#58;DWORD,&#58;DWORD  ;3 para  hdc hemf rect<br /><br />DrawMetaFile    proc uses esi hdc &#58;DWORD, hemf&#58;DWORD, rect&#58;DWORD<br /><br />LOCAL rc &#58;RECT<br />LOCAL pt &#58;POINT<br /><br />        mov     eax, rect.bottom<br />        sub     eax, rect.top<br /><br />        mov     ebx, rect.right<br />        sub     ebx, rect.left<br /><br />invoke SetRect,ADDR rc,0,0,ebx,eax<br /><br />        mov     eax, rect.top<br />        neg     eax             ; -rect-&gt;top<br /><br />        mov     ebx, rect.left<br />        neg     ebx<br /><br />invoke SetWindowOrgEx,hdc,ebx,eax,ADDR pt<br />invoke PlayEnhMetaFile,hdc,hemf,ADDR rc<br />invoke SetWindowOrgEx,hdc,pt.x,pt.y,0<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2001-11-25 02:42:50 by forge</div>
+   </div>
+  </div>
+ </body>
+</html>

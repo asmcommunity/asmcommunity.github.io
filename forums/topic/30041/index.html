@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Parallel Port - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30041" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=32">Electronics</a> &raquo; <a href="../?id=30041">Parallel Port</a></p>
+   <div class="post" id="post-212092">
+    <div class="subject"><a href="#post-212092">Parallel Port</a></div>
+    <div class="body"><br />Here&#039;s another side project of mine - a tool for viewing/editing the state of the parallel port pins.<br />Full source included - but you will need to download &quot;WinIO&quot;, and copy the binary files (DLL, SYS) into the same folder as the project executable. I didn&#039;t implement code for the 64bit version but the 64bit functions are there too.<br /><br />Does your parallel port support bidirectional mode (using data pins as inputs instead of outputs) ?<br />If so, does the data you place in D0-D7 survive a switch to bidirectional mode and back again?<br />Try my application and find out :)<br /><br />Note that this is a POLLED version.<br /><br />And now, some questions from me :)<br /><br /><br />#1 - I learned that I was able to find the current hardware address of the LPT1 port (usually 378h) can be found always at physical address 0408h ... Is there any way to determine for sure which IRQ is associated with the port?<br /><br />#2 - Usually the IRQ associated with parallel port is 7. No microsoft operating systems use this IRQ for anything that I am aware of, although I read a vague mention of it being assigned to other devices. Is it safe to hook int 7 with an ISR?<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3189" target="_blank">ParallelPort.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-06-17 06:02:09 by Homer</div>
+   </div>
+   <div class="post" id="post-212100">
+    <div class="subject"><a href="#post-212100">Re: Parallel Port</a></div>
+    <div class="body"><br />I found that (on this machine) in bidirectional mode, the data pins (D0-D7) all go HIGH.<br />This means that the interface circuit needs to be able to &quot;sink&quot; enough voltage to produce a zero - we get a one even when nothing is connected. So we need to &quot;pull down&quot; the voltage - thus the term &quot;pull-down resistor&quot;.<br /><br />If we found that the data pins produced a zero when not connected to anything, we would need to &quot;pull up&quot; the voltage to make a one... thus we would need a &quot;pull-up resistor&quot;.<br /><br />What is the difference between a pull-down resistor, a pull-up resistor, and a &#039;normal&#039; resistor - and why do we need a resistor at all?<br /></div>
+    <div class="meta">Posted on 2010-06-18 02:36:39 by Homer</div>
+   </div>
+   <div class="post" id="post-212101">
+    <div class="subject"><a href="#post-212101">Re: Parallel Port</a></div>
+    <div class="body"><div class="quote"><br />#2 - Usually the IRQ associated with parallel port is 7. No microsoft operating systems use this IRQ for anything that I am aware of, although I read a vague mention of it being assigned to other devices. Is it safe to hook int 7 with an ISR?</div><br /><br />Many moons ago, Creative assigned irq 7 to its SoundBlasters by default. They later changed this to irq 5.<br />So yes, there is empirical evidence of other hardware using irq 7.</div>
+    <div class="meta">Posted on 2010-06-18 08:31:23 by Scali</div>
+   </div>
+   <div class="post" id="post-212110">
+    <div class="subject"><a href="#post-212110">Re: Parallel Port</a></div>
+    <div class="body">As you say - many moons ago.<br />And this seems to be only the case for some machines which have NO parallel port (some few laptops).<br />Yes, Creative did advise people to manually configure IRQ7 for use with soundblaster, but they could have used any unused interrupt (I think irq 9 is deliberately left vacant for such a reason).<br /><br />Anyway - for parallel port work with custom interface hardware and software, I won&#039;t have other devices plugged in to the parallel port (no daisy chain), and I will know that if I ever have an IRQ conflict, its probably a &quot;misconfigured&quot; soundcard causing it.<br /><br />So I think I am &quot;pretty safe&quot; to go ahead and hook this interrupt via IDT hooking from a device driver.<br />In fact, I already found one example of a port access DLL which *does* provide such a functionality, allowing the user to write a userland callback function that the Driver will call in response to IRQ 7&#039;s falling edge.<br />Apparently it&#039;s been written as a filter that attaches to Microsoft&#039;s default PARPORT.SYS driver...<br />The author notes that we must tie the !ERROR pin to Earth, otherwise the default driver will cause chaos for about one minute by trying to &quot;ping&quot; a printer that does not exist - we&#039;ll tell it theres no printer, and it will shut up and leave us alone. So - we lose the use of the error line, but we gain the use of the interrupt line - definitely a good trade.<br />However I would suggest that it would be safer to do so via a 4k7 resistor, just incase the parallel port has no current protection on its inputs, as can be the case in some cheap ones.<br /><br />Warning that without having made said modification, this driver will bluescreen you.<br />http://www.scienceprog.com/xdrv-driver-for-lpt-with-interrupt-service-routine/<br /><br />Now - I don&#039;t think I really need this special driver if I write my own IDT hooking code - I already have a function that lets me read/write to anywhere in physical memory, and I know about using SIDT to gain the physical address of the IDT. But this driver already has the &quot;userland ISR&quot; function, I may just get lazy and use it as it stands.<br /><br />Many happy interruptions :)<br /></div>
+    <div class="meta">Posted on 2010-06-19 21:12:25 by Homer</div>
+   </div>
+   <div class="post" id="post-212112">
+    <div class="subject"><a href="#post-212112">Re: Parallel Port</a></div>
+    <div class="body"><div class="quote"><br />What is the difference between a pull-down resistor, a pull-up resistor, and a &#039;normal&#039; resistor - and why do we need a resistor at all?<br /></div><br />With common digital circuits, an input wire can have three states: high, low, and floating. Floating inputs can be at any voltage level, including any value between &quot;high&quot; and &quot;low&quot;. The pullup and pulldown resistors are normal resistors wired to eliminate floating inputs.<br /><br />Pullup and pulldown resistors have two uses.<br /><br />1) They force unconnected inputs to a known high/low state.<br />2) They allow specially designed outputs to be wired together, without logic gates, to feed a single input.</div>
+    <div class="meta">Posted on 2010-06-19 21:54:16 by tenkey</div>
+   </div>
+   <div class="post" id="post-212114">
+    <div class="subject"><a href="#post-212114">Re: Parallel Port</a></div>
+    <div class="body"><div class="quote"><br />As you say - many moons ago.<br />And this seems to be only the case for some machines which have NO parallel port (some few laptops).<br />Yes, Creative did advise people to manually configure IRQ7 for use with soundblaster, but they could have used any unused interrupt (I think irq 9 is deliberately left vacant for such a reason).</div><br /><br />No, it has nothing to do with laptops or machines with no parallel port. The early SoundBlasters were ISA cards. They had jumpers to set irq and things, but by default it was set to irq 7. Anyone who stuck such a card in their PC (99% of them having a parallel port), would use irq 7 by default. In fact, various games are even hardcoded to use only irq 7 on a SoundBlaster.</div>
+    <div class="meta">Posted on 2010-06-20 03:10:18 by Scali</div>
+   </div>
+   <div class="post" id="post-212117">
+    <div class="subject"><a href="#post-212117">Re: Parallel Port</a></div>
+    <div class="body">Fair enough.... still not sounding like a problem - at least not for me, there will be no games on that dedicated machine.<br />I&#039;ve been doing a bit of digging around - ok I lied - I&#039;ve spent the entire weekend SCOURING the internet, trawling through forums, just trying to find ONE example of a device driver which registers an ISR to the parport.sys driver &quot;the right way&quot; rather than using some hack. And I found just ONE example.. and the author mentions in the comments that it doesn&#039;t seem to actually DO anything on his test machine - disturbing. The example I found was a driver written for an application which used the parallel port to transfer data to and from CBM (commodore) devices, most recently edited it seems in 2006 (so not too old)... new enough anyway.<br /><br />Well, I now have sourcecode for writing such a driver, I&#039;ve read all the relevant docs over at MSDN, I will try it out.<br />And if it does not work, I&#039;ve already downloaded a copy of Ubuntu.<br />I will not spend another weekend hitting my head against the wall.<br /><br />But I do hope I can get it to work on Windows - I even took the time to learn how to register unlicensed drivers on Win7, and I don&#039;t use Win7.<br /><br />I have almost zero experience writing kernel mode drivers, so I expect to be asking for a little help at some stage.</div>
+    <div class="meta">Posted on 2010-06-21 01:35:53 by Homer</div>
+   </div>
+   <div class="post" id="post-212127">
+    <div class="subject"><a href="#post-212127">Re: Parallel Port</a></div>
+    <div class="body">Don&#039;t know if this helps, but IRQ 7 is notorious for issuing spurious interrupts.<br /><br />There are some theories and workarounds on <a target="_blank" href="http://www7.informatik.uni-erlangen.de/~ksjh/research/cluster/timesync/sprint.html">this page</a>.</div>
+    <div class="meta">Posted on 2010-06-21 13:01:46 by SpooK</div>
+   </div>
+   <div class="post" id="post-212129">
+    <div class="subject"><a href="#post-212129">Re: Parallel Port</a></div>
+    <div class="body"><br />That was a really interesting read - especially his &#039;probable causes&#039;.<br /><br />He mentions that the interrupt is firing, even though theres nothing connected to the parallel port. He notes that one possible cause is &quot;floating inputs&quot; - but fails to realize that they are floating BECAUSE they are not connected to anything :P<br />But then later he says that updating his kernel seems to have improved the issue.<br /><br />I have seen this problem before, where a friend had been shorting out parallel port input pins to earth, he damaged his PIO controller&#039;s outputs to his physical parallel port, some inputs were just dead, others would &#039;flutter&#039;.<br />But you should need the &quot;IRQ Enable&quot; pin active, and the &quot;ACK&quot; pin fluttering to cause interrupts.<br />The interrupt controller should ignore ACK unless IRQ Enable is enabled...<br /><br />Very interesting is the specifications of the 8259A PIC chip - are these still being used in modern motherboards?<br />It states that if an IRQ is not acknowledged by the cpu in an acceptable amount of time, the Master PIC will issue an IRQ7, which will be fed down through any cascaded Slave PICs... I assume this ends up being translated into something other than IRQ7, but it is a disturbing note. It could explain why an update of his linux kernel greatly reduced the problem... I would suspect the IO subsystem / port driver were taking too long.<br /><br />More disturbing is that eventually he opted to use Serial port (apparently just to generate the desired control interrupts).<br />It seems weird to me that the serial and parallel controllers would still be separate chips after all these years.<br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2010-06-22 00:06:45 by Homer</div>
+   </div>
+   <div class="post" id="post-212130">
+    <div class="subject"><a href="#post-212130">Re: Parallel Port</a></div>
+    <div class="body">Not sure. My guess is that the 8259A design was preserved, even within the Southbridge/LPC, though I would imagine it is generally disabled in favor of the APIC by most modern operating systems.<br /><br />Found that even Wikipedia has a <a target="_blank" href="http://en.wikipedia.org/wiki/Intel_8259#Spurious_Interrupts">section on 8259A and spurious interrupts</a>, interesting indeed.</div>
+    <div class="meta">Posted on 2010-06-22 00:33:37 by SpooK</div>
+   </div>
+   <div class="post" id="post-212135">
+    <div class="subject"><a href="#post-212135">Re: Parallel Port</a></div>
+    <div class="body">It&#039;s looking and sounding like a poor parallel port implementation to me.<br />The author does not state whether the port is card-based or native to the motherboard, nor specify make nor model.<br />I have found plenty of references to &quot;bad parallel port hardware implementations&quot; so we can&#039;t blame Intel.<br />Microsoft are actually in the clear this time,&nbsp; because this occurred on a Linux (2.4?) box.<br /><br />Anyway, I am going to go out on a limb and state that this is not likely to be the typical case.<br />I need to hold on to some hope!<br />There ARE commercial drivers which claim to be able to watch IRQ7, but I hear about people missing counts, and I wonder if (A) they used a IDT hack incorrectly on a multi-cpu system, or (B) They&#039;re just polling the ACK and IRQ Enable pins, and catching as many positives as they can, EMULATING interrupt handling.<br /><br />There seems to be very little evidence on the ground that anyone has done anything in this area in years.<br />Am I alone?<br /></div>
+    <div class="meta">Posted on 2010-06-22 04:09:32 by Homer</div>
+   </div>
+   <div class="post" id="post-212140">
+    <div class="subject"><a href="#post-212140">Re: Parallel Port</a></div>
+    <div class="body"><div class="quote"><br />There seems to be very little evidence on the ground that anyone has done anything in this area in years.<br />Am I alone?<br /></div><br /><br />Last time I dealt with this is on a 486, and I simply disabled IRQ 7 :lol:</div>
+    <div class="meta">Posted on 2010-06-22 11:44:36 by SpooK</div>
+   </div>
+   <div class="post" id="post-212141">
+    <div class="subject"><a href="#post-212141">Re: Parallel Port</a></div>
+    <div class="body">Well yea, the last few computers of mine don&#039;t have a parallel port at all.</div>
+    <div class="meta">Posted on 2010-06-22 13:00:14 by Scali</div>
+   </div>
+   <div class="post" id="post-212142">
+    <div class="subject"><a href="#post-212142">Re: Parallel Port</a></div>
+    <div class="body"><div class="quote"><br />Well yea, the last few computers of mine don&#039;t have a parallel port at all.<br /></div><br />Man, all I have is USB 2.0, USB 3.0, Firewire and E-SATA ^^ I remember having a PC with 1 serial port about 3 years ago. I can&#039;t recall how long it has been since the last time I had a PC with a parallel port ^^&#039;</div>
+    <div class="meta">Posted on 2010-06-22 16:43:44 by ti_mo_n</div>
+   </div>
+  </div>
+ </body>
+</html>

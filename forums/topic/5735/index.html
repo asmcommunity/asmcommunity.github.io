@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GDI coordinates - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5735" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5735">GDI coordinates</a></p>
+   <div class="post" id="post-40988">
+    <div class="subject"><a href="#post-40988">GDI coordinates</a></div>
+    <div class="body">Something I've always wondered about is the sometimes seemingly weird behaviour of the GDI drawing functions and other functions that deal with coordinates (RECT). Some examples:<br />- Rectangle(hdc, 10, 10, 12, 12):<br />this should draw a rectangle, where the upper left corner is at (10,10) and the lower right corner at (12,12). So there should be pixels at row 10,11,12 and column 10,11,12, thus having a rectangle of 3x3 pixels. However, when you call this function, the result is a 2x2 rectangle.<br />- MoveToEx(hdc, 0, 0, NULL) followed by LineTo(hdc, 4, 0). The same thing happens here. Although the X coordinates should be in the range of 0-4, only 4 pixels are drawn, not 5 (0,1,2,3,4 = 5 pixels).<br />- Calculating the width from a RECT structure is nearly always done by substracting the right point from the left point. This produces correct results: If I call GetWindowRect, calculate the width by substracting rect.right from rect.left, and then call MoveWindow with the result as width, the window size stays the same. But is rect.right - rect.left correct? Say the left coordinate is 4, and the right one 9. This would mean the window occupies the pixels at x coordinates 4,5,6,7,8 and 9, thus 6 pixels. However, right-left, 9-4, is 5, not 6.<br /><br />I'm probably missing something here but I couldn't find what so if anyone could help me out that would be great.<br /><br />One other thing:<br /><br />Is it okay to call SelectObject several times without restoring the previous object as long as you restore the original object (the object selected before your own code) at the end of the code?<br />In other words, is this okay:<br /><pre><code><br />invoke SelectObject, hDC, hBrush1<br />mov ebx, eax ;store old brush<br />; do something<br />invoke SelectObject, hDC, hBrush2<br />; do something<br />invoke SelectObject, hDC, hBrush3<br />; do something<br />invoke SelectObject, hDC, hBrush4<br />; do something<br />invoke SelectObject, hDC, hBrush5<br />; do something<br />invoke SelectObject, hDC, ebx ;restore old brush<br /></code></pre><br />Do I need to restore the old brush every time before I use my own brush or would one time at the end of the code suffice?<br /><br />Thanks,<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-01 17:56:40 by Thomas</div>
+   </div>
+   <div class="post" id="post-40990">
+    <div class="subject"><a href="#post-40990">GDI coordinates</a></div>
+    <div class="body">Thomas,<br /><br />The GDI functions have a reason for behaving the way they do. Well, two reasons actually. One is performance (albeit very small gain) and the second is for the programmer.<br /><br />Consider LineTo. Typically, you will call LineTo in a sequence. ex. MoveTo(0,0)/LineTo(4,0)/LineTo(10,10), etc.<br />The idea is that you draw the &quot;first&quot; point but leave out the last point cause it's just gonna be drawn in the next LineTo. In the above example, the point (4,0) isn't drawn first go cause it's drawn when you call LineTo(10,10).<br /><br />This saves drawing the pixel twice (big performance gain huh?). The same reasoning applies for rectangles. Consider if you're tiling a background or something. One call to Rectangle could be RectangleFunc(0,0,32,32) then the second one would be (32,0,64,32) which would draw a tile right next to it. If the func filled up to and including the 32 column, you'd have overlapping rectangles. And then you'd have to adjust your coords by 1 pixel.<br /><br />As for the width of rectangles, the calculations follow the same standard. For example, if you were to calculate the width of the client area as 6 (from your example) and then called a fillrect routine based on that (say, in WM_ERASEBKGND), you would be drawing pixels unnecessarily. Not a big deal for most DCs cause you're being clipped to the Client Rect anyways. But if you're using Window DCs it matters (for example, I do this to draw a custom toolbar in the non-client area using a window DC)<br /><br />As for GDI brushes (or objects in general), you should feel free to swap them at will. Just Select the original object back in when you're done. Or, if you change a lot of objects frequently, you can use SaveDC / RestoreDC.<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-06-01 18:20:24 by chorus</div>
+   </div>
+   <div class="post" id="post-41038">
+    <div class="subject"><a href="#post-41038">GDI coordinates</a></div>
+    <div class="body">Thanks <strong>chorus</strong>! That clearifies things. Is this behaviour documented somewhere?<br />Btw, I think mspaint suffers from the same thing, just draw a rectangle holding shift, until the statusbar says its 5x5 pixels. The result will be a 4x4 pixel rectangle :grin: (at least on my win2k machine).<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 03:03:21 by Thomas</div>
+   </div>
+   <div class="post" id="post-41105">
+    <div class="subject"><a href="#post-41105">GDI coordinates</a></div>
+    <div class="body">Hey Thomas,<br />  I checked into MSPaint, and you're right... it does report the wrong size. Looks like MS can't even follow their own API rules... quick poll: Is anybody surprised? :)<br /><br />  As for documentation, I checked my API guide, and although I didn't see a general &quot;this is how it goes for GUI&quot; I did find it documented in the individual functions:<br /><br /><div class="quote"><br />The LineTo function draws a line from the current position up to, but <strong>not including, the specified point.</strong><br /><br />and,<br /><br />The FillRect function fills a rectangle by using the specified brush. This function includes the left and top borders, but <strong>excludes the right and bottom borders of the rectangle. </strong><br /></div><br /><br />BTW, I'm not sure if this applies to Rectangle, which also draws a border that I think messes things up. I'm pretty sure Rectangle &quot;inflates&quot; the size of the rectangle by half the pen width because of how it draws the border. I'd have to check into that though.<br /><br />Later<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-06-02 12:11:20 by chorus</div>
+   </div>
+   <div class="post" id="post-41108">
+    <div class="subject"><a href="#post-41108">GDI coordinates</a></div>
+    <div class="body">Thanks, I don't know how I could miss that :)<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 12:29:40 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

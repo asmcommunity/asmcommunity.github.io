@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>how to get text of treeview item - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28271" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28271">how to get text of treeview item</a></p>
+   <div class="post" id="post-200249">
+    <div class="subject"><a href="#post-200249">how to get text of treeview item</a></div>
+    <div class="body">I've a problem to retrieve text of an item.
+When i expand or collapse an item, i want to get text string.
+here is my code :
+
+tvitem  TV_ITEM <?>
+...
+.if WM_NOTIFY
+mov edx,lParam
+    assume	edx:ptr NM_TREEVIEW
+    cmp		.hdr.code,TVN_ITEMEXPANDED
+    jnz		@fin
+    invoke	MessageBoxA, hwnd, .itemOld.pszText, 0, 0
+    assume	edx:nothing
+    ...
+
+but it doesn't work.
+i've tried with this :
+
+.if WM_NOTIFY
+mov edx,lParam
+    assume	edx:ptr NM_TREEVIEW
+    cmp		.hdr.code,TVN_ITEMEXPANDED
+    jnz		@fin
+mov tvitem.mask,TVIF_TEXT
+invoke SendMessageA, .itemOld.hItem, TVM_GETITEM, 0, addr tvitem
+invoke MessageBoxA, hwnd, tvitem.pszText, 0, 0
+...
+but when i compile i've this error :
+"missing operand after unary operator" related to mov tvitem.mask,TVIF_TEXT
+
+it drive me crazy...</div>
+    <div class="meta">Posted on 2001-06-03 17:57:00 by gael</div>
+   </div>
+   <div class="post" id="post-200250">
+    <div class="subject"><a href="#post-200250">how to get text of treeview item</a></div>
+    <div class="body">oups it is tvitem.imask and not tvitem.mask
+but this doesn't work anyway for getting string of an item...:/</div>
+    <div class="meta">Posted on 2001-06-03 18:07:00 by gael</div>
+   </div>
+   <div class="post" id="post-200251">
+    <div class="subject"><a href="#post-200251">how to get text of treeview item</a></div>
+    <div class="body">hmmm is that really the best method to use? why not send the TVM_GETITEM message?</div>
+    <div class="meta">Posted on 2001-06-03 18:12:00 by smurf</div>
+   </div>
+   <div class="post" id="post-200252">
+    <div class="subject"><a href="#post-200252">how to get text of treeview item</a></div>
+    <div class="body">hmm finally i've used another methode for my app.
+my aims is to make a treeview that display directory structure like in explorer.
+i post my code, maybe it could help someone but maybe you have already better code:eek: (if so please tell me:))
+Contrary than explorer, it build all in one time and take 12 secondes to build all directory on my pc (~2200 directories and 36000 files scanned)
+and it take 2.5Mo in my memory (i've 64Mo edo)
+
+code :
+<pre><code>
+.DATA
+wfd      WIN32_FIND_DATA <?>
+tvinsert TV_INSERTSTRUCT <?>
+...
+.CODE
+
+InitTreeViewItem proc path:DWORD, parent:DWORD
+		LOCAL	hFindFile_:DWORD
+
+		  invoke	FindFirstFileA, path, addr wfd
+		  mov      hFindFile_,eax
+@nextfile	:
+		  invoke	FindNextFileA, hFindFile_, addr wfd
+		  cmp	   eax,0
+		  jz	    @fin
+		  cmp 	 wfd.dwFileAttributes,FILE_ATTRIBUTE_DIRECTORY
+		  jnz	   @nextfile
+		  cmp	   byte ptr , "."
+		  jz	   @nextfile
+
+	    push	   parent
+		  pop	   tvinsert.hParent
+		  cmp	   parent,0
+		  jnz	   @notroot
+		  mov	   tvinsert.hInsertAfter, TVI_ROOT
+		  mov	   tvinsert.item.iImage, 0
+		  mov	   tvinsert.item.iSelectedImage, 1
+@next		:
+		  mov	   tvinsert.item.imask, TVIF_TEXT+TVIF_IMAGE+TVIF_SELECTEDIMAGE
+		  mov	   tvinsert.item.pszText, offset wfd.cFileName
+		  invoke	SendMessageA, hTreeView, TVM_INSERTITEM, 0, addr tvinsert
+		  push	    eax
+
+		  invoke	GlobalAlloc, GPTR, 2048 ;2048 is totally arbitrary i think it's enough :)
+		  mov	   path_,eax
+		  invoke	lstrcpy, path_, path
+		  invoke	lstrlen, path_
+		  sub	   eax,2
+		  mov	   edi,path_
+		  add	   edi,eax
+		  mov	   byte ptr ,"\"
+		  inc	   edi
+		  mov	   byte ptr ,0
+		  invoke	lstrcat, path_, addr wfd.cFileName
+		  invoke	lstrcat, path_, addr StrAll ; in path_ we have "dir1\dir2\etc\*"
+
+		  pop	   eax
+		  invoke	InitTreeViewItem, path_, eax
+		  invoke	GlobalFree, path_
+		  jmp	   @nextfile
+@fin		:
+		  invoke	FindClose, hFindFile_
+		  ret
+@notroot	:
+		  mov	   tvinsert.hInsertAfter, TVI_LAST
+		  jmp	   @next
+InitTreeViewItem endp
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-03 20:06:00 by gael</div>
+   </div>
+   <div class="post" id="post-200253">
+    <div class="subject"><a href="#post-200253">how to get text of treeview item</a></div>
+    <div class="body">Im presently making a TreeView manager class.  Such that all theses problems are encapsulated into an object and only a basic interface is invoked to get complex results with your tree.  Im almost finished, if your interested in this alternative i can post it when its finished.
+
+Im undecided if i want to include a Linked List within the class to better manage tree information (since it occationally asks for "GetDispInfo".  Anythoughts?
+
+If you have no idea what im talking about, download my classes tool and tutorial on how it is used to build a linked list. Its on my web-page (click the HOUSE icon above).
+
+NaN
+
+This message was edited by NaN, on 6/3/2001 10:55:21 PM</div>
+    <div class="meta">Posted on 2001-06-03 21:02:00 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

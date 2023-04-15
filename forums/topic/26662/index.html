@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>To the Svin (about speed testing) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26662" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26662">To the Svin (about speed testing)</a></p>
+   <div class="post" id="post-192493">
+    <div class="subject"><a href="#post-192493">To the Svin (about speed testing)</a></div>
+    <div class="body">To reduce interferences of other programs you can use this trick to freeze ALL threads(except yours), do your job and unfreeze them all. It works in win98 and 95, haven't tried nt and 2000.
+
+
+
+
+;#########################################################################
+
+      .386
+      .model flat, stdcall  ; 32 bit memory model
+      option casemap :none  ; case sensitive
+
+include \MASM32\INCLUDE\windows.inc
+include \MASM32\INCLUDE\kernel32.inc
+includelib \MASM32\LIB\kernel32.lib
+
+
+; ------ STRUCTS ------
+sSEH STRUCT
+	OrgEsp            DD ?
+	OrgEbp            DD ?
+	SaveEip           DD ?
+sSEH ENDS
+
+
+.data
+
+; ------ EQU'S ------
+MIN_KERNEL_SEARCH_BASE    EQU 070000000h
+
+SEH                       sSEH <0>
+dwKernelBase              DD 0
+
+
+VxDCall 			  dd 0
+
+.CODE
+main:
+	ASSUME FS : NOTHING
+	
+
+; this piece of code is cut&pasted from Y0da example..we need to use his proc to
+; get VxdCall address, because GetProcAddress(hkernel, 1) won't work...seems that bill doesn't want us
+; to reach these nice function exported by ordinal only. :)
+
+	;---- GET ImageBase of kernel32.dll ----	
+	PUSH 
+	CALL GetKernelBase		
+	OR   EAX, EAX
+	JZ   QUIT
+	MOV  dwKernelBase, EAX
+	
+	
+
+
+push 1		; VxDcall ordinal is 1
+push dwKernelBase
+call GetProcAddr  ; get VxdCall ( first kernel exported function) address
+
+mov VxDCall, eax
+
+
+push 02A003ah ; freeze all threads
+call VxDCall
+
+
+; put your routine here
+
+
+push 02A003bh
+call VxDCall	; unfreeze all threads
+
+
+QUIT:
+
+invoke ExitProcess, 0
+
+RET
+
+
+
+
+									
+
+; ------ ROUTINES ------
+; returns NULL in the case of an error
+GetKernelBase PROC USES EDI ESI, dwTopStack : DWORD
+	; install SEH frame
+	PUSH OFFSET SehHandler
+	PUSH FS:[0]
+	MOV  SEH.OrgEsp, ESP
+	MOV  SEH.OrgEbp, EBP
+	MOV  SEH.SaveEip, OFFSET ExceptCont
+	MOV  FS:[0], ESP
+	
+	; start the search
+	MOV  EDI, dwTopStack
+	AND  EDI, 0FFFF0000h		; wipe the LOWORD !
+	.WHILE TRUE
+	   .IF WORD PTR  == IMAGE_DOS_SIGNATURE
+	      MOV  ESI, EDI
+	      ADD  ESI, 
+	      .IF  DWORD PTR  == IMAGE_NT_SIGNATURE
+	         .BREAK
+	      .ENDIF
+	   .ENDIF
+           ExceptCont:
+	   SUB  EDI, 010000h
+	   .IF EDI < MIN_KERNEL_SEARCH_BASE
+	      MOV  EDI, 0BFF70000h
+	      .BREAK
+	   .ENDIF
+	.ENDW
+	XCHG EAX, EDI	
+	
+	; shutdown SEH frame
+	POP  FS:[0]
+	ADD  ESP, 4
+	RET
+GetKernelBase ENDP
+
+
+
+;this is a slighty modiefied version of Y0da's proc. We have to pass
+; the ordinal instead of the name of the function
+
+; returns address or NULL in the case of an error
+GetProcAddr PROC USES ESI EDI ECX EBX EDX, dwDllBase : DWORD, dwApiOrdinal : dword
+	; install SEH frame
+	PUSH OFFSET SehHandler
+	PUSH FS:[0]
+	MOV  SEH.OrgEsp, ESP
+	MOV  SEH.OrgEbp, EBP
+	MOV  SEH.SaveEip, OFFSET @@BadExit
+	MOV  FS:[0], ESP
+	
+	; check PE Signarue
+	MOV  ESI, dwDllBase
+	CMP  WORD PTR , IMAGE_DOS_SIGNATURE
+	JNZ @@BadExit
+	ADD  ESI, 
+	CMP  DWORD PTR , IMAGE_NT_SIGNATURE
+	JNZ @@BadExit
+	
+									; ECX -> Api string length
+	
+	; trace the export table
+	MOV  EDX, 						; EDX -> Export table
+	ADD  EDX, dwDllBase
+	ASSUME EDX : PTR IMAGE_EXPORT_DIRECTORY
+
+
+			
+mov ecx, dwApiOrdinal
+
+
+; ECX -> Api Ordinal
+	
+	; get the address of the api
+	MOV  EDI, .AddressOfFunctions
+	XOR  EDX, EDX
+	MOV  EBX, 4
+	MOV  EAX, ECX
+	MUL  EBX
+	ADD  EAX, dwDllBase
+	ADD  EAX, EDI
+	MOV  EAX, 
+	ADD  EAX, dwDllBase
+	JMP  @@ExitProc
+	
+	ASSUME EDX : NOTHING	
+		
+   @@BadExit:
+   	XOR  EAX, EAX   
+   @@ExitProc:
+	; shutdown SEH frame
+	POP  FS:[0]
+	ADD  ESP, 4
+	RET
+GetProcAddr ENDP
+
+SehHandler PROC C pExcept:DWORD,pFrame:DWORD,pContext:DWORD,pDispatch:DWORD
+	MOV  EAX, pContext
+	ASSUME EAX : PTR CONTEXT
+	PUSH SEH.SaveEip
+	POP  .regEip
+	PUSH SEH.OrgEsp
+	POP  .regEsp
+	PUSH SEH.OrgEbp
+	POP  .regEbp
+	MOV  EAX, ExceptionContinueExecution
+	RET
+SehHandler ENDP
+
+end main</div>
+    <div class="meta">Posted on 2001-01-22 15:32:00 by Yramr0g</div>
+   </div>
+   <div class="post" id="post-192494">
+    <div class="subject"><a href="#post-192494">To the Svin (about speed testing)</a></div>
+    <div class="body">Yramr0g,
+
+Cool, how did you get all that whitespace to stay in your post code?  
+
+Mine always dissapears making an unreadable mess.</div>
+    <div class="meta">Posted on 2001-01-22 17:00:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192495">
+    <div class="subject"><a href="#post-192495">To the Svin (about speed testing)</a></div>
+    <div class="body">just for the record it won't work on NT/2000 since VXD's don't exist and neither does that API as far as i know atleast anyway if it exists it doesn't work...</div>
+    <div class="meta">Posted on 2001-01-22 18:39:00 by NervGaz </div>
+   </div>
+   <div class="post" id="post-192496">
+    <div class="subject"><a href="#post-192496">To the Svin (about speed testing)</a></div>
+    <div class="body">A much better and simple way to halt the system, (it takes one byte) is the 'cli' instruction... 
+
+All this does is clear the interupt flag, disabling all hardware interupts. (except NMI's & exceptions - if you dont know what a NMI is, dont worry about it).
+
+On my system this works, (M$Win98) but seen cli can be a privilegded instruction, it may not work on NT
+
+------dont forget that once you have clears the int flag, dont forget to set it using a 'sti' -  Set Interrupt Flag</div>
+    <div class="meta">Posted on 2001-01-23 04:41:00 by wEeD </div>
+   </div>
+   <div class="post" id="post-192497">
+    <div class="subject"><a href="#post-192497">To the Svin (about speed testing)</a></div>
+    <div class="body">you could check this out... don't know if it's anything ....
+http://www.df.lth.se/~john_e/gems/gem0029.html</div>
+    <div class="meta">Posted on 2001-01-23 06:58:00 by NervGaz </div>
+   </div>
+  </div>
+ </body>
+</html>

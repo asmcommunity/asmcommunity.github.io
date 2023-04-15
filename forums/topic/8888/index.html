@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>fastest way to invert an MMx register - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8888" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8888">fastest way to invert an MMx register</a></p>
+   <div class="post" id="post-65352">
+    <div class="subject"><a href="#post-65352">fastest way to invert an MMx register</a></div>
+    <div class="body">hi there, the problem is the following: i need to invert a whole MMx register to get the inverted mask. the only way i saw to achieve this is by PXORing it with 1111...1111 (64x).<br />take for example the following routine that takes mm0 and mm2 and returns the greater words of both in mm0 (assumes mm4=1111...1111):<br /><br /><strong>FindMM0MM2max:</strong><br />&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;<strong>movq</strong> mm3,mm0&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;;mm3 = copy of mm0 (mm3 becomes mask)<br />&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;<strong>pcmpgtw</strong> mm3,mm2&amp;nbsp;;mm3 has 1111... where mm0 &gt; mm2<br />&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;<strong>pand</strong> mm0,mm3&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;;keep greater values of mm0, rest zero<br />&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;<strong>pxor</strong> mm3,mm4&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;;mm3 has 1111... where mm2 &gt; mm0<br />&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;<strong>pand</strong> mm2,mm3&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;;keep greater values of mm2, rest zero<br />&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;<strong>por</strong> mm0,mm2&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;;now or them together to get greater values of both.<br /><strong>RET</strong><br /><br />my approach to fill up mm4 with all &quot;1&quot;s is:<br /><br /><strong>mov</strong> eax,0ffffffffh<br /><strong>movd</strong> mm4,eax<br /><strong>movq</strong> mm5,mm4<br /><strong>psllq</strong> mm5,32<br /><strong>por</strong> mm4,mm5<br /><br />...<br />is there a faster way to invert a whole MMx register?<br />is there another way than xoring with all &quot;1&quot;s?<br />is there a faster way to fill a whole MMx register with all &quot;1&quot;s?</div>
+    <div class="meta">Posted on 2002-11-11 05:38:25 by BugByter</div>
+   </div>
+   <div class="post" id="post-65356">
+    <div class="subject"><a href="#post-65356">fastest way to invert an MMx register</a></div>
+    <div class="body">.data<br />qwerty dq -1<br /><br />.code<br />movq mm4, qwerty<br /><br /><br />Would this work? (i'm still a newbie, still learning)</div>
+    <div class="meta">Posted on 2002-11-11 05:52:09 by Delight</div>
+   </div>
+   <div class="post" id="post-65357">
+    <div class="subject"><a href="#post-65357">fastest way to invert an MMx register</a></div>
+    <div class="body">maybe it would but not for my problem as i'm writing inline assembler :/<br />thanks anyway, have a nice day,</div>
+    <div class="meta">Posted on 2002-11-11 06:06:12 by BugByter</div>
+   </div>
+   <div class="post" id="post-65384">
+    <div class="subject"><a href="#post-65384">fastest way to invert an MMx register</a></div>
+    <div class="body">This have to be fast enougth:<br /><pre><code>pcmpeqb mm1, mm1 ; mm1= -1<br />pxor mm0, mm1 ; invert mm0</code></pre></div>
+    <div class="meta">Posted on 2002-11-11 09:28:58 by masquer</div>
+   </div>
+   <div class="post" id="post-65389">
+    <div class="subject"><a href="#post-65389">fastest way to invert an MMx register</a></div>
+    <div class="body"><div class="quote"><br />This have to be fast enougth:<br /><pre><code>pcmpeqb mm1, mm1 ; mm1= -1<br />pxor mm0, mm1 ; invert mm0</code></pre></div>The fastest way is not to do it! :)<pre><code>FindMM0MM2max&#58;<br />    movq mm3,mm0    ;mm3 = copy of mm0 &#40;mm3 becomes mask&#41;<br />    pcmpgtw mm3,mm2 ;mm3 has 1111... where mm0 &gt; mm2<br />    pand mm0,mm3    ;keep greater values of mm0, rest zero<br />    pandn mm3,mm2    ;keep greater values of mm2, rest zero<br />    por mm0,mm3     ;now or them together to get greater values of both.<br />RET</code></pre>I prefer the general form:<pre><code>pmaxsw MACRO mreg1&#58;REQ, mreg2&#58;REQ, mregx&#58;REQ<br />      movq mregx, mreg1<br />      pcmpgtw mregx, mreg2<br />      pand mreg1, mregx<br />      pandn mregx, mreg2<br />      por mreg1, mregx<br />ENDM</code></pre></div>
+    <div class="meta">Posted on 2002-11-11 10:49:16 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-65402">
+    <div class="subject"><a href="#post-65402">fastest way to invert an MMx register</a></div>
+    <div class="body">wow, thank you both a lot!<br />what a nice 2-liner, masquer :) gotta remember this, really nice trick!<br /><br />bitrake: ahh i see ;) argl<br />thank you a lot, you're right, the fastest way is always not to do it ;) this solution is really obvious, duh<br /><br />must be coz i dont like pandn as it &quot;destroys&quot; the mask because it negates the DESTINATION register before anding - so so can only work with the inverse mask exactly one time - suxx :/<br />anyway, this is the best way :) thank you very much</div>
+    <div class="meta">Posted on 2002-11-11 13:22:40 by BugByter</div>
+   </div>
+   <div class="post" id="post-65403">
+    <div class="subject"><a href="#post-65403">fastest way to invert an MMx register</a></div>
+    <div class="body"><div class="quote"><br />This have to be fast enougth:<br /><pre><code>pcmpeqb mm1, mm1 ; mm1= -1<br />pxor mm0, mm1 ; invert mm0</code></pre> </div><br /><br />ah, i forgot to ask:<br />is there a list of how many cycles these mmx instructions take?<br />would pcmpeqD be faster than pcmpeqB?<br />in general: are those dealing with big chunks (quadword) faster then the ones operating on bytes?</div>
+    <div class="meta">Posted on 2002-11-11 13:29:09 by BugByter</div>
+   </div>
+   <div class="post" id="post-65408">
+    <div class="subject"><a href="#post-65408">fastest way to invert an MMx register</a></div>
+    <div class="body"><div class="quote"><br />is there a list of how many cycles these mmx instructions take?<br />would pcmpeqD be faster than pcmpeqB?<br />in general: are those dealing with big chunks (quadword) faster then the ones operating on bytes?</div>Generally speaking, the MMX instructions all take the same amount of time.  The execution speed is based on the number of MMX execution units within the processor: most processors can execute two instructions per cycle.  Athlons can sometimes execute three instructions per clock. Don't use MOVD if you can design the algo to use MOVQ.  Use pack/unpack rather than shifts as older pentiums have slower MMX shift. Test, test, test. :)<br /><br />I have forgot PANDN before, too.  I think Intel have included it just for the type of use above.</div>
+    <div class="meta">Posted on 2002-11-11 14:42:14 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-65884">
+    <div class="subject"><a href="#post-65884">PIII ROUTINES : MMX MAX</a></div>
+    <div class="body">Hi<br /><br />If you have PIII or more, try PMAXSW MM0,MM2 too. It makes FindMM0MM2Max.<br /><br />Bye</div>
+    <div class="meta">Posted on 2002-11-15 05:55:15 by valy</div>
+   </div>
+   <div class="post" id="post-65892">
+    <div class="subject"><a href="#post-65892">fastest way to invert an MMx register</a></div>
+    <div class="body">AMD Athlon and Duron also have PMAXSW instruction.</div>
+    <div class="meta">Posted on 2002-11-15 06:55:44 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-67407">
+    <div class="subject"><a href="#post-67407">fastest way to invert an MMx register</a></div>
+    <div class="body">ahh, i see... took me quite a time to find good info about pmaxsw but it actually works :) thanks a lot!</div>
+    <div class="meta">Posted on 2002-11-25 11:55:11 by BugByter</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Question on createdibsection - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17759" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17759">Question on createdibsection</a></p>
+   <div class="post" id="post-137091">
+    <div class="subject"><a href="#post-137091">Question on createdibsection</a></div>
+    <div class="body">I seem to be unable to create a dibsection using a handle from createfilemapping. My intent is to decompress a raw graphics file, directly draw a portion of it to a DC bitmap, and then display it. If I replace hMapBmap with 0, then it returns a handle but as I understand it, I would be unable to directly draw into the system allocated memory.<br /><br />Any suggestions would be greatly appreciated thanks.<br /><br />    invoke CreateFileMapping,\<br />        		0FFFFFFFFh,\<br />        		NULL,\<br />        		PAGE_READWRITE OR SEC_COMMIT,\<br />        		0,\<br />        		14400,\   <br />        		0<br />        		         <br />    mov     hMapBmap,eax <br />    .if eax==0<br />    	Invoke MessageBox, NULL,ADDR szCreateBitMapFileMap_Error, Offset szAppName,MB_OK<br />    .endif<br />	<br />    invoke CreateCompatibleDC,0<br />    mov	hBmapDC,eax<br /><br />    invoke CreateDIBSection,\<br />		hBmapDC,\<br />		OFFSET BMapInfo,\<br />		0,\<br />		OFFSET lplpBmpBits,\<br />		hMapBmap,\<br />		0<br /><br />    mov     hDIBSect,eax <br />    .if eax==0<br />    	Invoke GetLastError<br />    	Invoke MessageBox, NULL,ADDR szCreateDIBSect_Error, Offset szAppName,MB_OK<br />    .endif</div>
+    <div class="meta">Posted on 2004-03-26 20:38:32 by sceptor</div>
+   </div>
+   <div class="post" id="post-137131">
+    <div class="subject"><a href="#post-137131">Question on createdibsection</a></div>
+    <div class="body">No file mapping object is needed unless you have a reason to require one. You should be able to access the memory pointed to by lplpBmpBits. If the pointer is invalid, then something must have gone wrong.</div>
+    <div class="meta">Posted on 2004-03-27 06:33:47 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-137232">
+    <div class="subject"><a href="#post-137232">Question on createdibsection</a></div>
+    <div class="body">I have found that the return value from CreateDIBSection can be unreliable under some circumstances. At least TBPaint crashed alot before I stopped using the ppvBits value returned by it. You should get the pointer from GetObject, the file mapping is not necessary.<br /><br /><pre><code>LOCAL sbmp	&#58;DIBSECTION<br />LOCAL pDIBits	&#58;DWORD<br /><br />invoke GetObject, &#91;hBmp&#93;, SIZEOF DIBSECTION, ADDR sbmp<br />mov eax, &#91;sbmp.dsBm.bmBits&#93;<br />mov &#91;pDIBits&#93;, eax</code></pre></div>
+    <div class="meta">Posted on 2004-03-28 15:06:26 by donkey</div>
+   </div>
+   <div class="post" id="post-137233">
+    <div class="subject"><a href="#post-137233">Question on createdibsection</a></div>
+    <div class="body">Hmm, ppvBits unreliable? I haven't had problems with 32bpp as long as I filled out the bitmap info header stuff correctly - but ok, I've only messed with 32bpp dib sections, and only 2k and 98.</div>
+    <div class="meta">Posted on 2004-03-28 15:16:57 by f0dder</div>
+   </div>
+   <div class="post" id="post-137243">
+    <div class="subject"><a href="#post-137243">Question on createdibsection</a></div>
+    <div class="body"><div class="quote"><br />Hmm, ppvBits unreliable? I haven't had problems with 32bpp as long as I filled out the bitmap info header stuff correctly - but ok, I've only messed with 32bpp dib sections, and only 2k and 98. </div><br /><br />I can't remember the exact sequence of events that lead me to determine that my problems were with ppvBits, but I do know that there were circumstances where it crashed TBPaint and the value returned from GetObject was different than the one passed in ppvBits. I would have to dig out my notes to find out why I had to change the code but it definitely had to be changed for Get/SetPixelFast, FloodFillFast and LineToFast (direct to bitmap functions to replace the slow GDI ones). I especially remember this because I was a bit mad that I still had to make an API call in order to keep it from crashing. This is my DIB creation proc :<br /><br /><pre><code>CreateIndependantBitmap proc hDC&#58;DWORD,SizeX&#58;DWORD,SizeY&#58;DWORD,ppvBits&#58;DWORD<br />	LOCAL bmi	&#58;BITMAPINFO<br /><br />	mov bmi.bmiHeader.biSize,SIZEOF BITMAPINFOHEADER<br />	mov eax,SizeX<br />	mov bmi.bmiHeader.biWidth,eax<br />	mov eax,SizeY<br />	mov bmi.bmiHeader.biHeight,eax<br />	mov bmi.bmiHeader.biPlanes,1<br />	mov bmi.bmiHeader.biBitCount,32<br />	mov bmi.bmiHeader.biCompression,BI_RGB<br />	invoke CreateDIBSection,hDC,ADDR bmi,DIB_RGB_COLORS,ppvBits,NULL,NULL<br /><br />	push eax<br />	; Ensure synchonization of access<br />	invoke GdiFlush<br />	pop eax<br />	ret<br /><br />CreateIndependantBitmap endp</code></pre></div>
+    <div class="meta">Posted on 2004-03-28 16:27:30 by donkey</div>
+   </div>
+   <div class="post" id="post-137264">
+    <div class="subject"><a href="#post-137264">Question on createdibsection</a></div>
+    <div class="body">I would be happy if you would care to dig out your notes, I'm starting to dabble a bit with GDI now, and it would be nice to know if it's a 100% necessary thing to do this, or if there's some other fix that can be applied.</div>
+    <div class="meta">Posted on 2004-03-29 00:28:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-137267">
+    <div class="subject"><a href="#post-137267">Question on createdibsection</a></div>
+    <div class="body">I will look tomorrow after work.</div>
+    <div class="meta">Posted on 2004-03-29 00:36:40 by donkey</div>
+   </div>
+   <div class="post" id="post-137274">
+    <div class="subject"><a href="#post-137274">Question on createdibsection</a></div>
+    <div class="body">Thank you plenty, donkey :)</div>
+    <div class="meta">Posted on 2004-03-29 02:40:41 by f0dder</div>
+   </div>
+   <div class="post" id="post-137282">
+    <div class="subject"><a href="#post-137282">Question on createdibsection</a></div>
+    <div class="body"><strong>donkey</strong><br /><div class="quote">I will look tomorrow after work</div><br />I'll look forward too, because I'm using CreateDibSection for exactly your reasons and it works flawlessly on every system starting from Win95, ppvBits always have correct value 8-0</div>
+    <div class="meta">Posted on 2004-03-29 04:50:34 by masquer</div>
+   </div>
+   <div class="post" id="post-137299">
+    <div class="subject"><a href="#post-137299">Question on createdibsection</a></div>
+    <div class="body">Hi Guys,<br /><br />I looked through my notes and the problem for me was actually fairly benign. The value returned when I created the bitmap was fine but not necessarily the value that was there when I actually drew to the image. There was a possiblity that the image I was editing could be different from the main image, for example it could have been swapped out for any number of reasons. It could also be a temporary DDB bitmap as in the text paste function, where the bitmap is created solely to paste the text then destroyed. So I needed to get the actual image in the DC and then find the ppvBits from that. Sorry about that, my comments weren't clear and my memory was cloudy on it.</div>
+    <div class="meta">Posted on 2004-03-29 08:41:09 by donkey</div>
+   </div>
+   <div class="post" id="post-137300">
+    <div class="subject"><a href="#post-137300">Question on createdibsection</a></div>
+    <div class="body">No problem donkey, glad stuff is resolved and that it sounds like there's no worries wrt. using ppvBits :)</div>
+    <div class="meta">Posted on 2004-03-29 08:44:33 by f0dder</div>
+   </div>
+   <div class="post" id="post-137315">
+    <div class="subject"><a href="#post-137315">Question on createdibsection</a></div>
+    <div class="body">Oh, but you have to use GdiFlush after you call drawing functions. Otherwise the changes might not show up right away.</div>
+    <div class="meta">Posted on 2004-03-29 11:55:22 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-137632">
+    <div class="subject"><a href="#post-137632">Question on createdibsection</a></div>
+    <div class="body">Well, I never did get the mapped version of createdib working so I tossed the towell on it.<br /><br />The regular createdibsection works fine with one thing to note. When you fill out the bmapinfoheader structure, take note that the sign  of the height affects the bitmapbits pointer returned to you.<br /><br />If you use a negative height, the bitmapbits pointer is returned pointing to the beginning of the dibsection. If you use a positive height, the bitmapbits pointer is returned pointing to the end of the dibsection. After a few nervewrcking gpf's I realized I was moving my bitmap into unallocated memory because I had used a positive height. I assumed the bitmapbits pointer always pointed to the beginning of the section.<br /><br />So now once I get it tweaked in fully, I will port it to directx. The graphic file decompresses to 250Mbytes, and bitblt is a slow boat to china.</div>
+    <div class="meta">Posted on 2004-04-01 12:22:03 by sceptor</div>
+   </div>
+   <div class="post" id="post-137634">
+    <div class="subject"><a href="#post-137634">Question on createdibsection</a></div>
+    <div class="body">Hrm, &quot;points to the end&quot; with a non-negative height? I thought it was a bottom-up bitmap, but that the pointer returned was still to the start of the buffer?!<br /><br />250MB uncompressed? Christ, you shouldn't use regular bitmap structures or API calls for this, then :) - especially not if you want to run on 9x.</div>
+    <div class="meta">Posted on 2004-04-01 12:27:30 by f0dder</div>
+   </div>
+   <div class="post" id="post-137653">
+    <div class="subject"><a href="#post-137653">Question on createdibsection</a></div>
+    <div class="body">I guess they assumed everyone would know to decrement the pointer as they do for &quot;bottom-up&quot; bmaps. I didnt though.<br /><br />Actually I am not using true bitmaps. I am decompressing a 4 bit/pixel run length encoded file into an 24bit/ pixel RGB array, and displaying it. However I only show a 800x600 view of it at a time. Most of the time I will be just panning around in it. I suspect I will have to port it over to directx to get it to run faster though.</div>
+    <div class="meta">Posted on 2004-04-01 16:03:47 by sceptor</div>
+   </div>
+   <div class="post" id="post-137654">
+    <div class="subject"><a href="#post-137654">Question on createdibsection</a></div>
+    <div class="body">A negative height changes the origin of the bitmap. A bitmap is <strong>normally</strong> drawn from the <strong>bottom left</strong> pixel instead of the top left, normal bitmaps are bottom-up, a negative height will produce a top-down bitmap. The memory still follows the same format but you are reversing the scan lines (not the pixels). The major difference is that you cannot use any compression (ie RLL) on a top-down bitmap.</div>
+    <div class="meta">Posted on 2004-04-01 16:10:17 by donkey</div>
+   </div>
+   <div class="post" id="post-137655">
+    <div class="subject"><a href="#post-137655">Question on createdibsection</a></div>
+    <div class="body"><div class="quote"><br />I guess they assumed everyone would know to decrement the pointer as they do for &quot;bottom-up&quot; bmaps. I didnt though.<br /></div><br />Sounds pretty weird - I could've sworn it wasn't like that, but my memory sucks. Guess I'll have to play around a bit again :)<br /><br />You approach doesn't sound too bad since you're not decompressing directly to BITMAP stuff, although there's probably an amount of ways to optimize it. Especially if you have control of the file format, so you can design it in a way that doesn't have to be 100% decompressed at once :)</div>
+    <div class="meta">Posted on 2004-04-01 16:15:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-137657">
+    <div class="subject"><a href="#post-137657">Question on createdibsection</a></div>
+    <div class="body">here's how I found the pointer was pointed at the end of the dibsection.<br /><br />Make a window at 1024x800, then create a dibsection at 640 x 480, select it and all that.<br /><br />Draw about 30 or so lines of image in the section, and increase the pointer as you draw. Then blit it to the windows hDC, you will see it starting at 480 and extending below from there.<br /><br />make a new dibsection of 640 x -480, and do the same thing. (increasing the pointer as you fill it). It will start at the top of the window and extend down.<br /><br />It sure stumped me until I made the window larger than the dibsection so I could see where it was blitting to.</div>
+    <div class="meta">Posted on 2004-04-01 16:33:19 by sceptor</div>
+   </div>
+  </div>
+ </body>
+</html>

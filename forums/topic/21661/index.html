@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>invalid page fault when 'accept' called - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21661" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=21661">invalid page fault when 'accept' called</a></p>
+   <div class="post" id="post-163452">
+    <div class="subject"><a href="#post-163452">invalid page fault when 'accept' called</a></div>
+    <div class="body">Hi,<br />I am creating a web server that will, when finished, serve WAP pages. The problem is when I run what I have so far, I get the &#39;This program has caused an illegal operation&#39; (invalid page fault in module MSAFD.DLL). Using OllyDbg, I found it happens when the &#39;accept&#39; function is called. I will post the program below. I&#39;ve got the feeling that I&#39;m missing something stupidly obvious.<br /><br /><pre><code><br />.386<br />.model flat, stdcall<br />option casemap:none<br /><br />incboth macro incl<br />	include E:\masm32\include\incl.inc<br />	includelib E:\masm32\lib\incl.lib<br />endm<br />include E:\masm32\include\windows.inc<br />incboth kernel32<br />incboth user32<br />incboth wsock32<br /><br />addstr macro strng<br />	LOCAL nustr<br />	.data<br />	nustr db strng, 0<br />	.code<br />	exitm &lt;addr nustr&gt;<br />endm<br /><br />ServerThread proto :DWORD<br />ClientThread proto :DWORD<br /><br />.data<br />AppName db &quot;JMTServerB&quot;, 0<br /><br />.data?<br />ThreadID dd ?<br />ThreadID2 dd ?<br /><br />.code<br />start:<br />invoke CreateThread, 0, 0, ADDR ServerThread, 0, NORMAL_PRIORITY_CLASS, ADDR ThreadID<br />invoke CloseHandle, eax<br />invoke MessageBox, 0, addstr(&quot;Click OK to stop the server&quot;), ADDR AppName, 0<br />invoke ExitProcess, 0<br /><br /><br />ServerThread proc Param:DWORD<br />	<br />	LOCAL wsadata:WSADATA<br />	LOCAL sin:sockaddr_in<br />	LOCAL sfr:sockaddr_in<br />	LOCAL hServerSock:DWORD<br />	LOCAL hClientSock:DWORD<br />	invoke WSAStartup, 101h, ADDR wsadata<br />	invoke socket, AF_INET, SOCK_STREAM, 0<br />	mov hServerSock, eax<br />	mov sin.sin_family, AF_INET<br />	invoke htons, 4523<br />	mov sin.sin_port, ax<br />	mov sin.sin_addr.S_un.S_addr, INADDR_ANY<br />	invoke bind, hServerSock, ADDR sin, SIZEOF sin<br />	invoke listen, hServerSock, SOMAXCONN<br />	.while TRUE<br />		invoke accept, hServerSock, ADDR sfr, SIZEOF sfr<br />		mov hClientSock, eax<br />		invoke CreateThread, 0, 0, ADDR ClientThread, hClientSock, NORMAL_PRIORITY_CLASS, ADDR ThreadID2<br />	.endw<br />	invoke closesocket, hServerSock<br />	invoke WSACleanup<br />	ret<br /><br />ServerThread endp<br /><br />ClientThread proc Param:DWORD<br />	<br />	invoke send, Param, ADDR AppName, SIZEOF AppName-1, 0<br />	invoke Sleep, 2000<br />	invoke closesocket, Param<br />	ret<br /><br />ClientThread endp<br /><br />end start<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2005-08-18 19:49:35 by programinator</div>
+   </div>
+   <div class="post" id="post-163453">
+    <div class="subject"><a href="#post-163453">Re: invalid page fault when 'accept' called</a></div>
+    <div class="body">The &quot;size&quot; parameter to accept() is not an integer, it&#39;s a pointer to an integer. So you must create a variable, and pass &quot;addr sizethingy&quot;. In the PlatformSDK it is specified as an  parameter, so you need not fill the variable with the struct size before the call.<br /></div>
+    <div class="meta">Posted on 2005-08-18 20:50:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-163455">
+    <div class="subject"><a href="#post-163455">Re: invalid page fault when 'accept' called</a></div>
+    <div class="body">Changing<br /><br /><strong>invoke accept, hServerSock, ADDR sfr, SIZEOF sfr</strong><br />to<br /><strong>invoke accept, hServerSock, ADDR sfr, 0</strong><br />has done it. Thank you f0dder.&nbsp; :)</div>
+    <div class="meta">Posted on 2005-08-18 22:07:29 by programinator</div>
+   </div>
+   <div class="post" id="post-163459">
+    <div class="subject"><a href="#post-163459">Re: invalid page fault when 'accept' called</a></div>
+    <div class="body">That should work, too... I&#39;d prefer doing the paranoid version of passing &quot;addr thesize&quot; and &quot;cmp sizeof sfr, thesize&quot;, but that&#39;s up to you, really...<br /><br />Rule of thumb when dealing with network programming: <strong>NEVER</strong> make any assumptions.<br /></div>
+    <div class="meta">Posted on 2005-08-19 01:15:35 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

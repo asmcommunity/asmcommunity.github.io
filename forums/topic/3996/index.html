@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>FPU optimization - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3996" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3996">FPU optimization</a></p>
+   <div class="post" id="post-27275">
+    <div class="subject"><a href="#post-27275">FPU optimization</a></div>
+    <div class="body">Hi all!<br /><br />I'm doing a fractal plotting program in Delphi that draws a mandelbrot set on the screen. I'm now trying to rewrite the most important parts to assembly and until now i'm doing just fine. I came to a part where I wanted to convert a screen coordinate to a complex coordiate. I used to do it using this piece of code (in pascal):<br /><br /><pre><code><br />s&#58;=x/&#40;imagewidth/&#40;abs&#40;xmin&#41;+abs&#40;xmax&#41;&#41;&#41;+xmin;<br /></code></pre><br /><br />I transtlated it into:<br /><br /><br /><pre><code><br /><br />fld X		// st=x<br />fld imagewidth	// st=imagewidth,st&#40;1&#41;=x<br />fld Xmin	// st=Xmin,st&#40;1&#41;=imagewidth,st&#40;2&#41;=x<br />fabs		// st=abs&#40;Xmin&#41;,st&#40;1&#41;=imagewidth,st&#40;2&#41;=x<br />fld Xmax	// st=Xmax,st&#40;1&#41;=abs&#40;Xmin&#41;,st&#40;2&#41;=imagewidth,st&#40;3&#41;=x<br />fabs		// st=abs&#40;Xmax&#41;,st&#40;1&#41;=abs&#40;Xmin&#41;,st&#40;2&#41;=imagewidth,st&#40;3&#41;=x<br />fadd		// st=abs&#40;Xmax&#41;+abs&#40;Xmin&#41;,st&#40;1&#41;=imagewidth,st&#40;2&#41;=x<br />fdiv		// st=imagewidth/&#40;abs&#40;Xmax&#41;+abs&#40;Xmin&#41;&#41;,st&#40;1&#41;=x<br />fdiv		// st=x/&#40;imagewidth/&#40;abs&#40;Xmax&#41;+abs&#40;Xmin&#41;&#41;&#41;<br />fld Xmin	// st=Xmin,st&#40;1&#41;=x/&#40;imagewidth/&#40;abs&#40;Xmax&#41;+abs&#40;Xmin&#41;&#41;&#41;<br />fadd		// st=x/&#40;imagewidth/&#40;abs&#40;Xmax&#41;+abs&#40;Xmin&#41;&#41;&#41;+Xmin<br />fstp s		// s&#58;=x/&#40;imagewidth/&#40;abs&#40;Xmin&#41;+abs&#40;Xmax&#41;&#41;&#41;+Xmin;<br /><br /></code></pre><br /><br /><br />This works, but it's much slower than Delphi's output! <br /><br />How can I optimize this???<br /><br /><br />---EDIT-----<br />doh!<br />--------------<br /><br /><br />/Delight</div>
+    <div class="meta">Posted on 2002-03-05 07:13:29 by Delight</div>
+   </div>
+   <div class="post" id="post-27277">
+    <div class="subject"><a href="#post-27277">Div slow, mul faster!</a></div>
+    <div class="body">x / ( y / z) = (x * z) / y<br /><br />Faster<br /><br /><pre><code><br />  fld X<br />  fmul imagewidth<br />  fld Xmin<br />  fabs<br />  fld Xmax<br />  fabs<br />  fadd<br />  fdiv<br />  fadd Xmin<br />  fstp s<br /></code></pre><br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-03-05 08:14:33 by Mirno</div>
+   </div>
+   <div class="post" id="post-27279">
+    <div class="subject"><a href="#post-27279">FPU optimization</a></div>
+    <div class="body">Thank you Mirno! One step closer to perfection...:grin:<br /><br />/Delight</div>
+    <div class="meta">Posted on 2002-03-05 08:41:41 by Delight</div>
+   </div>
+   <div class="post" id="post-27282">
+    <div class="subject"><a href="#post-27282">FPU optimization</a></div>
+    <div class="body">You should also try to avoid loading a value twice from memory as you do here with Xmin. Instead load it at the start onto the stack then reuse it.<br /><br /><pre><code>fld Xmin<br />fld X<br />fmul imageWidth<br />fld st&#40;1&#41; ; Xmin<br />fabs<br />fld Xmax<br />fabs<br />fadd<br />fdiv<br />fadd<br />fstp s</code></pre> <br /><br />Also, if you don't want to preserve Xmax then you could get its absolute value by ANDing the sign bit with 0 in memory then simply adding it.</div>
+    <div class="meta">Posted on 2002-03-05 09:21:51 by Eóin</div>
+   </div>
+   <div class="post" id="post-27283">
+    <div class="subject"><a href="#post-27283">FPU optimization</a></div>
+    <div class="body">I think that the fastest way to clear a real8 number is to do:<br /><br />var db ?<br />...<br />xor var, var<br /><br />Marilyn</div>
+    <div class="meta">Posted on 2002-03-05 09:22:29 by Marilyn</div>
+   </div>
+   <div class="post" id="post-27287">
+    <div class="subject"><a href="#post-27287">FPU optimization</a></div>
+    <div class="body">You can't xor a memory variable with a memory variable.</div>
+    <div class="meta">Posted on 2002-03-05 09:42:40 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-27292">
+    <div class="subject"><a href="#post-27292">FPU optimization</a></div>
+    <div class="body">A real8 is eight bytes - requires MMX/FPU to store eight bytes in one instruction, but MMX/FPU would require an instruction to load a zero to store.  I think this would be fastest/shortest:<pre><code>and DWORD PTR &#91;var&#93;,0<br />and DWORD PTR &#91;var + 4&#93;,0</code></pre></div>
+    <div class="meta">Posted on 2002-03-05 10:02:52 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-27295">
+    <div class="subject"><a href="#post-27295">FPU optimization</a></div>
+    <div class="body">Thanks, but shouldn't that 0 be -1 ???<br /><br />/Delight</div>
+    <div class="meta">Posted on 2002-03-05 10:11:10 by Delight</div>
+   </div>
+   <div class="post" id="post-27297">
+    <div class="subject"><a href="#post-27297">FPU optimization</a></div>
+    <div class="body"><div class="quote"><br />Thanks, but shouldn't that 0 be -1 ???<br /><br />/Delight</div>No.<br /><br />Z AND -1 = Z<br />Z AND 0 = 0 ; you wanted to clear it?<br /><br />Z OR -1 = -1<br />Z OR 0 = Z<br /><br />Z XOR -1 = NOT Z<br />Z XOR 0 = Z</div>
+    <div class="meta">Posted on 2002-03-05 10:14:19 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-27298">
+    <div class="subject"><a href="#post-27298">FPU optimization</a></div>
+    <div class="body">Ok, now I get it. Thanks alot!<br /><br />/Delight<br />:stupid:</div>
+    <div class="meta">Posted on 2002-03-05 10:18:52 by Delight</div>
+   </div>
+   <div class="post" id="post-27302">
+    <div class="subject"><a href="#post-27302">FPU optimization</a></div>
+    <div class="body">Wouldn't it be better to move zero to the memory location?<br />It would avoid a read-modify-write operation.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-03-05 10:43:12 by Mirno</div>
+   </div>
+   <div class="post" id="post-27313">
+    <div class="subject"><a href="#post-27313">FPU optimization</a></div>
+    <div class="body"><div class="quote"><br />Wouldn't it be better to move zero to the memory location?<br />It would avoid a read-modify-write operation.<br /><br />Mirno</div>Yes, if there is an access of that memory location afterward,<br />otherwise it wouldn't matter on the Athlon.  It also effects<br />the flags, so it might be better to just move the zero.  :)</div>
+    <div class="meta">Posted on 2002-03-05 11:39:47 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-27361">
+    <div class="subject"><a href="#post-27361">FPU optimization</a></div>
+    <div class="body">Hi !<br /><br />One more FPU optimization is done by the following steps:<br /><br />i) start your fpu-block at a boundary of 16 bytes, means at addresses like $42010, $64df0, ...<br /><br />ii) if a fpu-instructions lead over a 16-byte-boundary (at example a 5 byte-operation starts at $4201e) insert nop-fillins (or integer-code which can be done simultanious) so that the fpu-instruction starts at the next 16-byte-boundary.<br /><br />this helps because instructions are fetched by 16-byte-blocks ...<br /><br />Greetings, Caleb</div>
+    <div class="meta">Posted on 2002-03-05 15:59:48 by Caleb</div>
+   </div>
+   <div class="post" id="post-27576">
+    <div class="subject"><a href="#post-27576">FPU optimization</a></div>
+    <div class="body">NO, No, No<br />Remember the pentium chip has pairing:<br /><br />mov ecx, 0<br />xor eax, eax<br />mov dword ptr , eax<br />mov ecx, 0<br /><br />is faster than:<br /><br />mov ecx, 0<br />mov dword ptr buffer, 0<br />mov ecx, 0<br /><br />Just remember to alternate reisters.<br /><br /><br /><br />And check these out:<br /><br />mov     eax, dword ptr buffer<br />push    eax<br />call    empty<br />pop     eax<br /><br />mov     eax, 0<br />push    eax<br />call    empty<br />pop     eax</div>
+    <div class="meta">Posted on 2002-03-06 20:44:05 by bdjames</div>
+   </div>
+  </div>
+ </body>
+</html>

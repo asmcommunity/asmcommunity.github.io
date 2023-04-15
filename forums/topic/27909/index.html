@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Tutorial request: Large program design - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27909" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27909">Tutorial request: Large program design</a></p>
+   <div class="post" id="post-198566">
+    <div class="subject"><a href="#post-198566">Tutorial request: Large program design</a></div>
+    <div class="body">By large, I mean multi-file.  I still have not been able to find any simple code showing proper use of PUBLIC, EXTERN, EXTERNDEF.  My big problem right now is that I have 2 files:
+
+main.asm
+files.asm
+
+files.asm uses CreateFile which is in Kernel32(inc/lib) and uses constants in Windows.inc.  Windows.inc is loaded in main.asm.  files.asm cannot see Windows.inc.  I cant load Windows.inc in files.asm or I get a redefinition error.  None of the source code I have looked at has given me any definite idea about how to resolve scope across files for variables, and apparently inc/libs.  Most tutorials are for some aspect of code, but none really for style/method of code design.</div>
+    <div class="meta">Posted on 2001-05-03 18:18:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198567">
+    <div class="subject"><a href="#post-198567">Tutorial request: Large program design</a></div>
+    <div class="body">I asked this question quite some time ago... the link is here:
+How to split asm files up
+
+I started prefereing the include statement, here's my main.asm
+<pre><code>
+486p
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+includelib \masm32\lib\user32.lib
+include \masm32\include\kernel32.inc
+includelib \masm32\lib\kernel32.lib
+include \masm32\include\comctl32.inc
+includelib \masm32\lib\comctl32.lib
+include \masm32\include\comdlg32.inc
+includelib \masm32\lib\comdlg32.lib
+include \masm32\include\gdi32.inc
+includelib \masm32\lib\gdi32.lib
+include \masm32\include\advapi32.inc
+includelib \masm32\lib\advapi32.lib
+include \masm32\lib\masm32.inc
+includelib \masm32\lib\masm32.lib
+;include \masm32\include\shell32.inc
+;includelib \masm32\lib\shell32.lib
+
+     include structs.inc
+     include protos.asm
+     include macros.asm
+
+.const
+     include constants.asm
+.data
+     include data.asm
+.data?
+     include udata.asm
+     
+.code
+start:
+     invoke GetModuleHandle,0
+     mov hInstance,eax
+     invoke WinMain, hInstance, NULL, CommandLine, SW_SHOWDEFAULT
+     invoke ExitProcess,eax
+     
+
+     include MyProcs.asm
+     include WndProc.asm
+     include WinMain.asm
+     
+end start
+</code></pre></div>
+    <div class="meta">Posted on 2001-05-03 18:28:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198568">
+    <div class="subject"><a href="#post-198568">Tutorial request: Large program design</a></div>
+    <div class="body">Best thing about this is:
+
+It gives you reusable files...</div>
+    <div class="meta">Posted on 2001-05-03 18:32:00 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-198569">
+    <div class="subject"><a href="#post-198569">Tutorial request: Large program design</a></div>
+    <div class="body">Thanks for that bit of code.  Alot easer to read than the mess I got now.
+
+I notice you include MyProcs.asm.  If in your own code in MyProcs.asm, you use WinAPI or Win constants, they will be in scope right? I'll have to look at my code, cause I think this is what I'm doing but Windows.inc is out of scope for files.asm</div>
+    <div class="meta">Posted on 2001-05-03 20:10:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198570">
+    <div class="subject"><a href="#post-198570">Tutorial request: Large program design</a></div>
+    <div class="body">I use this:
+<pre><code>
+;~~~~----==== ThisFile - v1.0b - by Wolfao ====----~~~~
+.586
+.model flat,stdcall
+option casemap:none
+
+include OtherFile.asm
+
+.data
+  blah DWORD 0
+.data?
+  bloo DWORD ?
+.code
+Start:
+  ...
+  invoke Proc1
+  invoke Proc2
+
+Proc1 proc
+ ret
+Proc1 endp
+End Start
+
+;~~~~----==== OtherFile - v1.0b - by Wolfao ====----~~~~
+.data
+  blee DWORD 0
+.code
+
+Proc2 proc
+ ret
+Proc2 endp
+</code></pre>
+Hope this help. :)</div>
+    <div class="meta">Posted on 2001-05-04 22:10:00 by wolfao</div>
+   </div>
+   <div class="post" id="post-198571">
+    <div class="subject"><a href="#post-198571">Tutorial request: Large program design</a></div>
+    <div class="body">Generally, you should add the following lines at the beginning of your include files :
+<pre><code>
+IFNDEF __YOUR_FILE_INC__
+__YOUR_FILE_INC__ = 1
+
+; declarations here
+
+ENDIF
+
+It will prevent the compiler to include the same file several times.
+
+Here is an example where File1.asm uses a function and a variable defined in File2.asm :
+
+;;;;;;;;;;;
+; File1.inc
+;;;;;;;;;;;;
+
+IFNDEF __FILE1_INC__
+__FILE1_INC__ = 1
+
+; MainFunction declaration
+MainFunction    proto arg1:DWORD, arg2:DWORD
+
+ENDIF
+
+;;;;;;;;;;;;
+; File1.asm
+;;;;;;;;;;
+
+include File1.inc
+include File2.inc
+
+.code
+
+; main function definition
+MainFunction proc arg1:DWORD, arg2:DWORD
+  invoke  Function2, arg1, arg2
+  ; you can use the variable defined in File2.asm
+  mov     eax, var
+  ret
+MainFunction endp
+
+-------
+
+; File2.inc
+
+IFNDEF __FILE_2_INC__
+__FILE_2_INC__ = 1
+ENDIF
+
+; var declaration
+externdef       var:dword
+
+; function2 declaration
+Function2  proto arg1:DWORD, arg2:DWORD
+
+
+;;;;;;;;;;;;
+; File2.asm
+;;;;;;;;;;
+
+.data
+  
+  ; var definition
+  var dword 0
+
+.code
+
+; Function2 declaration
+
+Function2 proc arg1:DWORD, arg2:DWORD
+; function code here
+Function2 endp
+
+---
+</code></pre>
+To build your executable :
+
+ml /c file1.asm
+ml /c file2.asm
+link file1.obj file2.obj /out:executable.exe
+
+There is more info in the MASM manual.
+
+Good luck!
+
+This message was edited by Hiroshimator, on 5/5/2001 9:14:01 AM</div>
+    <div class="meta">Posted on 2001-05-05 09:09:00 by karim</div>
+   </div>
+   <div class="post" id="post-198572">
+    <div class="subject"><a href="#post-198572">Tutorial request: Large program design</a></div>
+    <div class="body">Thnks for the new replies.  Now I have Jimmy Cliff's example for  biring includes/const/golbal var/ ect together.  The two examples show the relations hip between 2 files will help.  The MSAM help is very useful to me because it has definitions, but no examples.  Hirosimator linked some MASM help file, but I cant read them because I have no program that can read Word 2.0 format.  I will see if I can figure out now, thanks.</div>
+    <div class="meta">Posted on 2001-05-05 21:50:00 by asm_happy</div>
+   </div>
+  </div>
+ </body>
+</html>

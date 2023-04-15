@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>PIII ROUTINES : PMULB and PINC emulations - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10150" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=10150">PIII ROUTINES : PMULB and PINC emulations</a></p>
+   <div class="post" id="post-76051">
+    <div class="subject"><a href="#post-76051">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">PIII ROUTINES : PMULB and PINC emulations<br /><br />Hi<br /><br />You probably noticed that you can MMX multiply 8 nibbles at a time, for example by 9 :<br />movq mm0,<br />movq mm1,mm0<br />psllq mm0,3<br />paddb mm0,mm1<br /><br />Or a bit by 2... up to 255 :<br />PCMPEQB mm0,[0x0101...01]<br />PAND mm0,<br /><br /><br />Now, my problem :<br />I want to INC a qword, the faster possible. I have several 6&amp;7 instructions solution, not satisfying at all.<br />The trouble is, in my program values often go beyond 2^32. For instance I will have :<br /><br />11111111<br />11111111<br />11111111<br />11111111<br />11111111<br />00000000<br />11111111<br />00000000<br /><br />Other precisions :<br /><br />1/ it is better if I can keep the result to its MMX register.<br />(I searched add64 and so on on this forum, no real trick !?)<br /><br />2/ it is a subproblem : I would like to find 1st 0 of an MMX column, i.e. if I have<br /><br />ABCDEFGH<br />10000000 1<br />11100000 2<br />10100000 3<br />00000000 4 =&gt; first 0 of column A<br />00000000 5<br />10100000 6<br />00000000 7<br />10100000 8<br /><br />I would like to find quickly 1st 0 (or 1) of, say, column A.</div>
+    <div class="meta">Posted on 2003-01-13 09:55:43 by valy</div>
+   </div>
+   <div class="post" id="post-76065">
+    <div class="subject"><a href="#post-76065">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><pre><code>AA 00 CC DD 00 FF GG HH    Value<br />; cmp<br />00 FF 00 00 FF 00 00 00    Is Zero<br />; or<br />00 00 00 00 FF 00 00 FF    Has been zero<br />; not<br />FF 00 FF FF 00 FF FF 00    Not has been zero<br />; mov<br />01 01 01 01 01 01 01 01    Increment Value<br />; and<br />01 00 01 01 00 01 01 00    Add mask<br />; add<br />06 05 06 06 01 06 06 04    First Zero</code></pre></div>
+    <div class="meta">Posted on 2003-01-13 13:00:49 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-76283">
+    <div class="subject"><a href="#post-76283">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">:stupid: Sorry, too much for my single neurone :confused:<br />Er... I presume your AA to HH mean bytes 1 to 8 of an MMX register, byte 1 being the LSB, byte 8 the MSB.<br />Actually in my example above, column A designed least significant bit of each byte.<br /><br />Now to your code.<br />So 2nd line &quot;cmp&quot; means a PCMPEQB, up to here all right (hope so).<br />Next you ORe with a particular mask, dunno why, let us admit it.<br />Next you NOTe then INC and AND, it is OK, no comment.<br />Last you PADDB, byte 1 being 06... to byte 8 being 04 ?! Or is it the result ? In any case what does it stand for ?<br /><br />Thx in advance.</div>
+    <div class="meta">Posted on 2003-01-14 10:17:11 by valy</div>
+   </div>
+   <div class="post" id="post-76453">
+    <div class="subject"><a href="#post-76453">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">Here is one way of isolating first '1' of each MMX column.<br /><br />movq mm0, ;data<br /><br />movq mm1,mm0<br />psllq mm1,8<br />por mm1,mm0<br /><br />movq mm2,mm1<br />psllq mm2,16<br />por mm1,mm2<br /><br />movq mm2,mm1<br />psllq mm2,32<br />por mm1,mm2<br /><br />movq mm2,mm1<br />psllq mm1,8<br />pandn mm1,mm2<br /><br />A bit too long, though. Anyone has better, or retrieve first position indexes ?!</div>
+    <div class="meta">Posted on 2003-01-15 10:26:40 by valy</div>
+   </div>
+   <div class="post" id="post-76685">
+    <div class="subject"><a href="#post-76685">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">Another (unchecked yet) solution to isolate first ones ('1') of a column and zeroe remaining part :<br /><br />.data<br />mmxtri db 1,3,7,15,31,63,127,255<br />col0 db 1,1,1,1,1,1,1,1<br /><br />1/ copy from column to 8 MMX bytes :<br /><br />movq mm0, ;data<br /><br />psllq mm0,7<br />pmovmskb eax,mm0<br />movd mm1,eax ;byte 1<br />punpcklbw mm1,mm1 ;bytes 1-2<br />pshufw mm1,mm1,0 ;bytes 1-8<br /><br />2/ get rid of the casual '1' after 1st '0' :<br /><br />pand mm1,<br />pcmpeqb mm1,<br />pand mm1,<br /><br /><br />So, if input is<br />ABCDEFGH<br />1...<br />1<br />1<br />1<br />0<br />1<br />0<br />1<br /><br />output should be<br />ABCDEFGH<br />1<br />1<br />1<br />1<br />0<br />0<br />0<br />0<br /><br />There is certainly better... any idea ? And if anyone can explain Bitrake's trick ?! :confused:<br />Thx, bye</div>
+    <div class="meta">Posted on 2003-01-16 11:01:23 by valy</div>
+   </div>
+   <div class="post" id="post-76692">
+    <div class="subject"><a href="#post-76692">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">I'm sorry I though you were talking about bytes of one/zero.  I have to play with the code to understand how the data is organized.  Is each byte a row of data in an 8x8 matrix?  Where is <strong>Nexo</strong> when you need him? :tongue:<br /><br />Does this help any?<pre><code>movq	mm1, mm0<br />paddusb	mm0, mm_0101010101010101<br />pxor	mm1, mm0<br /><br />; bits above first zero can be anything<br />; ie 00,02,04,06,08,...,FE = 01<br />; 00 -&gt; 01<br />; 01 -&gt; 02<br />; 03 -&gt; 04<br />; 07 -&gt; 08<br />; 0F -&gt; 10<br />; 1F -&gt; 20<br />; 3F -&gt; 40<br />; 7F -&gt; 80<br />; FF -&gt; 00</code></pre></div>
+    <div class="meta">Posted on 2003-01-16 11:48:46 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-76846">
+    <div class="subject"><a href="#post-76846">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">No I've tried it, it does not do what I'd like. Thanks anyway, Bitrake.<br /><br />Actually several tricks may help me, handling with a set of two 8-byte chunks, say only one to simplify.<br /><br /><br />1st trick : get 1st opposite bit of each MMX byte. I got it in very few instructions, thanks to a gem found on the Net.<br />So if I have <br /><br />   ABCDEFGH<br />1 01000110<br />2 00000110<br />3 ...<br />8 10100000<br /><br />result in MMX is<br /><br />  ABCDEFGH<br />1 01000000<br />2 00000100<br />3 ...<br />8 10000000<br /><br />assuming that column A is LSBit and column H is MSBit and row 1 is Least Significant BYTE of MM0<br /><br /><br />2nd trick : get 1st opposite bit of each MMX COLUMN ; posted above, 12 instructions, hoping better ?!<br /><br />3rd trick : keep bits before first opposite bit, row-wise<br /><br />4th trick : keep bits before first opposite bit, column-wise<br /><br />5th-8th trick : same as 1-4, the opposite direction.<br /><br />9th-? trick : make it work for both directions, starting from row 3 to 6. Or retrieve indexes of opposite bits.<br /><br />Better if it works on 8 entities in parallel, but appreciated on a single entity, so a &quot;PMULB MM0,255&quot; is worth while :)<br />*Very* tiny LUTs admitted (actually I make a PSLLQ.../PMOVMSKB EAX/MOVZX EAX,myLUT but I have cache problems :()<br /><br />Hope it is clearer ?! Anyway, will continue to use my brain.</div>
+    <div class="meta">Posted on 2003-01-17 07:53:55 by valy</div>
+   </div>
+   <div class="post" id="post-77028">
+    <div class="subject"><a href="#post-77028">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><div class="quote"><br />I'm sorry I though you were talking about bytes of one/zero.  I have to play with the code to understand how the data is organized.  Is each byte a row of data in an 8x8 matrix?  Where is <strong>Nexo</strong> when you need him? :tongue:<br /></div><br />I bad understanding task with my English :) (that i really say? :))<br /><br />PMULB mmx0,mmx1 should be have 2 forms PMULLB &amp; PMULHB<br /><br /><pre><code><br />; PMULLB<br />	pxor mm7,mm7<br />	movq mm0,&#91;mmx0&#93;<br />	movq mm2,&#91;mmx1&#93;<br />	movq mm1,mm0<br />	movq mm3,mm2<br />	punpcklbw mm0,mm7<br />	punpcklbw mm2,mm7<br />	punpckhbw mm1,mm7<br />	punpckhbw mm3,mm7<br />	pmullw mm0,mm2<br />	pmullw mm1,mm3<br />	pand mm0,mmxw&#40;0FFh&#41;	; for PMULLB<br />	pand mm1,mmxw&#40;0FFh&#41;	; for PMULLB<br />	psrlw mm0,8	; for PMULHB<br />	psrlw mm1,8	; for PMULHB<br />	packuswb mm0,mm1<br />	movq &#91;mmx0&#93;,mm0<br /></code></pre><br /><br />About PINC. I do PADDQ mmx,mmxq(1) ;)<br />For PIII:<br /><pre><code><br />	movq mm1,mm0<br />	pcmpeqd mm0,mmxd&#40;0,-1&#41;<br />	psllq mm0,32<br />	paddd mm1,mmxd&#40;0,1&#41;<br />	psrld mm0,31<br />	paddd mm0,mm1<br /></code></pre><br /><br />About subproblems. I dont known relation with current thread PMUL and PINC emulations. May be it other problem.<br /><br /><div class="quote"><br />Does this help any?<pre><code>movq	mm1, mm0<br />paddusb	mm0, mm_0101010101010101<br />pxor	mm1, mm0<br /><br />; bits above first zero can be anything<br />; ie 00,02,04,06,08,...,FE = 01<br />; 00 -&gt; 01<br />; 01 -&gt; 02<br />; 03 -&gt; 04<br />; 07 -&gt; 08<br />; 0F -&gt; 10<br />; 1F -&gt; 20<br />; 3F -&gt; 40<br />; 7F -&gt; 80<br />; FF -&gt; 00</code></pre> </div><br /><br />Nice PINCB emulation ;)</div>
+    <div class="meta">Posted on 2003-01-18 10:57:21 by Nexo</div>
+   </div>
+   <div class="post" id="post-77366">
+    <div class="subject"><a href="#post-77366">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><strong>I want to INC a qword, the faster possible. I have several 6&amp;7 instructions solution, not satisfying at all.<br /></strong><br /><br />Thx for your reply, Nexo ! I see PINC (Qword) most probably cannot be done under 6 instructions :( Well, I give up. And I do not mind PINCB ; maybe your PMUL(L/W)B could help, I will take a look.<br /><br />Thx, bye</div>
+    <div class="meta">Posted on 2003-01-20 07:13:21 by valy</div>
+   </div>
+   <div class="post" id="post-77389">
+    <div class="subject"><a href="#post-77389">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">5 instructions...(one constant data)<br /><pre><code>; mm_A is incremented, mm_B is used as a temp register.<br />PINCQ MACRO mm_A&#58;REQ, mm_B&#58;REQ<br />	movq	mm_B, mm_A<br />	pcmpeqd	mm_A, mxc&#40;0,-1&#41;<br />	psubd	mm_B, mxc&#40;0,-1&#41;<br />	psllq	mm_A, 32<br />	psubd	mm_B, mm_A<br />ENDM</code></pre>I wonder if the shift can be replaced - slow on Pentiums.  If another register is used then it can be replaced with PUNPCKLDQ.  Example:<pre><code><br />	; high dword can be anything*, only set once<br />	mov	mm7, mxc&#40;-1,0&#41;<br /><br />;incq #1<br />	movq	mm1, mm0<br />	pcmpeqd	mm0, mxc&#40;0,-1&#41;<br /><br />	psubd	mm1, mxc&#40;0,-1&#41;<br />	punpckldq mm7, mm0	; bottom dword always zero<br /><br />	; &#40;another instruction goes here&#41;<br />	psubd	mm1, mm7<br /><br />;incq #2<br />	movq	mm1, mm0<br />	pcmpeqd	mm0, mxc&#40;0,-1&#41;<br /><br />	psubd	mm1, mxc&#40;0,-1&#41;<br />	punpckldq mm7, mm0	; bottom dword always zero<br /><br />	; &#40;another instruction goes here&#41;<br />	psubd	mm1, mm7</code></pre>See you can put several together... :)</div>
+    <div class="meta">Posted on 2003-01-20 11:30:29 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-77513">
+    <div class="subject"><a href="#post-77513">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">Played a bit with it... :alright:</div>
+    <div class="meta">Posted on 2003-01-21 06:10:48 by valy</div>
+   </div>
+   <div class="post" id="post-77579">
+    <div class="subject"><a href="#post-77579">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><div class="quote"><br />5 instructions...(one constant data)<br /><pre><code>; mm_A is incremented, mm_B is used as a temp register.<br />PINCQ MACRO mm_A&#58;REQ, mm_B&#58;REQ<br />	movq	mm_B, mm_A<br />	pcmpeqd	mm_A, mxc&#40;0,-1&#41;<br />	psubd	mm_B, mxc&#40;0,-1&#41;<br />	psllq	mm_A, 32<br />	psubd	mm_B, mm_A<br />ENDM</code></pre></div><br /><br />B:=A+1 ;)<br /><br />PADDQ mmB,mmA,1 ?<br /><br />Where &quot;Compare Packed Unsigned Integers for Greater Than&quot;? It is allow make PADDQ mmB,mmA,dw  :(<br /><br />Good night. Bye.</div>
+    <div class="meta">Posted on 2003-01-21 14:31:47 by Nexo</div>
+   </div>
+   <div class="post" id="post-77583">
+    <div class="subject"><a href="#post-77583">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><div class="quote"><br />B:=A+1 ;)</div>Yeah, sorry.  My comments are bad.<br />Read the code - ignore the english. :)</div>
+    <div class="meta">Posted on 2003-01-21 15:12:18 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-77589">
+    <div class="subject"><a href="#post-77589">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">Umm if you want to inc a qword &quot;fastest possible&quot; then why bother with MMX?<br /><br />add dword ptr , 1<br />adc dword ptr , 0</div>
+    <div class="meta">Posted on 2003-01-21 16:20:18 by iblis</div>
+   </div>
+   <div class="post" id="post-77592">
+    <div class="subject"><a href="#post-77592">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><div class="quote"><br />Umm if you want to inc a qword &quot;fastest possible&quot; then why bother with MMX?<br /><br />add dword ptr , 1<br />adc dword ptr , 0 </div>Bingo! :grin:</div>
+    <div class="meta">Posted on 2003-01-21 16:37:41 by Maverick</div>
+   </div>
+   <div class="post" id="post-77601">
+    <div class="subject"><a href="#post-77601">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body"><strong>valy</strong>, stated that the data was already in MMX registers - moving back and forth to MMX-&gt;GPR-&gt;MMX would be slower than MMX alone, but I think his algo might be faster if totally done in general purpose registers.  MMX isn't the answer to everything especially on an Athlon. :)</div>
+    <div class="meta">Posted on 2003-01-21 17:29:32 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-77642">
+    <div class="subject"><a href="#post-77642">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">does this work???<pre><code>pcmpeqb mm1, mm1<br />psrlq mm1, 63<br />paddq mm0, mm1</code></pre>inc mm0 ??? I guess this will only work on a p4. :grin:</div>
+    <div class="meta">Posted on 2003-01-21 23:15:30 by arkane</div>
+   </div>
+   <div class="post" id="post-77937">
+    <div class="subject"><a href="#post-77937">PIII ROUTINES : PMULB and PINC emulations</a></div>
+    <div class="body">Totally agree, bitrake. The pb is, I mainly use MMX in my current routines.<br /><br />I'll wait P5 of more, for GPR-MMX :rolleyes:</div>
+    <div class="meta">Posted on 2003-01-23 05:40:08 by valy</div>
+   </div>
+  </div>
+ </body>
+</html>

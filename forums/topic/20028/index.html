@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Mask&amp;Shift Vs 2 dwords; What's the best way to tag point - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20028" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=20028">Mask&amp;Shift Vs 2 dwords; What's the best way to tag point</a></p>
+   <div class="post" id="post-153567">
+    <div class="subject"><a href="#post-153567">Mask&amp;Shift Vs 2 dwords; What's the best way to tag point</a></div>
+    <div class="body">Hi, I'm going to start writing a Common Lisp compiler soon (yes, I'm one of those heathens, please no language war ;), and I need to tag objects (i.e., find a way to differentiate pointers to e.g. ints from those to e.g. functions). The canonical way of doing this is to use the least significant bits of the pointer. I'm wondering if using another dword (right next to it) altogether, like some Haskell compilers, wouldn't be more efficient. I know that shifting is very slow on the P4, but is it slower than a load from a cached address on P3 and up?<br /><br />In pseudo-c, the two ways would be something like:<br /><br />Tagged pointer (simplifying a bit here)<br /><br /><pre><code><br />int tag;<br /><br />tag = &#40;&#40;int&#41; ptr &amp; 3&#41;; /* 2 bits tag */<br />switch &#40;tag&#41; &#123;<br />  case 0&#58; <br />             /*do stuff with a function pointer*/<br />             break;<br />  case 1&#58;<br />             ptr = &#40;void*&#41; &#40;&#40;int&#41; ptr - 1&#41;; /* zero out LSB */<br />             /* do stuff with cons pointer */<br />             break;<br />  case 2&#58;<br />             ptr = &#40;void*&#41; &#40;&#40;int&#41; ptr - 2&#41;;<br />             /* do stuff with general pointer */<br />             break;<br />  case 3&#58;<br />             ptr = &#40;int&#41; ptr &gt;&gt; 2; /* with this scheme, ints must be &lt; 2^30-1, but that could be extended to 2^31-1 */<br />              /* do stuff with the int */<br />             break;<br />&#125;</code></pre><br /><br />Using another dword altogether as a tag would be more like:<br /><br /><pre><code><br />int tag;<br /><br />tag = * &#40;&#40;int*&#41; ptr&#41;; /* EDIT. Was * &#40;&#40;int*&#41; ptr + 1&#41;; Minor detail &#58;&#41; */<br /><br />switch &#40;tag&#41; &#123;<br />  case 0&#58; <br />             /*do stuff with a function pointer*/<br />             break;<br />  case 1&#58;<br />             /* do stuff with cons pointer */<br />             break;<br />  case 2&#58;<br />             /* do stuff with general pointer */<br />             break;<br />  case 3&#58;<br />              /* do stuff with the int */<br />             break;<br />&#125;</code></pre><br /><br />Using another dword also brings subtler differences, since for some functions, I could use a function pointer as the tag, allowing me to do a single dispatch ? la C++ instead of using a case or, worse, a series of conditional jumps. However, I'm not sure this is really important.<br /><br />A researcher found that a mix of both approaches (small tag in the LSBs for often-used types, and full word for others) was better, but that was approximately 10 years ago, and x86 has changed a lot since then.<br /><br />TIA!<br /><br />PS, I hope this isn't OT, since I like the board's content, and I intend to try and make my compiler, or, at least, the structure of its output, efficient, so I'll probably have a lot of questions :)</div>
+    <div class="meta">Posted on 2004-12-01 21:46:35 by pkhuong</div>
+   </div>
+   <div class="post" id="post-153571">
+    <div class="subject"><a href="#post-153571">Mask&amp;Shift Vs 2 dwords; What's the best way to tag point</a></div>
+    <div class="body">Short answer: memory is slow and code is fast.<br /><br />What about 64-bit pointers tomorrow?<br /><br />Are you doing this in x86?<br /><br /><br />mov ecx, [_ptr]<br />mov eax, ecx<br />and ecx, 4-1<br />and eax, 0-4<br />jmp <br /><br />Dispatch DWORD \<br />OFFSET PTR_Function,<br />OFFSET PTR_Cons,<br />OFFSET PTR_General,<br />OFFSET PTR_Int30<br /><br />This is two instructions more than storing another dword. :)<br /><br />mov ecx, [_ptr]<br />mov eax, [_ptr][4]<br />jmp <br /><br />The two extra instructions cost almost nothing in reality, but I think it is important to look at the bigger picture before making a choice.</div>
+    <div class="meta">Posted on 2004-12-01 23:27:49 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-153574">
+    <div class="subject"><a href="#post-153574">Mask&amp;Shift Vs 2 dwords; What's the best way to tag point</a></div>
+    <div class="body">Thanks.<br /><br />Well, my primary target is x86 (ia32 for now), and I won't have access to an x86-64 box for a while. The only reason I am considering the 2 dwords scheme is that the 2nd dword will be at an address that would have been cached anyway, so the extra latency caused by the load from main memory isn't as bad. The 2-bits tag, on the other hand, requires me to have another tag for general values, and to shift the Int30 (it also restricts the range for ints, but that's not too important). <br /><br />I guess the question is whether the additional branch for the general case is outweighed by having one less load.</div>
+    <div class="meta">Posted on 2004-12-01 23:57:06 by pkhuong</div>
+   </div>
+   <div class="post" id="post-153578">
+    <div class="subject"><a href="#post-153578">Mask&amp;Shift Vs 2 dwords; What's the best way to tag point</a></div>
+    <div class="body"><div class="quote">I guess the question is whether the additional branch for the general case is outweighed by having one less load.</div>Only as the number of items approaches infinity. :)  Another approach would be to pool the items based on type, but using pointers is so much easier. IMHO, the extra dword provides a great deal of flexiblity and an array type should be used for large numbers of items.</div>
+    <div class="meta">Posted on 2004-12-02 01:29:40 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

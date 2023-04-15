@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ASPI/CD-ROM drives - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28517" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28517">ASPI/CD-ROM drives</a></p>
+   <div class="post" id="post-201748">
+    <div class="subject"><a href="#post-201748">ASPI/CD-ROM drives</a></div>
+    <div class="body">I'm trying to test if my cd drive is ready by using the
+SCSI_TST_U_RDY command so I can then set its speed and read
+from a cd. But it doesnt seem to be working even though I'm
+pretty sure the drive is ready.
+It starts of by initializing ASPI, then getting the host Id
+and target id (which was 0 and 0 and also confirmed to be
+correct). After which comes my problem with SC_EXEC_SCSI_CMD
+(ive tried skipping the tests and going straight to Setting
+the speed and that also doesnt work)
+
+These are my structures:
+
+SRB_ExecCmd STRUCT
+Cmd1 db ?
+Status db ?
+HostID db ?
+Flags db ?
+SRB_Hdr_Rsvd dd ?
+TargetID db ?
+LUN db ?
+SRB_Rsvdl dw ?
+BufferLength dd ?
+pDataBuffer dd ?
+SenseLength db ?
+CDBLength db ?
+HostStatus db ?
+TargetStatus db ?
+pPostRoutine dd ?
+Reserved db 20 dup(?)
+CDB db 16
+Sense SenseData <>
+SRB_ExecCmd ENDS
+
+SenseData STRUCT
+Code db ?
+Unused db 11 dup(?)
+ASC db ?
+ASCQ db ?
+Unused_1 db 4 dup(?)
+SenseData ENDS
+
+And the code in which doesnt work:
+
+TestDrive proc
+PrintConsole "Test Unit Ready"
+memset offset cmd,0,sizeof SRB_ExecCmd ;clears the structure
+mov cmd.CDBLength,6
+invoke ExecCom
+cmp eax,0
+jne @F
+PrintConsole "Not Ready"
+@@:
+;...
+;After I try to Start/Stop it then I do 2 more of the above tests
+;(I do this because I read that these commands should be used before
+;sending other commands) all of these tests are executed if the same
+;way (except a different command to start/stop) and they all fail
+;...
+ret
+TestDrive endp
+
+ExecCom proc
+LOCAL Status:DWORD
+LOCAL hevent:DWORD
+invoke CreateEvent,0,1,0,0
+mov hevent,eax
+cmp eax,0
+jne @F
+xor eax,eax
+ret
+@@:
+mov al,HOST_ID ;Host ID=0
+mov cmd.HostID,al
+mov al,TARGET_ID ;Target ID=0
+mov cmd.TargetID,al
+mov al,LUN_ID ;LUN ID=0
+mov cmd.LUN,al
+mov cmd.Cmd1,2 ;2=SC_EXEC_SCSI_CMD
+mov cmd.Flags,40h ;40h=SRB_EVENT_NOTIFY
+push hevent
+pop cmd.pPostRoutine
+mov cmd.SenseLength,sizeof SenseData
+invoke ResetEvent,hevent
+push offset cmd
+call SendASPI32Command
+mov Status,eax
+cmp Status,0
+je @F
+invoke WaitForSingleObject,hevent,INFINITE
+@@:
+cmp cmd.Status,1
+je @F
+xor eax,eax
+ret
+@@:
+invoke CloseHandle,hevent
+ret
+ExecCom endp
+
+
+I've been looking through the "ASPI for Win32 Technical
+Reference", through mmc-r10a.pdf and through the ASPI SDK's
+sample source but I can't spot my problem. Anyone know what
+is wrong here or know of any other information/source code
+I could look at?</div>
+    <div class="meta">Posted on 2001-06-25 02:13:00 by Elecon</div>
+   </div>
+   <div class="post" id="post-201749">
+    <div class="subject"><a href="#post-201749">ASPI/CD-ROM drives</a></div>
+    <div class="body">I am no expert on hardware, but if the CD is an int 13h type of device, then maybe DeviceIoControl can do it. I got that function to read and write a floppy and a hard disk (after some trial and error in undocumented waters), and I think a variation could get the ready-state as well. The demo source is at www.hammick.com/hcs/diskio.asm.</div>
+    <div class="meta">Posted on 2001-06-25 18:18:00 by Larry Hammick</div>
+   </div>
+  </div>
+ </body>
+</html>

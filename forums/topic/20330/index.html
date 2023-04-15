@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>HLA generates invalid ASM code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20330" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=20330">HLA generates invalid ASM code</a></p>
+   <div class="post" id="post-155562">
+    <div class="subject"><a href="#post-155562">HLA generates invalid ASM code</a></div>
+    <div class="body">I have found strange behaviour of HLA in some situations.<br />1) HLA code:<br />	if (edx &gt; 0) then<br />		xor(edx,edx);<br />	elseif ((eax &lt; $100) || !test_proc(eax))  then<br />		xor(ecx,ecx);<br />	endif; <br /><br />   ASM generated code:<br />	cmp	edx, 00h	;/* 0 */<br />	jng	L1768_false__hla_<br />	cmp	eax, 0100h	;/* $100 */<br />	jb	L1770__hla_<br />	xor	edx, edx<br />	jmp	L1768_endif__hla_<br />L1768_false__hla_:<br />	push	eax<br />	call	L1765_test_proc__hla_	; test_proc<br />	test	eax,eax<br />	jne	L1769_false__hla_<br />L1770__hla_:<br />	xor	ecx, ecx<br />L1769_false__hla_:<br />L1768_endif__hla_:<br /><br />I think here is some mistake with positioning &quot;cmp&quot; instructions.<br /><br />2) This is not a bug i think, but inefficience in generated code <br />   HLA code:<br />	if (eax == edx) then<br />		xor(ecx,ecx);<br />		if (ecx == ebx) then<br />			xor(eax,eax);<br />		endif;<br />	else<br />		xor(edx,edx);<br />	endif;<br /><br />   ASM generated code:<br />	cmp	eax, edx	<br />	jne	L1766_false__hla_<br />	xor	ecx, ecx<br />	cmp	ecx, ebx	<br />	jne	L1767_false__hla_<br />	xor	eax, eax<br />L1767_false__hla_:<br />	jmp	L1766_endif__hla_<br />L1766_false__hla_:<br />	xor	edx, edx<br />L1766_endif__hla_:<br /><br />When ecx != ebx in second &quot;if&quot; then there must be jump to L1766_endif__hla_ not to L1767_false__hla_. With such thing we do not execute &quot;jmp L1766_endif__hla_&quot; because this instruction does the same.<br /><br />Sorry for my bad english.</div>
+    <div class="meta">Posted on 2005-01-11 02:52:16 by Elohim Meth</div>
+   </div>
+   <div class="post" id="post-155568">
+    <div class="subject"><a href="#post-155568">HLA generates invalid ASM code</a></div>
+    <div class="body">Hi,<br /><br />You are right, in the first situation, there is really a bug in the generated code. If (edx&gt;0) is false, (edx &lt; $100) will never be tested because the generated code for this test is misplaced.<br /><br /><pre><code><br />cmp edx, 00h ;/* 0 */ <br />jng L1768_false__hla_ <br />cmp eax, 0100h ;/* $100 */   &lt;--- here<br />jb L1770__hla_               &lt;--- and here<br />xor edx, edx <br />jmp L1768_endif__hla_ <br />L1768_false__hla_&#58; <br />push eax <br />call L1765_test_proc__hla_ ; test_proc <br />test eax,eax <br />jne L1769_false__hla_ <br />L1770__hla_&#58; <br />xor ecx, ecx <br /></code></pre><br /><br />should be<br /><br /><pre><code><br />cmp edx, 00h ;/* 0 */ <br />jng L1768_false__hla_ <br />xor edx, edx <br />jmp L1768_endif__hla_ <br />L1768_false__hla_&#58;<br />cmp eax, 0100h ;/* $100 */    &lt;--- have to go here<br />jb L1770__hla_<br />push eax <br />call L1765_test_proc__hla_ ; test_proc<br />test eax,eax <br />jne L1769_false__hla_ <br />L1770__hla_&#58; <br />xor ecx, ecx <br /></code></pre><br /><br />maybe corrected in version 1.74    :wink:</div>
+    <div class="meta">Posted on 2005-01-11 04:35:08 by arlequin</div>
+   </div>
+   <div class="post" id="post-155596">
+    <div class="subject"><a href="#post-155596">HLA generates invalid ASM code</a></div>
+    <div class="body">Error confirmed for FASM output:<br /><br /><pre><code><br />		cmp	edx, 00h	;/* 0 */<br />		jna	L2_false__hla_<br />		cmp	eax, 0100h	;/* $100 */<br />		jb	L4__hla_<br />		xor	edx, edx<br />		jmp	L2_endif__hla_<br />L2_false__hla_&#58;<br />		push	eax<br />		call	L1_test_proc__hla_	; test_proc<br />		test	eax,eax<br />		jne	L3_false__hla_<br />L4__hla_&#58;<br />		xor	ecx, ecx<br />L3_false__hla_&#58;<br />L2_endif__hla_&#58;<br />QuitMain__hla_&#58;<br />		pushd	00h<br />		call	dword ptr &#91;__imp__ExitProcess@4&#93;<br />;_HLAMain        endp<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2005-01-11 17:17:09 by Kain</div>
+   </div>
+   <div class="post" id="post-155616">
+    <div class="subject"><a href="#post-155616">Re: HLA generates invalid ASM code</a></div>
+    <div class="body"><div class="quote">I have found strange behaviour of HLA in some situations.<br />1) HLA code:<br />	if (edx &gt; 0) then<br />		xor(edx,edx);<br />	elseif ((eax &lt; $100) || !test_proc(eax))  then<br />		xor(ecx,ecx);<br />	endif; <br /><br /> </div><br /><br />The problem seems to be a bug in Bison. I'm not sure, the grammar is a bit convoluted and I'm playing tricks to handle procedure calls in this code, but the grammar does look right (the problem seems to be with the way Bison does lookahead).  Until I can figure this out, the best I can offer is the following work-around:<br /><br /><pre><code><br />if &#40;edx &gt; 0&#41; then <br /><br />	xor&#40;edx,edx&#41;; <br /><br />else<br />	if<br />	&#40; <br />			&#40;ebx &lt; $100&#41; <br />		||	!test_proc&#40;ebx&#41;  <br />	&#41; then <br /><br />		xor&#40;ecx,ecx&#41;;<br />		<br />	endif;<br /><br />endif; <br /></code></pre><br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2005-01-11 22:54:05 by rhyde</div>
+   </div>
+   <div class="post" id="post-155628">
+    <div class="subject"><a href="#post-155628">HLA generates invalid ASM code</a></div>
+    <div class="body">Thanks everybody for replies!<br />And what about situation 2?</div>
+    <div class="meta">Posted on 2005-01-12 02:30:42 by Elohim Meth</div>
+   </div>
+   <div class="post" id="post-155683">
+    <div class="subject"><a href="#post-155683">HLA generates invalid ASM code</a></div>
+    <div class="body"><div class="quote">Thanks everybody for replies!<br />And what about situation 2?</div><br /><br /><br />Situation 2 is a classic example of &quot;if you care about this kind of stuff, you shouldn't be using HLL-like constructs.&quot; :-)<br /><br />Seriously, though, there's not much chance of this kind of optimization in HLA v1.x. The internal structure of the compiler just won't allow it. I definitely plan to add an optimizer to HLA v2.0 (actually, if I follow the original road map, the difference between HLA v2.0 and v3.0 is the existence of the optimizer).  In any case, don't expect great code here (note: MASM actually *does* optimize this type of code).  There are lots of known &quot;bad code optimizations&quot; that occur in HLA. I have no plans of correcting most of these because that effort is better spent on HLA v2.0.<br /><br />As for topic #1, I have found the problem and I've corrected it. Look forward to an HLA v1.75 release this weekend or so.<br />Cheers,<br />Randy Hyde</div>
+    <div class="meta">Posted on 2005-01-12 21:36:20 by rhyde</div>
+   </div>
+  </div>
+ </body>
+</html>

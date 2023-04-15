@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Almost got Multisocket working with Events but.... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4165" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=4165">Almost got Multisocket working with Events but....</a></p>
+   <div class="post" id="post-28608">
+    <div class="subject"><a href="#post-28608">Almost got Multisocket working with Events but....</a></div>
+    <div class="body">HI all, sorry to bug u guys again, but I needed your help.<br />So far, I got the snippet of the board here, and try to modified it so that it can handle multi connections. but I seem to have problem modifying it.. coz I am still confusing about winsock stuff.<br /><br />here what I got:<br /><br />EventMode	proc	Param:DWORD<br /><br />LOCAL	Count:DWORD<br />LOCAL	CurrentEvent:DWORD<br /><br />	jmp @F<br />		Connection1C db &quot;test&quot;,0<br />		Connection1T db &quot;debuging&quot;,0<br />	@@:<br />	invoke MessageBox, NULL, addr Connection1T, addr Connection1C, MB_OK<br /><br />	mov Count, 0<br />@CreateNewEvent:<br />	invoke	WSACreateEvent			;create a event for listening<br />	mov dword ptr, eax	;save handle to array<br />	inc Count      ;use with WSAWaitForMultipleEvents<br />	.IF (Count==1)<br />		mov hEventListen, eax<br />		invoke	WSAEventSelect, hListenSocket, eax, FD_ACCEPT+FD_CLOSE<br />	.ELSE<br />		invoke	WSAEventSelect, hListenSocket, eax, FD_READ+FD_WRITE+FD_CLOSE<br />	.ENDIF<br />		<br />@NextEvent:<br />	invoke	WSAWaitForMultipleEvents, Count, addr pListenEvent, FALSE, INFINITE, FALSE	;&lt;--this call seems to always return 0xFFFFFFFF<br /><br />	;eax is now the index of the event object that got signaled<br />	mov CurrentEvent, eax<br />	.IF (eax==hEventListen)<br />		invoke WSAEnumNetworkEvents, hListenSocket, hEventListen, addr WSAEventListen<br />	.ELSE<br />		invoke WSAEnumNetworkEvents, hListenSocket, CurrentEvent, addr WSAEventListen<br />	.ENDIF<br />	cmp WSAEventListen.lNetworkEvents, FD_ACCEPT<br />	jne @READ<br />		lea edi, pListenEvent<br />		add edi, 4<br />		mov pListenEvent, edi<br />		jmp @F<br />			ConnectionC db &quot;Accepted:&quot;,0<br />			ConnectionT db &quot;Incoming Connection&quot;,0<br />		@@:<br />		invoke MessageBox, NULL, addr ConnectionT, addr ConnectionC, MB_OK<br />		jmp @CreateNewEvent<br />	@READ:<br />	cmp WSAEventListen.lNetworkEvents, FD_READ<br />	jne @SEND<br />		;do recv stuff<br />	@SEND:<br />	cmp WSAEventListen.lNetworkEvents, FD_WRITE<br />	jne @CLOSE<br />		;do send stuff<br />	@CLOSE:<br />	cmp WSAEventListen.lNetworkEvents, FD_CLOSE<br />	jne @MORE<br />		invoke WSACloseEvent, CurrentEvent<br />	@MORE:<br />	jmp @NextEvent<br /><br />	ret<br />EventMode	endp<br /><br />what I am trying to do here is:<br />1)create main event so it can handle FD_ACCEPT, FD_CLOSE<br />2)when the FD_ACCEPT notified, I go back and create a new event for that connection, and let it handle FD_READ, FD_WRITE, and FD_CLOSE<br />3) this will keep repeating until EventMode thread terminated<br /><br />after I noticed that it can accept multi connections but it seem to fall into the FD_ACCEPT notification in a forever loop. what I mean is when I create a connection to this server, the accept msg box keep poping up, I can't cancel it.<br /><br /><br />would somebody help me fix this please?<br /><br /><br />sincerely,</div>
+    <div class="meta">Posted on 2002-03-12 12:28:32 by Yanda</div>
+   </div>
+   <div class="post" id="post-28646">
+    <div class="subject"><a href="#post-28646">Almost got Multisocket working with Events but....</a></div>
+    <div class="body">I have not looked at it long, but one thing I see wrong is that you are not creating a new thread for each accept. After the main thread is signaled with an accept, use CreateThread() to spawn a new thread. Also look at WSAResetEvent(), otherwise your program will just spin.</div>
+    <div class="meta">Posted on 2002-03-12 15:26:41 by bdjames</div>
+   </div>
+   <div class="post" id="post-28712">
+    <div class="subject"><a href="#post-28712">Almost got Multisocket working with Events but....</a></div>
+    <div class="body">If you get it working... Please post the source, this is something I was/is struggling with for some time<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-03-13 00:44:15 by Sliver</div>
+   </div>
+   <div class="post" id="post-28724">
+    <div class="subject"><a href="#post-28724">Almost got Multisocket working with Events but....</a></div>
+    <div class="body">Ok sure!<br /><br />I feel so happy that I can also help someone too :alright: <br /><br /><br />keep an eye on :grin:</div>
+    <div class="meta">Posted on 2002-03-13 02:21:10 by Yanda</div>
+   </div>
+   <div class="post" id="post-28757">
+    <div class="subject"><a href="#post-28757">Almost got Multisocket working with Events but....</a></div>
+    <div class="body">I would be interested too.:)</div>
+    <div class="meta">Posted on 2002-03-13 07:16:17 by TCT</div>
+   </div>
+   <div class="post" id="post-28780">
+    <div class="subject"><a href="#post-28780">Almost got Multisocket working with Events but....</a></div>
+    <div class="body">The problem is that the lNetworkEvents member is a bitmask where one or more bits are set (corresponding to a FD_* value), indicating which of the network events occurred. You are comparing against each value, but more than one event can occur.<br />Here's a piece of code from my blueice webserver:<br /><pre><code><br />; Translates a network event into one or more connthread messages<br />; returns 1 on success, 0 on error &#40;dwLastError is set&#41;<br />CST_TranslateNetEvents proc uses ebx edi esi lpTHIS&#58;DWORD<br />LOCAL networkEvents&#58;WSANETWORKEVENTS<br />    SetObject edi, CServerThread<br /><br />    ; Look which network events occurred&#58;<br />    invoke  WSAEnumNetworkEvents, &#91;edi&#93;.hClientSocket, &#91;edi&#93;.hNetworkEvent,<br />                addr networkEvents<br />    <br />    ; If eax is not null, an error occurred&#58;<br />    .IF     eax<br />        mov     &#91;edi&#93;.dwLastError, ST_ERR_INTERNALFUNCTIONFAILED <br />        xor     eax, eax<br />        ret<br />    .ENDIF<br />    <br />    ; initialize&#58;<br />    mov     ebx, dword ptr &#91;networkEvents&#93;<br />    xor     esi, esi<br />    <br />    <br />    ; Bit test on server network events. Push each translated msg on stack,<br />    ; esi is the msg counter&#58;<br />    test    ebx, FD_READ<br />    jz      @F<br />    push    STMSG_FD_READ<br />    inc     esi<br />    @@&#58;<br />    test    ebx, FD_WRITE<br />    jz      @F<br />    push    STMSG_FD_WRITE<br />    inc     esi<br />    @@&#58;<br />    test    ebx, FD_CLOSE<br />    jz      @F<br />    push    STMSG_FD_CLOSE<br />    inc     esi<br />    @@&#58;<br />    <br />    ; Pop &#40;esi&#41; messages from stack and send them<br />    .WHILE  esi<br />        pop     eax<br />        method  edi, CServerThread, SendMsg, eax<br />        .IF     eax!=1<br />            mov     &#91;edi&#93;.dwLastError, eax<br />            xor     eax, eax<br />            ret<br />        .ENDIF<br />    dec esi<br />    .ENDW<br /><br />    xor     eax, eax<br />    inc     eax<br />    <br />    ReleaseObject edi<br />ret<br />CST_TranslateNetEvents  endp<br /></code></pre><br /><br />Thomas<br /><br /><strong>edit, sidenote:</strong>The code above tests if an event has happend, and if it has it pushes a message onto the stack. The loop after it pops all values off again and sends them one by one. You can simply test for the events in your code, this is just how my code's internals work.<br /><br /><strong>edit2:</strong>. Just found a bug in my message send loop above :), if something goes wrong the stack gets corrupted...</div>
+    <div class="meta">Posted on 2002-03-13 09:18:49 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

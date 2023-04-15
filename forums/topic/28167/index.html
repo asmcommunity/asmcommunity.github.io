@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>WinMain and Message Loop - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28167" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28167">WinMain and Message Loop</a></p>
+   <div class="post" id="post-199687">
+    <div class="subject"><a href="#post-199687">WinMain and Message Loop</a></div>
+    <div class="body">I have a problem. A rather large one. I simply cant get to grips with how to create a window and to send messages to it. I have read Iczelion's "tut03" (A Simple Window) many times and have even printed it out and been over it several times but no matter how hard i try i still don't get it.
+Sorry, but this will probably be a long question with a long answer. :) I just hope someone has the patience to answer it.
+
+	invoke GetModuleHandle, NULL
+	mov    hInstance,eax
+	invoke GetCommandLine
+	mov    CommandLine,eax
+	invoke WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT
+	invoke ExitProcess,eax
+
+I understand all this other than that I dont see why ExitProcess isnt at the end of the code. does the WinMain call make it jump to the line under ExitProcess? This Line:
+
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
+
+I understand that the large section below involving a lot of "mov-ing" is just shoving all the stuff we need to create the window class into the WNDCLASSEX structure. (correct me if im wrong). I dont understand why it cant just keep going rather than call WinMain and then jump over the ExitProcess and then go back to it when its done. This confuses me. 
+
+The lines after the CreateWindowEx i understand. They just display the window on the desktop and refresh it.
+
+	invoke ShowWindow, hwnd,SW_SHOWNORMAL
+	invoke UpdateWindow, hwnd
+
+if i was to leave these lines out would the window still be able to receive messages but just not be displayed on the desktop???
+
+OK. Now comes the part that really has me stuck in the mud. The message loop. 
+
+	.WHILE TRUE
+		invoke GetMessage, ADDR msg,NULL,0,0
+		.BREAK .IF (!eax)
+		invoke TranslateMessage, ADDR msg
+		invoke DispatchMessage, ADDR msg
+	.ENDW
+	mov     eax,msg.wParam
+	ret
+WinMain endp
+
+WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	.IF uMsg==WM_DESTROY
+		invoke PostQuitMessage,NULL
+	.ELSE
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam		
+		ret
+	.ENDIF
+	xor eax,eax
+	ret
+WndProc endp
+
+ok so this just waits for the WM_DESTROY message (the user clicking the X or ctrl+Alt+Del'ing it right?)
+
+i understand that this is what that code ultimately achieves but i dont understand what each part of it does. 
+what does ".WHILE TRUE" do? and what difference does putting an ! before eax make? what does ret do? return to something? i dont know.
+
+It would be great if someone could explain what each line of this code does.
+
+Sorry its such a basic question but i have got away with not using messages before and now i am getting to the stage where i really need to know how to use them :D
+
+thanks a ton. skud.</div>
+    <div class="meta">Posted on 2001-05-24 15:36:00 by skud</div>
+   </div>
+   <div class="post" id="post-199688">
+    <div class="subject"><a href="#post-199688">WinMain and Message Loop</a></div>
+    <div class="body">I wont explain each line, as i dont think its needed.  The structure is straight forward, really :)
+
+The code is really structured in 3 nested layers:
+<pre><code>
+
+Layer 1:
+
+  Start, getInstance, getCommandLine, DO LAYER 2, call Exitprocess, End
+
+Layer 2: (WinMain)
+
+  Fill Window Class stucture, Create a Window,
+
+    LOOP infinitely
+       Get Messages
+       Check for the 'destroy window' message value NULL!!
+           YES: break out of the infinite loop (windows is done!)
+            NO: then dispatch the message to my window
+                function (Layer 3)
+    LOOP agin for more messages
+ 
+    End Function, since im out of the infinite loop, which means
+                  the window had been told to close (somehow)
+                  this means, i must then return to the point
+                  where this WinMain function was called!,
+                  Right before the ExitProcess command, which
+                  is convienent because if im here, i want to do
+                  just this!
+
+Layer 3:
+
+      Your window behaviors, what every programmer stives
+to become good at!  Here at some point i can ask windows insert
+into the message loop (which will get noticed at layer 2!!) 
+the 'Destroy Messge'.  But i can't directy force myself to 
+quit!, i must simply ask and wait! Its up to layer 2 to decide 
+if this window is to quit.
+</code></pre>
+
+This is it in a nut shell..  Layer 3 is a subfunction of Layer 2, and Layer 2 is a sub function of layer 1. Since 2 has an infinite loop (controled by layer 3), the end of layer 1 is only reached when layer there finally allows layer two to return.  It may help to point out that the WinMain function is only entered once, and only exited once.  While layer 3, is being entered/exited with each message that has your window's name on it.
+
+Well there it is...
+NaN     
+
+This message was edited by NaN, on 5/24/2001 6:14:59 PM</div>
+    <div class="meta">Posted on 2001-05-24 18:13:00 by NaN</div>
+   </div>
+   <div class="post" id="post-199689">
+    <div class="subject"><a href="#post-199689">WinMain and Message Loop</a></div>
+    <div class="body">Thanks NAN!
+
+thats cleared a lot up for me. i'm sure when i start using messages i'll come across some more problems :D
+
+watch this space.
+
+skud.</div>
+    <div class="meta">Posted on 2001-05-24 18:24:00 by skud</div>
+   </div>
+   <div class="post" id="post-199690">
+    <div class="subject"><a href="#post-199690">WinMain and Message Loop</a></div>
+    <div class="body">Hi
+
+Answer part1
+=============
+I will try to explain it to you steep by steep, but before i start i also have to ask tou something:
+
+why do you do it? and how much ASM do you really wanna learn? i mean not knowing what "RET" instruction does is not a good start ;)
+
+Now for the explanations (long) :
+
+<div class="quote">
+invoke GetModuleHandle, NULL
+mov hInstance,eax
+invoke GetCommandLine
+mov CommandLine,eax
+invoke WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT
+invoke ExitProcess,eax
+
+I understand all this other than that I dont see why ExitProcess isnt at the end of the code. does the WinMain call make it jump to the line under ExitProcess? 
+</div>
+
+This is object and message driven programming why should ExitProcess be at the end? One thing you should learn is that linear procedural programm flow is not used in window any more.
+
+So that sequence will make all necessary setups and then somewhere in WinMain it will enter an never ending loop (well allmost never ending) this loop is called "the windows message loop" . This loop basically lets windows and other programs execute their code in the same time with yours. 
+Dont be triked by the fact that you dont see such "message loop" in MessageBox or Dialog Windows examples, the loop is there Ok but is embeded in the system procedures that deal with a messagebox or a Dialog
+
+Also C++ or Delphi or VB etc are doing their best to hide this true fact from you (they do it behind your back ;) ) but the loop is allways there....
+
+So WinMain (its message loop) will NOT terminate UNTIL a WM_Destroy message is received by the Callback function that is setup by the class registration done inside winmain ... clear?
+
+ONLY after that the LINEAR execution of the program continues to the ExitProcess line. That line does required cleanup (system) and then it terminates your program ...</div>
+    <div class="meta">Posted on 2001-05-24 18:28:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-199691">
+    <div class="subject"><a href="#post-199691">WinMain and Message Loop</a></div>
+    <div class="body">Part 2
+============
+
+<div class="quote">
+WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShowWORD
+
+I understand that the large section below involving a lot of "mov-ing" is just shoving all the stuff we need to create the window class into the WNDCLASSEX structure. (correct me if im wrong). I dont understand why it cant just keep going rather than call WinMain and then jump over the ExitProcess and then go back to it when its done. This confuses me. 
+
+</div>
+
+Now one thing that is very inportant is that WNDCLASSEX structure ALSO contains a POINTER to a FUNCTION ... TADA...this is the core of OBJECT Programming="POINTERs to FUNCTIONS"
+
+This funstion is the so called "window callback"
+why callback...welll because Windows will call it whenever it wants.... TADA...no more deterministic programming...this is the World of "EVENT DRIVEN PROGRAMMING".
+
+Basically your programm can only respond to certain events or messages and ONLY when WINDOWS allows you to do so (well thare are some advance methode to "bend" those rules like : timmers and threads...but that is too much advanced now)
+
+More..... this "callback" procedures MUST adhere to some standards, (save some registers, expect some parameters in a STDCALL convention, return some parameters) fail to do so and your program or even windows itself will start to behave eratic... hence the "cooperative" mode of windows multitasking paradigm ;)
+
+Latest... yes you are right it can continue normaly (without a call to a separate WinMain Setup)until the message loop is reached...but most programmers like to structure their code this way...however the next "layer=callbacks" as NaN names it CAN NOT be avoided (for all that you should know ;) )
+
+to be continued .....</div>
+    <div class="meta">Posted on 2001-05-24 18:42:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-199692">
+    <div class="subject"><a href="#post-199692">WinMain and Message Loop</a></div>
+    <div class="body">Part 3
+==========
+
+<div class="quote">
+
+OK. Now comes the part that really has me stuck in the mud. The message loop. 
+
+.WHILE TRUE
+  invoke GetMessage, ADDR msg,NULL,0,0
+  .BREAK .IF (!eax)
+  invoke TranslateMessage, ADDR msg
+  invoke DispatchMessage, ADDR msg
+.ENDW
+mov eax,msg.wParam
+ret
+WinMain endp
+
+</div>
+
+Hmm i will happy skip the part you think you understand ;)
+to get to the one that gets you in the "mud". 
+
+LOL i see a nice demonstration of what High Level instructions can do to a beginner...ie "let him in the mud" ;)
+
+this is the message loop part (only this one!)
+
+the HLL construct:
+.while 
+
+.endw
+
+is just a "nice" way to do a "while .... loop"
+
+MASM or TASM assemblers convert those "High Level" instructions into basic: CMP  and JMP instructions acordingly
+
+.WHILE TRUE will do a never ending loop...
+but the .BREAK .IF condition exits even this "never ending loop" ... just like in C ... eh?
+
+again like in C, (!eax) means (NOT eax) actually EAX<>0
+
+well RET is the RETURN instruction... it just RETURNS to the calling program, actually to the next instruction after the call. Pretty much like "end;" in PASCAL or the last "}" in C
+
+like this:
+
+;this is a comment showing some program call
+;--------------------------------------------
+ mov eax,6
+ call foo1
+
+; here will ret from foo1 come back
+;-----------------------------------
+ mov ecx,1
+
+; just to show some return to an upper level
+; -------------------------------------------
+ret
+
+
+; this is the "foo1" procedure
+; can be after many many lines of code
+; ---------------------------------------
+foo1:
+ mov ebx,3
+ add eax, ebx ; wow we just added 6+3 numbers
+ret 
+; now this latest "ret" will return to the "mov ecx,1"
+; in the above proggy
+
+...to be continued...
+
+and i started to make more and more typo errors ;(
+
+
+
+
+
+This message was edited by BogdanOntanu, on 5/24/2001 7:10:58 PM</div>
+    <div class="meta">Posted on 2001-05-24 19:06:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-199693">
+    <div class="subject"><a href="#post-199693">WinMain and Message Loop</a></div>
+    <div class="body">Part 4
+==========
+
+<div class="quote">
+WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+.IF uMsg==WM_DESTROY
+invoke PostQuitMessage,NULL
+.ELSE
+invoke DefWindowProc,hWnd,uMsg,wParam,lParam 
+ret
+.ENDIF
+xor eax,eax
+ret
+WndProc endp
+
+</div>
+
+So at LAST... the CALLBACK. Have you naticed that is an offset to this function that is "moved" into the WNDCALSSEX structure?
+
+WndProc is of course and overused name ;) for this callback
+
+Here you deal with messages that windows sends to you ;)
+You have to know what EVERY message means and what parameters it has, and what to do with him...etc THE CORE of Windows Programming (well not games but eh ... ) is here, read some books on this (Petzold is a good start or the Win APi Bible)
+even if all examples are in C :(
+
+what little is shown here is that at least ONE message (WM_Destroy) should be dealt with.. and that ALL other messages (and there are A LOT) that you DONT CARE ABOUT should be send to the DEFAULT Windows Procedure ... so nice from Win32API to have a DEFAULT procedure for this (for maximize, size,minimize,close etc...system operations)
+
+but you really need to compare with each message that you WANT to manage and dont forget to return ZERO by "xor eax,eax" or "mov eax, 0" to signal window YOU have dealed with that message OK ... ;) IF you do of course ;)
+
+
+Any more Questions?
+Bogdan</div>
+    <div class="meta">Posted on 2001-05-24 19:22:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-199694">
+    <div class="subject"><a href="#post-199694">WinMain and Message Loop</a></div>
+    <div class="body">thanks a lot BogdanOntanu.
+great answers. what i couldnt get to grips with was that as NaN put it "The code is really structured in 3 nested layers".
+
+I will be referring back to this a lot.
+
+btw, i have tried using Delphi and C++. C++ was just impossible and i soon gave up (I still have the CD's). Delphi wasn't so bad but my DVD drive "ate" my CD. No joke. It snapped the thing in two! I paid £25 for that disc! I never bothered getting a new one. My DVD Drive is made by AOpen i think. It's one of those ones without a tray that you just shove the disc into and it sucks it in. Avoid it like the plague! It's never snapped any other CD's since but i replaced it all the same. Maybe it just didn't like Delphi !!?? LOL.
+
+I found some TASM code and Turbo assembler at crackstore. I started playing with it and had a look on the internet for some other TASM stuff and found this site. I then tried MASM and thought it was better. So that's why i'm here now :)
+
+skud.
+
+This message was edited by skud, on 5/25/2001 3:55:20 AM</div>
+    <div class="meta">Posted on 2001-05-25 03:51:00 by skud</div>
+   </div>
+  </div>
+ </body>
+</html>

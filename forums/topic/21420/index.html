@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Clearing local variables - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21420" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21420">Clearing local variables</a></p>
+   <div class="post" id="post-161775">
+    <div class="subject"><a href="#post-161775">Clearing local variables</a></div>
+    <div class="body">Hi Community,<br /><br />This is a snippet for easy clearing local (stack) variables. It will work correctly if called from a subroutine with pushed registers: ebp,esi,edi and ebx<br /><pre><code>global ClearStack<br /><br />ClearStack:<br /><br />? ? mov eax,esp? ? ? ? ?; transfer esp to eax<br />? ? add eax,16? ? ? ? ? ; add 16, skips the pushed EIP, esi,edi,ebx<br />? ? xor edx,edx? ? ? ? ?; Sets edx to zero<br />.again: <br />? ? cmp eax,ebp? ? ? ? ?; if eax equals ebp - we&#39;re done<br />? ? je .fin <br />? ? mov dword ,edx ; clear 4 bytes<br />? ? add eax,4 <br />? ? jmp .again<br />.fin: <br />? ? ret</code></pre><br /><br />so, instead<br /><pre><code>WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD<br />? ? LOCAL? wc:WNDCLASSEX<br />? ? LOCAL? msg:MSG<br /><br />&nbsp; &nbsp; push esi,edi,ebx<br />? ? mov? ? wc.cbClsExtra,NULL ; &lt;- removed<br />? ? mov? ? wc.cbWndExtra,NULL ; &lt;- removed<br />...</code></pre><br />the code should looks like<br /><pre><code>WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD<br />? ? LOCAL? wc:WNDCLASSEX<br />? ? LOCAL? msg:MSG<br /><br />&nbsp; &nbsp; push esi,edi,ebx<br />? ? invoke ClearStack<br />...</code></pre><br /></div>
+    <div class="meta">Posted on 2005-07-07 12:48:49 by sapero</div>
+   </div>
+   <div class="post" id="post-161777">
+    <div class="subject"><a href="#post-161777">Re: Clearing local variables</a></div>
+    <div class="body">Mhm, did you actually test this? Your example won&#39;t work...<br /><br />If you don&#39;t push ebx, esi and edi, (like in your example above), you should be substracting 4 from esp... you need to add one parameter to the ClearStack procedure then, to know how much to substract from esp.<br /></div>
+    <div class="meta">Posted on 2005-07-07 19:12:35 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-161792">
+    <div class="subject"><a href="#post-161792">SSE or MMX can solve it faster</a></div>
+    <div class="body">pxor mm0,mm0<br />movq qword , mm0; to clear 2 dwords<br />or<br />pxor xmm0,xmm0<br />movdqu dqword,xmm0 ; to clear 4 dwords</div>
+    <div class="meta">Posted on 2005-07-07 22:51:09 by r22</div>
+   </div>
+   <div class="post" id="post-161796">
+    <div class="subject"><a href="#post-161796">Re: Clearing local variables</a></div>
+    <div class="body">Yes, it works, I always call this function from subroutines where are local structures for api functions<br />Added &quot;push esi,edi,ebx&quot; to examples (those registers are pushed automatically/always in my subs)<br />Also the stack frame must be present (enter x,y or push ebp...)<br /><br />the complete example (nasm syntax) compile for console<br /><pre><code>%include &quot;asm.inc&quot;<br />extern ClearStack<br /><br />main:<br />? ? call testme<br />? ? end<br /><br />testme: ;--------------------<br />? ? enter 32,0<br />? ? push? ebx, edi, esi<br /><br />? ? cdecl printf, strBefore ; print local string<br />? ? call? doPrint<br /><br />? ? call? ClearStack? ? ? ? ; clear stack<br />? ? cdecl printf, strAfter? ; and print again<br />? ? call? doPrint<br /><br />? ? cdecl printf, strq<br />? ? cdecl _getch? ? ? ; wait key<br />? ? pop? esi, edi, ebx<br />? ? leave<br />? ? ret<br /><br /><br />doPrint: ;--------------------<br />? ? lea? ?esi,<br />? ? mov? ?edi,32&gt;&gt;2<br />? .b<br />? ? cdecl printf, &quot;0x%X, &quot;, dword<br />? ? add? ?esi,4<br />? ? sub? ?edi,1<br />? ? jnz? .b<br />? ? ret<br /><br /> ;--------------------<br /><br />strBefore db &quot;--- String before ClearStack()---&quot;,13,10,0<br />strAfter? db 8,8,32,13,10,&quot;--- String after? ClearStack()---&quot;,13,10,0<br />strq? ? ? db 8,8,32,13,10,0</code></pre><br />the cdecl macro works like invoke + add esp, &lt;4*num.params&gt;</div>
+    <div class="meta">Posted on 2005-07-08 04:26:31 by sapero</div>
+   </div>
+   <div class="post" id="post-161808">
+    <div class="subject"><a href="#post-161808">Re: Clearing local variables</a></div>
+    <div class="body">No it doesn&#39;t, you&#39;re not pushing the registers in the first example you posted. And in any case, I still think it&#39;s best to pass an argument (at least in a register) so you don&#39;t force users to preserve registers that maybe didn&#39;t wanted to preserve...</div>
+    <div class="meta">Posted on 2005-07-08 09:24:39 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-161849">
+    <div class="subject"><a href="#post-161849">Re: Clearing local variables</a></div>
+    <div class="body">This is dumb. How often do you need to clear all the local variables? And you could just as well use this:<br />push DwordCount<br />pop ecx<br />clr:<br />push 0<br />loop clr<br /><br />This is 7 bytes rather than the 8 bytes required (not counting push ebx, esi and edi) when using your function.</div>
+    <div class="meta">Posted on 2005-07-09 06:55:56 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-161851">
+    <div class="subject"><a href="#post-161851">Re: Clearing local variables</a></div>
+    <div class="body"><div class="quote"><br />This is 7 bytes rather than the 8 bytes required (not counting push ebx, esi and edi) when using your function.<br /></div><br />But is it faaa-aaa-aaaast? ;-)<br /></div>
+    <div class="meta">Posted on 2005-07-09 07:33:43 by f0dder</div>
+   </div>
+   <div class="post" id="post-161854">
+    <div class="subject"><a href="#post-161854">Re: Clearing local variables</a></div>
+    <div class="body">In the above example, I feel that invoking his ClearStack is not worth it at all. All you need to do is clear the data in 2 dword, and by calling ClearStack you end up clearing the data in all your local variables (which takes more time than 2 simple mov).<br /><br />Also if the routine does not preserve ebx,edi,esi (as they might not use it), it ends up not clearing some of the local variable.<br /><br />Just my 2 cents. </div>
+    <div class="meta">Posted on 2005-07-09 07:50:31 by roticv</div>
+   </div>
+   <div class="post" id="post-161953">
+    <div class="subject"><a href="#post-161953">Re: Clearing local variables</a></div>
+    <div class="body">I think it could be used in the few cases when you need to clear several kilobytes of data... maybe. :?</div>
+    <div class="meta">Posted on 2005-07-11 11:21:17 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-161991">
+    <div class="subject"><a href="#post-161991">Re: Clearing local variables</a></div>
+    <div class="body">My stand on this issue is that if you want to clear a few kb, you would be using movq + mmx registers instead of the normal mov. It would be faster that way.&nbsp; ;)</div>
+    <div class="meta">Posted on 2005-07-12 07:09:33 by roticv</div>
+   </div>
+   <div class="post" id="post-161997">
+    <div class="subject"><a href="#post-161997">Re: Clearing local variables</a></div>
+    <div class="body">I wrote a simple macro to clean local variables, can be used (almost) anywhere within a procedure.<br /><pre><code>	; this macro clear (zeros) all local variables<br />	; !!! destroys edi<br />	; argument is the number of &quot;uses&quot; to skip<br />	ZeroLocals MACRO UsesNum<br />		xor eax, eax<br />		mov edi, esp<br />		if UsesNum ne 0<br />			add edi, UsesNum*4<br />		endif<br />		mov ecx, ebp<br />		sub ecx, edi<br />		shr ecx, 2<br />		rep stosd<br />	endm<br /></code></pre></div>
+    <div class="meta">Posted on 2005-07-12 13:33:20 by masquer</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Using RDTSC to measure # of clock cycles - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12879" />
+  <link rel="prev" href="../?id=12879&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12879">Using RDTSC to measure # of clock cycles</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=12879&amp;page=1" style="">&laquo;</a><a href="../?id=12879&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="12879" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-100302">
+    <div class="subject"><a href="#post-100302">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">Just take it that i forgot abt entry point :)<br /><pre><code><br />.386<br />.model flat, stdcall<br />option casemap&#58;none<br /><br />include /masm32/include/windows.inc<br />include /masm32/include/kernel32.inc<br />include /masm32/include/user32.inc<br />includelib /masm32/lib/kernel32.lib<br />includelib /masm32/lib/user32.lib<br />.data<br />format db &quot;%d %d clocks&quot;,0<br />.data?<br />buffer db 64 dup &#40;?&#41;<br />hOutput dd ?<br />written dd ?<br /><br />.code<br />start&#58;<br />    invoke GetStdHandle, STD_OUTPUT_HANDLE<br />    mov hOutput, eax<br />          rdtsc             ; First measure of time<br />                            ; rdtsc takes 13 cycles on Pentium MMX,<br />          push edx          ; I store it on the stack. <br />          push eax          ; You can store the 64 bit number whereever you like<br /><br />; routine to test<br />          nop<br />          nop<br />          nop<br />          nop<br />; end routine<br /><br />          rdtsc             ; Second measure of time<br />          sub eax, &#91;esp&#93;    ; subtract first from second<br />          sbb edx, &#91;esp+4&#93;  ; result in EDX&#58;EAX<br /><br />;         sub eax, 0eh      ; Optional compensation for the rdtsc and 2 pushes<br />;         sbb edx, 0        ; 14 cycles on a Pentium MMX<br />                            ;  9 cycles on a K6-2<br />          <br />          add esp,8         ; remove edx, eax from stack<br />invoke wsprintf, offset buffer, offset format, edx,eax<br />invoke WriteConsole,hOutput, offset buffer, sizeof buffer,offset written,0<br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-30 07:25:40 by roticv</div>
+   </div>
+   <div class="post" id="post-100303">
+    <div class="subject"><a href="#post-100303">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">Well, yes. For GetTickCount only, the OS could rdtsc at OS start (I think the &quot;since the system was started&quot; means windows start, not CPU poweron - might be wrong). And it determines the CPU speed, so it could convert clock cycles to miliseconds.<br /><br />That doesn't address the problem with power saving modes, though.<br /><br />The PIT is already used anyway, probably with a higher-than-milisec resolution, so it can add to a counter, which can later be returned much in the same manner that you'd convert a rdtsc reading to miliseconds.<br /><br />my &quot;constantly polling RDTSC would be slow.&quot; is nonsense - I was thinking preemptive scheduling, but of course you can't do that without an interrupt timer, thus there's no way &quot;RDTSC polling&quot; would enter the picture. :stupid:</div>
+    <div class="meta">Posted on 2003-04-30 07:33:53 by f0dder</div>
+   </div>
+   <div class="post" id="post-100305">
+    <div class="subject"><a href="#post-100305">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">V Coder wrote<br /><div class="quote">I wonder... Wouldn't the OS routine that determines ticks only poll RDTSC when it is called, not constantly? </div><br /><br />f0dder,<br /><br />Acutally, I was thinking maybe Bill could come and tell us exactly how GetTickCount works. I'm realizing that if it used RDTSC it would need to measure the clock speed first (either at the boot up, in which case the figure is stored somewhere) or else in the GetTickCount routine, in which case it would add lots of overhead. I'm just speculating here anyway. But how do you measure clock speed anyway. Wait, let me check yodel...<br /><br />Enjoy.<br /><br /><br />roticv,<br /><br />Thanks. Well now I'm late for work... I'll check it when I return.</div>
+    <div class="meta">Posted on 2003-04-30 07:43:44 by V Coder</div>
+   </div>
+   <div class="post" id="post-100306">
+    <div class="subject"><a href="#post-100306">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">V,<br /><br />===============================<br />hutch,<br /><br />I agree that there is tremendous variability with the time offered by RDTSC, especially for routines that should take lets say 200 cycles... I am getting wide variation.... Still in testing phase now though... I hope to get a fix on the ideal number of iterations to mask that effect.<br />===============================<br /><br />This is pretty much what I found using it and even though its easy enough to use as an instruction, the results varied too much.<br /><br />I use the simple GetTickCount with large samples because its easy to use and can deliver the accuracy I require when used that way.<br /><br />With RDTSC, there used to be a trick after you set the priority higher which was to use a serialising instruction which was from memory CPUID before it to stall both pipelines and empty them out.<br /><br />Logic is like this.<br /><br />CPUID<br />CPUID<br /><br />RDTSC<br /><br />run the code to time<br /><br />RDTSC<br /><br />The compare the results of the first and second RDTSC for the timing.<br /><br />I think if you algo is small enough that the technique that Bitrake designed is a good one if you run it often enough and only ake the minimum values. This is a good technique in the development stage but I would still suggest doing your final evaluation in real time as it better emulates how it will work in a program.<br /><br />Something I found out years ago with my old PIII was that if i had a net connection running which used CPU cycles if effected the timings I got in an interesting way. Algorithms that depended on loop code suffered the most from the interference where algorithms that depended on better logic has less interference.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-30 08:02:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-100309">
+    <div class="subject"><a href="#post-100309">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">hutch, a possible explanation for the net connection stuff is that most decent NICs will issue a hardware interrupt when there's data arriving, and when it's ready to send; thus, context switching is hard to avoid, even if you raise process priority to realtime-ish.</div>
+    <div class="meta">Posted on 2003-04-30 08:06:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-100637">
+    <div class="subject"><a href="#post-100637">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">Are you folks up to speed on the ins and outs of the RDTSC instruction as described by this site?  Ratch<br /><a target="_blank" href="http://cedar.intel.com/software/idap/media/pdf/rdtscpm1.pdf">http://cedar.intel.com/software/idap/media/pdf/rdtscpm1.pdf</a></div>
+    <div class="meta">Posted on 2003-05-01 19:27:08 by Ratch</div>
+   </div>
+   <div class="post" id="post-100680">
+    <div class="subject"><a href="#post-100680">Using RDTSC to measure # of clock cycles</a></div>
+    <div class="body">Nice doc, ratch.</div>
+    <div class="meta">Posted on 2003-05-02 02:01:19 by f0dder</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=12879&amp;page=1" style="">&laquo;</a><a href="../?id=12879&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="12879" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

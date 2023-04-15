@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Shell32.dll icons to imagelist - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10800" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=10800">Shell32.dll icons to imagelist</a></p>
+   <div class="post" id="post-81261">
+    <div class="subject"><a href="#post-81261">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Hi,<br /><br />I try to load all possible icons from SHELL32.DLL into an imagelist.<br />It works, but most icons looks shitty. Same of them have big black borders and some of them are pixeled out.<br />Is there a better method to put the shell32.dll-icons in the imagelist ?<br /><br />Sorry for my bad english...<br /><br /><pre><code><br />    invoke GetSystemMetrics,49<br />    mov  xxx,eax<br />    invoke GetSystemMetrics,50<br />    mov  yyy,eax<br />    <br />    invoke ImageList_Create,xxx,yyy,33,0,0  ;1<br />    mov  ilist,eax<br /><br />    invoke GetSystemDirectory,addr unwichtig,512<br />    invoke szCatStr,addr unwichtig,addr shelltext<br />    invoke LoadLibrary,addr unwichtig<br />    mov  shell32,eax<br /><br />    mov  ecx,1<br />    zander&#58;<br />    push ecx<br />    invoke LoadIcon,shell32,ecx<br />    pop  ecx<br />    cmp  eax,0<br />    je   endezander<br />    push ecx<br />    invoke ImageList_AddIcon,ilist,eax<br />    pop  ecx<br />    inc  ecx<br />    jmp  zander<br />    <br />    endezander&#58;<br /></code></pre><br /><br />Greetings,<br />Nordwind64</div>
+    <div class="meta">Posted on 2003-02-12 09:04:59 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81264">
+    <div class="subject"><a href="#post-81264">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Why not use the system image list, that way your icons can look the same as the standard icons on every operating system.  Use the following, where szFileName can be anything (I use c:\\):<br /><br /><pre><code><br />  SHFILEINFO	psfi;<br /><br />  hImageList = &#40;HIMAGELIST&#41;SHGetFileInfo&#40;szFileName, 0, &amp;psfi, <br />         sizeof&#40;SHFILEINFO&#41;, SHGFI_ICON | SHGFI_SYSICONINDEX | HGFI_SMALLICON &#41;;<br />  ListView_SetImageList&#40;hList, hImageList, LVSIL_SMALL&#41;;<br /></code></pre><br /><br />Use the following to get the index in the image list of each filename:<br /><br /><pre><code><br />  SHGetFileInfo&#40;szFileName, 0, &amp;psfi, sizeof&#40;SHFILEINFO&#41;, SHGFI_ICON&#41;;<br /></code></pre><br /><br />Where psfi.iIcon is the index of the icon in the system image list.  Make sure your list control has the LVS_SHAREIMAGELISTS style and don't destory the image list at the end.<br /><br />Nick</div>
+    <div class="meta">Posted on 2003-02-12 09:19:28 by Nick</div>
+   </div>
+   <div class="post" id="post-81315">
+    <div class="subject"><a href="#post-81315">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Thank you Nick !!!<br /><br />I've tested this/your method before, but I never could get more than 5 icons in my imagelist...<br />C:\\ don't work, C:\ does, but only 5 icons...<br />I have Windows XP Home<br /><br />Can you please post me an full example ? I cannot find my error...<br /><br />Greetings,<br />Nordwind64</div>
+    <div class="meta">Posted on 2003-02-12 14:14:46 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81328">
+    <div class="subject"><a href="#post-81328">Shell32.dll icons to imagelist</a></div>
+    <div class="body">First, you have to get the handle to the system image list (either large or small icons, your choice), we do this by passing a known folder/drive to the api I usually pass my app path. (I don't use c:\ here because not everyone has a c:\, I had em e:,f:,g: at one time)<br /><pre><code><br />	push	SHGFI_SMALLICON\<br />		or SHGFI_SYSICONINDEX<br />	push	sizeof sfi<br />	lea	eax, sfi<br />	push	eax<br />	push	0<br />	push	offset AppPath<br />	call	SHGetFileInfo<br />	mov	imlListView, eax	; store the system image list handle for our Listview imagelist<br /></code></pre><br /><br />Now you can create your Listview (with the share imagelist flag) and associate imlListView (which is the handle to the system imagelsit) with your listview.<br />i.e.<br /><pre><code><br />; #######################################<br />; ###### Create listview<br />	push	0<br />	push	hInstance<br />	push	IDC_LV_MAIN<br />	push	hWnd<br />	push	0<br />	push	0<br />	push	0<br />	push	255<br />	push	WS_CHILD\<br />		or WS_VISIBLE\<br />		or LVS_REPORT\<br />		or LVS_SHAREIMAGELISTS ; &lt;&lt;&lt; this is important  Nordwind64 if you are using the system image list!<br />	push	0<br />	push	offset WndClsListView<br />	push	WS_EX_CLIENTEDGE<br />	call	CreateWindowEx<br />	mov	hLVMain, eax<br /><br />	push	imlListView<br />	push	LVSIL_SMALL<br />	push	LVM_SETIMAGELIST<br />	push	hLVMain<br />	call	SendMessage		; Set listview imagelist to system imagelist<br /></code></pre><br /><br />Remember, do not destroy the image list you set to your listview, or all your icons will be gone in the os...<br />Now your listview will use the same imagelist that explorer uses to show icons.<br />HTH</div>
+    <div class="meta">Posted on 2003-02-12 14:50:07 by Gunner</div>
+   </div>
+   <div class="post" id="post-81575">
+    <div class="subject"><a href="#post-81575">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Hi,<br /><br />I found a much better way, an undokumented shell32.dll function (660), that forces Nt-based Windows to fill the system imagelist with ALL available icons...<br />Thanks to all !<br /><br />Greetings,<br />Nordwind64</div>
+    <div class="meta">Posted on 2003-02-13 13:05:04 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81577">
+    <div class="subject"><a href="#post-81577">Shell32.dll icons to imagelist</a></div>
+    <div class="body">&quot;much better&quot; and &quot;undocumented&quot; in the same sentence? hmm.</div>
+    <div class="meta">Posted on 2003-02-13 13:08:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-81584">
+    <div class="subject"><a href="#post-81584">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Hi fodder,<br /><br />without this function I only could get 5 icons (Windows XP) in the system imagelist, with the 660-function I get 95 icons, fast and in best quality...<br />Not bad for some lines of code ;-)<br /><br /><pre><code><br />invoke LoadLibrary,addr dllname<br />mov  shell32,eax<br /><br />invoke GetProcAddress,shell32,660<br /><br />.if eax!=0<br />  push 1<br />  call eax<br />.endif</code></pre><br /><br />Greetings,<br />Nordwind64</div>
+    <div class="meta">Posted on 2003-02-13 14:12:36 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81585">
+    <div class="subject"><a href="#post-81585">Shell32.dll icons to imagelist</a></div>
+    <div class="body">true... if you're only using it to *get* the icons it's fine... but if you're going to use the code in a production app... ick :)</div>
+    <div class="meta">Posted on 2003-02-13 14:13:58 by f0dder</div>
+   </div>
+   <div class="post" id="post-81598">
+    <div class="subject"><a href="#post-81598">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Hi,<br /><br />&gt; production app &lt; <br /><br />Sorry ?<br />What do you mean ? My english is not as good as it should be...</div>
+    <div class="meta">Posted on 2003-02-13 14:47:31 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81599">
+    <div class="subject"><a href="#post-81599">Shell32.dll icons to imagelist</a></div>
+    <div class="body">I mean that using undocumented calls like that is fine if you're only going to grab the imagelist to cut out some icons for later... not in an application that leaves your computer.</div>
+    <div class="meta">Posted on 2003-02-13 14:51:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-81600">
+    <div class="subject"><a href="#post-81600">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Production app means an app you are releasing to the public.  Undocumented functions are fine for your own use on your computer, but being they are undocumented, there is no guarantee the function exists/will exist in all windows versions.</div>
+    <div class="meta">Posted on 2003-02-13 14:52:13 by Gunner</div>
+   </div>
+   <div class="post" id="post-81701">
+    <div class="subject"><a href="#post-81701">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Hi,<br /><br />aha, thank you, ok.<br />I will test it on all platforms.<br /><br />Greetings,<br />Nordwind64</div>
+    <div class="meta">Posted on 2003-02-13 23:31:06 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81707">
+    <div class="subject"><a href="#post-81707">Shell32.dll icons to imagelist</a></div>
+    <div class="body">testing on all platforms is not enough as long as the function is undocumented - it might be gone in the next windows version without notice.</div>
+    <div class="meta">Posted on 2003-02-14 01:26:26 by f0dder</div>
+   </div>
+   <div class="post" id="post-81760">
+    <div class="subject"><a href="#post-81760">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Gunner,<br /><br />I tried your code in a listview process viewer of mine and I now have icons, but they're all the same default icon. I suppose I need to index into the image list with SHGetFileInfo as suggested by Nick ?</div>
+    <div class="meta">Posted on 2003-02-14 07:46:58 by gscundiff</div>
+   </div>
+   <div class="post" id="post-81762">
+    <div class="subject"><a href="#post-81762">Shell32.dll icons to imagelist</a></div>
+    <div class="body">F0dder, I think M$ only isn't interested in making the function public. But I'm sure, this function will be in the next windows versions... However, I use this method and two other methods for ripping icons.. <br /><br />Greetings,<br />Nordwind64</div>
+    <div class="meta">Posted on 2003-02-14 08:01:13 by Nordwind64</div>
+   </div>
+   <div class="post" id="post-81772">
+    <div class="subject"><a href="#post-81772">Shell32.dll icons to imagelist</a></div>
+    <div class="body">gscundiff,<br /><br />Now that you have the system imagelist associated with your listview, you can now do a SHGetFileInfo with either a path to a folder, full file path or a file extension to get the correct icon in your listview.  Here is an example:<br /><br />Create your listview with one column and try the below,<br />sfi = SHFILEINFO<br />lvi = LVITEM<br />dwIndex = index of current listview item inserting<br />FilePath = a valid path to any existing file<br /><br /><pre><code><br />	push	SHGFI_SYSICONINDEX\<br />		or SHGFI_USEFILEATTRIBUTES<br />	push	sizeof sfi<br />	lea	eax, sfi<br />	push	eax<br />	push	0<br />	push	offset FilePath<br />	call	SHGetFileInfo<br />	<br />	mov	lvi.imask, LVIF_IMAGE\<br />				or LVIF_TEXT<br />	push	sfi.iIcon<br />	pop	lvi.iImage<br />	push	dwIndex<br />	pop	lvi.iItem<br />	mov	lvi.iSubItem, 0<br />	lea	eax, FilePath<br />	push	lvi.pszText<br />	<br />	lea	ecx, lvi<br />	push	ecx<br />	push	0<br />	push	LVM_INSERTITEM<br />	push	hListView<br />	call	SendMessage<br /></code></pre><br />To get the icons for html files, just pass .html for the FilePath<br />To get the icon for a folder pass SHGFI_SYSICONINDEX Or SHGFI_SMALLICON or SHGFI_USEFILEATTRIBUTES for the flags.<br /><br />The important thing here is not to destroy the image list.<br /><br />HTH</div>
+    <div class="meta">Posted on 2003-02-14 08:55:05 by Gunner</div>
+   </div>
+   <div class="post" id="post-81784">
+    <div class="subject"><a href="#post-81784">Shell32.dll icons to imagelist</a></div>
+    <div class="body">Gunner,<br /><br />Thank you very much for your explanation. I am now able to retrieve and display the proper icons in my listview...something I've had an exhausting struggle with for a few sessions.:alright:</div>
+    <div class="meta">Posted on 2003-02-14 10:42:36 by gscundiff</div>
+   </div>
+  </div>
+ </body>
+</html>

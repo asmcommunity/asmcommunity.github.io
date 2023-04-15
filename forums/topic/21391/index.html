@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Reading .nfo Files? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21391" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21391">Reading .nfo Files?</a></p>
+   <div class="post" id="post-161638">
+    <div class="subject"><a href="#post-161638">Reading .nfo Files?</a></div>
+    <div class="body">I was wondering how I would go about reading a .nfo file (not the system spec kind but the .nfo files that are like readmes) into my program. Would it be like reading a regular text file?</div>
+    <div class="meta">Posted on 2005-07-01 01:43:49 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161639">
+    <div class="subject"><a href="#post-161639">Re: Reading .nfo Files?</a></div>
+    <div class="body">Most .nfo file I have came across are txt file (I opened them with notepad)&nbsp; ;)</div>
+    <div class="meta">Posted on 2005-07-01 01:45:28 by roticv</div>
+   </div>
+   <div class="post" id="post-161645">
+    <div class="subject"><a href="#post-161645">Re: Reading .nfo Files?</a></div>
+    <div class="body">NFO extension is used to denote an &#39;information&#39; file for a regular text file.<br />Usually those files come with a lot of ascii characters that are not supported by standard windows fonts, so make sure you handle them correctly.</div>
+    <div class="meta">Posted on 2005-07-01 06:50:20 by arafel</div>
+   </div>
+   <div class="post" id="post-161649">
+    <div class="subject"><a href="#post-161649">Re: Reading .nfo Files?</a></div>
+    <div class="body">If you open the .nfo files with notepad and change the font to &quot;Terminal&quot; you should see some nice ascii graphics.</div>
+    <div class="meta">Posted on 2005-07-01 09:13:10 by dev_zero</div>
+   </div>
+   <div class="post" id="post-161652">
+    <div class="subject"><a href="#post-161652">Re: Reading .nfo Files?</a></div>
+    <div class="body">yeah I just figured that out. What I was thinking was just setup a richedit and read it with the terminal font. However, I am having quite a hard time. I want the file to open as soon as the program opens and display in the terminal font. Im using the richedit dll and from there try to set everything up. Things aren&#39;t really going my way with this. It seems that there is something wrong with both opening the file and changing the font automatically. The font does not change and only part of the file is opened. Any help is appreciated guys. Heres my code:<br /><br /><pre><code><br />.data<br />buffer db &#39;file.nfo&#39;,0<br /></code></pre><br /><br /><pre><code><br /><br />	.if eax==WM_INITDIALOG<br />		push	hWin<br />		pop		hWnd<br />		;Get handle of RichEdit window and give it focus<br />		invoke 	GetDlgItem,hWin,IDC_RED<br />		mov		hREd,eax<br />		invoke 	SendMessage,hREd,EM_SETTEXTMODE,0,TM_PLAINTEXT<br />		;Set event mask<br />		invoke 	SendMessage,hREd,EM_SETEVENTMASK,0,ENM_SELCHANGE<br />		;Set the text limit.<br />		invoke 	SendMessage,hREd,EM_LIMITTEXT,-1,0<br />		;Create font<br />		invoke 	lstrcpy,offset lfnt.lfFaceName,offset szFont<br />		mov		lfnt.lfHeight,-12<br />		mov		lfnt.lfWeight,400<br />		invoke 	CreateFontIndirect,offset lfnt<br />		mov&nbsp; &nbsp;  hFont,eax<br />		;Set font &amp; format<br />		invoke 	SetFormat,hREd<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;Load File<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; invoke LoadFile,addr buffer<br />		;Init RichEdit<br />		invoke 	SendMessage,hREd,EM_SETMODIFY,FALSE,0<br />		invoke 	SendMessage,hREd,EM_EMPTYUNDOBUFFER,0,0<br />		invoke 	SetFocus,hREd<br />	.endif<br /></code></pre><br /><br />Heres the Proc&#39;s<br /><br /><pre><code><br />LoadFile proc lpFileName:DWORD<br />&nbsp; &nbsp; LOCAL&nbsp;  hFile:DWORD<br />	LOCAL	editstream:EDITSTREAM<br />	LOCAL	chrg:CHARRANGE<br /><br />	;Open the file<br />	invoke CreateFile,lpFileName,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0<br />	.if eax!=INVALID_HANDLE_VALUE<br />		mov		hFile,eax<br />		;Copy buffer to FileName<br />		invoke lstrcpy,offset FileName,lpFileName<br />		;stream the text into the richedit control<br />		push	hFile<br />		pop		editstream.dwCookie<br />		mov		editstream.pfnCallback,offset StreamInProc<br />		invoke SendMessage,hREd,EM_STREAMIN,SF_TEXT,addr editstream<br />		invoke CloseHandle,hFile<br />		invoke SendMessage,hREd,EM_SETMODIFY,FALSE,0<br />		mov		chrg.cpMin,0<br />		mov		chrg.cpMax,0<br />		invoke SendMessage,hREd,EM_EXSETSEL,0,addr chrg<br />		mov		eax,FALSE<br />	.else<br />		invoke MessageBox,hWnd,offset OpenFileFail,offset AppName,MB_OK or MB_ICONERROR<br />		mov		eax,TRUE<br />	.endif<br />	ret<br /><br />LoadFile endp<br /></code></pre><br /><br /><pre><code><br />StreamInProc proc hFile:DWORD,pBuffer:DWORD,NumBytes:DWORD,pBytesRead:DWORD<br /><br />	invoke ReadFile,hFile,pBuffer,NumBytes,pBytesRead,0<br />	xor		eax,1<br />	ret<br /><br />StreamInProc endp<br /></code></pre><br /><br /><pre><code><br />SetFormat proc hWin:DWORD<br />&nbsp; &nbsp; LOCAL	chrg1:CHARRANGE<br />&nbsp; &nbsp; LOCAL	chrg2:CHARRANGE<br />	LOCAL	pf:PARAFORMAT2<br />	LOCAL	cf:CHARFORMAT<br />	LOCAL	tp:DWORD<br />	LOCAL	buffer[16]:BYTE<br />	LOCAL	pt:POINT<br />	LOCAL	hDC:HDC<br /><br />	;Save modify state<br />	invoke SendMessage,hWin,EM_GETMODIFY,0,0<br />	push	eax<br />	;Save selection<br />	invoke SendMessage,hWin,EM_EXGETSEL,0,addr chrg1<br />	invoke SendMessage,hWin,EM_HIDESELECTION,TRUE,0<br />	;Select all text<br />	mov		chrg2.cpMin,0<br />	mov		chrg2.cpMax,-1<br />	invoke SendMessage,hWin,EM_EXSETSEL,0,addr chrg2<br />	;Set font charset<br />	mov		cf.cbSize,sizeof cf<br />	mov		cf.dwMask,CFM_CHARSET or CFM_FACE or CFM_SIZE or CFM_COLOR<br />	mov		al,lfnt.lfCharSet<br />	mov		cf.bCharSet,al<br />	mov		al,lfnt.lfPitchAndFamily<br />	mov		cf.bPitchAndFamily,al<br />	invoke lstrcpyn,addr cf.szFaceName,offset lfnt.lfFaceName,LF_FACESIZE<br />	mov		eax,lfnt.lfHeight<br />	neg		eax<br />	mov		ecx,15<br />	mul		ecx<br />	mov		cf.yHeight,eax<br />	mov		eax,rgb<br />	mov		cf.crTextColor,eax<br />	invoke SendMessage,hWin,EM_SETCHARFORMAT,SCF_SELECTION,addr cf<br />	;Get tab width<br />	invoke GetDC,hWin<br />	mov		hDC,eax<br />	invoke SelectObject,hDC,hFont<br />	push	eax<br />	mov		eax,&#39;WWWW&#39;<br />	mov		dword ptr buffer,eax<br />	invoke GetTextExtentPoint32,hDC,addr buffer,4,addr pt<br />	pop		eax<br />	invoke SelectObject,hDC,eax<br />	invoke ReleaseDC,hWin,hDC<br />	mov		eax,pt.x<br />	mov		ecx,TabSize<br />	mul		ecx<br />	mov		ecx,15<br />	mul		ecx<br />	shr		eax,2<br />	mov		tp,eax<br />	;Set tab stops<br />	mov		pf.cbSize,sizeof pf<br />	mov		pf.dwMask,PFM_TABSTOPS<br />	mov		pf.cTabCount,MAX_TAB_STOPS<br />	xor		eax,eax<br />	xor		edx,edx<br />	mov		ecx,MAX_TAB_STOPS<br />&nbsp; @@:<br />	add		eax,tp<br />	mov		dword ptr pf.rgxTabs,eax<br />	add		edx,4<br />	loop	@b<br />	invoke SendMessage,hWin,EM_SETPARAFORMAT,0,addr pf<br />	;Restore modify state<br />	pop		eax<br />	invoke SendMessage,hWin,EM_SETMODIFY,eax,0<br />	;Restore selection<br />	invoke SendMessage,hWin,EM_EXSETSEL,0,addr chrg1<br />	invoke SendMessage,hWin,EM_HIDESELECTION,FALSE,0<br />	ret<br /><br />SetFormat endp<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2005-07-01 13:17:28 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161665">
+    <div class="subject"><a href="#post-161665">Re: Reading .nfo Files?</a></div>
+    <div class="body">lol nevermind. Had my richedit control set to single line.. Just need help setting the text as soon as the program starts. I want it to be terminal before it even loads the text so it shows as terminal.. any ideas?</div>
+    <div class="meta">Posted on 2005-07-01 20:30:33 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161678">
+    <div class="subject"><a href="#post-161678">Re: Reading .nfo Files?</a></div>
+    <div class="body">Don&#39;t use richedit, code your own control... and use the codepage 865 dos font for displaying. That way, you will get correct results.<br /><br />I&#39;ve attached the binary font. 256 chars of 8x16 size, monochrome bitmap.<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=731" target="_blank">cp865.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-07-02 10:24:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-161680">
+    <div class="subject"><a href="#post-161680">Re: Reading .nfo Files?</a></div>
+    <div class="body">Do you mind me asking why you suggested to code my own control? I would really prefer not to because its just extra work. I know it probably would turn out nicer but I dont think I have the energy to do that lol</div>
+    <div class="meta">Posted on 2005-07-02 15:22:55 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161681">
+    <div class="subject"><a href="#post-161681">Re: Reading .nfo Files?</a></div>
+    <div class="body">Okay well here is an update. I smoothed out the code a bit but it still doesnt seem to change the font at runtime. I want it changed before the .nfo file is loaded. This would seem like the most logical way. But im still stuck with the system font in the richedit control. Any ideas?<br /><br /><pre><code><br />	.if eax==WM_INITDIALOG<br />			push	hWin<br />			pop		hWnd<br /><br />			invoke 	GetDlgItem,hWin,IDC_RED<br />			mov		hREd,eax<br />			invoke 	SendMessage,hREd,EM_SETTEXTMODE,0,TM_PLAINTEXT<br />			invoke 	SendMessage,hREd,EM_SETEVENTMASK,0,ENM_SELCHANGE<br />			invoke 	SendMessage,hREd,EM_LIMITTEXT,-1,0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; invoke 	Format &lt;--- Controls Font Face<br />			invoke 	LoadFile,addr devious<br />			invoke 	SendMessage,hREd,EM_SETMODIFY,FALSE,0<br />			invoke 	SendMessage,hREd,EM_EMPTYUNDOBUFFER,0,0<br />			invoke 	SetFocus,hREd<br />	.endif<br /></code></pre><br /><br />Here is the Format Proc<br /><br /><pre><code><br />Format PROC<br />	local&nbsp; cf:CHARFORMAT2<br />	<br />	invoke 	RtlZeroMemory,addr lfnt,sizeof lfnt<br />	mov 	lfnt.lfHeight,-12<br />	mov 	lfnt.lfWeight,400<br />	invoke 	lstrcat,addr lfnt.lfFaceName,offset szFont<br />	invoke 	CreateFontIndirect,addr lfnt<br />	mov 	hFont,eax<br />	;Set font<br />	invoke 	SendMessage,hREd,WM_SETFONT,hFont,0<br />	<br />	ret<br /><br />Format endp<br /></code></pre><br /><br />Any help is appreciated.</div>
+    <div class="meta">Posted on 2005-07-02 16:09:23 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161689">
+    <div class="subject"><a href="#post-161689">Re: Reading .nfo Files?</a></div>
+    <div class="body">I suggest coding your own control because it&#39;s the only way you&#39;ll get accurate rendering of the files, because it&#39;s really not that much work to do, and because it&#39;s fun :)<br /></div>
+    <div class="meta">Posted on 2005-07-03 09:00:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-161698">
+    <div class="subject"><a href="#post-161698">Re: Reading .nfo Files?</a></div>
+    <div class="body">Okay well if I can I would rather not. But if need be I suppose I can read up on it. I have already just doesn&#39;t seem to be my particular brand of vodka. Anyway, I have this so far but as I said before, its not working correctly. It works if I use the ChooseFont dialog box and all but when I try to set the font on startup, all goes to hell. I&#39;d like to get it to work this way if its possible.<br /><br /><pre><code><br />Format PROC<br />	invoke	GetDlgItem,hWnd,1001<br />	mov		hREd,eax<br />	mov 	cf1.cbSize,sizeof cf1<br />	mov 	cf1.dwMask,CFM_COLOR + CFM_FACE<br />	mov 	cf1.crTextColor,0000000h<br />	invoke	lstrcpy,offset cf1.szFaceName,addr szFont<br />	;mov		cf1.szFaceName,szFont<br />	invoke 	SendMessage,hREd,EM_SETCHARFORMAT,SCF_ALL,addr cf1<br />	<br />	ret<br /><br />Format endp<br /></code></pre><br /><br /></div>
+    <div class="meta">Posted on 2005-07-04 02:31:37 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161709">
+    <div class="subject"><a href="#post-161709">Re: Reading .nfo Files?</a></div>
+    <div class="body">nfo files are illegal</div>
+    <div class="meta">Posted on 2005-07-05 00:07:18 by comrade</div>
+   </div>
+   <div class="post" id="post-161710">
+    <div class="subject"><a href="#post-161710">Re: Reading .nfo Files?</a></div>
+    <div class="body"><div class="quote"><br />nfo files are illegal<br /></div><br /><br />why?</div>
+    <div class="meta">Posted on 2005-07-05 00:09:47 by arafel</div>
+   </div>
+   <div class="post" id="post-161712">
+    <div class="subject"><a href="#post-161712">Re: Reading .nfo Files?</a></div>
+    <div class="body">Yes I would like to know why as well...<br /><br />Would also like to know why no one can answer my question??</div>
+    <div class="meta">Posted on 2005-07-05 01:55:40 by resistance_is_futile</div>
+   </div>
+   <div class="post" id="post-161713">
+    <div class="subject"><a href="#post-161713">Re: Reading .nfo Files?</a></div>
+    <div class="body"><div class="quote"><br />nfo files are illegal<br /></div><br /><br />proof?<br /><br /></div>
+    <div class="meta">Posted on 2005-07-05 06:06:47 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-161729">
+    <div class="subject"><a href="#post-161729">Re: Reading .nfo Files?</a></div>
+    <div class="body"><div class="quote"><br />nfo files are illegal<br /></div><br />ROFLOL! :lol: this one made my day</div>
+    <div class="meta">Posted on 2005-07-05 18:27:44 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-161751">
+    <div class="subject"><a href="#post-161751">Re: Reading .nfo Files?</a></div>
+    <div class="body">Okay well I got the problem fixed elsewhere.. Thanks for tryin</div>
+    <div class="meta">Posted on 2005-07-06 10:42:14 by resistance_is_futile</div>
+   </div>
+  </div>
+ </body>
+</html>

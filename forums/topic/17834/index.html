@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Connection closed? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17834" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=17834">Connection closed?</a></p>
+   <div class="post" id="post-137646">
+    <div class="subject"><a href="#post-137646">Connection closed?</a></div>
+    <div class="body">Hi,<br />   Im new to winsock and am trying to make a simple server and client (blocking sockets).  However, I am slightly confused.<br />My client sends some data to a server, and then the client invokes recv ready to get a response<br />--&gt; the connection *seems* to have not been closed, although all data is sent<br />--&gt; the server does not move on from recv<br />--&gt; the server does not send its response.<br />If I close the client socket after send, signifying that the client has sent its data and that the connection is closed, and then re-open a socket everything is fine.  This seems very inefficient, what am I doing wrong?<br />Hope that makes sense!<br />Thanks,<br />-Adam</div>
+    <div class="meta">Posted on 2004-04-01 14:25:09 by adamjjackson</div>
+   </div>
+   <div class="post" id="post-137659">
+    <div class="subject"><a href="#post-137659">Connection closed?</a></div>
+    <div class="body">Hi adamjjackson,<br /><br />I've done something similar over the past days (client, server, both with blocking sockets) and ran into the same problem. Apparently, if <strong>both</strong> sides of the connection use blocking sockets, the client must actively indicate when it is done with sending.<br /><br />It is not necessary to actually close the socket after sending. Instead, it is sufficient if the client disables further sending by calling &quot;invoke shutdown, , 1&quot;. Thereby the (blocking) server gets the information that no more data will come in, and will switch to sending the response.<br /><br />After receiving the response, the client should in fact close the socket because it cannot be re-used for further sending (according to my helpfile).<br /><br />I hope that made sense.<br /><br />    Frank</div>
+    <div class="meta">Posted on 2004-04-01 17:17:49 by Frank</div>
+   </div>
+   <div class="post" id="post-137704">
+    <div class="subject"><a href="#post-137704">Connection closed?</a></div>
+    <div class="body">Okay, that makes sense - thank you.  So what is the best option then?  To make the server with non-blocking sockets (haven't used them yet!), or the client, or both?!  I was using non-blocking sockets and in a worker thread for simplicity.  I assume that re-creating the socket each time is not the best approach...<br />Thanks,<br />-Adam</div>
+    <div class="meta">Posted on 2004-04-02 03:19:06 by adamjjackson</div>
+   </div>
+   <div class="post" id="post-137720">
+    <div class="subject"><a href="#post-137720">Connection closed?</a></div>
+    <div class="body">Hm, it sounds a bit weird to me that your messages are never received - both closing the socket and calling shutdown() to make sure the data goes through are major hacks.<br /><br />Be aware that TCP/IP uses various network optimizations - one of them is to combine several small sends into one large. I believe this is called the Nagle algorithm, and it can be turned off (though you generally shouldn't do this). This can introduce some buffering delays.<br /><br />Perhaps if you posted the source, somebody could pinpoint possible errors.<br /><br />Btw, if you switch to non-blocking sockets, think twice before using the message-passing variant (WSAAsyncSelect), it doesn't offer particularly high performance. It's ok if you only have a few connections and a low data rate, though.<br /><br />Also, be sure to check out Thomas' stuff at <a target="_blank" href="www.madwizard.org">www.madwizard.org</a> and the Winsock Programmer's FAQ at <a target="_blank" href="http://www.tangentsoft.net/wskfaq">http://www.tangentsoft.net/wskfaq</a> .</div>
+    <div class="meta">Posted on 2004-04-02 06:42:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-137743">
+    <div class="subject"><a href="#post-137743">Connection closed?</a></div>
+    <div class="body">Okay maybe I should have been a bit clearer.  The data sent from the client to the server is recieved, in full.  However, if the client calls recv immediately after it has finished sending the data the connection is not closed.  And so the basic recv loop on the server:<br /><pre><code><br />_readData&#58;<br />        invoke recv,esi,ADDR tempBuffer1,TEMP_BUFFER_SIZE,0<br />        test eax,eax<br />        mov ecx,OFFSET g_errRead<br />        jz _connClosed                                                    ; Return value 0 means connection closed.<br />        cmp eax,SOCKET_ERROR<br />        je _error<br />    jmp _readData<br /></code></pre><br />will not exit - it has recieved all the data but the connection has not been closed, so recv remains blocked and therefor the server cannot send a response.  So there is no way round this with blocking sockets...?  So would I be right in thinking that a non-blocking version would require all the recieved data to be parsed, or some kind of header to be sent so that I can determine when that piece of data is recieved in full?<br /><br />I've read a few posts of yours about WSAAsyncSelect and WSAWaitForMultipleEvents.  The first appears to be the simplest to begin with, and I don't require scalability/lots of connections, i'm just fiddling/learning at the min.  I've also read Thomas' tut's, cheers for the links 'n' stuff!</div>
+    <div class="meta">Posted on 2004-04-02 11:36:04 by adamjjackson</div>
+   </div>
+   <div class="post" id="post-137753">
+    <div class="subject"><a href="#post-137753">Connection closed?</a></div>
+    <div class="body">WSAEventSelect+WSAWaitForMultipleEvents is not too bad, and it works pretty well, but you may want to start with WSAAsyncSelect + windows messages. It's a good idea to get experience with a bunch of different programming methods, anyway :)<br /><br />However, your problem doesn't require async sockets, and while async sockets can be a bit nicer than blocking sockets under many circumstances, I think you should stick to blocking sockets, and fix the logic of your server app :)<br /><br />Yes, you should do some sort of processing in the server app, to figure out when the client has logically stopped sending data. This could mean parsing the received data, or it could mean the client would start sending a &quot;I'm gonna send this many bytes&quot; message and the server waiting until it either recived this amount, or times out. This will depend very much on your protocol, and perhaps your protocol will have to be changed, too.</div>
+    <div class="meta">Posted on 2004-04-02 17:54:14 by f0dder</div>
+   </div>
+   <div class="post" id="post-137798">
+    <div class="subject"><a href="#post-137798">Connection closed?</a></div>
+    <div class="body">It will require both, I will need to parse to get the &quot;I'm gonna send this many bytes&quot;...<br />Thanks :)</div>
+    <div class="meta">Posted on 2004-04-03 04:32:52 by adamjjackson</div>
+   </div>
+   <div class="post" id="post-137813">
+    <div class="subject"><a href="#post-137813">Connection closed?</a></div>
+    <div class="body"><div class="quote"><br />both closing the socket and calling shutdown() to make sure the data goes through are major hacks.</div><br /><br />Your <a target="_blank" href="http://www.tangentsoft.net/wskfaq/newbie.html#howclose">own source</a> sees that a bit differently:<br /><br /><div class="quote"><br />2.10 - What's the proper way to close a TCP socket?<br /><br />The proper sequence for closing a TCP connection is:<br /><br />   1. Finish sending data.<br />   2. Call shutdown() with the how parameter set to 1.<br />   3. Loop on recv() until it returns 0.<br />   4. Call closesocket(). <br /></div><br /><br />Also the helpfiles are full of words to the effect of &quot;a return value of 0 indicates that the connection has been shut down gracefully&quot;. How would one shut down the connection gracefully, if not by using shutdown() ?<br /><br />Regards<br /><br />        Frank</div>
+    <div class="meta">Posted on 2004-04-03 09:15:48 by Frank</div>
+   </div>
+   <div class="post" id="post-137818">
+    <div class="subject"><a href="#post-137818">Connection closed?</a></div>
+    <div class="body">There's no contradiction - the above snippet describes a clean socket shutdown. I was referring to the process of shuttding down + reopening a socket to make sure data has gone through.<br /><br />Of course if sending the data is the clients final action and there's no further communication between the client and the server, the socket should be shut down (and cleanly).</div>
+    <div class="meta">Posted on 2004-04-03 10:08:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-137957">
+    <div class="subject"><a href="#post-137957">Connection closed?</a></div>
+    <div class="body"><div class="quote"><br />There's no contradiction</div><br /><br />Yes, you are right. I had managed to confuse myself, sorry.<br /><br />Thank you<br /><br />    Frank</div>
+    <div class="meta">Posted on 2004-04-05 08:23:39 by Frank</div>
+   </div>
+   <div class="post" id="post-137963">
+    <div class="subject"><a href="#post-137963">Connection closed?</a></div>
+    <div class="body">No problem - I probably wasn't as clear as I could have been, so there was plenty of room for misinterpretation :)</div>
+    <div class="meta">Posted on 2004-04-05 09:19:22 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

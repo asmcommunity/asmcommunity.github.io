@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Animated SkinMesh under D3D - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24515" />
+  <link rel="prev" href="../?id=24515&amp;page=2" />  <link rel="next" href="../?id=24515&amp;page=4" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24515">Animated SkinMesh under D3D</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=24515&amp;page=1" style="">&laquo;</a><a href="../?id=24515&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="24515" /><input type="number" name="page" min="1" max="4" step="1" value="3" onchange="this.form.submit();" /><a href="../?id=24515&amp;page=4">&gt;</a><a href="../?id=24515&amp;page=4">&raquo;</a></form>   <div class="post" id="post-179656">
+    <div class="subject"><a href="#post-179656">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Thinking about the BoneBox problem again, it seems to me that it&#39;s sometimes desirable to have the Boxes defined in BoneSpace, sometimes in ModelSpace, and sometimes in WorldSpace.. it depends what we want to do with it.<br /><br />For the purpose of synchronizing the animation of the boxes to the bones and rendering them (to visually prove the code so far), it&#39;s best for us to get the boxes into modelspace.<br />The reason why is because the SkinMesh vertices are also defined in modelspace..which implies that we can &#39;deform&#39; our boxes by treating them to the same process as the SkinMesh vertices, which means that the boxes are automatically transformed in synch with the bones, and it gets better - they can all be rendered in a single pass (no walking of hierarchies etc), and theres no messing around with matrices required.<br /><br />All we need to do is add a line of code to the bonebox builder to transform the box points back from bonespace to modelspace :)<br /><br />Once we switch to RagDoll mode, we&#39;ll want the Boxes in BoneSpace for the purpose of orienting them, and in ModelSpace for the purpose of collision detection between bodyparts.. <br /><br />Finally, when we want to perform collision detection against the rest of the universe, we&#39;ll need the boxes in WorldSpace.<br /><br />Anyway, it seems to me to be a tidy solution to obtain the bindpose box points in modelspace as we generate our boxes, and thus we&#39;ll always have reference values for bonespace and modelspace, leaving only worldspace to worry about, which we&#39;ll worry about when we need to.</div>
+    <div class="meta">Posted on 2006-04-16 09:24:27 by Homer</div>
+   </div>
+   <div class="post" id="post-179686">
+    <div class="subject"><a href="#post-179686">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">I&#39;d like to explain my understanding of the various Matrices being employed in the Animated SkinMesh, as much for my own benefit as anyone else&#39;s.<br /><br />Firstly, we have the Frame Matrices.<br />Each frame in the hierarchy has its own unique &#39;Frame Transformation Matrix&#39;.<br />This matrix can be thought of as &quot;the difference&quot; between a parent and a child frame.<br />We can use it to &quot;move from parent space to child space&quot;, by combining the transformation of a given Parent with that of its Child. This gives us a second kind of Matrix, the &quot;Combined Frame Matrix&quot;.. If we combine any given Frame&#39;s Transform matrix with the Combined matrices of all of its Parents (all the way back to Root), we have calculated (for the given Frame) a Combined Matrix that gets us all the way from ModelSpace to FrameSpace without requiring us to perform all those matrix multiplies ever again..<br />We &quot;walk the entire frame hierarchy&quot; and precalculate all the &quot;Combined Frame Matrices&quot; for all the Frames in the entire hierarchy, irrespective of whether the Frames represent Bones or not.<br /><br />OK its important to mention at this point that our Combined Frame Matrices describe the skeleton in BIND POSE.. <br /><br />The next kind of Matrix to talk about is the &quot;Bone Offset&quot; matrix..<br />These are the matrices which are internally managed (animated) by the SkinMesh.<br />They represent &quot;how much to move each Bone&quot;.<br />Sometimes they are called the &quot;Skin Offset&quot; matrices, because they deform the Skin vertices. Anyway, we combine each &quot;difference matrix&quot; with the Combined matrix of the Frame it represents, in order to &quot;bend our skeleton&quot;. This results in a set of &quot;Final Matrices&quot; which we&#39;ll use to deform our BindPose mesh each time we render a frame.<br /><br />So, these &quot;final matrices&quot; take us from ModelSpace into BoneSpace, and then further, to the animated space of the Bone.. that is to say, the final matrices are used to ANIMATE OUR BONES.<br /><br />OK, now I&#39;m going to leave the land of FACTS behind and talk about my implementation ideas.<br /><br />We can&#39;t deform our BoneBoxes using the same method as the SkinMesh unless we want to go to the trouble of setting up SkinWeights etc, but we can achieve the same effect by hand, by transforming our ModelSpace boneboxes using the Final Matrices, and then getting them back into ModelSpace using the Inverse of the Combined Frame Matrix.<br />This should in my mind animate the boneboxes correctly, because it moves them from ModelSpace to &quot;new, animated bonespace&quot;, and then it moves them from &quot;old, bindpose bonespace&quot; back to ModelSpace .. this implies that the &quot;difference between the Old and New matrices&quot; has been applied to the Bone.. That&#39;s like saying &quot;We applied the BoneOffset Matrix directly to each BoneBox, in BoneSpace&quot;.. Well bloody hell, why don&#39;t we just do that instead? :P<br /><br />Did that make the slightest bit of sense?<br /><br />If our Boxes are defined in ModelSpace, we use the Final Matrices to animate them.<br />If our Boxes are defined in BoneSpace, we use the OffsetMatrices to animate them.<br />Either way, the transformed vertices are in BoneSpace, and need to be transformed back into ModelSpace.<br /></div>
+    <div class="meta">Posted on 2006-04-17 03:37:14 by Homer</div>
+   </div>
+   <div class="post" id="post-179689">
+    <div class="subject"><a href="#post-179689">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Hi Homer,<br /><br /><div class="quote">We can&#39;t deform our BoneBoxes using the same method as the SkinMesh unless we want to go to the trouble of setting up SkinWeights etc, but we can achieve the same effect by hand, by transforming our ModelSpace boneboxes using the Final Matrices, and then getting them back into ModelSpace using the Inverse of the Combined Frame Matrix.</div><br /><br />Do you mean by this SkinWeights are useless.<br />Or more correctly: There is always a better way than using SkinWeights.<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-04-17 05:29:31 by mdevries</div>
+   </div>
+   <div class="post" id="post-179701">
+    <div class="subject"><a href="#post-179701">A</a></div>
+    <div class="body">We currently apply our Final matrices to the Mesh vertices (ie bend the mesh) using a call to ID3DXSkinInfo.UpdateSkinnedMesh.. we can&#39;t use this to transform the BoneBoxes, but we can do what it does by hand, we simply ignore the SkinWeight, since the vertices of a BoneBox are only affected by the Bone that owns them.<br /><br />It might help to see the formula being applied by the ID3DXSkinInfo.UpdateSkinnedMesh interface method:<br /><br /><div class="quote"><br />We need to weight each vertex to define the influence of each bone Final Matrix. Thus the final vertex position in character space is defined by:<br /><br />Vertexdest = SUM ( Vertexsource * Underlying_Bone_Final_Matrix * Underlying_Bone_Weight)<br /></div><br /><br />The only thing not shown there is that once the Vertices have been manipulated using the above formula, they are then transformed back into ModelSpace..<br /><br />If we ignore the Weight part of it, and assuming that we begin with BoneBoxes defined in BoneSpace, we can vastly simplify this formula into this:<br />New BoneSpace Vertex = Old BoneSpace Vertex * BoneOffsetMatrix<br /><br />and assuming that the BoneBoxes are defined in ModelSpace,<br />New ModelSpace Vertex = Old ModelSpace Vertex * BoneFinalMatrix<br /><br />and in either case, performing this as a secondary step:<br />New ModelSpace Vertex = New BoneSpace Vertex * InvBoneMatrix<br />in order to bring the BoneSpace Vertex back into ModelSpace.<br /><br />Does that help explain what I meant? (gee, I&#39;m confusing myself now, lol)<br /><br />Anyway, I realized later that we can cheat a little here, if we do the following:<br />During rendering, combine the current world transform with each final matrix so that we are in BoneSpace (and the animated bonespace at that), then draw the bonebox as a simple axially-aligned box.<br />What we just did is draw the BoneBoxes in the context of each animated Bone.<br />We don&#39;t have to tranform ANYTHING this way, which will be problematic later, but it&#39;s a quick and easy way to get the boxes on the screen so we can see them.<br />As I said, we&#39;re cheating..</div>
+    <div class="meta">Posted on 2006-04-17 09:25:54 by Homer</div>
+   </div>
+   <div class="post" id="post-179779">
+    <div class="subject"><a href="#post-179779">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body"><br />Here&#39;s another update of the Binary.<br />I PROMISE I&#39;ll post the source again soon, I just want to clean it up a little.<br />It took several attempts to get the BoneBoxes working.<br />Eventually I got it working using the first method I described, the shortcut method &#39;should&#39; work too, maybe I made some small mistake, I&#39;ll try that again later.<br /><br />You can see the BoneBoxes now, here I&#39;m transforming the BoneBoxes using the very same matrices as the skinmesh, except applied &#39;rigidly&#39; (skinweights ignored). I had to get the BoneBox definitions transformed into ModelSpace first, but that&#39;s where collision detection with other bodyparts will happen anyway, and that&#39;s coming soon..<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1565" target="_blank">DXSkinMesh.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-04-18 10:56:00 by Homer</div>
+   </div>
+   <div class="post" id="post-179802">
+    <div class="subject"><a href="#post-179802">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Hi Homer,<br /><br />I tested the demo: It&#39;s working. This is one step ahead again.<br /><br />Friendly regards,<br />mdevries.<br /></div>
+    <div class="meta">Posted on 2006-04-18 14:36:05 by mdevries</div>
+   </div>
+   <div class="post" id="post-179822">
+    <div class="subject"><a href="#post-179822">Onwards</a></div>
+    <div class="body"><br />Cool, thanks for the feedback :)<br /><br />Being able to see the BoneBoxes should make it painfully clear what this is all about.<br />We&#39;ll be using the BoneBoxes for two quite separate purposes, although these purposes are in many ways related.<br /><br />Firstly, we&#39;ll be using them to implement RAGDOLL PHYSICS.<br />Basically we&#39;ll apply some physics to the boxes, such that they collide with and respond to each other, and use the resulting orientations of the boxes to control the bones, and thus the mesh. This is kinda the opposite of what we are doing at the moment, right now we&#39;re constraining the boxes to follow the bones, rather than constraining the bones to follow the boxes...<br /><br />The second thing we&#39;ll be using the boxes for is for collision detection between the skinmesh and &#39;the rest of the universe&#39;. We can begin to think of the entire set of bone-oriented boundingboxes as comprising &quot;a convex hull which totally encloses the model regardless of the orientation of its bones&quot;, ie, a COLLISION HULL.<br /><br />It&#39;s a lot cheaper to test against the BoneBoxes than it is to test against the mesh.<br />Since (as you can see from the demo)&nbsp; the Hull is quite a good fit, it&#39;s acceptable for gaming purposes to use this as our only collision test.. the alternative, if we wanna be really accurate and still faster than testing against the mesh is to precalculate the subset of mesh faces which share the subset of bone-affected Vertices (during our box generation phase) and to perform a secondary collision test against the Faces, should the primary test against the Box succeed..<br /><br />As a matter of fact, the more Joints the model has, the more BoneBoxes are required, the tighter the Hull fits, and the more pronounced is the efficiency of using the Hull rather than the Mesh for collisions.<br /><br />For skeletons with low numbers of Joints, it might not seem so cool.<br />But for skeletons with realistic numbers of Joints, it almost seems crazy not to do it, particularly if we want a few Instances of our beasties onscreen ;)<br /><br />Next post, I shall attach the updated source, and begin discussion of exactly how we go about switching from Animated mode to RagDoll mode (activating the bone physics), in particular how to initialize the State of the physics system (by extracting some physics variables implied by the animation of the skeleton) :)<br /><br />Have a nice day.<br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2006-04-19 01:03:38 by Homer</div>
+   </div>
+   <div class="post" id="post-179843">
+    <div class="subject"><a href="#post-179843">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Hi Homer,<br /><br />My machine is a Pentium 2.66 GHz running on WinXP SP2.<br />It takes about 4 seconds on my machine, to load and render the animated model, including the BoneBoxes. <br />How much time does it take on your machine?<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-04-19 10:39:21 by mdevries</div>
+   </div>
+   <div class="post" id="post-179844">
+    <div class="subject"><a href="#post-179844">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">So, umm, where do I get the .X file?<br /></div>
+    <div class="meta">Posted on 2006-04-19 10:48:07 by f0dder</div>
+   </div>
+   <div class="post" id="post-179845">
+    <div class="subject"><a href="#post-179845">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">It takes about the same time on my 500mhz machine (ge4 video), so its likely that m$&#39;s xfile parsing code is not very efficient, ie, I am blaming disk accesses and cache misses.<br />It&#39;s possible to render stuff while loading..<br /><br />I promised to send updated source, here she is :)<br />Let me know if it doesnt compile (I forgot to send something etc)<br /><br />Now I wanna start talking about physics :P<br />Most people would look away, so you must be weird.. let&#39;s continue :)<br />( Don&#39;t worry if you&#39;re totally new to physics, just accept that theres a bunch of formula that have to be coded up, then we just apply them and pray;) )<br /><br />&#39;RagDoll Mode&#39; requires that we initialize some more of those quirky and hitherto unmentioned fields of the RagDollBone structure.<br />When we switch from Animated mode to RagDoll mode, we&#39;ll calculate some values which describe the physics system at the Time that we switched over from Animated to RagDoll mode.<br /><br />The first thing that needs to be added to get the Physics going is some code to update the contents of a new field in CRagDoll called m_PrevState.<br />It&#39;s a copy of the previous content of CRagDoll.m_State.. each time we update m_State, we also update m_PrevState.<br />This gives us two snapshots of the Bone&#39;s dynamic properties, at two linear moments in time..which is all we need to deduce some values to initialize the kinematic properties of the bone :)<br /><br />To give you an obvious example, we can now deduce the change in rotation over time, and extract it as a Rotation Matrix directly from the Prev and Current matrices.. this is how we calculate the Angular Velocity of each Bone :)<br /><br />The physics code is actually a &quot;numerical integrator&quot;, which basically is a mathematical tool for solving an equation whose components are interdependant.. ie a &quot;differential equation&quot;.<br /><br />In my next post I&#39;ll start describing Euler Integration, which is the most simple kind of &#39;numerical integrator&#39; .. theres others, and they are really just variations on the basic Euler Integrator. Euler&#39;s solution is the fastest and the least accurate, but should be &quot;good enough&quot; for our purposes :)<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1571" target="_blank">DXSkinMesh.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-04-19 11:11:49 by Homer</div>
+   </div>
+   <div class="post" id="post-179846">
+    <div class="subject"><a href="#post-179846">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">f0dder - get the XFiles from the DirectX SDK &#39;media&#39; folder&nbsp; (130 odd meg installer for a few pissy files)<br /><br />The demo requires that any texture files referenced by an xfile be in the relative path specified within the xfile.. <br /><br />Otherwise just google for them, I&#39;m sure you&#39;ll find them, or if not, just find another one.. Since the loader isn&#39;t incredibly robust, there&#39;s likely a few xfiles that will crash it.<br />For example, if they contain progressive meshes or other unhandled data types.<br /><br />Everyone - Tiny&#39;s name is a joke.<br />The model is 600-ish units in height :)<br />What&#39;s not so funny is that its primary axis is Z rather than Y, so it needs to have some axes switched in order to display it correctly (I rotate it 90 degrees to view it in the current source..)<br />Thanks again Microsoft, for releasing something that seems ok until you try to USE it.</div>
+    <div class="meta">Posted on 2006-04-19 11:17:21 by Homer</div>
+   </div>
+   <div class="post" id="post-179854">
+    <div class="subject"><a href="#post-179854">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Hi Homer,<br /><br />A few files were missing, but were included in a previous post of yours.<br />- d3d9.inc<br />- SuperTimer.inc<br /><br />Anyway, at assembly time I get the following complaint from the linker:<br /><br /><pre><code>LINK : error LNK2001: unresolved external symbol _WinMainCRTStartup<br />DXSkinMesh.exe : fatal error LNK1120: 1 unresolved externals</code></pre><br /><br />Any idea what is missing?<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-04-19 17:20:01 by mdevries</div>
+   </div>
+   <div class="post" id="post-179888">
+    <div class="subject"><a href="#post-179888">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">That&#39;s an interesting error you got !!<br />It indicates that the last line of the ASM file is missing !!!<br /><br />The Linker is complaining about the Program EntryPoint, whose label is identified by the &quot;END label&quot; directive at the end of the source.<br />The &quot;END start&quot; directive is missing, or there is no matching &quot;start:&quot; label.<br />Please check the end of the ASM file and verify this.<br /><br /></div>
+    <div class="meta">Posted on 2006-04-20 00:41:57 by Homer</div>
+   </div>
+   <div class="post" id="post-179900">
+    <div class="subject"><a href="#post-179900">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body"><br />I&#39;m going to leap ahead a little here and describe the steps involved in &quot;integrating the physics state&quot;.<br /><br />In mathematics, integrating means &quot;solving a non-linear differential equation&quot;.<br />In the context of our GameDev physics, integrating means &quot;updating the physics state over time&quot;.<br /><br />We&#39;ll be coding up a Method whose name is Integrate, and whose purpose is to update the physics state of a rigid body, given the elapsed time and previous physics state.<br />This implies that the previous physics state is already known to us, which in turn implies that we need to initialize the physics state.<br /><br />Before talking more about the initial physics state, I&#39;d like to cover the steps involved in advancing the physics state with time, ie, Integrating it.<br />Once we see what the Integrate method requires from us, we&#39;ll be in a better position to code the physics init method.<br /><br /></div>
+    <div class="meta">Posted on 2006-04-20 02:50:42 by Homer</div>
+   </div>
+   <div class="post" id="post-179940">
+    <div class="subject"><a href="#post-179940">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Hi Homer,<br /><br />I have been looking for a missing &quot;end label&quot;. But it is right there. So that should not be the problem.<br />But the source contains the following line:<br /><br /><pre><code>include D:\masm32\m32lib\atofp.asm</code></pre><br /><br />This file contains an &quot;end&quot;. But it has no label it is referring to.<br />Could this file be the problem? Did you leave the source unchanged?<br />(What version of atofp.asm do you use?)<br /><br /><br />I have one more question:<br />Is your version of ID3DXAllocateHierarchy.inc the same as in the previously published source? Because it was not included in the last source either, so I am using the original version.<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-04-20 14:00:42 by mdevries</div>
+   </div>
+   <div class="post" id="post-179964">
+    <div class="subject"><a href="#post-179964">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Files that will be packed in a .lib don&#39;t need a label after &quot;end&quot;.<br />Only the file that contains the startpoint of execution needs &quot;end start&quot;. </div>
+    <div class="meta">Posted on 2006-04-21 06:53:06 by Ultrano</div>
+   </div>
+   <div class="post" id="post-179970">
+    <div class="subject"><a href="#post-179970">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">...and files that are INCLUDE&#39;d must not have END.<br /></div>
+    <div class="meta">Posted on 2006-04-21 08:27:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-179996">
+    <div class="subject"><a href="#post-179996">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Thanks Ultrano and Fodder for your comments.<br /><br />I copied the atofp.asm file from the m32lib directory to the project directory. Then I removed the &quot;END&quot; directive from that file, and tried to build the project again.<br />This time one of the complaints was about pRagDollBone.<br /><br />Homer,<br /><br />I remember you added pRagDollBone to the FRAME struct.<br />So I did that manually in ID3DXAllocateHierarchy too.<br />But I think you have changed more in ID3DXAllocateHierarchy.<br />Could you post the updated file, because it was missing in the previously attached project source?<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-04-21 17:46:15 by mdevries</div>
+   </div>
+   <div class="post" id="post-180019">
+    <div class="subject"><a href="#post-180019">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Attached is my current ID3DXAllocateHierarchy, and yes, some small changes made in here.<br />Sorry about that oversight.<br />My atofp is the standard one from masm32 lib folder.<br />My FloatToString is modified to append a &quot;.0&quot;&nbsp; when displaying floats that happen to be perfect integers, such as 10.0f<br />I&#39;ve just managed to break a couple of fingers, and am typing like a chicken.<br />Maybe I&#39;m gone a few days while I patch myself up.<br />l8r</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1580" target="_blank">ID3DXAllocateHierarchy.inc</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-04-22 02:58:22 by Homer</div>
+   </div>
+   <div class="post" id="post-180040">
+    <div class="subject"><a href="#post-180040">Re: Animated SkinMesh under D3D</a></div>
+    <div class="body">Time to show the heart of the physics code, the Integrate method.<br />I choose to begin with pseudocode:<br /><br />Position += Elapsed*LinearVelocity<br />AngularMomentum += Elapsed * Torque<br />LinearVelocity += Elapsed * Force / Mass<br />qVelocity = Elapsed *AngularVelocity<br />(and then we recalculate the orientation matrix using instantaneous qVelocity)<br /><br />We can see from this that we need to already have :<br />-Elapsed Time<br />-Linear Velocity<br />-Torque<br />-Force<br />-Mass<br />-Angular Velocity<br />-Angular Momentum<br /><br />So, at the moment we switch from animated to ragdoll mode, we need to extract all these values from the current and previous animation frames.<br />We&#39;ll start with the easier ones, and work our way through them.<br /><br />Once we&#39;ve managed to calculate the physical state of each bone at the magic switching moment in time, we can then modify the values over time using the pseudocode above.<br /><br /></div>
+    <div class="meta">Posted on 2006-04-22 08:35:39 by Homer</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=24515&amp;page=1" style="">&laquo;</a><a href="../?id=24515&amp;page=2" style="">&lt;</a><input type="hidden" name="id" value="24515" /><input type="number" name="page" min="1" max="4" step="1" value="3" onchange="this.form.submit();" /><a href="../?id=24515&amp;page=4">&gt;</a><a href="../?id=24515&amp;page=4">&raquo;</a></form>  </div>
+ </body>
+</html>

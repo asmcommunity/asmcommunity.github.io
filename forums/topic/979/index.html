@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>non-blocking - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=979" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=979">non-blocking</a></p>
+   <div class="post" id="post-6337">
+    <div class="subject"><a href="#post-6337">non-blocking</a></div>
+    <div class="body">Can someone help me?  How do I make a socket non-blocking?  What function do i use to do this and what parameters?  If I set the socket to non-blocking does this mean that send() will return straight away?  Also, what kind of routine should I create to recieve data from an http server?  I want to be able to do this in one thread and close the socket when the http server finishes sending the data. <br />     Should it be like this:<br /><br />@@getdata:<br />check if socket is still open, if not: jump to @@done<br />check if data is there for reading, if so read<br />jmp @@getdata<br />@@done:<br />ret<br /><br />Also, how much data should I set recv() to receive?</div>
+    <div class="meta">Posted on 2001-09-06 07:57:38 by nin</div>
+   </div>
+   <div class="post" id="post-6373">
+    <div class="subject"><a href="#post-6373">non-blocking</a></div>
+    <div class="body">&quot;Can someone help me? How do I make a socket non-blocking?&quot;<br /><br />The direct way to do this is using SetSockOpt (or something like that, I have no docs here), but you probably won't use that.. The common method is to use WSAAsyncSelect, which sets the socket to non-blocking and also sets a window message you choose that will be sent to your program's window when an event happens... So basically the blocking model becomes a event-driven model like most things in windows.. Take a look at the winsock 2 docs (they're at my site), the function is described there and Iczelion has written a tutor about it as well.<br /><br />&quot;If I set the socket to non-blocking does this mean that send() will return straight away?&quot;<br /><br />Yes, that's why it's non-blocking.. But this also means that data may not be sent or be partly sent... For example, when you feed send 100 bytes of data, it might return 40, indicating that it has sent 60 of the 100 bytes.. The other have to be sent again..<br />Another thing that can happen and will hapen is that send just fails (returns error), but on non-blocking sockets, always call WSAGetLastError after a failure of send. If it returns WSAEWOULDBLOCK, it means that the socket is not ready to send data, and would block if it wasn't in non-blocking mode. At THIS POINT (and not sooner or later), you should wait for an FD_WRITE notification (via the window message you set with WSAsyncSelect), that indicates the socket is available for writing again... <br /><br />&quot;Also, what kind of routine should I create to recieve data from an http server?&quot;<br /><br />When you receive your user defined message (set with WSAsyncSelect), with the network code FD_READ, it means data is waiting for you on the socket... When this happens, call read() until it fails (or indicates there is no more data)... When all data is read (and NOT before), you will get another FD_READ message when data is available.. <br /><br />&quot;I want to be able to do this in one thread and close the socket when the http server finishes sending the data. &quot;<br /><br />When using WSAsyncSelect, you will get notifications via your own user defined message. When you want to use a thread you somehow have to let the thread know of the notification.. There's not a quick way to do this.. But there's another function, called WSEventSelect (or something that looks like that), which is exactly the same as WSAsyncSelect, but it uses an event (see Iczelion's tutor on events) that is signalled when an event occurred.. The disadvantage of that function is that it only uses one event object for all notifcations (read,write,close etc.), so you'll have to get the type of notification via some winsock function (it's in the docs)<br /><br />&quot;Should it be like this: <br />@@getdata: <br />check if socket is still open, if not: jump to @@done <br />check if data is there for reading, if so read <br />jmp @@getdata <br />@@done: &quot;<br /><br />Well it can look like it, but add waiting functions (for example, wait for the event object set with WSEventSelect), otherwise you will get a continually executing loop that consumes far too much processor time..<br /><br />Hope this helps,<br /><br />Thomas<br /><br />ret</div>
+    <div class="meta">Posted on 2001-09-06 14:17:25 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

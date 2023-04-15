@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Heaps of problems - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19130" />
+  <link rel="prev" href="../?id=19130&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19130">Heaps of problems</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=19130&amp;page=1" style="">&laquo;</a><a href="../?id=19130&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="19130" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-147956">
+    <div class="subject"><a href="#post-147956">Heaps of problems</a></div>
+    <div class="body">BTW, just FYI the Griffon image is 1.75MB ~128,000 colors and the function requires 21MB of memory to count the colors :) But other larger images with less colors saw that drop off sharply. A 1024x768 image with around 11,000 colors only required 6MB.</div>
+    <div class="meta">Posted on 2004-08-12 06:11:27 by donkey</div>
+   </div>
+   <div class="post" id="post-147967">
+    <div class="subject"><a href="#post-147967">Heaps of problems</a></div>
+    <div class="body">hi donkey,<br /><br />I could be way off base here, but try allocating/reallocating a heap 4k bigger than what you will actually use therefor not possible to access non-existing page.</div>
+    <div class="meta">Posted on 2004-08-12 09:34:18 by djinn</div>
+   </div>
+   <div class="post" id="post-147990">
+    <div class="subject"><a href="#post-147990">Heaps of problems</a></div>
+    <div class="body"><div class="quote"><br />BTW, just FYI the Griffon image is 1.75MB ~128,000 colors and the function requires 21MB of memory to count the colors :) But other larger images with less colors saw that drop off sharply. A 1024x768 image with around 11,000 colors only required 6MB. </div><br /><br />Yep, that is one major drawback with this algo that I posted.  Even a bitmap all black will take 256k + 256 bytes to give a count of one.  :(<br /><br />I've been playing with it on my machine and have a ASM version that's some what hand tuned which works well from the source I posted.  Here's my version.<br /><br /><pre><code><br />TITLE ColorCount.asm<br /><br />.486<br />.model flat<br /><br />extern __imp__GetProcessHeap@0&#58;near<br />extern __imp__HeapAlloc@12&#58;near<br />extern __imp__HeapFree@12&#58;near<br /><br />.code<br /><br />; ----------------------------------------------------------------------------<br />; prototype&#58;<br />;		int __stdcall CountColors&#40;LPVOID pRawPixelData, int Width, int Height&#41;;<br />;<br />; Description&#58;<br />;		Returns the count of unique colors in a given image.<br />;<br />; Params&#58;<br />;		- A pointer to the raw pixel data in 32-bit format &#40;ARGB&#41; or &#40;BGRA&#41;<br />;		- Width of image<br />;		- Height of image<br />; ----------------------------------------------------------------------------<br /><br /><br />align 16<br />_CountColors@12 PROC NEAR<br />	push	ecx<br />	push	ebx<br />	push	ebp<br />	push	esi<br />	push	edi<br />	call	DWORD PTR __imp__GetProcessHeap@0<br />	mov	ebx, eax<br /><br />	mov	esi, &#91;esp+24&#93;<br />	push	262144<br />	push	8<br />	push	eax<br />	call  dword ptr __imp__HeapAlloc@12<br /><br />	mov	ecx, &#91;esp+28&#93;<br />	imul	ecx, &#91;esp+32&#93;<br />	mov	&#91;esp+16&#93;, eax<br />	lea	ebp, &#91;esi+ecx*4&#93;<br /><br />align 4<br />ExaminePixel&#58;<br />	movzx	edx, WORD PTR &#91;esi&#93;<br />	cmp	DWORD PTR &#91;eax+edx*4&#93;, 0<br />	lea	edi, &#91;eax+edx*4&#93;<br />	jne	SHORT NoSubAlloc<br /><br />	push	256<br />	push	8<br />	push	ebx<br />	call	dword ptr __imp__HeapAlloc@12<br />	mov	&#91;edi&#93;, eax<br />	mov	eax, &#91;esp+16&#93;<br /><br />NoSubAlloc&#58;<br />	movzx	ecx, BYTE PTR &#91;esi+2&#93;<br />	mov	edx, &#91;edi&#93;<br />	add	esi, 4<br />	cmp	esi, ebp<br />	mov	BYTE PTR &#91;ecx+edx&#93;, 1<br />	jb	SHORT ExaminePixel<br /><br />	xor	esi, esi<br />	mov	edi, eax<br />	lea	ebp, &#91;eax+262144&#93;<br /><br />align 4<br />AddCounts&#58;<br />	mov	ecx, &#91;edi&#93;<br />	test	ecx, ecx<br />	je	SHORT NotAllocated<br /><br />	mov	eax, 255<br /><br />align 4<br />CountSubArray&#58;<br />	cmp	BYTE PTR &#91;ecx+eax&#93;, 0<br />	je	SHORT @F<br />	add	esi, 1<br /><br />@@&#58;<br />	sub	eax, 1<br />	jns	short CountSubArray<br /><br />	push	ecx<br />	push	0<br />	push	ebx<br />	call	dword ptr __imp__HeapFree@12<br /><br />NotAllocated&#58;<br />	add	edi, 4<br />	cmp	edi, ebp<br />	jb	SHORT AddCounts<br /><br />	push	&#91;esp+16&#93;<br />	push	0<br />	push	ebx<br />	call	dword ptr __imp__HeapFree@12<br /><br />	mov	eax, esi<br />	pop	edi<br />	pop	esi<br />	pop	ebp<br />	pop	ebx<br />	pop	ecx<br /><br />	ret	12<br />_CountColors@12 ENDP<br /><br />END<br /></code></pre><br /><br />Relvinian</div>
+    <div class="meta">Posted on 2004-08-12 18:07:30 by Relvinian</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=19130&amp;page=1" style="">&laquo;</a><a href="../?id=19130&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="19130" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

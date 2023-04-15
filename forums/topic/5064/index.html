@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Can you help me with a small piece of code? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5064" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5064">Can you help me with a small piece of code?</a></p>
+   <div class="post" id="post-35570">
+    <div class="subject"><a href="#post-35570">Can you help me with a small piece of code?</a></div>
+    <div class="body">Hi,  I new to ASM programming, and I am having a bit of trouble using the SendMessage API.  My code simply grabs the Title and URL of the currently active Internet Explorer window using the SendMessage API call.  The problem is, that I can get it to grab the Title, or the URL, but not both.  It will do one or the other depending on which one is done first, and then mess up on the second call.  Here is the part of the code I am having trouble with.<br /><br />    invoke SendMessage, IEFrameHwnd, WM_GETTEXTLENGTH, 0, 0<br />    mov ctxtLength, eax<br />    add ctxtLength, 1<br />    mov captionText, LENGTHOF ctxtLength<br />    invoke SendMessage, IEFrameHwnd, WM_GETTEXT, ctxtLength, addr captionText<br />    invoke MessageBox, NULL, addr captionText, addr AppName, MB_OK<br /><br />  <br />    invoke SendMessage, editHwnd, WM_GETTEXTLENGTH, 0, 0<br />    mov utxtLength, eax<br />    add utxtLength, 1<br />    mov urlText, LENGTHOF utxtLength<br />    invoke SendMessage, editHwnd, WM_GETTEXT, utxtLength, addr urlText<br />    invoke MessageBox, NULL, addr urlText, addr AppName, MB_OK    <br /><br />The rest of the code sets up variable, etc. and get handles or the varius controls of the IE Window.  Can anyone see what I am doing wrong with the above. (Above will grab the title and then mess up with the url, but if I put the url code first, it will get the URL, and not the Title)<br /><br />Anyway,  here is the full code, in case you need it.<br /><br />; #########################################################################<br /><br />.386<br />.model flat, stdcall<br />option casemap :none   ; case sensitive<br /><br />; #########################################################################<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\user32.inc<br />include \masm32\include\kernel32.inc<br /><br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\kernel32.lib<br /><br />; #########################################################################<br />.data          <br />ClassIEFrame            db &quot;IEFrame&quot;, 0<br />ClassWorkerW            db &quot;WorkerW&quot;, 0<br />ClassWorkerA            db &quot;WorkerA&quot;, 0<br />ClassReBarWindow32      db &quot;ReBarWindow32&quot;, 0<br />ClassComboBoxEx32       db &quot;ComboBoxEx32&quot;, 0<br />ClassComboBox           db &quot;ComboBox&quot;, 0<br />ClassEdit               db &quot;Edit&quot;, 0<br />AppName                 db &quot;IE URL Viewer&quot;, 0<br />ErrorMSG                db &quot;No instances of Internet Explorer running!&quot;, 0<br /><br />.data?  <br />OsVer       OSVERSIONINFO {}<br />captionText db ?<br />urlText     db ?<br />ctxtLength  dd ?<br />utxtLength  dd ?<br />editHwnd    HWND ?<br />IEFrameHwnd HWND ?<br />retval      dd ?<br /><br />.code<br />start:<br />  mov OsVer.dwOSVersionInfoSize, SIZEOF OSVERSIONINFO<br />  invoke GetVersionEx, addr OsVer<br />  invoke FindWindow, addr ClassIEFrame, NULL<br />  .if eax!=NULL<br />    mov IEFrameHwnd, eax<br />    .if OsVer.dwPlatformId==VER_PLATFORM_WIN32_WINDOWS<br />        invoke FindWindowEx, eax, 0, addr ClassWorkerA, NULL<br />    .endif<br />    .if OsVer.dwPlatformId==VER_PLATFORM_WIN32_NT<br />        invoke FindWindowEx, eax, 0, addr ClassWorkerW, NULL<br />    .endif    <br />    invoke FindWindowEx, eax, 0, addr ClassReBarWindow32, NULL<br />    invoke FindWindowEx, eax, 0, addr ClassComboBoxEx32, NULL<br />    invoke FindWindowEx, eax, 0, addr ClassComboBox, NULL<br />    invoke FindWindowEx, eax, 0, addr ClassEdit, NULL<br />    mov editHwnd, eax<br /><br />    invoke SendMessage, IEFrameHwnd, WM_GETTEXTLENGTH, 0, 0<br />    mov ctxtLength, eax<br />    add ctxtLength, 1<br />    mov captionText, LENGTHOF ctxtLength<br />    invoke SendMessage, IEFrameHwnd, WM_GETTEXT, ctxtLength, addr captionText<br />    invoke MessageBox, NULL, addr captionText, addr AppName, MB_OK<br /><br />  <br />    invoke SendMessage, editHwnd, WM_GETTEXTLENGTH, 0, 0<br />    mov utxtLength, eax<br />    add utxtLength, 1<br />    mov urlText, LENGTHOF utxtLength<br />    invoke SendMessage, editHwnd, WM_GETTEXT, utxtLength, addr urlText<br />    invoke MessageBox, NULL, addr urlText, addr AppName, MB_OK    <br /><br />  .else<br />    invoke MessageBox, NULL, addr ErrorMSG, addr AppName, MB_OK+MB_ICONERROR <br />  .endif<br />  invoke ExitProcess, 0<br />end start</div>
+    <div class="meta">Posted on 2002-04-29 08:43:55 by RussG</div>
+   </div>
+   <div class="post" id="post-35577">
+    <div class="subject"><a href="#post-35577">Can you help me with a small piece of code?</a></div>
+    <div class="body">You've pointed the program at the address of a variable called captionText, which is a single byte long, the program then attempts to write several bytes starting at this position.<br />A string longer than 10 bytes will corrupt editHwnd, and a string longer than 14 bytes will corrupt IEFrameHwnd.<br /><br />So the second SendMessage will be to a bogus (or at least unpredictable) window handle.<br /><br />You should allocate more space to the caption buffer to start with:<br /><pre><code><br />captionBuffer db 20 DUP &#40;?&#41; ; for a buffer 20 bytes long<br /></code></pre><br /><br />And secondly check to see if the string you are trying to get is longer than the buffer and compensate accordingly.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-04-29 10:17:43 by Mirno</div>
+   </div>
+   <div class="post" id="post-35586">
+    <div class="subject"><a href="#post-35586">Can you help me with a small piece of code?</a></div>
+    <div class="body">If you're grabbing a URL or something you'd better make that buffer larger than 20 bytes.  ;)</div>
+    <div class="meta">Posted on 2002-04-29 11:36:18 by iblis</div>
+   </div>
+   <div class="post" id="post-35590">
+    <div class="subject"><a href="#post-35590">Can you help me with a small piece of code?</a></div>
+    <div class="body">or use the value returrned by WM_GETTEXTLENGHTH to dynamically allocate some memory</div>
+    <div class="meta">Posted on 2002-04-29 12:06:39 by Kudos</div>
+   </div>
+   <div class="post" id="post-35606">
+    <div class="subject"><a href="#post-35606">Can you help me with a small piece of code?</a></div>
+    <div class="body">Thnaks for the info...  <br />Can you explain how to set the buffer size from the result of the WM_GetTextLength...<br />I thought that is what I was doing with the:<br /><br />mov ctxtLength, eax<br />add ctxtLength, 1 <br />mov captionText, LENGTHOF ctxtLength<br /><br />and <br /><br />mov utxtLength, eax <br />add utxtLength, 1 <br />mov urlText, LENGTHOF utxtLength<br /><br />Doesn't the LENGTHOF operator set the buffer size to that of the text length returned by WM_GetTExtLength?</div>
+    <div class="meta">Posted on 2002-04-29 13:25:14 by RussG</div>
+   </div>
+   <div class="post" id="post-35608">
+    <div class="subject"><a href="#post-35608">Can you help me with a small piece of code?</a></div>
+    <div class="body">ok if you want to set the buffer size first declare a pointer<br />ptrBuffer dd ?<br />...<br />invoke GetProcessHeap<br />invoke HeapAlloc, eax, HEAP_ZERO_MEMORY, utxtLength<br />mov ptrBuffer, eax<br /><br /><br />Don't forget to use HeapFree when you have finnished with this memory<br /></div>
+    <div class="meta">Posted on 2002-04-29 13:34:21 by Kudos</div>
+   </div>
+   <div class="post" id="post-35609">
+    <div class="subject"><a href="#post-35609">Can you help me with a small piece of code?</a></div>
+    <div class="body">LENGTHOF is not opcode it is operator for preprocessing.<br />It doesn't change anything using params that are changed in runtime.<br />LENGTHOF returns a number wich is known in DESIGN time.<br />Number of length of predefined structure. <br />Size between to starting points of next to each other strings etc.<br />Only things that you can calculate youself in design time, and they<br />are constant.</div>
+    <div class="meta">Posted on 2002-04-29 13:36:52 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

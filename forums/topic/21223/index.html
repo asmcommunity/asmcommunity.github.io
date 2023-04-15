@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Argh! Damn compiler! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21223" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=21223">Argh! Damn compiler!</a></p>
+   <div class="post" id="post-160623">
+    <div class="subject"><a href="#post-160623">Argh! Damn compiler!</a></div>
+    <div class="body">I&#39;m beginning to understand those &quot;hardcore&quot; assembly programmers who hate compilers... :mad:<br /><br />I was coding in C++ a today, my program was crashing and after quite some debugging I found out what the problem was: my checksum function was *somehow* returning negative values (it was supposed to use positives only) and that was causing a GPF later.<br /><br />I scratched my head and wondered: how come this code can return a negative number?<br /><br /><span class="mono"><br />unsigned int checksum(const char* name)<br />{<br />? ? unsigned int sum = 0;<br />? ? for( int i = 0; name<em>; i++ )<br />? ? {<br />? ? ? ? sum += (unsigned int)name<em>;<br />? ? };<br />? ? return sum;<br />};<br /></span><br /><br />It couldn&#39;t be an integer overflow, because the strings I was feeding it were very short (under 256 chars long). I managed to isolate what kind of strings would produce negative results, and it turned out they all had ASCII characters over 128.<br /><br />Something fishy was going on there :/ so I took a look at the dissassembly, and saw this line:<br /><br /><span class="mono"><br />MOVSX ECX, DWORD PTR <br /></span><br /><br />Huh?! :?:<br /><br />I have a theory: I think the compiler hasn&#39;t defined a conversion from <strong>char</strong> (signed by default) and <strong>unsigned int</strong>, but it does to <strong>int</strong> (also signed by default). So this statement...<br /><br /><span class="mono"><br />(unsigned int)name<em><br /></span><br /><br />...was converting the <strong>char</strong> to <strong>int</strong>, and then to <strong>unsigned int</strong>. Since the last conversion <strong>does nothing</strong>, in practice the char was being converted to a signed integer instead! :mad:<br /><br />I had to fix the code like this:<br /><br /><span class="mono"><br />unsigned int checksum(const char* name)<br />{<br />? ? unsigned int sum = 0;<br />? ? for( int i = 0; name<em>; i++ )<br />? ? {<br />? ? ? ? sum += (unsigned int)((unsigned char)name<em>);<br />? ? };<br />? ? return sum;<br />};<br /></span><br /><br />It can still be overflowed, but now it needs a string full of 0xFF chars and at least 8,421,505 bytes long to do it. I think I&#39;m safe with my 256 chars limit. ;)<br /><br />Anyway, is it possible to disable this automatic type conversions? Or at least flag a warning when they take place? I&#39;d hate to run into another one like this... :sad:<br /></div>
+    <div class="meta">Posted on 2005-05-30 19:51:29 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160624">
+    <div class="subject"><a href="#post-160624">Re: Argh! Damn compiler!</a></div>
+    <div class="body">Hm, I&#39;m not sure if there&#39;s some obscure thing in The Standard that explains this, but it does smell like a compiler bug. You should state which compiler you use - it&#39;s reproducible with vc2003. I would either pass unsigned chars (since signed chars have often been problematic in various circumstances), or rewrite it to something like this:<br /><br /><pre><code><br />unsigned int checksum(const void* a_name)<br />{<br />	const unsigned char* const name = static_cast&lt;const unsigned char* const&gt;( a_name );<br />	unsigned int sum = 0;<br /><br />	for( int i = 0; name<em>; i++ )<br />	{<br />		sum = sum + static_cast&lt;unsigned&gt;( name<em> );<br />	}<br /><br />	return sum;<br />}<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2005-05-30 20:14:24 by f0dder</div>
+   </div>
+   <div class="post" id="post-160625">
+    <div class="subject"><a href="#post-160625">Re: Argh! Damn compiler!</a></div>
+    <div class="body">BIG smile,&nbsp; :mrgreen:<br /><br /><div class="quote"><br />I&#39;m beginning to understand those &quot;hardcore&quot; assembly programmers who hate compilers..<br /></div><br /><br /><strong>Ve Vill conVert Yoooo !</strong></div>
+    <div class="meta">Posted on 2005-05-30 21:46:13 by hutch--</div>
+   </div>
+   <div class="post" id="post-160634">
+    <div class="subject"><a href="#post-160634">Re: Argh! Damn compiler!</a></div>
+    <div class="body">IMO it is not a bug!<br /><br />The matter is that your <strong>signed</strong> character already holds a negative value, and that value will be preserved when promoting to integer, independently on the fact that the destination integer is signed or unsigned. That peculiarity (signed or unsigned) will only be taken into account in the following operations you will perform on the promoted integer.<br /><br />Just another example:<br /><pre><code><br />? ? signed int si = -13;? // mov dword ptr ,0FFFFFFF3h<br />? ? unsigned int ui = (unsigned int)si;? // mov eax,dword ptr  + mov dword ptr ,eax<br /></code></pre><br /><br />So the value inside <strong>ui</strong> will be the same as the value inside <strong>si</strong>:<br />you cannot expect that the cast operation will take off the negative sign from -13...<br /><br />Best regards, bilbo<br /><br />P.S. This is anyway a common programmer&#39;s trap: I saw a similar discussion on a Microcontrollers forum,<br />hxxp://www.cygnal.org/ubb/Forum7/HTML/000056.html? </div>
+    <div class="meta">Posted on 2005-05-31 05:39:17 by bilbo</div>
+   </div>
+   <div class="post" id="post-160638">
+    <div class="subject"><a href="#post-160638">Re: Argh! Damn compiler!</a></div>
+    <div class="body">To solve such problems in my C code, I make pointers - at least I know they will be properly copied :). Here&#39;s how I&#39;d fix your code:<br /><pre><code><br />unsigned long checksum(const char* sname)<br />{<br />&nbsp; &nbsp; unsigned long sum = 0;<br />&nbsp; &nbsp; unsigned char *name = (unsigned char*)sname;<br />&nbsp; &nbsp; while(*name)<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; sum += (unsigned int)(*name); // extra round brackets<br />&nbsp; &nbsp; &nbsp; &nbsp; name++;<br />&nbsp; &nbsp; };<br />&nbsp; &nbsp; return sum;<br />};<br /></code></pre><br /><br />Note that I also use &quot;long&quot; instead of &quot;int&quot;, because with some compilers &quot;int&quot; is 2 bytes, and &quot;long&quot; is always 4 bytes. <br />I use extra round brackets at tricky conversion-bound places, to assure the compiler will understand what exactly I need (and to spare me from learning the rock-paper-scissors logic in C/C++ compilers - that is not always implemented as ANSI states). </div>
+    <div class="meta">Posted on 2005-05-31 07:22:19 by Ultrano</div>
+   </div>
+   <div class="post" id="post-160652">
+    <div class="subject"><a href="#post-160652">Re: Argh! Damn compiler!</a></div>
+    <div class="body"><div class="quote"><br />BIG smile, :mrgreen:<br /><br /><strong>Ve Vill conVert Yoooo !</strong><br /></div><br /><br />I&#39;m scared... :D<br /><br />As pointed out by bilbo this is not a bug -- a design flaw at any rate. Since there seems to be no way to make the compiler at least <em>warn</em> me when it&#39;s about to do something unexpected, I guess I&#39;ll have to use unsigned chars always from now on. :P<br /><br />BTW, Ultrano, your fix won&#39;t work. The compiler will try to convert the signed char into signed integer first, no matter how many brackets you use... :(</div>
+    <div class="meta">Posted on 2005-05-31 19:51:47 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160653">
+    <div class="subject"><a href="#post-160653">Re: Argh! Damn compiler!</a></div>
+    <div class="body">What about the absolute value of the signed variable?</div>
+    <div class="meta">Posted on 2005-05-31 20:28:48 by SpooK</div>
+   </div>
+   <div class="post" id="post-160655">
+    <div class="subject"><a href="#post-160655">Re: Argh! Damn compiler!</a></div>
+    <div class="body">OK, maybe because I made a typo:<br />sum += (unsigned <strong>int</strong>)(*name);&nbsp; // ^^&quot;<br />should be &quot;long&quot;.<br /><br />But if that doesn&#39;t work either, try<br />sum += ((unsigned long)(*name)) &amp; 255;<br /><br />So, which compiler do you use ???</div>
+    <div class="meta">Posted on 2005-06-01 00:57:12 by Ultrano</div>
+   </div>
+   <div class="post" id="post-160656">
+    <div class="subject"><a href="#post-160656">Re: Argh! Damn compiler!</a></div>
+    <div class="body">If you&#39;re going to treat plain <strong>char</strong> as numbers, you should always strip away any potential sign extension.<br /><br />Here is the historical reason: the <strong>char to int</strong> conversion is supposed to use the most efficient conversion. On some machines, like the Digital machines, it was more efficient if <strong>char</strong> was treated as signed. On other machines, like the IBM mainframes, it was more efficient to treat <strong>char</strong> as unsigned. The big Unix port to at least three other machines (the original machines were Digital models) pointed out little things like this.<br /><br />When C began to migrate to microprocessors, there was no <strong>signed</strong> keyword. So if you wanted (implied) sign extension in your compiler, you made plain <strong>char</strong> be equivalent to modern <strong>signed char</strong>. (Even if signed conversion was less efficient than unsigned.)<br /><br />Another reason - what I remember was that everyone with access to Unix machines wanted to mimic them, which meant mimicking the Digital versions of software.</div>
+    <div class="meta">Posted on 2005-06-01 01:40:08 by tenkey</div>
+   </div>
+   <div class="post" id="post-160663">
+    <div class="subject"><a href="#post-160663">Re: Argh! Damn compiler!</a></div>
+    <div class="body">With vc2003 you can use the /J switch to cl.exe to make char be treated as unsigned, which may help.</div>
+    <div class="meta">Posted on 2005-06-01 05:46:31 by stormix</div>
+   </div>
+   <div class="post" id="post-160665">
+    <div class="subject"><a href="#post-160665">Re: Argh! Damn compiler!</a></div>
+    <div class="body"> :shock: impressive, tenkey :)<br /><br />interesting to know</div>
+    <div class="meta">Posted on 2005-06-01 06:09:08 by HeLLoWorld</div>
+   </div>
+   <div class="post" id="post-160666">
+    <div class="subject"><a href="#post-160666">Re: Argh! Damn compiler!</a></div>
+    <div class="body">Wow! A lot of nice info, thanks to <strong>tenkey</strong> and <strong>stormix</strong>!<br /><br />By the way, also MSVC 6.0 contemplates the switch /J!<br />Regards, bilbo</div>
+    <div class="meta">Posted on 2005-06-01 06:32:57 by bilbo</div>
+   </div>
+   <div class="post" id="post-160683">
+    <div class="subject"><a href="#post-160683">Re: Argh! Damn compiler!</a></div>
+    <div class="body">Another way to do this (sqeezed into one line for extra l33tness :mrgreen:)<br /><pre><code>for (int i = 0; name<em>; sum += (unsigned char)name<em>);</code></pre><br />Which is basically what tenkey indicated ;)</div>
+    <div class="meta">Posted on 2005-06-01 10:37:01 by Tola</div>
+   </div>
+   <div class="post" id="post-160685">
+    <div class="subject"><a href="#post-160685">Re: Argh! Damn compiler!</a></div>
+    <div class="body"><div class="quote"><br />So, which compiler do you use ???<br /></div><br />Both VC 6 and GCC 3. Since one of my goals is portability, I&#39;d rather stay away from <strong>long</strong> and keep using <strong>int</strong>.<br /><br />@tenkey: Very interesting! That explains this oddity in the type conversion logic. :)</div>
+    <div class="meta">Posted on 2005-06-01 11:24:21 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160687">
+    <div class="subject"><a href="#post-160687">Re: Argh! Damn compiler!</a></div>
+    <div class="body"><div class="quote"><br />With vc2003 you can use the /J switch to cl.exe to make char be treated as unsigned, which may help.<br /></div><br />Never never never ever depend on this, it&#39;s for being able to compile broken source code. If you&#39;re depending on &#39;char&#39; being unsigned, you might as well code in assembly, as your code will not be portable.</div>
+    <div class="meta">Posted on 2005-06-01 12:00:23 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

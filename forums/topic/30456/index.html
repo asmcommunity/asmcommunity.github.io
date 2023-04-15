@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Is there any optimization in..... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30456" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30456">Is there any optimization in.....</a></p>
+   <div class="post" id="post-213958">
+    <div class="subject"><a href="#post-213958">Is there any optimization in.....</a></div>
+    <div class="body">This is actually multiple questions in a single thread but they are all related.<br /><br />I read somewhere that for simple arithmetic instructions, the smaller the register size the faster it is. For example:<br />{sub al, 48} is faster than {sub eax, 48}<br />Of course, that is assuming that numbers in the arithmetic operations are always small enough not to cause carries or overflows. I wonder if that is still true in modern processors.<br /><br />What about movzx vs mov? If XOR is only used once to clear whatever register and then use MOV in a loop afterwards. Is there any optimization gain?<br /><br />Let&#039;s assume the result has to be in a 32-bit size but the input is an 8-bit size:<br /><pre><code><br />mov	esi, offset string<br />xor	eax, eax<br />xor	ebx, ebx<br />again:<br />	add	eax, ebx<br />	movzx	ebx,byte ptr <br />	sub	ebx, 48<br />jnb again<br /></code></pre><br /><br />Replaced with the alternative:<br /><pre><code><br />mov	esi, offset string<br />xor	eax, eax<br />xor	ebx, ebx<br />again:<br />	add	eax, ebx<br />	mov	bl,&nbsp; <br />	sub	bl, 48<br />jnb again<br /></code></pre><br />Is there going to be any gain in optimization?</div>
+    <div class="meta">Posted on 2011-01-26 16:20:39 by banzemanga</div>
+   </div>
+   <div class="post" id="post-213961">
+    <div class="subject"><a href="#post-213961">Re: Is there any optimization in.....</a></div>
+    <div class="body"><div class="quote"><br />I read somewhere that for simple arithmetic instructions, the smaller the register size the faster it is. For example:<br />{sub al, 48} is faster than {sub eax, 48}<br />Of course, that is assuming that numbers in the arithmetic operations are always small enough not to cause carries or overflows. I wonder if that is still true in modern processors.</div><br /><br />It&#039;s not true.<br />In fact, using &#039;partial registers&#039; (al/ah/ax etc, rather than the full eax, ebx etc) can be suboptimal. Namely, the CPU only supports full registers internally.<br />If you use al, it will use a full 32-bit register internally... That&#039;s all fine and well... But if you modify al, and then read ax or eax, it has to combine the new value of al from the 32-bit register with the rest of the register. This causes a so-called &#039;partial register stall&#039;.<br />An exception is implemented: the CPU will know that it does not have to combine the registers, if the register was 0 beforehand. For example:<br /><pre><code>xor eax, eax ; CPU will set an internal flag to signal that eax is 0<br />mov al, 8 ; CPU will allocate an internal register for al<br />add eax, 10 ; CPU will know that eax was 0 beforehand, so it skips the recombining stage and just uses the internal &#039;al&#039; register as eax, and performs the add immediately</code></pre><br /><br /><div class="quote">What about movzx vs mov? If XOR is only used once to clear whatever register and then use MOV in a loop afterwards. Is there any optimization gain?</div><br /><br />On some CPUs movzx may be slightly slower. It all depends. On the other hand, movzx is a good way to avoid the partial register stall described above.<br /><br /><div class="quote"><br />Let&#039;s assume the result has to be in a 32-bit size but the input is an 8-bit size:<br /><pre><code><br />mov	esi, offset string<br />xor	eax, eax<br />xor	ebx, ebx<br />again:<br />	add	eax, ebx<br />	movzx	ebx,byte ptr <br />	sub	ebx, 48<br />jnb again<br /></code></pre><br /><br />Replaced with the alternative:<br /><pre><code><br />mov	esi, offset string<br />xor	eax, eax<br />xor	ebx, ebx<br />again:<br />	add	eax, ebx<br />	mov	bl,&nbsp; <br />	sub	bl, 48<br />jnb again<br /></code></pre><br />Is there going to be any gain in optimization?<br /></div><br /><br />The xor ebx, ebx at the top should avoid partial register stalls on the add eax, ebx. The second version will be slightly faster on CPUs which perform movzx slower than mov.<br />You could have a look here: http://www.agner.org/optimize/instruction_tables.pdf<br />It would seem that on AMD K7, K8 and K10 (different architectures? yea right) for example, movzx r,m has higher latency than mov r,m.<br />Other than that, only the ancient Pentium 1/MMX seems be slower with movzx (then again, those don&#039;t have the partial register problem, since they don&#039;t do out-of-order execution and register renaming). All the modern Intel architectures (Pentium 4, Core2, Core i7, even Atom) have the same performance for mov and movzx.<br />You seem to have forgotten a lea esi,  somewhere in the loop, though :)</div>
+    <div class="meta">Posted on 2011-01-27 02:01:08 by Scali</div>
+   </div>
+   <div class="post" id="post-213963">
+    <div class="subject"><a href="#post-213963">Re: Is there any optimization in.....</a></div>
+    <div class="body">I was under the impression that the internal register size for most modern pc processors is 80 bits, and for gpu its 48 bits, but otherwise, I agree with everything :)<br /></div>
+    <div class="meta">Posted on 2011-01-27 02:26:19 by Homer</div>
+   </div>
+   <div class="post" id="post-213964">
+    <div class="subject"><a href="#post-213964">Re: Is there any optimization in.....</a></div>
+    <div class="body"><div class="quote"><br />I was under the impression that the internal register size for most modern pc processors is 80 bits, and for gpu its 48 bits, but otherwise, I agree with everything :)<br /><br /></div><br /><br />80 bits? Only for the FPU.<br />GP registers are 64-bits these days, but since this was 32-bit code, I decided not to over-complicate the explanation. In 32-bit mode, 64-bit CPUs work exactly the same as 32-bit CPUs.<br />Obviously SSE registers are 128 bits, and AVX is 256 bits.<br /><br />No idea where you get 48 bits for a GPU... Latest generation GPUs have 64-bit double precision IEEE754.</div>
+    <div class="meta">Posted on 2011-01-27 02:57:45 by Scali</div>
+   </div>
+   <div class="post" id="post-213965">
+    <div class="subject"><a href="#post-213965">Re: Is there any optimization in.....</a></div>
+    <div class="body">48 bit color space was used internally by some Adobe products, I read that this was because it was the &#039;native gpu color resolution&#039; at the time of writing, and accepted that at face value.<br /><br /></div>
+    <div class="meta">Posted on 2011-01-27 05:30:51 by Homer</div>
+   </div>
+   <div class="post" id="post-213967">
+    <div class="subject"><a href="#post-213967">Re: Is there any optimization in.....</a></div>
+    <div class="body"><div class="quote"><br />48 bit color space was used internally by some Adobe products, I read that this was because it was the &#039;native gpu color resolution&#039; at the time of writing, and accepted that at face value.</div><br /><br />But colour resolution is something completely different from GPU registers. Generally the GPU&#039;s internal registers and ALUs have higher precision than the rendertarget.<br />Besides, 48 bit colour space will probably mean either 12:12:12:12 or 16:16:16. So that would be 12 or 16 bits of precision per component.<br />A modern GPU with double precision has 64 bit precision per component, of which 53 bits are the mantissa.</div>
+    <div class="meta">Posted on 2011-01-27 05:52:30 by Scali</div>
+   </div>
+  </div>
+ </body>
+</html>

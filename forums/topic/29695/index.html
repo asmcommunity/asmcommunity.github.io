@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CRC16 Table Generation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29695" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=29695">CRC16 Table Generation</a></p>
+   <div class="post" id="post-209644">
+    <div class="subject"><a href="#post-209644">CRC16 Table Generation</a></div>
+    <div class="body">ok... I&#039;m trying to generate the lookup table for ANSI CRC16 poly/reflect/reverse of reciprocal 8005h / A001h / C002h. Doing this in real mode x86. I can&#039;t seem to get it working I&#039;ve fiddled with the code for a few days to no avail. Any help would be appreciated.<br /><br /><pre><code>;CRC<br /><br />crc_16_table						dw	0x0600<br />crc_16_poly						dw	0A001h<br />crc_16_reflect						dw	08005h<br />crc_16_neg						dw	0FFFFh<br />create_crc:<br />	push	CX<br /><br />	mov	CX, 08h<br />	xor	AL, 0FFh<br />	.begin:<br />		shr	AX, 1<br />		jnc	.next_bit<br />		xor	AX, <br />		.next_bit:<br />	loop	.begin<br />	<br />	pop	CX<br />	<br />	ret<br />	<br />init_crc_16:<br />;<br />	push	SI<br />	pusha<br />	<br />	CLD<br />;	mov	SI, 							;for saving table to later... after i get this working<br />	xor	CX, CX									;counter = 0<br /><br />	.next_char:<br />		mov	AL, CL								;initial current char = 00h<br />		inc	CX									;increment counter<br />		call create_crc<br />		call hex_print_16							;print hex of AX<br />		cmp	CX, 100h<br />	jne	.next_char<br />	<br />	popa<br />	pop	SI<br />	<br />	ret</code></pre></div>
+    <div class="meta">Posted on 2009-11-18 07:21:54 by Goose007</div>
+   </div>
+   <div class="post" id="post-209645">
+    <div class="subject"><a href="#post-209645">Re: CRC16 Table Generation</a></div>
+    <div class="body">Maybe you should post the actual algorithm you are trying to implement.<br /><br />Here&#039;s what your create_crc code seems to do<br /><pre><code><br />crc = crc ^ 0FFh; //flip all bits 0&#039;s to 1&#039;s, 1&#039;s to 0&#039;s<br />for(bit=0; bit&lt;8; bit++){ //loop 8 times<br />&nbsp; carry = crc &amp; 1; //get the bit that will be shifted out<br />&nbsp; crc = crc &gt;&gt; 1; //shift lowest bit out (same as divide by 2<br />&nbsp; if(carry == 1){ //if the shifted bit was set<br />&nbsp; &nbsp; crc = crc ^ 0A001h; //xor by magic number<br />&nbsp; }<br />}<br /></code></pre><br /><br />Other notes:<br />- Your hex_print_16 function might be changing the value of CX which could cause problems, but you didn&#039;t post that code so there&#039;s no way of knowing.<br />- You have _reflect and _neg variables that you don&#039;t seem to be using.<br /><br />Good luck, and comment your code</div>
+    <div class="meta">Posted on 2009-11-18 09:08:02 by r22</div>
+   </div>
+   <div class="post" id="post-209646">
+    <div class="subject"><a href="#post-209646">Re: CRC16 Table Generation</a></div>
+    <div class="body">right... sorry it was super early. I sometimes forget my manners. well I have working (i think) CRC16 but it is slowww. I wanted to add the lookup table to speed things up. I can&#039;t find a good axample of creating the table that I&#039;ve been able to implement. as for commenting... i was changing things around trying to get it to work i was leaving it out till i found something that worked. I will try and be awake enough to put comments in before posting. This is my first attempt at CRC so I&#039;m still grasping the concept. I will post the algo and the slow working code(if i didn&#039;t overwrite it) when i get back to the house in about 2.5 hours. thanks for reminding me of my bad forum habits... I am truly sorry.</div>
+    <div class="meta">Posted on 2009-11-18 09:43:39 by Goose007</div>
+   </div>
+   <div class="post" id="post-209647">
+    <div class="subject"><a href="#post-209647">Re: CRC16 Table Generation</a></div>
+    <div class="body">Here&#039;s a link to a C++ implementation of CRC16, it looks complete and correct.<br /><a target="_blank" href="http://www.koders.com/cpp/fid2A0294B0225688F7CA9C892B993226F5CB4B3F9D.aspx?s=socket">http://www.koders.com/cpp/fid2A0294B0225688F7CA9C892B993226F5CB4B3F9D.aspx?s=socket</a><br /><br />It should help you with your ASM solution<br /><br />good luck</div>
+    <div class="meta">Posted on 2009-11-18 11:38:55 by r22</div>
+   </div>
+   <div class="post" id="post-209655">
+    <div class="subject"><a href="#post-209655">Re: CRC16 Table Generation</a></div>
+    <div class="body">Ok, here is my completed code for generating CRC16. I&#039;m pretty sure this is IEEE standard (not for certain since I only found an excerpt, didn&#039;t realize subscriptions were $10k)... I think at first I was trying to do modbus(which switches the high and low bytes of words). Either way this seems to work.. From what I&#039;ve read this should be able to generate unique CRCs for data up to 8192 bytes in length. Can anyone verify my work? Most of the apps I found to check my work were CCITT so I was getting very frustrated.<br /><br /><pre><code>;CRC<br /><br />crc_16_table						dw	0x0600<br />crc_16_poly						dw	0A001h<br />crc_16_init						dw	0000h<br /><br />init_crc:<br />	call init_crc_16<br />;call init_crc_32<br />	ret<br />	<br />init_crc_16:<br />	push	SI<br />	push	AX<br />	push	CX<br /><br />	CLD											;clear direction<br /><br />	mov	SI, 							;for saving table to later... after i get this working<br />	xor	CX, CX<br />	xor	AX, AX									;counter = 0<br /><br />	.next_char:<br />		mov	AX, CX								;current char to be processed = count<br />		inc	CX									;increment counter<br />		call create_crc							;create crc of byte<br />		mov	, AX							;copy crc to memory<br />		add	SI, 2								;increment SI by word length<br />		cmp	CX, 100h								;have we done all 256 chars<br />	jne	.next_char<br /><br />	pop	CX<br />	pop	AX<br />	pop	SI<br /><br />	ret<br /><br />create_crc:<br />	; AL = char<br />	push	CX<br /><br />	mov	CX, 08h									; 8 bits per byte<br />	xor	AL, 							; xor with initiating value<br />	.begin:<br />		shr	AX, 1								; shift rightmost bit into carry<br />		jnc	.next_bit								; if 0 goto next bit<br />		xor	AX, 						; else xor with poly<br />		.next_bit:								; next bit is zero, do nothing<br />	loop	.begin									; do this for all 8 bits<br /><br />	pop	CX<br /><br />	ret											; return with crc of initial char in AX<br />	<br />crc_16:<br />	;AX = Address<br />	;CX = Length<br />	push	SI<br />	push	DI<br />	push	BX<br /><br />	CLD											; direction up<br />	xor	SI, SI									; zero SI<br />	mov	SI, AX									; SI = start of input<br />	mov	DI, 							; DI = our precalculated table<br /><br />	mov	BX, 							; BX = initial crc<br /><br />	.crc_loop:<br />		xor	AX, AX								; Zero AX<br />		mov	AL, 								; grab a byte from our input<br />		inc	SI									; increment for next grab<br />		xchg	AX, BX								; exchange CRC with our Char BL = char, AX = crc<br />		xor	BL, AL								; xor with current crc to get our index in table<br />		xor	BH, BH								; zero out hi bytes<br />		shl	BX, 1								; *2 to get our word index<br />		shr	AX, 8								; shift high byte to low byte<br />		xor	AX, word 						; CRC = CRC xor table<br />		mov	BX, AX								; BX = CRC<br />	loop	.crc_loop									; do this till counter reaches zero<br /><br />	mov	AX, BX									; move crc to AX<br /><br />	pop	BX<br />	pop	DI<br />	pop	SI<br /><br />	ret											; returns CRC in AX<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2009-11-20 11:19:51 by Goose007</div>
+   </div>
+  </div>
+ </body>
+</html>

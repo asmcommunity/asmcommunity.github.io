@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>help on reading HD boot sector... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2739" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2739">help on reading HD boot sector...</a></p>
+   <div class="post" id="post-17442">
+    <div class="subject"><a href="#post-17442">help on reading HD boot sector...</a></div>
+    <div class="body">Hi! I've instaled on my box WinXP and Win98, but i've lost a file named BootSect.DOS that is located<br />on the root of the drive. And from the informations that i've this file is the boot sector of Win98.<br />The current MBR of the drive is the one of WinXP OS. Since i've another box on my house with Win98<br />OS only, i've the idea to create a bootsector &quot;dumper&quot;. This is my first program coded to be used on<br />MS-DOS, so don't blame me if it is like shit. Soo first i try to use INT 13h,2:<br /><pre><code><br />        MOV     AH,02h<br />	MOV	AL,01h<br />        MOV     CX,1<br />        MOV     DH,0<br />	MOV	DL,1000000b ;harddrive num is 0 &#40;C&#58;&#41;<br />        MOV     BX,OFFSET BootSector<br />	INT	13h<br />	JC	_Error2<br /></code></pre><br />Acording with Ralph INT list: &quot;under Windows95, a volume must be locked (see INT 21/AX==440Dh/CX=084Bh)<br />in order to perform direct accesses such as INT 13h reads writes.&quot;<br />The INT 21h,440Dh uses a few tables, but there is no another method??<br /><br />I don't know if there is some port that can do it, coz i don't have any port list file explaning<br />something about the port and is number...<br />I've tried all the methods (that i know about them) to get MBR of a HD without success. The only thing<br />that i could do was get the boot sector of a diskette on drive a. And yes i've tryed all the methods<br />on MS-DOS not DOS on Windows ambient.<br />BOOTSEC.ZIP... (example from m$) i've downloaded but when i try to build it i got 3 errors. It uses<br />the same method that my first try (see on source code).<br /><br />Remeber that my main objective, is to read the MBR (or boot sector) of a HardDrive, in a way<br />soo i can write it on a file.<br /><br />Thanks!<br /><br />Regards, jean (Coder7345)<br /><br />PS: sorry my bad english...<br /><pre><code><br />;########### Source code start, i use TASM 5.0 to compile it #########<br />;###########            tasm xxxx | tlink /t xxxx            #########<br /><br />                .MODEL TINY<br />;		.STACK 100h<br />;		.286<br />		.code<br />MAIN  SEGMENT<br />      ASSUME CS&#58;MAIN,DS&#58;MAIN,ES&#58;MAIN,SS&#58;MAIN<br />		ORG 100h<br />Start&#58;<br /><br />;	Reset Disk System &#40;if i do this, INT 21,7305 returns error, else it don't,<br />;	but the BootSection goes empty...&#41;<br /><br />        MOV     AX,440Dh<br />        MOV     CX,084Bh<br />        INT     13h<br /><br />;----- 1st Try<br />	MOV	AX,0201h<br />	MOV     CX,00000001b		;Sector number &#40;1-...&#41; &amp; High two bits of cylinder<br />	MOV     DH,0			;Head number<br />	MOV	DL,1000000b		;Drive &#40;80h=HD1,...&#41;<br />	MOV     BX,OFFSET BootSector	;data buffer<br />	INT	13h			;DISK READ SECTOR&#40;S&#41; INTO MEMORY<br />	JC	_Error2<br /><br />;----- 2nd Try<br />;	MOV	CX,-1		; must be<br />;	MOV	AL,2		;DriveNumber &#40;0=A, 1=B, 2=C&#41;<br />;	LEA	BX,dio		;Disk I/O packet &#40;DS&#41;<br />;	LEA	DI,BootSector<br />;	MOV	bso,DI		;Save<br />;	INT     25h		;ABSOLUTE DISK READ &#40;32M-2047M hard-disk partition&#41;<br />;	JC	_Error2<br /><br />;----- 3th Try<br />;	MOV	AX,7305h<br />;	MOV	CX,0FFFFh	;must be<br />;	MOV	DL,02h		;drive number &#40;0=default, 1=a, 2=b,...&#41;<br />;	MOV	SI,0		;read/write mode flags<br />;	LEA	BX,dio<br />;	LEA	DI,BootSector<br />;	MOV	bso,DI<br />;	INT	21h		;Win95 - FAT32 - Extended Absolute Disk Read/Write<br />;	JC	_Error2<br /><br />;	Create file	<br /><br />	MOV	AH,03Ch<br />	MOV	CX,000h<br />        MOV	DX,OFFSET BootFile<br />	INT	21h 		; Create File using Handle<br />	JC	_Error 		; Error ocurred<br /><br />;	Write BootSector to file	<br /><br />	MOV	DI,AX ;Save file handle so we can close it later<br /><br />	MOV	BX,AX<br />	MOV	AH,40h<br />	MOV	CX,200h<br />        MOV     DX,OFFSET BootSector<br />	INT	21h<br />	<br />	MOV	BX,DI<br />	MOV	AX,3E00h<br />	INT	21h<br /><br />Exit&#58;   INT     20h<br /><br />_Error&#58;<br />	MOV	AH,09h<br />        MOV     DX,OFFSET Error<br />	INT	21h<br />        MOV     AH,00h<br />        INT     21h<br /><br />_Error2&#58;<br />	MOV	AH,09h<br />        MOV     DX,OFFSET Error2<br />	INT	21h<br />        MOV     AH,00h<br />        INT     21h<br /><br /><br />Error		db	&quot;Error$&quot;,0<br />Error2          db      &quot;Error on INT !$&quot;<br />dio		dd      1<br />		dw      1<br />		dw	0<br />bso		dw      0 ;OFFSET BootSector<br />BootFile	db	&quot;bootfile.bin&quot;,0<br />BootSector	db	200h dup&#40;0&#41;<br />MAIN	ENDS<br />END Start<br /></code></pre></div>
+    <div class="meta">Posted on 2002-01-03 17:35:42 by coder</div>
+   </div>
+   <div class="post" id="post-17451">
+    <div class="subject"><a href="#post-17451">help on reading HD boot sector...</a></div>
+    <div class="body">Try looking at this thread, it might help:<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=1936&amp;highlight=flat+thunk">http://www.asmcommunity.net/board/index.php?topic=1936&amp;highlight=flat+thunk</a><br /><br />Under NT kernels, you can get harddrive access in a very convenient<br />way - through CreateFile. You can open devices like \\.\PHYSICALDRIVE0<br />or \\.\C: - this makes it very very easy to extract boot sectors :).</div>
+    <div class="meta">Posted on 2002-01-03 18:50:41 by f0dder</div>
+   </div>
+   <div class="post" id="post-17525">
+    <div class="subject"><a href="#post-17525">help on reading HD boot sector...</a></div>
+    <div class="body">i heard alot about DPMI services in windows but how to<br />use them? i wanted to write the same prog, too... it would<br />be nice if it's written win32_compatible without vxd's or dll's.</div>
+    <div class="meta">Posted on 2002-01-04 03:17:26 by mob</div>
+   </div>
+   <div class="post" id="post-17526">
+    <div class="subject"><a href="#post-17526">help on reading HD boot sector...</a></div>
+    <div class="body">I only think you can use the DPMI services from 9x, and that does<br />have a bit hacky feel to it. As a lot of 9x stuff ;). And on NT kernels,<br />the createfile method works like a charm (haven't tested writing<br />yet, but I can't see why it wouldn't work when you have admin privileges).</div>
+    <div class="meta">Posted on 2002-01-04 03:23:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-17529">
+    <div class="subject"><a href="#post-17529">help on reading HD boot sector...</a></div>
+    <div class="body">don't worry it works nice on NT... 'think it's a great loss<br />that this is not win32 compatible :(</div>
+    <div class="meta">Posted on 2002-01-04 03:41:59 by mob</div>
+   </div>
+   <div class="post" id="post-17530">
+    <div class="subject"><a href="#post-17530">help on reading HD boot sector...</a></div>
+    <div class="body">It *is* win32 compatible - too bad win9x isn't :).</div>
+    <div class="meta">Posted on 2002-01-04 03:47:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-17535">
+    <div class="subject"><a href="#post-17535">help on reading HD boot sector...</a></div>
+    <div class="body">I never looked at it carefully but i heard somewhere that DeviceIOControl can be useful to do those things under 9x<br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/hardware/devio_89ph.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/hardware/devio_89ph.asp</a><br /><br />may be a start.<br /><br />*EDIT*<br /><br />I've just seen that DeviceIOControl need an handle from CreateFile... so the problem seems to be the same :(</div>
+    <div class="meta">Posted on 2002-01-04 04:44:23 by JCP</div>
+   </div>
+   <div class="post" id="post-17552">
+    <div class="subject"><a href="#post-17552">help on reading HD boot sector...</a></div>
+    <div class="body">coder7345,<br /><br />here we go:<br /><br />the attached program i wrote read the MBR, but work only on 95/98.<br />It need a 16 bit dll, where i call DPMI int31h to emulate int13h service42 (read sectors as LBA) that i've also coded.<br /> <br />Use Tools&gt;EditSector to see how it works.<br /><br />It's not finished yet but, let me know if could be useful.<br />On my site you'll find a tutorial about the method i've used. I've posted also the code, if you need i can send the complete project.<br /> <br />Bye   B7</div>
+    <div class="meta">Posted on 2002-01-04 07:48:29 by Bit7</div>
+   </div>
+   <div class="post" id="post-17615">
+    <div class="subject"><a href="#post-17615">help on reading HD boot sector...</a></div>
+    <div class="body">ok, lets begin...<br /><br />f0dder, i forget to talk about portability, in this progy i don't care it it is to work on DOS or on Win9x, it work? cool... but anyway it is a interesting way! ;)<br /><br />mob, i never heard anything about DPMI services... u know something about them?<br /><br />readiosys, deviceIOControl... ummm (coz of that handle....)<br /><br />Bit7, i've not test that progy yet but when i try it i tell u something. About your tutor, i'ven't read it yet to, i take a quick look on it, and from what i see it uses Int 13h service 42h (large disk reading), and i try it to on my DOS proggy (i've forggoten to put that method/try) without success. But maybe i found the problem with this source code. Thanks for it :)<br /><br />god coding times...<br /><br />jean/coder7345</div>
+    <div class="meta">Posted on 2002-01-04 17:30:42 by Unregistered</div>
+   </div>
+   <div class="post" id="post-17821">
+    <div class="subject"><a href="#post-17821">help on reading HD boot sector...</a></div>
+    <div class="body">If you want, I made a prog that activate a partition, it reads in the mbr with int13, it checks if it's correct, then it can update it and write in the mbr with int13 too. But under W98 or/and W95 (don't remember) it is protected, you can't write in the mbr directly, you have to reboot to DOS mode and then execute your exe.<br /><br />There is also winhex that can write in the mbr and it shows you how the mbr works. But it's a shareware ;) . You can go to : <a target="_blank" href="http://www.winhex.com">http://www.winhex.com</a></div>
+    <div class="meta">Posted on 2002-01-06 03:47:37 by Vom-bonjour:-()</div>
+   </div>
+   <div class="post" id="post-17823">
+    <div class="subject"><a href="#post-17823">help on reading HD boot sector...</a></div>
+    <div class="body">I believe you can get int13 disk access under 9x if you do a &quot;lock&quot;<br />before launching your app. I know there's a way to do the lock<br />programatically (I've seen an app that does it), and this information<br />is probably in Ralph Brown's interrupt list. Again, this is 9x only, and<br />would only work from a dos app.</div>
+    <div class="meta">Posted on 2002-01-06 03:55:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-17882">
+    <div class="subject"><a href="#post-17882">help on reading HD boot sector...</a></div>
+    <div class="body">f0dder, i know what is the INT to lock but i don't know (for now) how to use it. It is INT 25 i think. I go try to use it to lock and next i try to read the MBR.<br /><br />Vom-bonjour, if the prog u have can read the mbr of a HD... ok it will help me if u let me see the source. Long time ago i've downloaded that prog (winhex) but i don't know that it could read mbrs.... i will check it.<br /><br />regards, jean (coder7345)</div>
+    <div class="meta">Posted on 2002-01-06 16:04:54 by coder</div>
+   </div>
+   <div class="post" id="post-17966">
+    <div class="subject"><a href="#post-17966">help on reading HD boot sector...</a></div>
+    <div class="body">Vom-bonjour writing such thing in dos is easy but<br />in windows you can't use the normal way coz you're<br />in protected mode... well, a win32 compatible way to<br />do this would be really great.<br /><br />hm elicz wrote a prog that uses VWIN32 to access MBR<br />but i don't know if it's the same as DPMI... the prog is<br />called absdisk9xII and it's in his export\trash2.zip.</div>
+    <div class="meta">Posted on 2002-01-07 03:10:57 by mob</div>
+   </div>
+   <div class="post" id="post-17978">
+    <div class="subject"><a href="#post-17978">help on reading HD boot sector...</a></div>
+    <div class="body">vwin32 code would also be 9x-only if I'm not mistaken. You probably<br />can't create a universal version, so just do GetVersion checks. Use<br />whatever is cleanest on 9x, and the wonderful clean CreateFile<br />under NT kernels (with proper checks for the administrative rights<br />required to do this - or at least handle CreateFile returning INVALID_HANDLE_VALUE ;) ).</div>
+    <div class="meta">Posted on 2002-01-07 04:59:34 by f0dder</div>
+   </div>
+   <div class="post" id="post-18146">
+    <div class="subject"><a href="#post-18146">help on reading HD boot sector...</a></div>
+    <div class="body">Well it seems that i've found the problem on my INT 13h call.<br />It was a segment register problem, since it is my first DOS app<br />i don't have care about segment registers, but i think that<br />this one is not commly used (ES). The interrupt gets the buffer<br />address with ES:BX. Btw f0dder, i try to use &quot;Lock&quot; ints, in<br />Windows9x it works as it works without it, on DOS.... let me<br />check...ummm... nop... under DOS it &quot;cannot&quot; lock the HD. The INT<br />return an error. WinHex is a kinda strange program, since it<br />don't use any private VxD or DLL. Bit7 your program works fine<br />but when i save the file to my HD it save the text inside the<br />EDITBOX not the real HEX bytez of the sector :)<br /><br />On WinXP the INTs to read/write directly to HD does work.<br />At least on DOS programs. A private VxD sould resolve this<br />problem (with an ExE loader with GUI look of curse).<br />Label Iczelion's VxD tut is a very close way, than the VxD<br />will be. If some one is writing a sector reader... by me<br />i write a VxD to work on Win9x platforms, and for WinNT<br />i will use the method that f0dder tell:<br /><br />CreateFile(&quot;\\.\C:&quot;,....)<br />something like this, check MSDN.<br /><br />My DOS COM source is here coz someone can need it to learn<br />something or even maybe fix is HD MBR problem... :)<br />(151 bytes... i think it could be smaller, without error<br />messages it is +/- 55 bytes)<br /><br />I've writen a mbr writer to, since is not such difrence.<br /><br />cyas, Jean/Coder7345</div>
+    <div class="meta">Posted on 2002-01-08 09:55:01 by coder</div>
+   </div>
+  </div>
+ </body>
+</html>

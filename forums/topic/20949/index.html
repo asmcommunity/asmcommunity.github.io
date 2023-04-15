@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to send 2 real 4 to this function - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20949" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20949">How to send 2 real 4 to this function</a></p>
+   <div class="post" id="post-158977">
+    <div class="subject"><a href="#post-158977">How to send 2 real 4 to this function</a></div>
+    <div class="body">Can someone explain me how to send 2 real4 paramteters to this program<br /><br /><pre><code>&nbsp; &nbsp; &nbsp; &nbsp; PAGE ,132<br />;-- --------------------------------------------------------<br />; F_ADD -- version for use with assembly language programs<br />;<br />; Copyright Bob Kline 1988<br />;<br />; Purpose:<br />;&nbsp; &nbsp; &nbsp;  Add two single-precision floating-point numbers.<br />;<br />; Input:<br />;&nbsp; &nbsp; &nbsp;  DX:AX and CX:BX contain the two 4-byte reals<br />;&nbsp; &nbsp; &nbsp;  to be added in IEEE format.<br />;<br />; Output:<br />;&nbsp; &nbsp; &nbsp;  Result (IEEE) is single-precision real in DX:AX<br />;<br />; Other registers affected:<br />;&nbsp; &nbsp; &nbsp;  BX, CX, SI, DI, BP<br />;<br />; Other procedures called:<br />;&nbsp; &nbsp; &nbsp;  F_SUB<br />;<br />; Comments:<br />;&nbsp; &nbsp; &nbsp;  Sets external variable _errno to ERANGE if over-<br />;&nbsp; &nbsp; &nbsp;  flow occurs.&nbsp; If a calling routine will be testing<br />;&nbsp; &nbsp; &nbsp;  _errno, it must first reset the variable to zero<br />;&nbsp; &nbsp; &nbsp;  to be sure that an error code is not left over<br />;&nbsp; &nbsp; &nbsp;  from some previous call.&nbsp; If the signs of the two<br />;&nbsp; &nbsp; &nbsp;  operands differ the negative number is placed in<br />;&nbsp; &nbsp; &nbsp;  CX:BX, the sign removed, and F_SUB is called.<br />;----------------------------------------------------------<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; .MODEL&nbsp; SMALL<br /><br />	PUBLIC	F_ADD<br />&nbsp; &nbsp; &nbsp; &nbsp; EXTRN&nbsp;  _errno:WORD,F_SUB:PROC<br /><br />ERANGE	EQU	34<br /><br />	.CODE<br /><br />F_ADD	PROC<br /><br />; before doing anything else, see if one of the operands<br />;&nbsp;  is zero<br />&nbsp; &nbsp; &nbsp; &nbsp; MOV&nbsp; &nbsp;  SI,CX<br />&nbsp; &nbsp; &nbsp; &nbsp; OR&nbsp; &nbsp; &nbsp; SI,BX<br />&nbsp; &nbsp; &nbsp; &nbsp; JZ&nbsp; &nbsp; &nbsp; DONE<br />&nbsp; &nbsp; &nbsp; &nbsp; MOV&nbsp; &nbsp;  SI,DX<br />&nbsp; &nbsp; &nbsp; &nbsp; OR&nbsp; &nbsp; &nbsp; SI,AX<br />&nbsp; &nbsp; &nbsp; &nbsp; JNZ&nbsp; &nbsp;  CHKSGN<br />&nbsp; &nbsp; &nbsp; &nbsp; MOV&nbsp; &nbsp;  AX,BX<br />&nbsp; &nbsp; &nbsp; &nbsp; MOV&nbsp; &nbsp;  DX,CX<br />&nbsp; &nbsp; &nbsp; &nbsp; RET<br /><br />; check the sign<br />CHKSGN: MOV&nbsp; &nbsp;  SI,DX<br />	XOR	SI,CX<br />	JNS	SAME_SIGNS<br /><br />; signs are different -- put the one with the<br />;&nbsp;  minus sign in the subtrahend position,<br />;&nbsp;  remove its sign, and use F_SUB<br />&nbsp; &nbsp; &nbsp; &nbsp; OR&nbsp; &nbsp; &nbsp; DX,DX<br />&nbsp; &nbsp; &nbsp; &nbsp; JNS&nbsp; &nbsp;  NOSWAP<br />	XCHG	DX,CX<br />	XCHG	AX,BX<br />NOSWAP: AND	CX,7FFFh<br />	CALL	F_SUB<br />DONE:&nbsp;  RET<br /><br />; sign same for both -- save it<br />SAME_SIGNS:<br />	MOV	SI,DX<br />	AND	SI,8000h<br />	PUSH	SI<br /><br />; unpack exponent and remove bias<br />	MOV	DI,DX<br />	MOV	SI,CX<br />	SHL	DX,1<br />	SHL	CX,1<br />	XCHG	DH,DL<br />	XCHG	CH,CL<br />	XOR	DH,DH<br />	XOR	CH,CH<br />	SUB	DX,127<br />	SUB	CX,127<br />	XCHG	DI,DX<br />	XCHG	SI,CX<br /><br />; unpack the mantissas &amp; slide over to the left<br />;&nbsp;  one position so we&#39;ll have elbowroom to catch<br />;&nbsp;  any lost low bit for rounding<br />	AND	DX,7Fh<br />	AND	CX,7Fh<br />	OR	DX,80h<br />	OR	CX,80h<br />	SHL	AX,1<br />	RCL	DX,1<br />	SHL	BX,1<br />	RCL	CX,1<br /><br />; use BP instead of CX for high word of 2nd operand so<br />;&nbsp;  we can use CX for shift counting<br />	MOV	BP,CX<br /><br />; if exponents are equal, no adjustment necessary<br />	CMP	DI,SI<br />	JE	MATCHED<br /><br />; otherwise make first operand the larger of the two<br />	JG	ADJUST<br />	XCHG	DX,BP<br />	XCHG	AX,BX<br />	XCHG	DI,SI<br /><br />; make the exponents equal<br />ADJUST: MOV	CX,DI<br />	SUB	CX,SI<br /><br />; if the second number is so much smaller than than first<br />;&nbsp;  that adding it in will not make any difference, don&#39;t bother<br />	CMP	CX,24<br />	JA	SHIFTBACK<br /><br />; shift lower number to the right<br />LOOP1:	SHR	BP,1<br />	RCR	BX,1<br />	LOOP	LOOP1<br /><br />; the exponents now match -- add the mantissas<br />MATCHED:<br />	ADD	AX,BX<br />	ADC	DX,BP<br /><br />; see if we gained a position during addition --<br />;&nbsp;  shift right once if we did &amp; increment exponent<br />	TEST	DX,200h<br />	JZ	SHIFTBACK<br />	SHR	DX,1<br />	RCR	AX,1<br />	INC	DI<br /><br />; now we undo that left shift we did up above to make<br />;&nbsp;  room for a rounding bit -- and here&#39;s where we do<br />;&nbsp;  the rounding<br />SHIFTBACK:<br />	ADD	AX,1<br />	ADC	DX,0<br />	SHR	DX,1<br />	RCR	AX,1<br /><br />; make the top bit of the mantissa invisible -- it&#39;s understood<br />	AND	DX,7Fh<br /><br />; restore exponent bias<br />	MOV	BX,DI<br />	ADD	BX,127<br /><br />; test for valid exponent and re-pack<br />	OR	BH,BH<br />	JZ	EXP_OK<br />&nbsp; &nbsp; &nbsp; &nbsp; MOV&nbsp; &nbsp;  _errno,ERANGE<br />	XOR	BH,BH<br />EXP_OK: XCHG	BH,BL<br />	SHR	BX,1<br />	OR	DX,BX<br /><br />; get sign back and we&#39;re done<br />	POP	CX<br />	OR	DX,CX<br />&nbsp; &nbsp; &nbsp; &nbsp; RET<br /><br />F_ADD	ENDP<br /><br />	END<br /></code></pre></div>
+    <div class="meta">Posted on 2005-04-13 21:21:02 by luisvalencia</div>
+   </div>
+   <div class="post" id="post-158979">
+    <div class="subject"><a href="#post-158979">Re: How to send 2 real 4 to this function</a></div>
+    <div class="body">It&#39;s 16-bit DOS code. It could be converted to 32-bit with some effort. You would need the F_SUB procedure.<br /><br /></div>
+    <div class="meta">Posted on 2005-04-13 21:45:28 by Greg</div>
+   </div>
+   <div class="post" id="post-159097">
+    <div class="subject"><a href="#post-159097">Re: How to send 2 real 4 to this function</a></div>
+    <div class="body">It&#39;s right there in the comments at the top.<br /><br />Input:<br />&nbsp; &nbsp; &nbsp;  DX:AX and CX:BX contain the two 4-byte reals<br />&nbsp; &nbsp; &nbsp;  to be added in IEEE format.<br /><br />And it&#39;s not DOS code. It is not part of and does not use DOS.</div>
+    <div class="meta">Posted on 2005-04-17 03:56:22 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-159103">
+    <div class="subject"><a href="#post-159103">Re: How to send 2 real 4 to this function</a></div>
+    <div class="body">This guy is trying to get his homework done by others all over the forums ;)<br /></div>
+    <div class="meta">Posted on 2005-04-17 08:21:03 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Console redirecting problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15630" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15630">Console redirecting problem</a></p>
+   <div class="post" id="post-121234">
+    <div class="subject"><a href="#post-121234">Console redirecting problem</a></div>
+    <div class="body">I've met with a console redirecting problem in Win9x. (does not happen on NT)<br />see code below<br /><br /><pre><code><br />ConsolePipe proc uses esi edi lpCmdLine&#58;DWORD,lpCurDir&#58;DWORD,lpOutBuf&#58;DWORD,BufSize&#58;DWORD<br />	LOCAL startupinfo&#58;STARTUPINFO<br />	LOCAL pinfo&#58;PROCESS_INFORMATION<br />	LOCAL buffer&#91;pipebufsize+1&#93;&#58;byte<br />	LOCAL bytesGo&#58;DWORD<br />	LOCAL bytesTotal&#58;DWORD<br />	LOCAL sat&#58;SECURITY_ATTRIBUTES<br /><br />	mov bytesTotal,0			<br />	mov sat.nLength,sizeof SECURITY_ATTRIBUTES<br />	mov sat.lpSecurityDescriptor,NULL<br />	mov sat.bInheritHandle,TRUE<br />	invoke CreatePipe,addr hRead,addr hWrite,addr sat,NULL<br />	.if eax==NULL<br />		invoke MessageBox,hInstance,addr CreatePipeError,lpCmdLine,MB_ICONERROR+MB_OK<br />	.else<br />		mov startupinfo.cb,sizeof STARTUPINFO<br />		invoke GetStartupInfo,addr startupinfo<br />		mov eax,hWrite<br />		mov startupinfo.hStdOutput,eax<br />		mov startupinfo.hStdError,eax<br />		mov startupinfo.dwFlags,STARTF_USESHOWWINDOW+STARTF_USESTDHANDLES<br />		mov startupinfo.wShowWindow,SW_HIDE<br />		invoke CreateProcess,NULL,lpCmdLine,NULL,NULL,TRUE,NULL,NULL,lpCurDir,addr startupinfo,addr pinfo<br />		.if eax==NULL<br />			invoke MessageBox,NULL,addr CreateProcessError,lpCmdLine,MB_ICONERROR+MB_OK<br />		.else<br />			invoke CloseHandle,hWrite<br />			.while TRUE<br />				invoke RtlZeroMemory,addr buffer,pipebufsize+1<br />				invoke ReadFile,hRead,addr buffer,pipebufsize,addr bytesGo,NULL<br />				.if eax==NULL <br />					mov	eax,1<br />					.break<br />				.else<br />					mov eax,bytesTotal<br />					add eax,bytesGo<br />					.if eax&gt;BufSize<br />						.break<br />					.else<br />						mov bytesTotal,eax<br />					.endif<br />					invoke lstrcat,lpOutBuf,addr buffer<br />				.endif<br />			.endw<br />		.endif<br />		invoke CloseHandle,hRead<br />	.endif<br />	mov	eax,bytesTotal<br />	ret<br />ConsolePipe endp<br /></code></pre><br /><br />The problem is ReadFile blocks after the program has finished. How to solve it?</div>
+    <div class="meta">Posted on 2003-10-13 11:59:40 by optimus</div>
+   </div>
+   <div class="post" id="post-121356">
+    <div class="subject"><a href="#post-121356">Console redirecting problem</a></div>
+    <div class="body">Hi, optimus.<br /><br />Perhaps you could use asynchronous I/O calls, and also check for program termination. That way your program won't get locked by a pipe that never gets written to.</div>
+    <div class="meta">Posted on 2003-10-14 18:10:46 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-121379">
+    <div class="subject"><a href="#post-121379">Console redirecting problem</a></div>
+    <div class="body">can u give me some details on that?</div>
+    <div class="meta">Posted on 2003-10-15 01:49:32 by optimus</div>
+   </div>
+   <div class="post" id="post-121572">
+    <div class="subject"><a href="#post-121572">Console redirecting problem</a></div>
+    <div class="body">Mhm... my mistake, only CreateFile uses overlapped calls. I couldn't find a way to do the same with pipes. :( <br />Perhaps you could instead create a temp file, redirect console I/O of the target process into that file, and wait for process termination. Then just read the temp file.<br />Also I think there was some info in the FAQ...<br /><br />EDIT: Indeed,<br /><a target="_blank" href="">http://www.asmcommunity.net/board/index.php?topic=23</a></div>
+    <div class="meta">Posted on 2003-10-17 13:15:56 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-121607">
+    <div class="subject"><a href="#post-121607">Console redirecting problem</a></div>
+    <div class="body">Now I use 2 threads to solve the problem.<br /><br /><pre><code><br />ConsolePipe proc uses esi edi lpCmdLine&#58;DWORD,lpCurDir&#58;DWORD,lpOutBuf&#58;DWORD,BufSize&#58;DWORD<br />	LOCAL startupinfo&#58;STARTUPINFO<br />	LOCAL pinfo&#58;PROCESS_INFORMATION<br />	LOCAL sat&#58;SECURITY_ATTRIBUTES<br />	LOCAL hThread&#58;DWORD<br />	LOCAL pHnd&#58;DWORD<br /><br />	mov sat.nLength,sizeof SECURITY_ATTRIBUTES<br />	mov sat.lpSecurityDescriptor,NULL<br />	mov sat.bInheritHandle,TRUE<br />	invoke CreatePipe,addr hRead,addr hWrite,addr sat,NULL<br />	.if eax==NULL<br />		invoke MessageBox,hInstance,addr CreatePipeError,lpCmdLine,MB_ICONERROR+MB_OK<br />	.else<br />		mov startupinfo.cb,sizeof STARTUPINFO<br />		invoke GetStartupInfo,addr startupinfo<br />		mov eax,hWrite<br />		mov startupinfo.hStdOutput,eax<br />		mov startupinfo.hStdError,eax<br />		mov startupinfo.dwFlags,STARTF_USESHOWWINDOW+STARTF_USESTDHANDLES<br />		mov startupinfo.wShowWindow,SW_HIDE<br />		invoke CreateProcess,NULL,lpCmdLine,NULL,NULL,TRUE,NULL,NULL,lpCurDir,addr startupinfo,addr pinfo<br />		.if eax==NULL<br />			invoke MessageBox,NULL,addr CreateProcessError,lpCmdLine,MB_ICONERROR+MB_OK<br />		.else<br />			invoke CloseHandle,hWrite<br />			invoke	RtlZeroMemory,lpOutBuf,BufSize<br />			invoke	OpenProcess,SYNCHRONIZE,0,pinfo.dwProcessId<br />			.if eax==0<br />				invoke MessageBox,NULL,addr CreateProcessError,lpCmdLine,MB_ICONERROR+MB_OK<br />			.else<br />				mov		pHnd,eax<br />				mov		eax,BufSize<br />				mov		BufferSize,eax<br />				invoke	CreateThread,0,0,addr ReadPipeThread,lpOutBuf,0,addr hThread<br />				mov	hThread,eax<br />				invoke	WaitForSingleObject,pHnd,10000<br />				invoke	CloseHandle,pHnd<br />				invoke	TerminateThread,hThread,0<br />			.endif<br />		.endif<br />		invoke CloseHandle,hRead<br />	.endif<br />	mov	eax,bytesTotal<br />	ret<br />ConsolePipe endp<br /><br /></code></pre><br /><pre><code><br />ReadPipeThread proc lpOutBuf&#58;DWORD<br />LOCAL buffer&#91;pipebufsize+1&#93;&#58;byte<br />LOCAL bytesGo&#58;DWORD<br /><br />mov bytesTotal,0			<br /><br />.while TRUE<br />	invoke RtlZeroMemory,addr buffer,pipebufsize+1<br />	invoke ReadFile,hRead,addr buffer,pipebufsize,addr bytesGo,NULL<br />	.if eax==NULL <br />		mov	eax,1<br />		ret<br />	.else<br />		mov eax,bytesTotal<br />		add eax,bytesGo<br />		.if eax&gt;BufferSize<br />			.break<br />		.else<br />			mov bytesTotal,eax<br />		.endif<br />		invoke lstrcat,lpOutBuf,addr buffer<br />	.endif<br />.endw<br />ret<br />ReadPipeThread endp<br /></code></pre></div>
+    <div class="meta">Posted on 2003-10-17 21:46:55 by optimus</div>
+   </div>
+   <div class="post" id="post-121674">
+    <div class="subject"><a href="#post-121674">Console redirecting problem</a></div>
+    <div class="body">The API docs say that TerminateThread is not a very good choice. Perhaps you could set a global variable instead to signal thread termination, and write zero bytes to the pipe (if that doesn't work, try writing a CR/LF pair) to make your thread return from ReadFile. :)</div>
+    <div class="meta">Posted on 2003-10-18 15:23:31 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-121682">
+    <div class="subject"><a href="#post-121682">Console redirecting problem</a></div>
+    <div class="body">It's probably because you don't close the process handle.</div>
+    <div class="meta">Posted on 2003-10-18 15:38:20 by Sephiroth3</div>
+   </div>
+  </div>
+ </body>
+</html>

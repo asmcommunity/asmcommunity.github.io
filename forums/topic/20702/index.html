@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>RegSaveKey - anyone having a working example? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20702" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20702">RegSaveKey - anyone having a working example?</a></p>
+   <div class="post" id="post-157736">
+    <div class="subject"><a href="#post-157736">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">I want to use RegSaveKey, but getting errors when using this function on NT platforms (it works with 9x). This topic was already discussed, but without a final solution (<a target="_blank" href="http://nosub.win32asmcommunity.net/viewtopic.php?t=12261&amp;highlight=regsavekey">http://nosub.win32asmcommunity.net/viewtopic.php?t=12261&amp;highlight=regsavekey</a>)<br />Perhaps someone now has a working source sample?</div>
+    <div class="meta">Posted on 2005-03-06 03:25:29 by japheth</div>
+   </div>
+   <div class="post" id="post-157737">
+    <div class="subject"><a href="#post-157737">Regsavekey</a></div>
+    <div class="body">Hi Jappeth,<br /><br /><div class="quote"><br /><em>Source : Undocumented WindowsNT<br />Section : Securty</em><br /><br />The major WIN32 API implementation difference between Windows 95/98 and Windows NT is security. Windows 95/98's implementation does not have any support for security. In all the Win32 API functions that have SECURITY ATTRIBUTES as one of the parameters, Windows 95/98's implementation just ignores these parameters. This has some impact on the way a developer programs. Registry APIs such as RegSaveKey and RegRestoreKey work fine under Windows 95/98. However, under<br />Windows NT, you need to do a few things before you can use these functions. In Windows NT, there is a concept of privileges. There are different kinds of privileges, such as Shutdown, Backup, and Restore. Before using a function such as RegSaveKey, you need to acquire the Backup privilege. To use RegRestoreKey, you need to acquire the Restore privilege, and to use the InitiateSystemShutdown function, you need to<br />acquire the Shutdown privilege.<br /></div><br /><br /> <br /> <br /> RegSaveKey = NtSaveKey ? (I don't try yet) <br /><br /> I found with google this link:<br /><br /> <a target="_blank" href="http://undocumented.ntinternals.net/UserMode/Undocumented%20Functions/NT%20Objects/Key/NtSaveKey.html">http://undocumented.ntinternals.net/UserMode/Undocumented%20Functions/NT%20Objects/Key/NtSaveKey.html</a><br /><br /> Regards,</div>
+    <div class="meta">Posted on 2005-03-06 04:10:16 by CYDONIA</div>
+   </div>
+   <div class="post" id="post-157738">
+    <div class="subject"><a href="#post-157738">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">Thanks CYDONIA,<br /><br />in fact its a security issue.<br /><br />I managed to get it to work on NT platforms now. Found a simple C source fragment how to set SE_BACKUP_NAME privilege and converted it to MASM:<br /><br /><pre><code><br />;// The following example can be used to enable or disable the<br />;// backup privilege. By making the indicated substitutions, you can<br />;// also use this example to enable or disable the restore privilege <br />;// Use the following to enable the privilege&#58;<br />;//   hr = ModifyPrivilege&#40;SE_BACKUP_NAME, TRUE&#41;;<br />;// Use the following to disable the privilege&#58;<br />;//   hr = ModifyPrivilege&#40;SE_BACKUP_NAME, FALSE&#41;;<br />;// Use SE_RESTORE_NAME for the restore privilege.<br /><br />	.386<br />	.model flat, stdcall<br />	option casemap&#58;none<br /><br />	include windows.inc<br /><br />ifndef ERROR_FUNCTION_FAILED<br />ERROR_FUNCTION_FAILED equ 1627<br />endif<br /><br />	.code<br /><br />ModifyPrivilege proc szPrivilege&#58;LPSTR, fEnable&#58;BOOL<br />local    hr&#58;HRESULT<br />local    NewState&#58;TOKEN_PRIVILEGES <br />local    luid&#58;LUID<br />local    hToken&#58;HANDLE<br /><br />	mov hr, S_OK<br />	mov hToken, NULL<br /><br />;    // Open the process token for this process.<br />;    if &#40;!OpenProcessToken&#40;GetCurrentProcess&#40;&#41;,<br />;                          TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,<br />;                          &amp;hToken &#41;&#41;<br />;    &#123;<br />;        printf&#40;&quot;Failed OpenProcessToken\n&quot;&#41;;<br />;        return ERROR_FUNCTION_FAILED;<br />;    &#125;<br />	invoke GetCurrentProcess<br />	lea ecx, hToken<br />	invoke OpenProcessToken, eax, TOKEN_ADJUST_PRIVILEGES or TOKEN_QUERY, ecx<br />	.if &#40;!eax&#41;<br />		mov eax, ERROR_FUNCTION_FAILED<br />		ret<br />	.endif<br /><br />;    // Get the local unique id for the privilege.<br />;    if &#40; !LookupPrivilegeValue&#40; NULL,<br />;                                szPrivilege,<br />;                                &amp;luid &#41;&#41;<br />;    &#123;<br />;        CloseHandle&#40; hToken &#41;;<br />;        printf&#40;&quot;Failed LookupPrivilegeValue\n&quot;&#41;;<br />;        return ERROR_FUNCTION_FAILED;<br />;    &#125;<br />	invoke LookupPrivilegeValue, NULL, szPrivilege, addr luid<br />	.if &#40;!eax&#41;<br />		invoke CloseHandle, hToken<br />		mov eax, ERROR_FUNCTION_FAILED<br />		ret<br />	.endif<br /><br />;    // Assign values to the TOKEN_PRIVILEGE structure.<br />;    NewState.PrivilegeCount = 1;<br />;    NewState.Privileges&#91;0&#93;.Luid = luid;<br />;    NewState.Privileges&#91;0&#93;.Attributes = &#40;fEnable ? SE_PRIVILEGE_ENABLED &#58; 0&#41;;<br />	mov NewState.PrivilegeCount,1<br />	mov eax, luid.LowPart<br />	mov ecx, luid.HighPart<br />	mov NewState.Privileges&#91;0*sizeof LUID_AND_ATTRIBUTES&#93;.Luid.LowPart,eax<br />	mov NewState.Privileges&#91;0*sizeof LUID_AND_ATTRIBUTES&#93;.Luid.HighPart,ecx<br />	.if &#40;fEnable&#41;<br />		mov eax, SE_PRIVILEGE_ENABLED<br />	.else<br />		mov eax, 0<br />	.endif<br />	mov NewState.Privileges&#91;0*sizeof LUID_AND_ATTRIBUTES&#93;.Attributes,eax<br /><br />;    // Adjust the token privilege.<br />;    if &#40;!AdjustTokenPrivileges&#40;hToken,<br />;                               FALSE,<br />;                               &amp;NewState,<br />;                               sizeof&#40;NewState&#41;,<br />;                               NULL,<br />;                               NULL&#41;&#41;<br />;    &#123;<br />;        printf&#40;&quot;Failed AdjustTokenPrivileges\n&quot;&#41;;<br />;        hr = ERROR_FUNCTION_FAILED;<br />;    &#125;<br />	invoke AdjustTokenPrivileges, hToken, FALSE, addr NewState, sizeof NewState, NULL, NULL<br />	.if &#40;!eax&#41;<br />		mov hr, ERROR_FUNCTION_FAILED<br />	.endif<br /><br />;    // Close the handle.<br />;    CloseHandle&#40;hToken&#41;;<br />	invoke CloseHandle, hToken<br /><br />;    return hr;<br />	mov eax, hr<br />	ret<br />;&#125;<br />ModifyPrivilege endp<br /><br />	end<br /></code></pre><br /><br />    <br />this function has to be called before RegSaveKey:<br /><br /><pre><code><br />      invoke ModifyPrivilege, SE_BACKUP_NAME, TRUE<br />      invoke RegSaveKey, ...<br /></code></pre><br /><br />but please note that SE_BACKUP_NAME is defined wrong in MASM32's windows.inc (it has to be a string pointer, not a string constant)<br /><br /><br /><br /><br /></code></pre></div>
+    <div class="meta">Posted on 2005-03-06 04:35:45 by japheth</div>
+   </div>
+   <div class="post" id="post-157739">
+    <div class="subject"><a href="#post-157739">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">well if you are not averse to reverse the latest release from sysinternals <br />rootkitrevealer uses RegSaveKeyW to dump the <br />user.hiv for its reading of raw dump iirc when i poked inside it some days ago</div>
+    <div class="meta">Posted on 2005-03-06 05:18:46 by bluffer</div>
+   </div>
+   <div class="post" id="post-157740">
+    <div class="subject"><a href="#post-157740">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">Saving the registry values works.<br /><br />With restoring the values there remains a slight problem. RegRestoreKey doesn't exist on win9x, so I tried RegLoadKey for this platform. But it seems with this function one can only &quot;restore&quot; keys just below the root (i.e., it works for restoring HKLM\&lt;mykey&gt;, but not for HKLM\Software\&lt;mykey&gt;). Pretty annoying. Now I remember why I always hated this registry stuff and prefer private profile files.</div>
+    <div class="meta">Posted on 2005-03-06 06:32:44 by japheth</div>
+   </div>
+   <div class="post" id="post-157765">
+    <div class="subject"><a href="#post-157765">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">Hello japheth,<br /><br />I had a problem similar a few months ago.  I ended up using CreateProcess with regedit.exe /e to backup a file which can be later restored using regedit.exe /c.  Works on all windows platforms providing regedit.exe is on hard drive and there are no security issues with win nt or xp and no api's that break under wrong version of windows.<br /><br />hope this is helpful and best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2005-03-06 21:11:44 by czDrillard</div>
+   </div>
+   <div class="post" id="post-157774">
+    <div class="subject"><a href="#post-157774">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">Hello czDrillard.<br /><br />thanks, I think I will try this approach as well. It's far better because the output file may be used as import on other platforms (9x -&gt; NT). A catch may be that it may not work if an instance of regedit.exe is already running?</div>
+    <div class="meta">Posted on 2005-03-07 00:35:45 by japheth</div>
+   </div>
+   <div class="post" id="post-157775">
+    <div class="subject"><a href="#post-157775">RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">Works almost perfectly. But I would like to export a registry branch on winXP in old NT4 format so it can be imported on win9x systems. regedit doesn't tell me its command line options, so anyone knows them?</div>
+    <div class="meta">Posted on 2005-03-07 02:03:47 by japheth</div>
+   </div>
+   <div class="post" id="post-164275">
+    <div class="subject"><a href="#post-164275">Re: RegSaveKey - anyone having a working example?</a></div>
+    <div class="body">yeah it is too late o reply :) i was reading through replies to your posts and this thread caught my attention <br />i think japheth might have found out this earlier <br />so i am posting this only to complete the question :<br /><br /><div class="quote"><br />To export a filename.reg file, in W9x/NT4 format, suitable for merging with W9x/NT4/NT5 registries, use: <br /><br />regedit /a &quot;&lt;Drive:&gt;\FolderName\FileName.reg&quot; &quot;KeyPath&quot; <br /></div><br /><br /><a target="_blank" href="http://www.microsoft.com/technet/prodtechnol/Windows2000serv/support/FAQW2KCP.mspx">http://www.microsoft.com/technet/prodtechnol/Windows2000serv/support/FAQW2KCP.mspx</a><br /><br /></div>
+    <div class="meta">Posted on 2005-09-06 07:26:05 by bluffer</div>
+   </div>
+  </div>
+ </body>
+</html>

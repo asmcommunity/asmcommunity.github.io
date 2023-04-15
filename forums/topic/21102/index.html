@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>how to remove repeating chars... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21102" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21102">how to remove repeating chars...</a></p>
+   <div class="post" id="post-159841">
+    <div class="subject"><a href="#post-159841">how to remove repeating chars...</a></div>
+    <div class="body">How do you remove repeating chars?<br /><br />e.g. I have a string &quot;aaaaaaaaaaaaaaaaaaaaaaaaabcde&quot;, I want to make this to &quot;abcde&quot;</div>
+    <div class="meta">Posted on 2005-05-08 00:13:55 by audioman</div>
+   </div>
+   <div class="post" id="post-159846">
+    <div class="subject"><a href="#post-159846">Re: how to remove repeating chars...</a></div>
+    <div class="body">Write a scanner that does a 1 byte look ahead and if the next byte is the same as the current one, don&#39;t write the current one to the output buffer.<br /><br />The basic concept in code is like this.<br /><br /><pre><code><br />mov al, &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; read current byte<br />mov cl, &nbsp; &nbsp; &nbsp;  ; read the next byte<br />cmp cl, al<br />je label<br />mov , al<br />......<br />label:<br /></code></pre></div>
+    <div class="meta">Posted on 2005-05-08 01:20:36 by hutch--</div>
+   </div>
+   <div class="post" id="post-159847">
+    <div class="subject"><a href="#post-159847">Re: how to remove repeating chars...</a></div>
+    <div class="body">I forgot to tell that i only need to remove spaces.<br /><br />e.g.<br />&quot;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; hello &quot; -&gt; &quot;hello&quot;<br /><br />&quot;test me&quot; -&gt; &quot;test me&quot; (no change)</div>
+    <div class="meta">Posted on 2005-05-08 02:22:56 by audioman</div>
+   </div>
+   <div class="post" id="post-159854">
+    <div class="subject"><a href="#post-159854">Re: how to remove repeating chars...</a></div>
+    <div class="body">This should do the trick.<br />Repeated series of input bytes are recorded as a single output byte.<br />Your single space will be preserved, at it will work for any character.<br />ie &quot;hellllllllp? ? ? ? meeeeeeeeee&quot; = &quot;help me&quot;<br />&quot;help me&quot; = &quot;help me&quot;<br />but also it&#39;s not smart by any means:<br />&quot;cool beer&quot; = &quot;col ber&quot;<br />&quot;deep wells are creepy&quot; = &quot;dep wels are crepy&quot;<br /><br />Note that it&#39;s perfectly safe to have the output string overwrite the input string, ie, to hand in the same pointer for both params in your calls.<br />This is because we can be sure that the ouput string will be as long, or shorter, than the source string. It will never be longer, and so we can do no harm.<br />It&#39;s up to you if you want to remove the second param and set edi to esi at the start of it.<br /><br /><pre><code><br /><br />StripDuplicates proc uses esi edi pStringIn, pStringOut<br />mov esi,pStringIn<br />mov edi,pStringOut ;edi will point to somewhere to store the next output byte<br />mov al,byte ptr ;al will contain the most recent byte we&#39;ve seen<br />inc esi ;we want esi to point to the &quot;next&quot; byte, which we have not yet checked<br />.while byte ptr!=0 ;we want to break the loop if we reach the zeroterminator in source string<br />? ?.if byte ptr==al ;we found a duplicated byte so skip it<br />? ? ? inc esi <br />? ?.else ;we found a different byte so record al to output and update al<br />&nbsp; &nbsp; &nbsp; mov byte ptr,al<br />? ? ? mov al,byte ptr<br />? ? ? inc esi<br />? ? ? inc edi<br />? .endif<br />.endw<br />mov byte ptr,0;write the zero terminator<br />ret<br />StripDuplicates endp<br /><br /><br /></code></pre><br /><pre><code></code></pre></div>
+    <div class="meta">Posted on 2005-05-08 04:26:40 by Homer</div>
+   </div>
+   <div class="post" id="post-159862">
+    <div class="subject"><a href="#post-159862">Re: how to remove repeating chars...</a></div>
+    <div class="body">Here&#39;s some solid code I just whipped up. Trims multiple spaces (and only spaces), and doesn&#39;t produce buffer overflows.<br /><br /><pre><code><br />; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />; void trimspace(char *dst, char *src, unsigned dstlen)<br />; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br />;<br />; Removes duplicate spaces in string, and makes sure not to produce any<br />; buffer overflows. Safety over speed, can probably be optimized plenty.<br />; <br />; dstlen includes trailing NUL char, and destination will always be zero<br />; terminated - ie, a 2-byte buffer will hold a string of 1 char.<br />;<br />OPTION PROLOGUE:NONE<br />OPTION EPILOGUE:NONE<br /><br />trimspace proc stdcall a_dst:dword, a_src:dword, a_len:dword<br />arg_dst&nbsp; &nbsp;  = 8<br />arg_src&nbsp; &nbsp;  = 12<br />arg_len&nbsp; &nbsp;  = 16<br /><br />&nbsp; &nbsp; push&nbsp; &nbsp; esi<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  esi, <br />&nbsp; &nbsp; test&nbsp; &nbsp; esi, esi<br />&nbsp; &nbsp; jz&nbsp; &nbsp; &nbsp; short @@out<br />&nbsp; &nbsp; cmp&nbsp; &nbsp;  esi, 1<br />&nbsp; &nbsp; jnz&nbsp; &nbsp;  short @@longer_than_1<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  eax, <br />&nbsp; &nbsp; mov&nbsp; &nbsp;  byte ptr , 0<br />&nbsp; &nbsp; pop&nbsp; &nbsp;  esi<br />&nbsp; &nbsp; retn&nbsp; &nbsp; 12<br /><br />@@longer_than_1:<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  eax, <br />&nbsp; &nbsp; mov&nbsp; &nbsp;  edx, <br />&nbsp; &nbsp; dec&nbsp; &nbsp;  esi<br />&nbsp; &nbsp; push&nbsp; &nbsp; ebx<br /><br />@@mainloop:<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  cl, <br />&nbsp; &nbsp; inc&nbsp; &nbsp;  eax<br />&nbsp; &nbsp; cmp&nbsp; &nbsp;  cl, &#39; &#39;<br />&nbsp; &nbsp; jnz&nbsp; &nbsp;  short @@space_done<br />&nbsp; &nbsp; cmp&nbsp; &nbsp;  , cl<br />&nbsp; &nbsp; jnz&nbsp; &nbsp;  short @@space_done<br />&nbsp; &nbsp; nop<br /><br />@@skipspace:<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  bl, <br />&nbsp; &nbsp; inc&nbsp; &nbsp;  eax<br />&nbsp; &nbsp; cmp&nbsp; &nbsp;  bl, &#39; &#39;<br />&nbsp; &nbsp; jz&nbsp; &nbsp; &nbsp; short @@skipspace<br /><br />@@space_done:<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  , cl<br />&nbsp; &nbsp; inc&nbsp; &nbsp;  edx<br />&nbsp; &nbsp; dec&nbsp; &nbsp;  esi<br />&nbsp; &nbsp; test&nbsp; &nbsp; cl, cl<br />&nbsp; &nbsp; jz&nbsp; &nbsp; &nbsp; short @@zterm_out<br />&nbsp; &nbsp; test&nbsp; &nbsp; esi, esi<br />&nbsp; &nbsp; jnz&nbsp; &nbsp;  short @@mainloop<br /><br />@@zterm_out:<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  byte ptr , 0<br />&nbsp; &nbsp; pop&nbsp; &nbsp;  ebx<br /><br />@@out:<br />&nbsp; &nbsp; pop&nbsp; &nbsp;  esi<br />&nbsp; &nbsp; retn&nbsp; &nbsp; 12<br />trimspace&nbsp;  endp<br /><br />OPTION PROLOGUE:PROLOGUEDEF<br />OPTION EPILOGUE:EPILOGUEDEF<br /></code></pre><br /><strong>EDIT:</strong> tabs to spaces since I use 4space tabs.<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=618" target="_blank">test.asm</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-05-08 07:31:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-159892">
+    <div class="subject"><a href="#post-159892">Re: how to remove repeating chars...</a></div>
+    <div class="body">I tried this string -&gt; &quot;call ExitProcess&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &quot; it became -&gt; &quot;call ExitProcess &quot;<br />It still has a space at the end..<br /><br /></div>
+    <div class="meta">Posted on 2005-05-09 04:19:45 by audioman</div>
+   </div>
+   <div class="post" id="post-159894">
+    <div class="subject"><a href="#post-159894">Re: how to remove repeating chars...</a></div>
+    <div class="body">Unless you want to write a dedicated algo that does both, if your source string has multiple leading and trailing spaces you need to perform that operation seperately from removing duplicate characters.<br /><br />If you are using MASM32, use the &quot;szTrim&quot; procedure to clean up both end of a zero terminated string.</div>
+    <div class="meta">Posted on 2005-05-09 04:58:07 by hutch--</div>
+   </div>
+   <div class="post" id="post-159909">
+    <div class="subject"><a href="#post-159909">Re: how to remove repeating chars...</a></div>
+    <div class="body">ops :P I delete my one hehe<br /><br />A input<br /><br /><pre><code><br />#@&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; oler&nbsp; &nbsp;  no&nbsp; &nbsp;  se<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; oler&nbsp; &nbsp;  no&nbsp; &nbsp;  se&nbsp; &nbsp; #@ ;&lt;- triling and after spaces<br />oler#@ ; first output (no spaces before)<br /> no#@ ; second output<br /> se#### ;third output (no spaces after)<br /></code></pre><br /><br />You only need to join them... dont know if have some error there...<br /><br /><pre><code><br />org 0x100<br />section .text<br />start:<br />	mov bx, buffer<br />	call GetLine<br />	call PrintNL<br />	call Print<br />	call PrintNL<br />	call NoRepeat<br />	mov bx, END_HERE<br />	call Print<br />	mov ah, 0<br />	int 0x21<br />END_HERE db &quot;####&quot;, 0<br /><br />; Get a line until enter is pressed store in bx<br />GetLine:<br />	mov ah, 0x1<br />	push di<br />	xor di, di<br />	.getNextChar:<br />		int 0x21<br />		cmp al, 0xD<br />		jz .fin<br />			mov , al<br />			inc di<br />			jmp .getNextChar<br />		.fin:<br />		xor ax, ax<br />		mov , al<br />		pop di<br />		ret<br /><br /><br />; print the string pointed by bx<br />Print:<br />	push si<br />	push dx<br />	xor si, si<br />	mov ah, 0x2<br />	.printNextChar:<br />		mov dl, <br />		cmp dl, 0<br />		jz .end<br />			int 0x21<br />			inc si<br />			jmp .printNextChar<br />		.end:<br />	pop dx<br />	pop si<br />	ret<br /><br />; print a new Line with indicators, preserving the anterior string in bx...<br />PrintNL:<br />	push bx<br />	mov bx, NL<br />	call Print<br />	pop bx<br />	ret<br />NL db &quot;#&quot;, &quot;@&quot;, 13,10,0<br /><br />PrintSpace:<br />	push bx<br />	mov bx, SPACE<br />	call Print<br />	pop bx<br />	ret<br />SPACE db &quot; &quot;, 0<br /><br />; delete characters that repeat more than 1<br />NoRepeat:<br />	xor si, si<br />	mov ah, 0x2<br />	mov dx, si<br />	.nextSpace:<br />		mov dl, <br />		cmp dl, 0<br />		jz .end<br />		cmp dl, &quot; &quot;<br />			jnz .print_ln<br />				.nextSpace1:<br />				inc si<br />				jmp .nextSpace<br />			.print_ln<br />			cmp dh, 0<br />			jz .chars0<br />				call PrintNL<br />				call PrintSpace<br />			.chars0:<br />			mov dh, 1<br />			.chars:<br />		int 0x21<br />		inc si<br />		mov dl,<br />		cmp dl, &quot; &quot;<br />		jz .nextSpace1<br />		cmp dl, 0<br />		jz .end<br />			jmp .chars<br />		.end:<br />	ret<br /><br /><br />section .bss<br />buffer resb 64<br /></code></pre><br /><br />In fact there is a little trik here :) ... have you find it??</div>
+    <div class="meta">Posted on 2005-05-09 12:05:58 by rea</div>
+   </div>
+  </div>
+ </body>
+</html>

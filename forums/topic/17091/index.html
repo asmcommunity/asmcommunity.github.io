@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Subclassing control in another process - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17091" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17091">Subclassing control in another process</a></p>
+   <div class="post" id="post-132585">
+    <div class="subject"><a href="#post-132585">Subclassing control in another process</a></div>
+    <div class="body">Hey guys.. I'm not sure if this is a 'quick' question or not, but I'm going to hope for the best.. ;)<br />I have a program that im trying to write which will look for an open AIM window and subclass its edit control class &quot;Ate32Class&quot; so that I can intercept the WM_CHAR message and play a sound whenever someone types (like icq).<br />Now apparently I have to use some method other than what i'm currently doing, which is getting the handle of the edit box class and then subclasses it with SetWindowLong.<br /><br />One thing to note: I know that the handle that I receive for the edit box class is valid because I can send text to it through SendMessage with WM_SETTEXT.<br /><br />Here's how I threw it together, basically:<br />1.) I have a menu item called IDM_KEY_SOUND:<br />elseif eax==IDM_KEY_SOUND<br />     invoke FindEditWindow      ;get the handle to the Ate32Class editbox<br />     .if hAte32Class != NULL				<br />          invoke SetWindowLong, hAte32Class, GWL_WNDPROC, addr TextSoundProc    ; subclass it		<br />          mov OldWndProc, eax	;store old procedure			<br />    .endif<br /><br />2.) Inside I have a function FindEditWindow called:<br />FindEditWindow PROC<br />	invoke FindIMWindow   ;finds the actual AIM IM Window itself<br />	.if eax != NULL<br />		mov hIMWindow, eax  ;store the handle inside<br />                        ;This goes through the little tree of parent/child relationships for the controls in the window<br />		invoke FindWindowEx, hIMWindow, NULL, addr lpWndAteClass, NULL<br />		mov hWndAteClass, eax<br />		invoke FindWindowEx, hIMWindow, hWndAteClass, addr lpWndAteClass, NULL<br />		mov hWndAteClass, eax<br />		invoke FindWindowEx,hWndAteClass, NULL, addr lpAte32Class, NULL<br />		mov hAte32Class, eax   ;this is the handle to our edit text box inside of the im window<br />	.endif	<br />	ret<br /><br />FindEditWindow endp<br /><br />3.) Inside this function I call the FindIMWindow function:<br />FindIMWindow	PROC	<br />	invoke FindWindow, addr lpIMClass, NULL       ;find our AIM IM Window<br />	.if eax == NULL           <br />		invoke FindWindow, addr lpDIMClass, NULL ;Check for the DeadAIM IM Window<br />	.endif<br />	ret<br />FindIMWindow endp<br /><br />4.) And finally, here's the actual custom editbox procedure:<br />TextSoundProc	PROC hEdit:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD<br />                .if uMsg ==WM_CHAR		<br />	                invoke PlaySound, addr lpSoundFile, hInstance, 0<br />		invoke CallWindowProc,OldWndProc,hEdit,uMsg,wParam,lParam <br />	.else<br />		invoke CallWindowProc,OldWndProc,hEdit,uMsg,wParam,lParam <br />	.endif	<br />	ret<br />TextSoundProc endp<br /><br />Now that is basically the code in a nutshell...<br />I didnt know if I had to somehow load aim with my program first and get some handle to its process before I could subclass its edit box or what I had to do.. Needless to say, I'm pretty confused...<br /><br />Also, Whenever I run the code--nothing is called inside of the custom editbox subclass proc, like if i put a messagebox or anything inside, none of it is ever called.<br /><br />Thanks guys for at least looking at it..</div>
+    <div class="meta">Posted on 2004-02-04 20:29:44 by dijo</div>
+   </div>
+   <div class="post" id="post-132586">
+    <div class="subject"><a href="#post-132586">Subclassing control in another process</a></div>
+    <div class="body">If all else fails:<br /><br />*) put your subclassing code in a DLL<br />*) inject DLL into AIM's process<br /><br />This might be balancing at the edge of what is allowed at this board (stupid DMCA and all), but since it's pretty obvious you're not doing anything harmful and not really reversing anything, I guess it should be okay.<br /><br />There's basically two ways of injecting a DLL - one is easy, the NT way... VirtualAllocEx + CreateRemoteThread. Under 9x, there's a hacky way, it's demonstrated by my XCOM bugfix loader at <a target="_blank" href="http://f0dder.has.it">http://f0dder.has.it</a> (C source, not asm). Oh, and there's EliCZ's stuff to emulate VirtualAllocEx+CreateRemoteThread under 9x...</div>
+    <div class="meta">Posted on 2004-02-04 20:39:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-132591">
+    <div class="subject"><a href="#post-132591">Subclassing control in another process</a></div>
+    <div class="body">I just wanted to say thanks for the help.<br />I've got the dll created with the 'proper' functions, I hope..<br />now all I have to do is read up on this dll injection, and then i'll hope for the best. =)<br /><br />note: oh yeah, I can call the dll fine too. woohoo. ;)<br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/memory/base/virtualallocex.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/memory/base/virtualallocex.asp</a><br />^ looks pretty interesting, although perhaps a TAD difficult! <br />&quot;Specify pointer to requested address.&quot; I thought that was pretty interesting.. <br />I should probably read some tutorials which will build me up to this point.. I havent a clue on how much memory to allocate (although i could just create a ridiculous amount of space and hope for the best..) or where to point the address at.. but i'll keep looking. *just keeping you informed in case you were curious*<br /><br />okay then..<br /><br />I found some interesting things here on getting the handle and such... to the process<br /><a target="_blank" href="http://win32assembly.online.fr/w32_02.txt">http://win32assembly.online.fr/w32_02.txt</a>  haha, yes i realize that's a popular site..</div>
+    <div class="meta">Posted on 2004-02-04 21:55:20 by dijo</div>
+   </div>
+   <div class="post" id="post-132598">
+    <div class="subject"><a href="#post-132598">Subclassing control in another process</a></div>
+    <div class="body">Okay.. I guess im at a stand still at the moment.  Apparently I need to use a pe viewer and find out where to put my code in, and im not exactly knowledgeable with such.. I'll probably try and find some good tutorials unless somebody could recommend a few.. and then there's using a debugger/disassembler (like ida/olly) which im not *too* familiar with..<br /><br />fodder, i was amazed at how much you knew from reading the xcom essay.. that was pretty impressive.. if you have any idea on where you learned most of that stuff (minus the direct3d/x), i'd like to know so i can read up on it..<br /><br />I'm pretty much just stuck here at the VirtualAllocEx.. I'm not sure what to put in for the values for that (because of what i mentioned above)... <br />Then i saw some suggestions for CreateProcess() with some debug flag so that I could write to the process's memory, but I havent a clue as to where i'd write to or what i'd write there even if i knew...<br /><br />Gosh, I feel like such a newb! haha.. how embarrassing.<br />well, i'm trying.. I guess that's all I can do.<br /><br />Thanks again for the help fodder.</div>
+    <div class="meta">Posted on 2004-02-04 23:22:42 by dijo</div>
+   </div>
+   <div class="post" id="post-132627">
+    <div class="subject"><a href="#post-132627">Subclassing control in another process</a></div>
+    <div class="body">You can also use a Hook and watch for the target window beeing created .<br /><br />The hook will resolve the DLL injection as the hook DLL is normaly injected by windows itself into each running process ....  and is going to work the same way on both Win9x and Win2k/NT<br /><br />Take care as you must be very carefull and minimalist in your hook or it can slow down the OS a lot. Also it might need shared data sections for global flags because each DLL has its own data zone in each process.<br /><br />Also &quot;theoretically&quot; after you have found your window and have subclasses it .... you could remove the hook :grin:<br /><br />But hellas this will remove your injected (via hook)  DLL also ... so the hook will have to stay for as long AIM/whatever is running...</div>
+    <div class="meta">Posted on 2004-02-05 05:27:22 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-132629">
+    <div class="subject"><a href="#post-132629">Subclassing control in another process</a></div>
+    <div class="body">Hey! :)<br /><br />When using VirtualAllocEx for this, you don't really care what adress you get inside the target process, so specify NULL to have windows find one for you. As for size, a single page (4096) bytes should be quite sufficient - what you want to put in the target process would be something like this:<br /><br /><pre><code><br />call	@@delta<br />@@delta&#58;<br />pop	edx<br />sub	edx, offset @@delta<br /><br />lea	eax, &#91;edx+libname&#93;<br />push	eax<br />call	LoadLibrary<br />ret	; this will terminate your thread<br />libname db &quot;mylibrary.dll&quot;,0<br /></code></pre><br /><br />The &quot;delta trick&quot; makes your code position-independent, which is necessary since you don't know at which address you will be running inside the target process. Any data access needs to be done with delta... this is the reason I use DLLs for this, I can keep the injected delta-code to something as simple as the above, and put all the real stuff in a DLL that is written as usual.<br /><br />Notice that this code is meant to be executed with CreateRemoteThread, and can thus be ended with a &quot;ret&quot;. NT is so much nicer and simpler than 9x :)<br /><br />If you want to do it the 9x way with CreateProcess, you need to use some PE tool to find the imagebase of your executable, and the header.AddressOfEntyPoint - that's where to write the code. If you don't understand the stuff in my XCOM loader though, I suggest you try the NT method first; it's much simpler.<br /><br />Don't feel like too much of a newb, this is semi-complicated stuff.<br /><br /><br />I don't like hooks for this - it's a brute force and lazy method :)</div>
+    <div class="meta">Posted on 2004-02-05 05:37:18 by f0dder</div>
+   </div>
+   <div class="post" id="post-132631">
+    <div class="subject"><a href="#post-132631">Subclassing control in another process</a></div>
+    <div class="body">Hi f0dder,<br /><br />Well i agree that i am lazy and brute force sometimes :grin:<br /><br />But my dumb question is: will this method of your's work with an application that is already running<br />ie is not started by me and where i have to hook multiple windows/controls created by the application at random times?<br /><br />If it does i will be happy to learn another way and i will try to use your method instead of a brute force hook.<br /><br />Honestly i do not like the hook either because i can not stop it and leave my DLL inside the target process.<br /><br />But you have to admit that since is provided as a part of windows API it is much safer :grin: <br />and it works just the same on Win9x (and unfortunately my clients use a strange mix of OS'es)</div>
+    <div class="meta">Posted on 2004-02-05 05:47:01 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-132633">
+    <div class="subject"><a href="#post-132633">Subclassing control in another process</a></div>
+    <div class="body">VirtualAllocEx + CreateRemoteThread will work on running apps, the CreateProcess 9x workaround obviously requires you to start the process. However, EliCZ has made a library that provides VirtualAllocEx+CreateRemoteThread functionality under 9x...</div>
+    <div class="meta">Posted on 2004-02-05 06:09:13 by f0dder</div>
+   </div>
+   <div class="post" id="post-132635">
+    <div class="subject"><a href="#post-132635">Subclassing control in another process</a></div>
+    <div class="body">Ok,<br /><br />Thank you for info.</div>
+    <div class="meta">Posted on 2004-02-05 06:23:19 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-132648">
+    <div class="subject"><a href="#post-132648">Subclassing control in another process</a></div>
+    <div class="body">This article mentions some ways:<br /><br /><a target="_blank" href="ms-help://MS.VSCC/MS.MSDNVS/dnmgmt/html/msdn_subclas3.htm">ms-help://MS.VSCC/MS.MSDNVS/dnmgmt/html/msdn_subclas3.htm</a><br /><br />or same article here <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dnwui/html/msdn_subclas3.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dnwui/html/msdn_subclas3.asp</a></div>
+    <div class="meta">Posted on 2004-02-05 07:28:47 by stormix</div>
+   </div>
+   <div class="post" id="post-132674">
+    <div class="subject"><a href="#post-132674">Subclassing control in another process</a></div>
+    <div class="body">Thanks for the info stormix. <br />I found this too; it seems pretty good..<br /><a target="_blank" href="http://www.codeproject.com/threads/int64_memsteal.asp">http://www.codeproject.com/threads/int64_memsteal.asp</a></div>
+    <div class="meta">Posted on 2004-02-05 09:05:28 by dijo</div>
+   </div>
+   <div class="post" id="post-132816">
+    <div class="subject"><a href="#post-132816">Subclassing control in another process</a></div>
+    <div class="body">Why would he want to load a library or create a thread? Under Windows NT, he can use VirtualAllocEx and WriteProcessMemory. Under Windows 9X, he can go into Ring0 and allocate memory at a high address. When the code is present in the other program's address space, a WM_TIMER message can be sent to run it. This code can then call SetWindowLong to subclass the window. It's very simple!</div>
+    <div class="meta">Posted on 2004-02-07 05:28:58 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-132819">
+    <div class="subject"><a href="#post-132819">Subclassing control in another process</a></div>
+    <div class="body"><div class="quote"><br />Under Windows 9X, he can go into Ring0 and allocate memory at a high address.</div><br /><br />Why would he want to go into Ring0? Under Windows 9x he can allocate shared memory by giving VirtualAlloc the 08000000h flag. It's very simple!</div>
+    <div class="meta">Posted on 2004-02-07 06:07:33 by stormix</div>
+   </div>
+   <div class="post" id="post-132826">
+    <div class="subject"><a href="#post-132826">Subclassing control in another process</a></div>
+    <div class="body">I just wanted to show you guys a nice link that I found for masm<br /><a target="_blank" href="http://doc.ddart.net/asm/Microsoft_MASM_Programmers_Guide_v6.1/">http://doc.ddart.net/asm/Microsoft_MASM_Programmers_Guide_v6.1/</a><br />It seems to be pretty nice.. :)</div>
+    <div class="meta">Posted on 2004-02-07 10:11:45 by dijo</div>
+   </div>
+   <div class="post" id="post-132830">
+    <div class="subject"><a href="#post-132830">Subclassing control in another process</a></div>
+    <div class="body">Ah, I didn't know you could do that. I must have overlooked it.</div>
+    <div class="meta">Posted on 2004-02-07 12:23:09 by Sephiroth3</div>
+   </div>
+  </div>
+ </body>
+</html>

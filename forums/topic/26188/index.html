@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>the stack - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26188" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26188">the stack</a></p>
+   <div class="post" id="post-190560">
+    <div class="subject"><a href="#post-190560">the stack</a></div>
+    <div class="body">Hi.
+
+Could someone point me to some good info on the stack, clearing stackframe etc? I am new to masm32 and would appreciate any help on the topic.
+
+Thanks</div>
+    <div class="meta">Posted on 2000-11-20 12:16:00 by mars_matrix</div>
+   </div>
+   <div class="post" id="post-190561">
+    <div class="subject"><a href="#post-190561">the stack</a></div>
+    <div class="body">Any stack frame should be created and destroyed by MASM without you knowing in anyway, like so:
+
+func proc  Arg1:DWORD,Arg2:DWORD
+
+LOCAL Local1 :DWORD
+LOCAL Local2 :DWORD
+; MASM32 sets up your stack frame accordingly
+ret
+; MASM32 releases your stack frame accordingly
+func endp
+
+However, if you want to control this yourself, good luck!  Here's what I know.  The stack (SS:(E)SP) loads from bottom to top, not top to bottom to keep the segment size the same, back when memory was scarse.  For example, a push would decrement (E)SP while a pop increments it.  So, in order to set up a stack frame, first count the number of variables you'll use and do this:
+
+; set up stack frame, 32 bit
+; if 16 bit, replace EBP with BP and ESP with SP
+push ebp
+mov ebp,esp
+sub esp,size_of_variables_and_arguments
+; add esp,-(size_of_variables_and_arguments)  is slightly faster
+
+; clear stack frame
+mov esp,ebp
+pop ebp
+ret size_of_arguments_only
+; This return doesn't return a value, but instead pops off
+; X number of bytes.  We want that to avoid stack overflow!
+
+Then, to access your variables and arguments, you must use correct indirect pointers:
+
+ Argument(s)
+ Return address (leave it alone!)
+ Local variable(s)
+etc...
+
+Not exactly easy, but doable.  Note to decrease (E)SP, not (E)BP.  If you don't modify (E)SP, then your pushes and pops will forever screw up your local variables. =)</div>
+    <div class="meta">Posted on 2000-11-20 13:29:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190562">
+    <div class="subject"><a href="#post-190562">the stack</a></div>
+    <div class="body">Grrr....sorry.  I meant SS: (E)SP.</div>
+    <div class="meta">Posted on 2000-11-20 13:30:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190563">
+    <div class="subject"><a href="#post-190563">the stack</a></div>
+    <div class="body">Gah, sorry.  Was eating lunch and didn't notice a fairly major typo. :)
+
+Pointers:
+
+ Arguments
+ Return address
+ Original Base Pointer
+ first argument
+ second-X arguments</div>
+    <div class="meta">Posted on 2000-11-20 13:57:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190564">
+    <div class="subject"><a href="#post-190564">the stack</a></div>
+    <div class="body">mars_matrix,
+
+If you actually need the practice of seting the stack manually, the technique that Rasco has shown you will do the job but unless its a matter of needing the practice, you are a lot better off by using the assembler to do this for you.
+
+The general model of writing prototypes and procedures with matching parameters makes you code one HELL of a lot more reliable and there is no size or performance gain by not using it.
+
+You also have the advantage using procedures with prototypes in that you can specify the calling convention if for example you need to pass a variable number of parameters to a procedure. Where win 32 bit is normally in STDCALL, using C calling convention allows you to make the last parameter VARARG.
+
+MASM32 version 6 has an example called "tstyle" that show what a manually code stack looks like, its not there as an example of why you should use this style, its there as an example of why you should NOT use this style.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2000-11-20 20:22:00 by hutch-- </div>
+   </div>
+   <div class="post" id="post-190565">
+    <div class="subject"><a href="#post-190565">the stack</a></div>
+    <div class="body">I most deceidly agree with hutch here, use the masm build-in stack frame handling macros. They are 100% reliable, YOU are not.
+
+The programmer is ALWAYS the weak link in the chain.
+
+Just one more thing to add: end all your procedures with a 'ret'  This is eazy to forget, and doesn't generate any compile errors.
+
+SomeFunct PROC param1:DWORD, parma2:DWORD
+LOCAL  L1:DWORD, L2:SomeStruct
+
+{code here}
+
+ret         ;  ALWAYS use 'ret'... this expands into a
+            ;  few instructions that clear the stack. 
+            ;  It is acceptable to have multiple 'ret' in
+            ;  single PROC if you have mulptple exit points
+            ;  (You deceid if you don't like that coding
+            ;   convention)
+
+SomeFunct ENDP</div>
+    <div class="meta">Posted on 2000-11-20 21:01:00 by TTom </div>
+   </div>
+   <div class="post" id="post-190566">
+    <div class="subject"><a href="#post-190566">the stack</a></div>
+    <div class="body">Actually, after
+
+   push ebp
+   mov  ebp,esp
+   sub  esp, LocalVarsSize
+
+the ebp offsets should be
+
+  start of args
+  Old EIP (return address)
+    Old EBP
+ start of local variables
+
+So yes, it's easier to let the assembler do it.</div>
+    <div class="meta">Posted on 2000-11-20 23:57:00 by ub1 </div>
+   </div>
+   <div class="post" id="post-190567">
+    <div class="subject"><a href="#post-190567">the stack</a></div>
+    <div class="body">Yeah, I made too many typos that day.  Never try to eat lunch and type at the same time, especially when you've got only got a 30 minute lunch break. :D</div>
+    <div class="meta">Posted on 2000-11-22 00:52:00 by Racso </div>
+   </div>
+   <div class="post" id="post-190568">
+    <div class="subject"><a href="#post-190568">the stack</a></div>
+    <div class="body">Thanks alot for the help. I've been sick for a few days and havn't tried it yet but I will. I ran into these 'stack' problems when doing a timer callback function. 
+
+cheers</div>
+    <div class="meta">Posted on 2000-11-22 13:18:00 by mars_matrix </div>
+   </div>
+  </div>
+ </body>
+</html>

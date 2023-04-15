@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GetDlgItem doesn''t work ?!? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28628" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28628">GetDlgItem doesn''t work ?!?</a></p>
+   <div class="post" id="post-202315">
+    <div class="subject"><a href="#post-202315">GetDlgItem doesn''t work ?!?</a></div>
+    <div class="body">Hi all!
+In the following source code, I can't store the result of
+<pre><code>
+GetDlgItem, hDlg, 2000
+</code></pre>
+in the "hLabel" variable ("mov hLabel, eax"). The SendMessage in the WM_TIMER event doesn't display any text if
+I use "addr hLabel" as hwnd. But, look at the code, and tell me, why it does not work, if I use "addr hLabel" instead of eax :D
+
+<pre><code>
+; #########################################################################
+
+      .386
+      .model flat, stdcall
+      option casemap :none
+
+; #########################################################################
+
+      include \masm32\include\windows.inc
+      include \masm32\include\kernel32.inc
+      include \masm32\include\user32.inc
+
+      includelib \masm32\lib\kernel32.lib
+      includelib \masm32\lib\user32.lib
+
+; #########################################################################
+
+      DlgProc PROTO :DWORD, :DWORD, :DWORD, :DWORD
+
+; #########################################################################
+    .data
+        szTaskBar	db "Shell_TrayWnd", 0 ; taskbar class
+        szSysTray	db "TrayNotifyWnd", 0 ; systray class
+        szSysClock	db "TrayClockWClass", 0 ; sysclock class
+
+        szTime		db "00:00:00", 0
+
+        lpWidth		dd 0
+        lpHeigth	dd 0
+
+        ; hLabel		dd 0
+
+        rect		RECT <> ; structure
+
+        hInstance	EQU 400000h
+
+    .code
+start:
+
+      invoke DialogBoxParam, hInstance, 1000, 0, addr DlgProc, 0
+    	invoke ExitProcess, eax
+
+; #########################################################################
+
+DlgProc proc hDlg :DWORD, uMsg :DWORD, wParam :DWORD, lParam :DWORD
+
+		.if uMsg == WM_INITDIALOG
+        	invoke SendMessage, hDlg, WM_TIMER, 0, 0 ; display time
+
+            invoke FindWindow, addr szTaskBar, 0
+            invoke FindWindowEx, eax, 0, addr szSysTray, 0
+            invoke FindWindowEx, eax, 0, addr szSysClock, 0
+  		push eax ; handle of clock
+
+            invoke GetWindowRect, eax, addr rect ; get window size
+            mov eax, rect.right
+            sub eax, rect.left ; calculate width
+            mov lpWidth, eax
+            mov eax, rect.bottom
+            sub eax, rect.top
+            mov lpHeigth, eax ; calculate heigth
+
+            ; invoke GetDlgItem, hDlg, 2000
+            ; mov hLabel, eax
+
+            invoke SetTimer, hDlg, 3000, 1000, 0 ; start timer (1 sec)
+
+            invoke MoveWindow, hDlg, 0, 0, lpWidth, lpHeigth, 0 ; resize
+            invoke GetDlgItem, hDlg, 2000
+            invoke MoveWindow, eax, 0, 0, lpWidth, lpHeigth, 0 ; resize
+
+            pop eax ; handle of clock
+            invoke SetParent, hDlg, eax ; draw dialog over clock
+
+        .elseif uMsg == WM_TIMER
+	      invoke GetTimeFormat, 0, TIME_FORCE24HOURFORMAT, 0, 0, \
+            					  addr szTime, 9 ; get current time
+            invoke GetDlgItem, hDlg, 2000
+        	invoke SendMessage, eax, WM_SETTEXT, 0, addr szTime
+
+        .elseif uMsg == WM_CLOSE
+        	invoke KillTimer, hDlg, 3000 ; to clean up
+        	invoke EndDialog, hDlg, 0
+        .endif
+
+		xor eax, eax
+        ret
+
+DlgProc endp
+
+; #########################################################################
+
+end start
+</code></pre>
+
+<strong>rsrc.rc ------------------------</strong>
+<pre><code>
+#include "resource.h"
+1000 DIALOGEX 0, 0, 35, 8
+STYLE WS_POPUP
+EXSTYLE WS_EX_TOOLWINDOW
+FONT 8, "MS Sans Serif"
+BEGIN
+    CTEXT           "",2000,0,0,35,8,SS_CENTERIMAGE
+END
+</code></pre>
+
+
+This message was edited by bAZiK, on 7/3/2001 7:41:43 PM</div>
+    <div class="meta">Posted on 2001-07-03 19:37:00 by bazik</div>
+   </div>
+   <div class="post" id="post-202316">
+    <div class="subject"><a href="#post-202316">GetDlgItem doesn''t work ?!?</a></div>
+    <div class="body">you shouldnt put addr infront of hLabel, it should be:
+invoke SendMessage, hLabel, WM_SETTEXT, 0, addr szTime
+using "addr hLabel" you would be pushing a pointer to the handle... when using just "hLabel" it pushes the handle.</div>
+    <div class="meta">Posted on 2001-07-04 01:36:00 by Soul~Drudge</div>
+   </div>
+   <div class="post" id="post-202317">
+    <div class="subject"><a href="#post-202317">GetDlgItem doesn''t work ?!?</a></div>
+    <div class="body">Hmmm..... sounds good. I'll try this. Thanx!
+
+<strong>edited:</strong>
+works! :D
+
+This message was edited by bAZiK, on 7/4/2001 6:45:34 AM</div>
+    <div class="meta">Posted on 2001-07-04 05:56:00 by bazik</div>
+   </div>
+  </div>
+ </body>
+</html>

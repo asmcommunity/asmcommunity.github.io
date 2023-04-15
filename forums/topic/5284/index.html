@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>reducing case-like statement - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5284" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5284">reducing case-like statement</a></p>
+   <div class="post" id="post-37389">
+    <div class="subject"><a href="#post-37389">reducing case-like statement</a></div>
+    <div class="body">Hello all!<br /><br />I have a bit of code which, although it doesn't need &quot;optimization&quot; especially for speed, it is kinda ugly. I was wondering if people had any interesting ways of simplifying a case-like statement.<br /><br />Specifically, the code I'm talking about is regarding scrolling the document. It compares each case of WM_VSCROLL, adds a value to the current scroll position, and redraws it by calling a proc I've defined called Scroll (imaginative, huh?)<br /><br />There is a similar batch of code for handling key strokes that have the same effect.<br /><br />So... any ideas???<br /><br /><pre><code><br />WM_VSCROLL_HANDLER&#58;<br />  mov eax,wParam<br />  cmp ax,SB_PAGEUP<br />  jne @F<br />  mov eax,ScrollInfo.nPos<br />  sub eax,PageHeight<br />  invoke Scroll,hWin,eax<br />  ret<br />@@&#58;      <br />  cmp ax,SB_PAGEDOWN<br />  jne @F<br />  mov eax,ScrollInfo.nPos<br />  add eax,PageHeight<br />  invoke Scroll,hWin,eax<br />  ret<br />@@&#58;<br />  cmp ax,SB_LINEUP<br />  jne @F<br />  mov eax,ScrollInfo.nPos<br />  sub eax,20<br />  invoke Scroll,hWin,eax<br />  ret<br />@@&#58;<br />  cmp ax,SB_LINEDOWN<br />  jne @F<br />  mov eax,ScrollInfo.nPos<br />  add eax,20  <br />  invoke Scroll,hWin,eax<br />  ret<br />@@&#58;<br />  cmp ax,SB_THUMBPOSITION<br />  jne @F<br />  shr eax,16<br />  mov ScrollInfo.nPos,eax<br />  invoke InvalidateRect,hWin,NULL,TRUE<br />  ret<br />@@&#58;<br />  cmp ax,SB_THUMBTRACK<br />  jne @F<br />  shr eax,16<br />  mov ScrollInfo.nPos,eax<br />  invoke InvalidateRect,hWin,NULL,TRUE<br />@@&#58;<br />  ret<br /></code></pre></div>
+    <div class="meta">Posted on 2002-05-09 15:02:35 by chorus</div>
+   </div>
+   <div class="post" id="post-37394">
+    <div class="subject"><a href="#post-37394">reducing case-like statement</a></div>
+    <div class="body">This topic has been brought up in multiple ways (note recursion :)):<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=1026">http://www.asmcommunity.net/board/index.php?topic=1026</a><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=24171">http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=24171</a></div>
+    <div class="meta">Posted on 2002-05-09 15:20:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-37408">
+    <div class="subject"><a href="#post-37408">reducing case-like statement</a></div>
+    <div class="body">BitRake,<br />  I have seen these threads before. Thanks though. The reason I put the post up regardless of this fact is that I am looking at a very specific case vs. very general. For instance, the case handling of a windows message loop, where virtually every branch is completely different is not what I was looking for (although it does give me ideas). I find that this particular loop I'm looking to optimize is very &quot;symmetric&quot; in that most every branch calls the same function with a different value loaded.<br /><br />Regards<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-05-09 16:18:22 by chorus</div>
+   </div>
+   <div class="post" id="post-37414">
+    <div class="subject"><a href="#post-37414">reducing case-like statement</a></div>
+    <div class="body">I like macro's for the job.   Im not saying this is the 'fastest' or 'smallest' approach, but it is quite readable as a case like structure, and the extra jump's arnt that big of a deal (most cases).<br /><br /><strong>Macro #1:  IF_MSG:</strong><pre><code>IF_MSG MACRO WMsg&#58;REQ, DoJmp&#58;REQ<br />      cmp uMsg, WMsg<br />      jz  DoJmp<br />ENDM</code></pre><br /><br /><strong>Macro #2: IF_WPARAM:</strong><pre><code>IF_WPARAM MACRO WPrm&#58;REQ, DoJmp&#58;REQ<br />      cmp wParam, WPrm<br />      jz  DoJmp<br />ENDM</code></pre><br /><br /><strong>Example framework of their use:</strong><pre><code>_WndECProc proc USES EBX _hWnd&#58;DWORD, uMsg&#58;DWORD, wParam&#58;DWORD, lParam&#58;DWORD<br /><br />     IF_MSG    WM_CASE1,          Do_Case1<br />     IF_MSG    WM_CASE1,          Do_Case2<br />     IF_MSG    WM_COMMAND,    Do_Command<br /><br /> ; Default Case&#58;     <br /> @return&#58;  <br />     invoke    DefWindowProc,_hWnd,uMsg,wParam,lParam<br />     ret<br />     <br /> @end&#58;     <br />     xor eax, eax<br />     jmp @return<br /><br />;-------------------------------<br /> Do_Case1&#58;<br />;-------------------------------<br />     ; Case Code Here<br />     jmp @end<br />;-------------------------------<br /> Do_Case2&#58;<br />;-------------------------------<br />     ; Case Code Here<br />     jmp @end<br />;-------------------------------<br /> Do_Command&#58;<br />;-------------------------------<br />     IF_WPARAM      1010,     Do_Exit<br />     IF_WPARAM      1011,     Do_Something<br /><br />     jmp @return<br />  ;-=-=-=-=-=--=-=-=-=-=--=<br />     Do_Exit&#58;<br />  ;-=-=-=-=-=--=-=-=-=-=--=<br />     invoke SendMessage,hWnd,WM_SYSCOMMAND,SC_CLOSE,NULL<br />     jmp @end<br />  ;-=-=-=-=-=--=-=-=-=-=--=<br />     Do_Something&#58;<br />  ;-=-=-=-=-=--=-=-=-=-=--=<br />     ; Something code here<br />     jmp @end<br /></code></pre><br />I like this when pounding out new ideas and quickly handling stuff.  Its also flexible, if you wanted one case to bleed into the next simply dont add the &quot;jmp @end&quot;.  Default cases are at the end of the IF_ Macro's.  For both, the default here is 'passing the buck' to the windows' default handler.<br /><br />Hope it helps<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-05-09 16:51:00 by NaN</div>
+   </div>
+   <div class="post" id="post-37416">
+    <div class="subject"><a href="#post-37416">reducing case-like statement</a></div>
+    <div class="body"><div class="quote"><br />I find that this particular loop I'm looking to optimize is very &quot;symmetric&quot; in that most every branch calls the same function with a different value loaded.</div>Then use a table and don't branch. :)  The fastest approach will take much manual manipulation.  By the code above, it looks like you'll have one multi-way branch table.</div>
+    <div class="meta">Posted on 2002-05-09 16:54:11 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-37591">
+    <div class="subject"><a href="#post-37591">reducing case-like statement</a></div>
+    <div class="body">Haha! Size-optimizing :) Here's the best I can make of it in 10 minutes.<br />Please note I'm a TASM coder (but learning MASM), and I don't know much about MASM's addressing syntax yet. More specifically, I'v assumed PageHeight is a variable. This causes the PAGEDOWN and PAGEUP compares to be in a different order than the original. If PageHeight is a constant (with EQU or =), then you can keep the original order by negating it were it is used (as in the LINEUP/LINEDOWN case)<br /><br />WM_VSCROLL_HANDLER:<br />  mov eax,wParam<br />  mov ebx, PageHeight<br />  cmp ax, SB_PAGEDOWN<br />  je  @@Scroll<br /><br />  neg ebx<br />  cmp ax,SB_PAGEUP<br />  je  @@Scroll<br />  <br />  mov ebx, -20<br />  cmp ax,SB_LINEUP<br />  je @@Scroll<br /><br />  neg ebx<br />  cmp ax,SB_LINEDOWN<br />  je  @@Scroll<br /><br />  cmp ax,SB_THUMBPOSITION<br />  je  @@Scroll_Page<br />  cmp ax,SB_THUMBTRACK<br />  jne @@No_Scroll<br />@@Scroll_Page:<br />  shr eax,16<br />  mov ScrollInfo.nPos,eax<br />  invoke InvalidateRect,hWin,NULL,TRUE<br />  ret<br /><br />@@Scroll:<br />  add ebx,ScrollInfo.nPos<br />  invoke Scroll,hWin,ebx<br />@@No_Scroll:<br />  ret</div>
+    <div class="meta">Posted on 2002-05-10 11:59:07 by james</div>
+   </div>
+   <div class="post" id="post-37601">
+    <div class="subject"><a href="#post-37601">reducing case-like statement</a></div>
+    <div class="body">Thanks for the replies :)<br /><br />NaN, I like the ideas of the macros, it is very readable. However, I am actually implementing the version James posted (thanks James). It suits my needs pretty well, especially considering that I can merge my WM_KEYDOWN message with it :)<br /><br />Thanks again everybody<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-05-10 13:35:12 by chorus</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>macro pseudoinstruction - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25969" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25969">macro pseudoinstruction</a></p>
+   <div class="post" id="post-189252">
+    <div class="subject"><a href="#post-189252">macro pseudoinstruction</a></div>
+    <div class="body">Could somebody tell me a book about macro?<br />I konw nothing about macro and never used macro to write a asm.<br />This is the code i do not understand.especially the&nbsp; &#39;pseudoinstruction&#39; Thanks friends.<br /><pre><code>_invoke		macro	_Proc,args:VARARG<br />		local	count<br />&nbsp; &nbsp; <br />	count	= 0<br />%	for	i,&lt; reverseArgs( args ) &gt;<br />		count	= count + 1<br />		push	i<br />	endm<br />	call	dword ptr _Proc&nbsp; &nbsp; <br />&nbsp; &nbsp; <br />endm</code></pre><br /></div>
+    <div class="meta">Posted on 2007-05-15 21:15:16 by ekin</div>
+   </div>
+   <div class="post" id="post-189253">
+    <div class="subject"><a href="#post-189253">Re: macro pseudoinstruction</a></div>
+    <div class="body">Macros (aka &#39;buildtime procedures&#39;) basically fall into two categories : those which perform a calculation (at BuildTime) and return some kind of value, and those which emit one or more OpCodes, which are then processed as if you had actually written them.<br /><br />Macros are most often used to disguise relatively short and frequently-used blocks of code, which can make your sourcecode shorter and nicer to look at, in other words they can be used to hide from the casual reader what the heck is actually going on.<br />In that respect, they are a mixed blessing.<br /><br />I have never seen one decent tutorial on this subject, let alone a book, however Randy Hyde&#39;s AoA is probably as good as it gets (chapter 8 from memory).<br /><br />Like most users, I&#39;ve learned what I know about (masm) macros by studying the ones I&#39;ve encountered in other people&#39;s sources.<br /><br />The most fundamental difference between macros and procedures in terms of design is that macros can work with params that contain some Text (rather than some fixed size of arbitrary data, like dword).<br />Your example macro is doing just that - its parameters are Text based.<br />The macro you have posted emits a number of opcodes.. specifically, given that &#39;_Proc&#39; is the name of a procedure, and &#39;args&#39; is 0 or more comma-delimited arguments, your macro emits a PUSH opcode for each and every comma-delimited argument in &#39;args&#39; (in reverse order of appearance), and then emits &#39;Call _Proc&#39;, where _Proc is replaced with its Text Content.<br />The result of all this is a &#39;Standard Call&#39; to an arbitrary procedure.<br /><br />For example, if we did this:<br />_invoke MyProc, XX, YY, ZZ<br /><br />that would cause the following code to be emitted:<br />push ZZ<br />push YY<br />push XX<br />call MyProc<br /><br />A macro PSEUDOINSTRUCTION is a macro which emits one or more OpCodes, like we just saw.<br />Here&#39;s a better example... you already know that theres no X86 opcodes that allow you to move a value directly from one memory location to another - you&#39;re forced to load into a register, and then store again.<br /><br />m2m macro Dest, Source<br />push Source<br />pop Dest<br />endm<br /><br />Now an example usage of that macro:<br />m2m MyBackupVariable, MyWorkingVariable<br /><br />That would generate this:<br />push&nbsp; MyWorkingVariable<br />pop&nbsp; MyBackupVariable<br /><br />We can use &#39;m2m&#39; AS IF it was an actual opcode, so our SourceCode can be shorter and less ugly to look at. Since we understand the macro, we know it really generates TWO opcodes for each &#39;m2m&#39; in our sourcecode, but we could quite easily use this macro WITHOUT understanding how it really works (which I think is bad, but hey, isn&#39;t this what C, C++, VB and other HLLs REALLY DO?)<br /><br />Hope this has helped you in some small way :)</div>
+    <div class="meta">Posted on 2007-05-16 02:36:10 by Homer</div>
+   </div>
+   <div class="post" id="post-189258">
+    <div class="subject"><a href="#post-189258">Re: macro pseudoinstruction</a></div>
+    <div class="body">I have a &quot;PseudoInstruction.asm&quot; file in my kernel&#39;s project directory and I have coded something like this:<br /><br /><pre><code>%DEFINE _EAX 1<br />%DEFINE _EBX 2<br />%DEFINE _ECX 3<br />%DEFINE _EDX 4<br />; ??????????????????????????????????????????????????<br />%MACRO MMOVB 2-3 _EAX<br />&nbsp; %IF %3 = _EAX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  AL , BYTE PTR [%2]<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BYTE PTR [%1] , AL<br />&nbsp; %ENDIF<br />&nbsp; %IF %3 = _EBX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BL , BYTE PTR [%2]<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BYTE PTR [%1] , BL<br />&nbsp; %ENDIF<br />&nbsp; %IF %3 = _ECX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  CL , BYTE PTR [%2]<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BYTE PTR [%1] , CL<br />&nbsp; %ENDIF<br />&nbsp; %IF %3 = _EDX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  DL , BYTE PTR [%2]<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BYTE PTR [%1] , DL<br />&nbsp; %ENDIF<br />%ENDMACRO<br />; ??????????????????????????????????????????????????</code></pre><br /><br />Using the above macro, you can move a byte from a memory location to another. For example, you can do something like this:<br /><br /><pre><code>&nbsp; MOV&nbsp; &nbsp;  ESI , OFFSET SourceString<br />&nbsp; MOV&nbsp; &nbsp;  EDI , OFFSET DestinationString<br />&nbsp; MMOVB&nbsp;  EDI , ESI</code></pre><br /><br />And the above code will the AL register to first copy the content of the byte at the memory location to which ESI points, to the memory location inside the EDI register.<br /><br />Hope it gives you a hint.<br /></div>
+    <div class="meta">Posted on 2007-05-16 19:42:31 by XCHG</div>
+   </div>
+   <div class="post" id="post-189260">
+    <div class="subject"><a href="#post-189260">Re: macro pseudoinstruction</a></div>
+    <div class="body">Thanks a million!This is really helpful. ;)But could some tell a litter about the syntax about the macro?like the <pre><code>for	i,&lt; reverseArgs( args ) &gt;</code></pre>I wish i could write macro by my self.</div>
+    <div class="meta">Posted on 2007-05-16 22:59:32 by ekin</div>
+   </div>
+  </div>
+ </body>
+</html>

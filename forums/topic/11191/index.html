@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GlobalAlloc size limit is 5M - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11191" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=11191">GlobalAlloc size limit is 5M</a></p>
+   <div class="post" id="post-84381">
+    <div class="subject"><a href="#post-84381">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">I have discovered something strange... <br />I allocated a memory block:<br /><br />invoke GlobalAlloc,GMEM_FIXED,size<br />mov pdata,eax<br /><br />Then resized it:<br /><br />invoke GlobalHandle,pdata<br />invoke GlobalRealloc,eax,newsize,GMEM_MOVEABLE<br /><br />Ok, this is fixed memory, but the GMEM_MOVEABLE allows it to be moved, but it<br />stays fixed. This has been discussed on an earlier thread, and is fine for Win95 up.<br /><br />The problem is, testing on a Win95 system, with 256M RAM, GlobalRealloc fails if<br />I try to go above about 5M.<br />I created a loop, calling GlobalRealloc() in 288 byte increments (for reasons that<br />I won't go into here), and it failed at 59F0E0h, which is 5,894,368 decimal.<br /><br />So, I wonder why?<br />I see in an earlier thread that f0dder tested GlobalAlloc() at 256M.<br />So, why can't I do it with ReAlloc()? Is this perhaps a Win95 specific problem?<br />Any suggestions welcome.<br /><br />Regards,<br />Barry Kauler</div>
+    <div class="meta">Posted on 2003-03-01 19:29:24 by bkauler</div>
+   </div>
+   <div class="post" id="post-84434">
+    <div class="subject"><a href="#post-84434">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">A point of clarification. I am of course reloading the pointer:<br /><br />invoke GlobalHandle,pdata<br />invoke GlobalRealloc,eax,newsize,GMEM_MOVEABLE<br />mov pdata,eax<br /><br />Also, I understand from MS docs that GlobalHandle() isn't necessary, as a<br />fixed pointer can be passed direct to GlobalReAlloc().<br /><br />Anyway, further fascinating developments. I tried this on a Win98 system, and<br />GlobalReAlloc() failed when the block size reached 599020h or 5,869,600 decimal.<br />About the same place.<br /><br />MS has a little utility called &quot;HeapWatch32&quot;, and I ran my app. My app is &quot;EVE&quot;,<br />my freeware vector drawing program. I repeatedly imported a JPG graphic file of about 1.5M, and watched what Heapwatch32 reported:<br /><br />Import 1.5 graphic   Bytes alloc        Obj cnt      Bytes free<br />1st time                   1,710,332         40             7,730,236<br />2nd time                  3,410,684         40             6,029,884<br />3rd time                   5,111,036         40        1,052,179,732<br />4th time FAIL           5,571,932          40       2,068,325,356<br /><br />This is reporting the heap allocation specific to my mem block.<br />Each time I import the JPG, it gets added to the diagram database, and the<br />mem block increases appropriately. On the third import, it was very slow to<br />complete, many seconds, and look what has happened in the last column!<br />Fourth time, sat there for many more seconds before reporting failure, and<br />again notice the last column.<br /><br />Can anyone shed any light on this? <br />What do you think is happening on the last column?<br /><br />Regards,<br />Barry Kauler</div>
+    <div class="meta">Posted on 2003-03-02 03:30:47 by bkauler</div>
+   </div>
+   <div class="post" id="post-84451">
+    <div class="subject"><a href="#post-84451">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">I have been using good old Google to find more info.<br />I found this at MS's MSDN:<br /><br />--------------<br />Windows Me/98/95:  The heap managers are designed for memory blocks smaller than four megabytes. If you expect your memory blocks to be larger than one or two megabytes, you can avoid significant performance degradation by using the VirtualAlloc or VirtualAllocEx function instead.<br />---------------<br /><br />This is on a page describing GlobalReAlloc() etc.<br /><br />Funny, that paragraph isn't in my MSDN CD (1998).<br />They don't tell us that not only does performance degrade, it also fails!<br /><br />So, I gotta use these Virtual***() thingys -- never tried them.<br /><br />Regards,<br />Barry Kauler</div>
+    <div class="meta">Posted on 2003-03-02 04:35:22 by bkauler</div>
+   </div>
+   <div class="post" id="post-84643">
+    <div class="subject"><a href="#post-84643">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">I think if you make a loop with 288 bytes realloc, you will get a large fragmentation of memory.<br />I know, that windows reallocates a block, it allocates a new one, does a memcopy from old to new and<br />than frees old block. <br /><br />I deal with a lot GlobalAlloc alloc'ed blocks also of big size (up to 50MB) and never saw this problem.<br />Maybe you should not use fixed memory, or simply switch to VirtualAlloc functions.<br /><br />Main problem without GlobalXX is, that reallocations do not preserve the old memory content.</div>
+    <div class="meta">Posted on 2003-03-03 03:56:34 by beaster</div>
+   </div>
+   <div class="post" id="post-84790">
+    <div class="subject"><a href="#post-84790">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">I've also used GlobalAlloc with 5MB+ blocks, and never have had problem with it.</div>
+    <div class="meta">Posted on 2003-03-03 16:35:52 by comrade</div>
+   </div>
+   <div class="post" id="post-84832">
+    <div class="subject"><a href="#post-84832">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">My situation is, I am importing a graphic into a database with 288 byte<br />records, so the graphic gets split into a linked list of records.<br />I was calling GlobalReAlloc() as I appended each new 288 byte record,<br />so consider if I am importing a 10M graphic, GlobalReAlloc() gets called<br />about, what would that be... 90,000 times ... the poor thing falls in a<br />heap (pun!).<br /><br />So, I changed my code so GlobalReAlloc() gets called once to increase<br />the mem block by the total graphic size, then as I create each record don't have to call GlobalReAlloc() repeatedly.<br />The sensible approach of course.<br /><br />However, on my Win95 system I'm still getting crashing. Yeah, I was able<br />to import a 10M graphic, then a couple more smaller ones, then got a crash.<br />I think we need to head Microsoft's advice not to use the Global***() or<br />Local***() funcs above about 4M on Win9x systems.<br />... after all, MS won't be posting that advice for no reason.<br /><br />Maybe you guys who are doing it ok, are using WinNT/2000/XP?</div>
+    <div class="meta">Posted on 2003-03-03 17:56:44 by bkauler</div>
+   </div>
+   <div class="post" id="post-84834">
+    <div class="subject"><a href="#post-84834">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">what if you alloc 2 times and freealloc the smallest one each time?<br /><br />homemade realloc :|<br /><br />maybe it has a problem with realloc and not with the normal alloc.<br /><br />unfortunately I do not have a 9x here so I can not test.<br /><br /><br />Any specific reason why they can only be 288 bytes? is that faster for your database? :)</div>
+    <div class="meta">Posted on 2003-03-03 18:14:36 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-84933">
+    <div class="subject"><a href="#post-84933">GlobalAlloc size limit is 5M</a></div>
+    <div class="body">I know 288 bytes seem an odd size to choose for database records.<br />Well, there is some history behind it.<br />I did build in the capability to make it bigger, but don't want to change<br />it now, as for sure it'll break something.<br />When it works, leave it alone. <br />Maybe one day.</div>
+    <div class="meta">Posted on 2003-03-04 06:58:45 by bkauler</div>
+   </div>
+  </div>
+ </body>
+</html>

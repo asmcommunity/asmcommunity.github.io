@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Loop problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19360" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19360">Loop problem</a></p>
+   <div class="post" id="post-149388">
+    <div class="subject"><a href="#post-149388">Loop problem</a></div>
+    <div class="body">Hey fellas, call me stupid if you must but I just can't get this to work the way I want it:<br /><pre><code><br />LOCAL Count&#58;BYTE<br /><br />invoke SendMessage,IDC_LISTBOX2,LB_GETCOUNT,0,0<br />mov Count,al<br />dec Count<br />Loop1&#58;<br />invoke MessageBox,hWin,0,0,0<br />dec Count<br />cmp Count,0<br />jne Loop1<br /></code></pre><br /><br />Here's what's supposed to happen: The program should get the number of items in the listbox, and do the stuff in the loop procedure as many times as there are items. Unfortunately, instead of the message box popping up twice if there were two things in the listbox, it pops up A LOT of times (I have a feeling it's 255). I am just completely stumped on this. Please help!</div>
+    <div class="meta">Posted on 2004-09-08 18:41:04 by yo|dude|mon</div>
+   </div>
+   <div class="post" id="post-149389">
+    <div class="subject"><a href="#post-149389">Loop problem</a></div>
+    <div class="body">This code looks wrong - you're using a dialog, aren't you? (Judging by IDC_LISTBOX2). SendMessage wants a window handle, not a control ID. What you want is SendDlgItemMessage - it's the same as your current code, except you need to add the dialog hwnd as the first parameter.<br /><br />255 popups sounds about right - wouldn't surprise me if at least some windows versions return &quot;-1&quot; if the window is invalid (there's a good chance it will be with a dialog control constant), this is 0xFFFFFFFF, and your &quot;count&quot; will thus be 0xFF or 255.</div>
+    <div class="meta">Posted on 2004-09-08 19:24:44 by f0dder</div>
+   </div>
+   <div class="post" id="post-149390">
+    <div class="subject"><a href="#post-149390">Loop problem</a></div>
+    <div class="body">There must be an problem with your listbox and the SendMessage are returning the error message LB_ERR in EAX, whose value is -1, or 255, in byte size.</div>
+    <div class="meta">Posted on 2004-09-08 19:29:56 by Marginais</div>
+   </div>
+   <div class="post" id="post-149392">
+    <div class="subject"><a href="#post-149392">Loop problem</a></div>
+    <div class="body">It looks like the loop is badly formed.  Just look at it and imagine what would happen if the amount returned is 0 or 1.  You'll see that it will not exit the loop on time.  In all other cases it will loop once less than necessary because of the extra &quot;dec&quot; you inserted.  The only way you can handle the case of zero items is to put some kind of jump at the beginning to skip over the loop if there are zero items.<br /><br /><pre><code><br />invoke SendMessage,IDC_LISTBOX2,LB_GETCOUNT,0,0<br />or al,al<br />jz EndLoop1<br />mov Count,al<br />Loop1&#58;<br />invoke MessageBox,hWin,0,0,0<br />dec Count<br />jnz Loop1<br />EndLoop1&#58;<br /></code></pre><br /><br />Don't forget that &quot;dec&quot; sets the zero flag if the result is zero, so you don't have to use &quot;cmp&quot;.</div>
+    <div class="meta">Posted on 2004-09-08 19:41:38 by yessopotamus</div>
+   </div>
+   <div class="post" id="post-149395">
+    <div class="subject"><a href="#post-149395">Loop problem</a></div>
+    <div class="body">Assuming that IDC_LISTBOX2 is part of a dialog box,<br /><br /><pre><code><br />invoke SendDlgItemMessage,&#91;dlghwnd&#93;,IDC_LISTBOX2,LB_GETCOUNT,0,0<br />or al,al<br />jz EndLoop1<br />mov Count,al<br />Loop1&#58;<br />invoke MessageBox,hWin,0,0,0<br />dec Count<br />jnz Loop1<br />EndLoop1&#58; <br /></code></pre></div>
+    <div class="meta">Posted on 2004-09-08 22:03:12 by roticv</div>
+   </div>
+   <div class="post" id="post-149409">
+    <div class="subject"><a href="#post-149409">Loop problem</a></div>
+    <div class="body">Or, if you have one to spare, you could put the counter in a register (except eax,ecx,edx), to avoid use of a memory variable.<br /><br /><pre><code><br />push ebx<br /><br />invoke SendDlgItemMessage,&#91;dlghwnd&#93;,IDC_LISTBOX2, LB_GETCOUNT,0,0 <br />test eax, eax<br />jz EndLoop1<br />mov ebx, eax<br /><br />Loop1&#58; <br />invoke MessageBox,hWin,0,0,0 <br />dec ebx<br />jnz Loop1 <br />EndLoop1&#58; <br /><br />pop ebx<br /></code></pre></div>
+    <div class="meta">Posted on 2004-09-09 02:26:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-149410">
+    <div class="subject"><a href="#post-149410">Loop problem</a></div>
+    <div class="body">Not directly related to the loop itself but istead of<br /><br />invoke MessageBox,hWin,0,0,0<br /><br />it is much safer to use<br /><br />invoke MessageBox,hWin,Offset szNULL,Offset szNULL,0<br /><br />where <br /><br /><br />.DATA<br />szNULL DB 0<br /><br />Antonis</div>
+    <div class="meta">Posted on 2004-09-09 02:43:59 by akyprian</div>
+   </div>
+   <div class="post" id="post-149453">
+    <div class="subject"><a href="#post-149453">Loop problem</a></div>
+    <div class="body">I'd rather write:<br />mov eax,offset $+6<br />invoke MessageBox,hWin,eax,eax,0</div>
+    <div class="meta">Posted on 2004-09-09 11:50:09 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-149456">
+    <div class="subject"><a href="#post-149456">Loop problem</a></div>
+    <div class="body">It is amazing how you write such a code. Simply Brilliant</div>
+    <div class="meta">Posted on 2004-09-09 11:52:21 by roticv</div>
+   </div>
+   <div class="post" id="post-149487">
+    <div class="subject"><a href="#post-149487">Loop problem</a></div>
+    <div class="body">Don't worry about the whole SendMessage thing (I had a feeling that it would be confusing). This should explain it:<br /><pre><code><br />.data?<br />     IDC_LISTBOX2 dd ?<br /><br />..............<br /><br />.if uMsg == WM_INITDIALOG<br />     invoke GetDlgItem,hWin,701<br />     mov IDC_LISTBOX2, eax<br />.............<br /></code></pre><br />I just felt that this way would be easier.<br /><br />Sorry about the confusion. I'll try some of your examples.</div>
+    <div class="meta">Posted on 2004-09-09 15:24:52 by yo|dude|mon</div>
+   </div>
+   <div class="post" id="post-149488">
+    <div class="subject"><a href="#post-149488">Loop problem</a></div>
+    <div class="body">Yeah, it works now. Thanks a LOT!!</div>
+    <div class="meta">Posted on 2004-09-09 15:27:22 by yo|dude|mon</div>
+   </div>
+  </div>
+ </body>
+</html>

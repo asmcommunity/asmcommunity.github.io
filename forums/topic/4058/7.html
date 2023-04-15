@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>New strlen algorithm by Jens Duttke - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4058" />
+  <link rel="prev" href="../?id=4058&amp;page=6" />  <link rel="next" href="../?id=4058&amp;page=8" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=4058">New strlen algorithm by Jens Duttke</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=4058&amp;page=1" style="">&laquo;</a><a href="../?id=4058&amp;page=6" style="">&lt;</a><input type="hidden" name="id" value="4058" /><input type="number" name="page" min="1" max="9" step="1" value="7" onchange="this.form.submit();" /><a href="../?id=4058&amp;page=8">&gt;</a><a href="../?id=4058&amp;page=9">&raquo;</a></form>   <div class="post" id="post-31015">
+    <div class="subject"><a href="#post-31015">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">hi!<br /><br />Ok, i finished my strlen routine which use MMX, now.<br />It include the idea of fodder to test only the first time for MMX, and modify the code, if MMX is available or not.<br /><br />At the first run, it will be a bit slower, because it need to &quot;initialize the stuff&quot;. But after that it will be much faster, than the code which check all the time for MMX.<br /><br />After a last speed testing on my P2 the result is, that this routine is the fastest for strings below 8 bytes (if the string is not aligned) and above ~95 bytes.<br />So i think it has also it use for &quot;normal&quot; strings, because the &quot;normal&quot; string length i handle is between 100 bytes and 255 bytes.<br />Between 10 and ~95 bytes buliaNaza's and my non-MMX-code are at the same speed-level (sometimes buliaNaza's is faster, sometimes mine ... but only a tick).<br />Below 10 bytes, all non-mmx routines have nearly the same speed.<br /><br />So here is the code :<br /><br /><pre><code><br />strlenEx PROC lpString&#58;DWORD<br />	mov	ecx, lpString<br /><br />code_base&#58;<br /><br />	mov	eax, 1						; request CPU feature flags<br />	cpuid								; CPUID instruction<br />	test	edx, 800000h					; test bit 23 to see if MMX available<br />	jz	no_mmx						; jump if no MMX is available<br />	jmp	mmx<br /><br />mmx_code&#58;<br /><br />	; Simple byte loop until string is aligned to 8<br />	@@&#58;<br />		mov	al, byte ptr &#91;ecx&#93;<br />		inc	ecx<br />		test	al, al<br />		je	done<br />	test	ecx, 7<br />	jne	@B<br /><br />	pxor	mm0, mm0<br /><br />	@@&#58;<br />		movq	mm1, qword ptr &#91;ecx&#93;<br />		movq	mm2, qword ptr &#91;ecx + 8&#93;<br />		movq	mm3, qword ptr &#91;ecx + 16&#93;<br />		movq	mm4, qword ptr &#91;ecx + 24&#93;<br />		movq	mm5, qword ptr &#91;ecx + 32&#93;<br />		movq	mm6, qword ptr &#91;ecx + 40&#93;<br /><br />		pcmpeqb mm1, mm0<br />		pcmpeqb mm2, mm0<br />		pcmpeqb mm3, mm0<br />		pcmpeqb mm4, mm0<br />		pcmpeqb mm5, mm0<br />		pcmpeqb mm6, mm0<br /><br />		por	mm1, mm2<br />		por	mm3, mm4<br />		por	mm5, mm6<br />		por	mm1, mm3<br />		por	mm1, mm5<br /><br />		add	ecx, 48<br /><br />		packsswb mm1, mm1<br />	movd	eax, mm1<br />	test	eax, eax<br />	jz	@B<br /><br />	sub	ecx, 48<br /><br />	emms							; Empty MMX state<br /><br />no_mmx_code&#58;<br /><br />	@@&#58;<br />		mov	eax, dword ptr &#91;ecx&#93;<br />		add	ecx, 4<br /><br />		lea	edx, &#91;eax - 01010101h&#93;<br />		xor	eax, edx<br />		and	eax, 80808080h<br />	jz	@B<br />		and	eax, edx<br />	jz	@B<br /><br />	bsf	edx, eax<br /><br />	shr	edx, 3<br />	lea	eax, &#91;ecx + edx - 4&#93;<br /><br />	sub	eax, lpString<br />	ret<br /><br />	done&#58;<br /><br />	lea	eax, &#91;ecx - 1&#93;<br />	sub	eax, lpString<br />	ret<br /><br />code_end&#58;<br /><br />.data?<br />	flOldProtect dd ?<br />.code<br /><br />no_mmx&#58;<br /><br />	invoke VirtualProtect, code_base, code_end - code_base, PAGE_EXECUTE_READWRITE, offset flOldProtect<br />	test	eax, eax<br />	.if !ZERO?<br />		mov	esi, no_mmx_code<br />		mov	edi, code_base<br /><br />		mov	ecx, code_end - no_mmx_code<br /><br />		cld<br /><br />		rep	movsb<br /><br />		invoke VirtualProtect, code_base, code_end - code_base, flOldProtect, offset flOldProtect<br /><br />		mov	ecx, lpString<br />		jmp	code_base<br />	.endif<br /><br />	jmp	no_mmx_code<br /><br />mmx&#58;<br /><br />	invoke VirtualProtect, code_base, code_end - code_base, PAGE_EXECUTE_READWRITE, offset flOldProtect<br />	test	eax, eax<br />	.if !ZERO?<br />		mov	esi, mmx_code<br />		mov	edi, code_base<br /><br />		mov	ecx, code_end - mmx_code<br /><br />		cld<br /><br />		rep	movsb<br /><br />		invoke VirtualProtect, code_base, code_end - code_base, flOldProtect, offset flOldProtect<br /><br />		mov	ecx, lpString<br />		jmp	code_base<br />	.endif<br /><br />	jmp	mmx_code<br />strlenEx ENDP<br /></code></pre><br /><br />I am not sure if that's a good solution for selfmodifying code, since that's my first &quot;real&quot; selfmodifying code.<br />Maybe it's the most worst solution out there ? If so, please correct me. :)<br /><br />---<br /><br />If anyone has problems while using it, because of the large amount of readed bytes behind the string-end, it would be nice if you can inform us/me.<br /><br />I recommend to allocate 48 bytes more memory, than you need, so you are on the secure side, and if you call this routine really often and need the speed, I think these 48 bytes are it worth :)<br /><br />I attached the result of the test with this routine.<br /><br />Cu, Jens<br />----<br /><a target="_blank" href="http://www.emucheater.com">http://www.emucheater.com</a><br /><a target="_blank" href="http://cyberpad.psxemu.com">http://cyberpad.psxemu.com</a></div>
+    <div class="meta">Posted on 2002-03-26 11:28:12 by Jens Duttke</div>
+   </div>
+   <div class="post" id="post-31095">
+    <div class="subject"><a href="#post-31095">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Hi Jens,<br /><br />Is this my first or second variant?</div>
+    <div class="meta">Posted on 2002-03-26 20:51:30 by buliaNaza</div>
+   </div>
+   <div class="post" id="post-31097">
+    <div class="subject"><a href="#post-31097">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Hi Jens,<br />Please, could you post a graph zoomed on lengths from 0 to ~64?</div>
+    <div class="meta">Posted on 2002-03-26 21:01:14 by Maverick</div>
+   </div>
+   <div class="post" id="post-31109">
+    <div class="subject"><a href="#post-31109">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body"><div class="quote"><br />Is this my first or second variant? </div><br />Nope, it was the first one. I havn't seen your second post.<br />I've tried your new one now, and it's sometimes one tick faster.<br />So your new code is sometimes one clock faster than mine, and sometimes at the same speed.<br /><br />Maverick, I attached a test from 1 to 100 bytes.<br /><br />Cu, Jens<br />----<br /><a target="_blank" href="http://www.emucheater.com">http://www.emucheater.com</a><br /><a target="_blank" href="http://cyberpad.psxemu.com">http://cyberpad.psxemu.com</a></div>
+    <div class="meta">Posted on 2002-03-27 01:34:31 by Jens Duttke</div>
+   </div>
+   <div class="post" id="post-31120">
+    <div class="subject"><a href="#post-31120">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Thank you, Jens.</div>
+    <div class="meta">Posted on 2002-03-27 03:58:37 by Maverick</div>
+   </div>
+   <div class="post" id="post-32800">
+    <div class="subject"><a href="#post-32800">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Again me here make a fool ;)<br /><br /><pre><code><br />@@&#58;<br />	prefetchnta &#91;eax+64&#93;<br />	movq	mm1,qword ptr &#91;eax&#93;<br />	movq	mm2,qword ptr &#91;eax+8&#93;<br />	movq	mm3,qword ptr &#91;eax+16&#93;<br />	movq	mm4,qword ptr &#91;eax+24&#93;<br />	movq	mm5,qword ptr &#91;eax+32&#93;<br />	movq	mm6,qword ptr &#91;eax+40&#93;<br />	por	mm1,mm2<br />	por	mm3,mm4<br />	por	mm5,mm6<br />	por	mm1,mm3<br />	por	mm1,mm5<br />	pcmpeqb mm1,mm0<br />	add	eax,48<br />	packsswb mm1, mm1	;;; pmovmskb ecx,mm1<br />	movd	ecx, mm1	;;;<br />	jecxz	@B<br /></code></pre><br /><br />I am pleased to be useful.</div>
+    <div class="meta">Posted on 2002-04-08 12:44:01 by Nexo</div>
+   </div>
+   <div class="post" id="post-32905">
+    <div class="subject"><a href="#post-32905">a new twist on string algo</a></div>
+    <div class="body">hi guys!<br /> I've been somewhat following this thread and wrote my own strlen algo that I hope you guys will find interesting. It's not mmx, it's just regular integer instructions (I'm running on a AMD k6/2). Anyways, my first couple of tests were promising: it was comparable to Jens original post and Agners (I've been testing it with the slen.zip package hutch posted on page 2)<br /><br />The thing is ... it looks horrible. I think there's a lot of room for optimization, but I couldn't come up with anything. Take a look:<br /><br />   chorusalgo proc uses ecx lptext:DWORD<br /><br />    mov ecx,lptext<br />    sub ecx,4<br /><br />  looper:<br />    add ecx,4<br />    mov eax,<br />    test al,ah<br />    jz maybefoundit<br />    shr eax,16<br />    test al,ah<br />    jnz looper<br />  maybefoundit:<br />    test ah,ah<br />    jz foundit<br />    test al,al<br />    jnz looper<br />  foundit:<br />    ;fix up ecx to point to actual byte.<br />    ;I just test al,al/jz finished/shr eax,8/inc ecx<br />  finished:<br />    mov eax,ecx<br />    ret<br /><br />chorusalgo endp<br /><br /><br />The idea is to filter out as many possibilities as I can. At the top I move the dword into eax and then test al,ah. If the test is not zero then we *know* neither al or ah is zero. Do the same for the next 16 bits of eax. Now, if the test *is* zero, then maybe one of the two values is zero so we jump to maybefoundit and test each one.<br /><br />It's a different approach, but there are too many jumps. I'm sure it plays hell on the branch prediction. If anyone has some other ideas I'd be glad to hear 'em. Also, there's lots of forward dependencies cause I use eax throughout the entire thing.<br /><br />One variation I tried was to bury the mov eax, by changing it into mov edx, and mov eax,edx. The hope was that I could read the *next* four bytes into edx where there was room to execute the instruction and then the mov eax,edx would be cheap at the top. It didn't work out though, but I think the idea has potential.<br /><br />Thanks all<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-04-09 11:02:12 by chorus</div>
+   </div>
+   <div class="post" id="post-32910">
+    <div class="subject"><a href="#post-32910">Re: a new twist on string algo</a></div>
+    <div class="body"><div class="quote"><br />hi guys!<br /> I've been somewhat following this thread and wrote my own strlen algo that I hope you guys will find interesting. It's not mmx, it's just regular integer instructions (I'm running on a AMD k6/2).</div>AFAIK the K6-2 has MMX support.. so why not use it?</div>
+    <div class="meta">Posted on 2002-04-09 11:47:31 by Maverick</div>
+   </div>
+   <div class="post" id="post-32912">
+    <div class="subject"><a href="#post-32912">hehe...</a></div>
+    <div class="body">I guess it does...<br /><br />Actually, I can't say I've used MMX. At all. I didn't think the K6-2 had it so I never bothered looking into it. I guess I will though, but usually when I program I don't assume much more than a PPlain. Just in case someone tries to run my program on a processor that doesn't support certain instructions (for most of my programs I submit my friends to doing testing for me :))<br /><br />Thanks for the tip though.. I'll check out some more MMX stuff when I can.<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-04-09 11:56:02 by chorus</div>
+   </div>
+   <div class="post" id="post-32918">
+    <div class="subject"><a href="#post-32918">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Code for search of null:<br /><pre><code><br />	pxor mm7,mm7<br />@@&#58;	movq mm0,&#91;eax+0&#93;<br />	pminub mm0,&#91;eax+8&#93;<br />	pminub mm0,&#91;eax+16&#93;<br />	pminub mm0,&#91;eax+24&#93;<br />	pminub mm0,&#91;eax+32&#93;<br />	pminub mm0,&#91;eax+40&#93;<br />	pminub mm0,&#91;eax+48&#93;<br />	pminub mm0,&#91;eax+56&#93;<br />	pcmpeqb mm0,mm7<br />	add eax,64<br />	pmovmskb ecx,mm0<br />	jecxz @B<br /></code></pre><br />It is shorter and faster.</div>
+    <div class="meta">Posted on 2002-04-09 12:47:29 by Nexo</div>
+   </div>
+   <div class="post" id="post-32986">
+    <div class="subject"><a href="#post-32986">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">hi!<br /><br /><div class="quote"><br />Code for search of null:<br />It is shorter and faster. </div>... and doesn't work on older machines like the Pentium, Pentium MMX, Pentium Pro, Pentium 2 (does it work on the P3 ? ), K6/K6-2 (does the Athlon support these instructions ?) and so on.<br /><br />I think it's a nice idea, but the use is currently not that high, since some (or the most ?) people still use these &quot;old&quot; processors, which does not support these instructions.<br /><br />Cu, Jens<br />---<br /><a target="_blank" href="http://www.emucheater.com">http://www.emucheater.com</a><br /><a target="_blank" href="http://cyberpad.psxemu.com">http://cyberpad.psxemu.com</a></div>
+    <div class="meta">Posted on 2002-04-10 02:49:35 by Jens Duttke</div>
+   </div>
+   <div class="post" id="post-33002">
+    <div class="subject"><a href="#post-33002">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Jens Duttke, you have forgotten many 386, 486 processors. But it not a motive of a mention of absence for them MMX instructions. This code works since a Pentium III and anyone Athlon processors. These processors exist and have the extended set of instructions which non-use is silly. For what them have added? These are main processes for which demand to create programs customers. These processors have the majority of local friends. If it is not interesting to you, can skip these messages. Or it is better to be limited to a minimum level 386? In general it is easier to me to not represent codes for these processors of times it to nobody interestingly. I for that coders used all possibilities of processors. If has found application of some instructions I am is simple glad to share it with others.</div>
+    <div class="meta">Posted on 2002-04-10 10:37:47 by Nexo</div>
+   </div>
+   <div class="post" id="post-33007">
+    <div class="subject"><a href="#post-33007">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">hi!<br /><br />It's nice that you share your code with us, and it's nice that you've done such a optimized code (even if i can't test it, because i am one of the guys who still use a P2 :) ).<br /><br />And it's also nice that Intel (and Amd) develope new instructions to make it possible to improve the speed of the programs even more.<br /><br />But you limit the number of people who can use your strlen-routine extremly, because not many people buy everytime the newest computers. I think computers with cpu's with MMX are standard currently.<br /><br />Cu, Jens</div>
+    <div class="meta">Posted on 2002-04-10 11:45:22 by Jens Duttke</div>
+   </div>
+   <div class="post" id="post-33008">
+    <div class="subject"><a href="#post-33008">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Your last procedure works on processors with MMX and without MMX. To expand it there are no problems ;)</div>
+    <div class="meta">Posted on 2002-04-10 11:52:00 by Nexo</div>
+   </div>
+   <div class="post" id="post-33017">
+    <div class="subject"><a href="#post-33017">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">hi!<br /><br />Nexo, your idea with<br /><br />jecxz @B<br /><br />is well done, so I've changed my code a bit, to do that on the same way (that saved me one TEST) and it's on larger strings (above 500 bytes), one tick faster.<br /><br />My old MMX/non-MMX version had also a bug, if VirtualProtect returns 0, it will most likely crash, so that's fixed now too.<br /><br />I attached it as zip, because the code is a bit large now, to post it here.<br /><br />Maybe someone has some time (and the processor to test it :) ) and combine Nexo's SSE code with my non-MMX/MMX code, so it will always use the best way.<br /><br />Cu, Jens<br />----<br /><a target="_blank" href="http://www.emucheater.com">http://www.emucheater.com</a><br /><a target="_blank" href="http://cyberpad.psxemu.com">http://cyberpad.psxemu.com</a></div>
+    <div class="meta">Posted on 2002-04-10 13:16:42 by Jens Duttke</div>
+   </div>
+   <div class="post" id="post-33456">
+    <div class="subject"><a href="#post-33456">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Hi !<br />When Hutch started this thread he presented Jens algo and in<br /><br /><pre><code>....<br />bsf edx,eax<br />sub edx,4<br />shr edx,3<br />....</code></pre> <br /><br />I can't see what's the use of &quot;sub edx,4&quot; .Must be wrong copied.<br />But I saw even in a Jens post this part of code so please let me now if I got wrong Jens' idea .:confused:</div>
+    <div class="meta">Posted on 2002-04-14 13:04:51 by M.B.</div>
+   </div>
+   <div class="post" id="post-33784">
+    <div class="subject"><a href="#post-33784">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Well there that was a most interesting thread to read. Hundreds of ideas posted and while not knowing completely what was going on i have a better idea of MMX Technology and what not .. <br /><br />I would love to see a graph with Nexo's code benchmarked besides everybody elses..<br /><br />and is there a simple way to detect between SSE ? <br /><br />Is it as easy to determine as it was for the MMX Technology.<br /><br />I would attempt to put together some of the samples and test them cause i have a 3 different types of processors and with a little convincing i can even round up a pentium 2 i think ;) but i am going to sleep right now dreaming Of ASM Instructions and 2 millisecond optimizations :P<br /><br />Also I guess These are all for Regular Systems not Unicode ? <br />Because I would like to have a pure Unicode version of the program i am using. And String Parsing Routines would be very interesting to see :)<br /><br />Also are there any links where i can read up on the MMX Technology.. the MMX Instructions .. which ones work on both AMD and Pentium and etc...<br /><br />thank you very much</div>
+    <div class="meta">Posted on 2002-04-17 00:09:05 by Volcano_88101</div>
+   </div>
+   <div class="post" id="post-34847">
+    <div class="subject"><a href="#post-34847">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">I have an <br />Intel Pentium 3 - 700 MHZ<br />Intel Pentium 2 - 233 MHZ<br />AMD Athlon XP 1800 - 1.53 GHZ<br /><br />If somebody has the routine I would gladly benchmark them on my computers.. Would be very interesting to see how they all performed on the differnt platforms</div>
+    <div class="meta">Posted on 2002-04-24 11:01:37 by Volcano_88101</div>
+   </div>
+   <div class="post" id="post-34857">
+    <div class="subject"><a href="#post-34857">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">Hmm Okay I have a question.. A While back I saw the code of a program that was for Unicode and Non/Unicode Systems..<br /><br />Basically what they did is when the program first starts up it detects whether you are a Unicode System or not <br /><br /><br />And if it isnt then it defines all the functions to point to non/Unicode Functions... else we use Unicode Functions ..<br /><br />Couldnt we do something like that for the MMX Detection Part?<br /><br />So It doesnt have to do that every time we call it ? or am I trying to eliminate something that uses up maybe 2 or 3 cycles ?<br /><br />If so you feel free to kick me</div>
+    <div class="meta">Posted on 2002-04-24 11:08:05 by Volcano_88101</div>
+   </div>
+   <div class="post" id="post-34862">
+    <div class="subject"><a href="#post-34862">New strlen algorithm by Jens Duttke</a></div>
+    <div class="body">yeah, of course mmx detecting can be done in a one-time-only way :).<br />You can either do indirect function calling through a pointer, or patch<br />the code. For something the really matters, I'd probably do the<br />latter, as it's a tiny bit faster in the end.</div>
+    <div class="meta">Posted on 2002-04-24 11:27:40 by f0dder</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=4058&amp;page=1" style="">&laquo;</a><a href="../?id=4058&amp;page=6" style="">&lt;</a><input type="hidden" name="id" value="4058" /><input type="number" name="page" min="1" max="9" step="1" value="7" onchange="this.form.submit();" /><a href="../?id=4058&amp;page=8">&gt;</a><a href="../?id=4058&amp;page=9">&raquo;</a></form>  </div>
+ </body>
+</html>

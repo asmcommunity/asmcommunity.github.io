@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Removing File Extension - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28275" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28275">Removing File Extension</a></p>
+   <div class="post" id="post-200301">
+    <div class="subject"><a href="#post-200301">Removing File Extension</a></div>
+    <div class="body">Hello,
+
+for a simple upx gui i like to know how i to get the filename without the extension.
+
+im not shure,but i think i have to write a function who look if extension is something like : .exe ,.bmp ,.avi
+if yes,then delete it.
+
+but this will take some time.
+in delphi i search for the '.' and remove all behind it.
+
+can i use this also in asm and how ?
+sorry,dont know how i can make this.
+
+Thank you</div>
+    <div class="meta">Posted on 2001-06-04 02:09:00 by Newbie</div>
+   </div>
+   <div class="post" id="post-200302">
+    <div class="subject"><a href="#post-200302">Removing File Extension</a></div>
+    <div class="body">i assume that the filename is in a buffer. so you can use lstrlen to get the number of letters in the string. then do something like that:
+
+<pre><code>
+.data
+zeroes db 0,0,0
+
+.code
+lea esi,zeroes
+lea edi,string
+add edi,strlength
+sub edi,4
+mov ecx,4
+rep movsb
+</code></pre>
+
+this should work. you know that the last 4 chars of the string are ".ext" so you fill this last 4 chars with zeroes. that's all....</div>
+    <div class="meta">Posted on 2001-06-04 04:34:00 by [-alloces-]</div>
+   </div>
+   <div class="post" id="post-200303">
+    <div class="subject"><a href="#post-200303">Removing File Extension</a></div>
+    <div class="body">You can use the following code :
+<pre><code>
+RemoveExt	PROC	USES EDI ECX, pFilename:DWORD
+	mov	edi, pFilename
+	mov	ax, '.'
+	mov	ecx, MAX_PATH
+	repne	scasb                 
+	mov	byte ptr , ah
+	ret
+RemoveExt	ENDP
+</code></pre>
+It will replace the first '.' in the file name with a 0.
+
+Alloces, 
+You don't need to use rep movsb to copy 4 bytes. You can replace 
+<pre><code>
+lea esi,zeroes
+lea edi,string
+add edi,strlength
+sub edi,4
+mov ecx,4
+rep movsb
+</code></pre>
+with 
+<pre><code>
+mov eax, strlength
+mov dword ptr string, 0
+</code></pre>
+But some file extensions are longer than 3 characters (.html for example)
+
+
+
+This message was edited by karim, on 6/4/2001 6:06:22 AM</div>
+    <div class="meta">Posted on 2001-06-04 05:03:00 by karim</div>
+   </div>
+   <div class="post" id="post-200304">
+    <div class="subject"><a href="#post-200304">Removing File Extension</a></div>
+    <div class="body">hmm...
+alloces, what if the extension isn't 3 chars, or the file doesn't have an extension?
+karim, what if there's another period in the filename?
+
+i'd do something like this:
+<pre><code>
+RemoveExt proc uses edi filename:LPSTR
+invoke lstrlen, filename
+mov ecx, eax
+lea edi, 
+mov al, '.'
+std
+repne scasb
+jecxz no_ext
+mov byte ptr , 0
+no_ext:
+cld
+ret
+RemoveExt endp
+</code></pre>
+
+that should work, i think. haven't tested it though so don't count on it. :D
+
+This message was edited by fresh, on 6/4/2001 6:11:11 AM</div>
+    <div class="meta">Posted on 2001-06-04 06:10:00 by fresh</div>
+   </div>
+   <div class="post" id="post-200305">
+    <div class="subject"><a href="#post-200305">Removing File Extension</a></div>
+    <div class="body">Another solution :
+<pre><code>
+mov     ecx, MAX_PATH
+mov     esi, pString
+mov     edi, MAX_PATH+1
+mov     bx, '.'
+@@ :
+mov     al, 
+inc     esi
+cmp     al, bl
+cmove   edi, esi
+or      al, al
+loopnz  @B
+mov     , bh
+</code></pre>
+This way we are sure that the last '.' is replaced with a 0. If there is no '.' in the string, the last character will be replaced with a zero but it's not a problem since the string must end with a zero anyway.
+
+This message was edited by karim, on 6/4/2001 6:28:51 PM</div>
+    <div class="meta">Posted on 2001-06-04 07:28:00 by karim</div>
+   </div>
+   <div class="post" id="post-200306">
+    <div class="subject"><a href="#post-200306">Removing File Extension</a></div>
+    <div class="body">I would use...
+
+include shlwapi.inc
+...
+
+invoke PathRemoveExtension, addr pString</div>
+    <div class="meta">Posted on 2001-06-04 13:27:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-200307">
+    <div class="subject"><a href="#post-200307">Removing File Extension</a></div>
+    <div class="body">The code doesn't seem to be optimized. It's better to use clean assembly code when you can.</div>
+    <div class="meta">Posted on 2001-06-04 18:04:00 by karim</div>
+   </div>
+   <div class="post" id="post-200308">
+    <div class="subject"><a href="#post-200308">Removing File Extension</a></div>
+    <div class="body">The DLL code may indeed not be optimal speed - wise, but then again are we really lokking for speed in this case?
+
+It seems like there is an undue concern about improving code speed at the expense of code size.
+In a tight loop (like array processing type code) this would be pertinent. But from my experience
+most of the time the DLL function calls are the major bottleneck to speed optimization.
+I tend to try to minimize code size more often for this reason.
+
+A judicious amount of hand tweeking for speed is of course a good
+thing when used at the right places!
+
+have fun!</div>
+    <div class="meta">Posted on 2001-06-04 22:07:00 by gfalen</div>
+   </div>
+   <div class="post" id="post-200309">
+    <div class="subject"><a href="#post-200309">Removing File Extension</a></div>
+    <div class="body">I agree with you. Optimization is complex. There a lot of parameters to take into account (branch target buffer, caching, instruction pairing, stalls, etc.). And your process can be interrupted at any moment by the os. However, it's always better to use your own code. The dll code is longer in the shwapi, so there is no gain in term of size of code.</div>
+    <div class="meta">Posted on 2001-06-05 12:06:00 by karim</div>
+   </div>
+  </div>
+ </body>
+</html>

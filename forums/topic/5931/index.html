@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>logic problems - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5931" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5931">logic problems</a></p>
+   <div class="post" id="post-42498">
+    <div class="subject"><a href="#post-42498">logic problems</a></div>
+    <div class="body">I'm trying to play an mp3 file using DirectSound.  Then general process goes like this:<br /><br />readfile -&gt; acm -&gt; buffer -&gt; DirectSound<br /><br />I'm kinda stuck though in figuring out how to keep the buffer constantly full.  First of all, don't you have to lock the DS buffer...so how would you keep it full of data if it has to be locked while it's playing?  You would have to unlock it, fill it again with the next chunk and then play again...but that would cause breaks in the sound, right?<br /><br />Also, I'm not sure whether to use a DS callback or event to read in the next block of data...<br /><br />How does DS work when playing from a cyclical buffer?</div>
+    <div class="meta">Posted on 2002-06-10 21:40:38 by grv575</div>
+   </div>
+   <div class="post" id="post-42541">
+    <div class="subject"><a href="#post-42541">logic problems</a></div>
+    <div class="body">You should lock a portion of the buffer that is not currently played at that moment, then copy a new audio block there, and then unlock the DS buffer.<br /><br />If you have problems to feed enough data, then maybe the problem is that you are using a &quot;syncronous&quot; technique.. i.e. you do the file read and MP3 decoding every time you've to put a new block on the DS buffer. This means that e.g. if ReadFile takes too long on that iteration, you will hear audio interruptions. You may make the DS buffer bigger or, even better, use a &quot;read ahead&quot; strategy.. i.e. ReadFile and Mp3Decode continuosly, and in your main program loop <em>send</em> the output to a FIFO buffer (unless it's full, of course).<br />Your DS routine would then <em>get</em> instantaneously data from the other end of this FIFO buffer (unless it's empty of course, in which case it would be forced to ReadFile and Mp3Decode itself), and copy it to the locked portion of the DS buffer, and then unlock it.<br /><br />About the notification method (i.e. what/where/when to lock?), I found the callback method buggy on two cards. So, if you can, and it doesn't impair the performance given the way the program is structured, just use GetCurrentPosition in your main program loop. When you spot that a portion of your buffer needs new data, just feed it from the FIFO. You can &quot;divide&quot; the DS buffer in two parts, resulting in double buffering.<br /><br />PS: if you want to limit the checks &quot;should I send a new block to the DS buffer?&quot; to a minimum, use RDTSC to know if at least the minimum time has elapsed, and thus avoid to execute that &quot;check&quot; portion of code in your main loop.</div>
+    <div class="meta">Posted on 2002-06-11 03:30:30 by Maverick</div>
+   </div>
+   <div class="post" id="post-42770">
+    <div class="subject"><a href="#post-42770">logic problems</a></div>
+    <div class="body">Cool that explains a lot.  What my real question is guess is this:  Why does the Lock method take as parameters two pointers to the buffer?  Why would you lock a certain sized portion of the buffer and then want two pointers to write the the portion you locked?</div>
+    <div class="meta">Posted on 2002-06-11 21:13:06 by grv575</div>
+   </div>
+   <div class="post" id="post-42814">
+    <div class="subject"><a href="#post-42814">logic problems</a></div>
+    <div class="body">Hi again pal.<br /><br />The reason is because the DS buffer is a &quot;circular&quot; one. You probably already know this well, but I'll just make an example, because this may interest others as well.<br /><br />Imagine your DS buffer is 1 MB big. The sound card plays it a bit at a time regularly.. and automatically. This means that sooner or later the 1 MB will be finished, and it will either stop, or loop and play it again.<br /><br />If you needed just a &quot;one shot&quot; sound, you would load the whole 1 MB buffer with your sound, then Play() and that's all.<br /><br />But allocating e.g. a 5 minutes buffer for a MP3 song may be a big waste of memory, and not a good coding practice as well.. since you would have to load and decode the whole MP3 prior to start playing.<br /><br />Here comes the streaming part. You will instead decide to decode a bit of sound at a time.<br /><br />A well written sound device should be easy to program for, too. So an ideal sound device should be FIFO based, so that you just send n samples to it, and they will be queued in an internal buffer, and then played when it's their time. This way you could just decode an MP3 block, and enqueue its resulting samples.. and not care anymore about anything (ideally).<br /><br />But DirectSound was written by Microsoft and thus... ok, I'll avoid to start my &quot;MS sucks&quot; rant, and go to the point ;)<br /><br />The way DirectSound works is much more primitive.. so you'll have to implement the above by yourself.<br /><br />For this, allocate a &quot;small&quot; sound buffer, e.g. just 1 KB big. Your big 1 MB sound now can be well placed on disk, no need to use that &quot;much&quot; memory anymore. What would you do to play it from disk? You would play the 1 KB buffer &quot;looped&quot;, i.e. continuosly.. and continuosly check (or get notified of) the current play position. Now imagine that the sound card has finally played <em>half</em> of your 1 KB buffer.. it means that it's starting to play the other half, and thus that you can &quot;lock&quot; the first half of the buffer, and fill it with your samples.. and just wait that the sound card has finished to play the other half. When it does, then you will know that it's gonna play the first half.. and you'll be able to lock the second part and fill it with the next 0.5 KB samples taken from the disk. And repeat these two steps till your whole MP3 has finished.<br /><br />This is a very simple double buffering scheme.<br /><br />Now why Lock has two pointers? Simply because it wasn't designed strictly with double buffering in mind.. but it was a bit more generical. So as long as you use double buffering, or n buffering where n is integer, you will need just the first pointer returned by Lock().. but imagine that n wasn't integer, sometimes you will have to lock a portion of the buffer that e.g. starts at the byte address 970, but is 191 bytes long. This would go beyond the 1024 limit (the size of our 1 KB buffer), and thus the Lock() function will split it in two pointers/lenght:<pre><code><br />1&#41; Pt=970  Len=54   &#40;i.e.. 1024-970&#41;<br />2&#41; Pt=0    Len=137  &#40;i.e. 191-54 of above&#41;<br /></code></pre>So we will have our total 191 bytes that span the two ends of a circular buffer.<br /><br />Hope that was helpful.. otherwise I'll be glad to help more.</div>
+    <div class="meta">Posted on 2002-06-12 04:03:45 by Maverick</div>
+   </div>
+   <div class="post" id="post-42897">
+    <div class="subject"><a href="#post-42897">logic problems</a></div>
+    <div class="body">Ok I've pretty much gotten that far.  Here's the main hangup:  I read in 1k at a time from the mp3 file and then convert that to a 16k buffer.  The DS secondary buffer is also 16k.  Then when I get notified that the play position is at the beginning or middle of the DS buffer, I lock the buffer and write out how many bytes were converted from the mp3.<br /><br />Thing is the amount of data conveted varies so I can never fully fill the DS buffer.  And if I don't fill the 8k half entirely, I'll lose my notification messages...<br /><br />So I thought about just increasing the secondary buffer size (to guarantee no overflow if too much data results from decoding) and then setting a timer to fill the buffer.  Just try and keep ahead of the play position.  But if I lock say a 32k buffer, how much of it is guaranteed to be writeable?  Can I always assume that I'll have 16k to write to?</div>
+    <div class="meta">Posted on 2002-06-12 12:59:55 by grv575</div>
+   </div>
+   <div class="post" id="post-42927">
+    <div class="subject"><a href="#post-42927">logic problems</a></div>
+    <div class="body">Don't make your life too complicated and the timings too much time-critical.. Windows is not best suited for that. The overall best solution is to pass all of your (processed) samples through a FIFO buffer, as I described in my first post. So your callback routine will always find all the data it needs, ready to go. Your main application will try to keep this FIFO as full as possible.. execution may be interrupted for seconds, without any audio loss. Response would still be instantaneous.. i.e. this system doesn't add latency if properly implemented (i.e. flush the FIFO on player Stop, etc..).</div>
+    <div class="meta">Posted on 2002-06-12 16:09:53 by Maverick</div>
+   </div>
+   <div class="post" id="post-43032">
+    <div class="subject"><a href="#post-43032">logic problems</a></div>
+    <div class="body">That's pretty much what I'm doing.  I just don't want to use large chunks of memory since a 100M mp3 file would decode to at least a G of memory.  So I'm using a streaming buffer that and just reading till I fill that and saving the overflow in a temporary buffer.  Everything seems to work ok except there's noticable pops/stutters/garbage between samples.  Even with 1M buffers.  It's really noticable if you decrease the buffer size to see what I mean.  Maybe my sample rates are off?  Sometimes it plays perfectly though, usually not.<br /><br />If anyone can test on their system, tell me if it plays properly.  It's expecting a file called test.mp3 in the same directory.</div>
+    <div class="meta">Posted on 2002-06-13 03:50:38 by grv575</div>
+   </div>
+   <div class="post" id="post-43240">
+    <div class="subject"><a href="#post-43240">logic problems</a></div>
+    <div class="body">Ok fixed it.  The buffer was playing before there was enough data in it.  Here's a working version.<br /><br />The code streams an mp3 named &quot;test.mp3&quot; to a 128k buffer using the acm, copies that to a DirectSound buffer, and then plays it.  Not as simple as I first thought it would be but not too complicated once you work out how the buffering works.<br /><br />If it stutters try uncommenting the debug code (PrintDword xxx) and make sure the secondary buffer position is ahead of the play position.  Or try increasing the buffer size constants.</div>
+    <div class="meta">Posted on 2002-06-13 22:51:18 by grv575</div>
+   </div>
+   <div class="post" id="post-43324">
+    <div class="subject"><a href="#post-43324">logic problems</a></div>
+    <div class="body">grv575, <br /><br />I get no sound, but a messagebox title displays 00401448 and text says 'The operation completed successfully.' (on both versions you posted)<br /><br />Would you post your fixed code please so I can try to track it down? (WinME here).</div>
+    <div class="meta">Posted on 2002-06-14 08:19:59 by gscundiff</div>
+   </div>
+   <div class="post" id="post-43337">
+    <div class="subject"><a href="#post-43337">logic problems</a></div>
+    <div class="body">Yeah.. it is working..<br />I'm using Win2k SP2<br /><br />but i can detect not smooth music being played. Sometimes some part of the music is being repeated.</div>
+    <div class="meta">Posted on 2002-06-14 08:58:56 by roticv</div>
+   </div>
+   <div class="post" id="post-43366">
+    <div class="subject"><a href="#post-43366">logic problems</a></div>
+    <div class="body">roticv,<br />Could you play the test.mp3 included in the zip below with the latest mp3.exe and paste the last two sets of output you get in dbgwin?<br /><br />You could also try doubling the DS_BUFFER_SIZE.<br /><br />gscundiff:<br />The messagebox shows the location of the failed api call.  So if you have ollydbg, run this latest version and if you still get that error you can load mp3.exe in ollydbg, press ctrl+g, and type in the address.</div>
+    <div class="meta">Posted on 2002-06-14 16:39:26 by grv575</div>
+   </div>
+   <div class="post" id="post-43437">
+    <div class="subject"><a href="#post-43437">logic problems</a></div>
+    <div class="body">Here's the debug stuff... no messagebox.. that means everything is ok<br /><br />before calls<br />dwCurrentWriteCursor = 0<br />dwCurrentPlayCursor = 0<br />dwSecondaryBufferPos = 0<br />dwOverflowBufferPos = 0<br />after calls<br />dwCurrentPlayCursor = 0<br />------------------------------------<br />before calls<br />dwCurrentWriteCursor = 9872<br />dwCurrentPlayCursor = 1620<br />dwSecondaryBufferPos = 65536<br />dwOverflowBufferPos = 3584<br />after calls<br />dwCurrentPlayCursor = 5084<br />------------------------------------<br />before calls<br />dwCurrentWriteCursor = 74776<br />dwCurrentPlayCursor = 66756<br />dwSecondaryBufferPos = 0<br />dwOverflowBufferPos = 11776<br />after calls<br />dwCurrentPlayCursor = 69560<br />------------------------------------<br />before calls<br />dwCurrentWriteCursor = 9576<br />dwCurrentPlayCursor = 1068<br />dwSecondaryBufferPos = 65536<br />dwOverflowBufferPos = 19968<br />after calls<br />dwCurrentPlayCursor = 3724<br />------------------------------------<br />before calls<br />dwCurrentWriteCursor = 74940<br />dwCurrentPlayCursor = 66424<br />dwSecondaryBufferPos = 0<br />dwOverflowBufferPos = 512<br />after calls<br />dwCurrentPlayCursor = 69768<br />------------------------------------</div>
+    <div class="meta">Posted on 2002-06-15 11:29:12 by roticv</div>
+   </div>
+   <div class="post" id="post-43484">
+    <div class="subject"><a href="#post-43484">logic problems</a></div>
+    <div class="body">Yeah it doesn't work as well as I thought.  I'm developing it on a 1.4 Ghz pentium and the buffers are barely able to keep up with decoding it realtime.  But I just tried it on an 800mhz pentium and it keeps skipping, even if I quadruple the buffer sizes.  Oh well, I guess I can either try to optimize it a bit or make the decoding and conversion into seperate threads.</div>
+    <div class="meta">Posted on 2002-06-15 22:33:26 by grv575</div>
+   </div>
+   <div class="post" id="post-43551">
+    <div class="subject"><a href="#post-43551">logic problems</a></div>
+    <div class="body">lolx.. It appears that i'm testing it on my 600mhz computer ;)<br />no wonder there's much of the skipping. Good luck for your optimising of the code.</div>
+    <div class="meta">Posted on 2002-06-16 08:38:00 by roticv</div>
+   </div>
+   <div class="post" id="post-43860">
+    <div class="subject"><a href="#post-43860">logic problems</a></div>
+    <div class="body">Well it still doesn't work on processors that can't decode in realtime.  Tested it on an 800mhz system and it skips, but it is able to keep up on a 1.4ghz system.  Not really sure if there's too much optimiaztion oppurtunity going from mp3-&gt;acm api-&gt;direct sound.<br /><br />Anyway, here's the latest version of the code.  It plays DirectShow if it's a video and DirectSound if it's an mp3 (since DirectShow has buffering problems resulting in audible pops on some mp3s).<br /><br />What's cool about the acm codec is that is actually sounds better than whatever codec winamp (v. 1.65) is using on the system I tested it on.<br /><br />If there's a faster way to stream mp3s using the acm and directsound I'd like to know.</div>
+    <div class="meta">Posted on 2002-06-17 23:12:08 by grv575</div>
+   </div>
+   <div class="post" id="post-66771">
+    <div class="subject"><a href="#post-66771">question</a></div>
+    <div class="body">hi<br />u guys know how get videowindow hdc??</div>
+    <div class="meta">Posted on 2002-11-21 11:01:26 by playh</div>
+   </div>
+  </div>
+ </body>
+</html>

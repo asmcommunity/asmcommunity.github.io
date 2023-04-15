@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>NetGroupGetUsers help plz - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22533" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22533">NetGroupGetUsers help plz</a></p>
+   <div class="post" id="post-169041">
+    <div class="subject"><a href="#post-169041">NetGroupGetUsers help plz</a></div>
+    <div class="body">Hi<br /><br />I am new at this but am trying to learn.<br /><br />I want to use teh NetGroupGetUsers function but my exe keeps generating illegal memory references. I am sure it has something to do with my lack of understanding of pointers to buffers, but have spent many hours trying to solve this to no avail.<br /><br />My declarations look like this:<br /><br />ervername			db 0<br />groupname			db 0<br />level				DWORD 0<br />bufptr				db &#39;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  &#39;,0<br />prefmaxlen			DWORD 20<br />resumehandle		db 0<br />entriesread			dd ?<br />totalentries		dd ?<br /><br />And my code looks like this:<br /><br />					invoke NetGroupGetUsers,NULL,NULL,level,addr bufptr,<br />											prefmaxlen, addr entriesread,<br />											addr totalentries,NULL<br /><br />Can anyone help plz?<br /><br />Wongdai<br /></div>
+    <div class="meta">Posted on 2005-12-22 00:27:46 by WongDai</div>
+   </div>
+   <div class="post" id="post-169042">
+    <div class="subject"><a href="#post-169042">Re: NetGroupGetUsers help plz</a></div>
+    <div class="body"><pre><code>bufferptr dd ?<br />numentries dd ?<br />allentries dd ?<br /><br />NetGroupGetUsers, 0, 0, 0, addr bufferptr, MAX_PREFERRED_LENGTH, addr numentries, addr allentries, 0<br /><br />(...) do something with the data pointed by &#39;bufferptr&#39; (...)<br /><br />NetApiBufferFree, bufferptr</code></pre><br /><br />Assuming that the second parameter may be 0, this should work.</div>
+    <div class="meta">Posted on 2005-12-22 00:44:34 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-169043">
+    <div class="subject"><a href="#post-169043">Re: NetGroupGetUsers help plz</a></div>
+    <div class="body">Thank you kindly for that.<br /><br />It now runs, but doesn&#39;t seem to return anything.<br /><br />Here is my code:<br />					invoke NetGroupGetUsers,0,0,0,addr bufptr,<br />											MAX_PREFERRED_LENGTH, addr entriesread,<br />											addr totalentries,0<br /> <br />&nbsp; &nbsp; &nbsp; 				.IF eax==ERROR_ACCESS_DENIED<br />						invoke ShellAbout,hWin,addr AccessDenied,addr AboutMsg,NULL<br />				&nbsp; &nbsp; .elseif eax==NERR_InvalidComputer<br />						invoke ShellAbout,hWin,addr InvalidComputer,addr AboutMsg,NULL<br />				&nbsp; &nbsp; .elseif eax==NERR_GroupNotFound<br />						invoke ShellAbout,hWin,addr GroupNotFound,addr AboutMsg,NULL<br />				&nbsp; &nbsp; .elseif eax==ERROR_MORE_DATA<br />						invoke ShellAbout,hWin,addr MoreData,addr AboutMsg,NULL<br />					.else<br />						invoke MessageBox,NULL,ADDR bufptr,OFFSET AppName,MB_OK<br />				&nbsp; &nbsp; .ENDIF					<br /><br />As you can see I check for all the known error return codes.&nbsp; When I run it falls through to teh final &quot;else&quot;, but the messagebox doesn&#39;t display any text (which would be at the addr bufptr).<br /><br />Any ideas of what I am doing wrong?&nbsp; <br /><br />Also, is there a way I can step through the source with ollydbg and see what is going on?&nbsp; I have tried using it, but I can&#39;t correlate my source to what I see in olly.<br /><br />Thanks for your help<br /><br />Wongdai<br /></div>
+    <div class="meta">Posted on 2005-12-22 01:33:55 by WongDai</div>
+   </div>
+   <div class="post" id="post-169044">
+    <div class="subject"><a href="#post-169044">Re: NetGroupGetUsers help plz</a></div>
+    <div class="body">1) bufptr is a pointer to the data, NOT the data. so it&#39;ll more probably work with invoke MessageBox,NULL,bufptr,OFFSET AppName,MB_OK  but i doubt it because...<br />2) ...The returned data must be text in order to display it with messagebox. the SDK says that the returned data is a &#39;structure&#39; of some sort, not the text. and don&#39;t try to do messagebox with it until you&#39;re sure that it&#39;s zero-terminated somewhere. otherwise you&#39;ll get GP fault. It&#39;s <u>probably</u> refering to the <strong>GROUP_USERS_INFO_0</strong> structure.<br /><br />So the return value is (probably) pointing to an array of these structures. number of these structures is returned in &#39;entriesread&#39; dword.<br /><br />Try something like this:<br /><pre><code>push ebx<br />xor ebx, ebx<br />push esi<br />mov esi, bufptr<br />cmp ebx, entriesread<br />jae skip<br /><br />shownext:<br /><br />call MessageBoxW, 0, esi, 0, 0<br />add ebx, 1<br />add esi, 4<br />cmp ebx, entriesread<br />jb shownext<br /><br />skip:<br /><br />pop esi<br />pop ebx</code></pre></div>
+    <div class="meta">Posted on 2005-12-22 02:00:22 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-169050">
+    <div class="subject"><a href="#post-169050">Re: NetGroupGetUsers help plz</a></div>
+    <div class="body">Thanks Ti_mo_n<br /><br />I am back to having GPFs now, so something amiss.<br /><br />You have put me on the correct path, so I will try and do some more research and figure out how to get this going.&nbsp; I haven&#39;t been able to find any code examples using the NetGroupGetUsers function, so it is difficult.&nbsp; As you can tell me asm is not great, but it is improving and I will not give up.<br /><br />I need a source code debugger to help me understand where it is going wrong.<br /><br />Thanks again<br /><br />Wongdai<br /></div>
+    <div class="meta">Posted on 2005-12-22 07:15:38 by WongDai</div>
+   </div>
+   <div class="post" id="post-169077">
+    <div class="subject"><a href="#post-169077">Re: NetGroupGetUsers help plz</a></div>
+    <div class="body">download yourself <strong>Ollydbg</strong>.</div>
+    <div class="meta">Posted on 2005-12-22 21:12:36 by ti_mo_n</div>
+   </div>
+  </div>
+ </body>
+</html>

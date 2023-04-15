@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Thread Synchronization - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22423" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22423">Thread Synchronization</a></p>
+   <div class="post" id="post-168258">
+    <div class="subject"><a href="#post-168258">Thread Synchronization</a></div>
+    <div class="body">Hi there,<br />I want to synchronize several threads that should be able to read/write<br />to some global data. Therefore I&#39;m currently using the following code:<br /><br /><pre><code><br />.data<br />access_var dd -1d<br /><br />.code<br />;...<br />invoke RequestAccess<br />;access the global data<br />dec access_var<br /><br />RequestAccess:<br />@@:<br />inc access_var<br />jz @GotAccess<br />dec access_var<br />invoke rand, 5d<br />invoke Sleep, eax<br />jmp @b<br />@GotAccess:<br />ret<br />RequestAccess endp<br /></code></pre><br /><br />As in multi-threading one instruction is always performed completely (I assume),<br />the &quot;inc access_var&quot; instruction sets the zero-flag only in one thread at a time.<br />If some other thread tries to access (invoke RequestAccess) while the first<br />currently reads/writes to the protected memory it loops after sleeping some<br />random milliseconds, until the first thread gives up his access by doing &quot;dec access_var&quot;.<br /><br />I tested it with multiple threads, but my question is what happens on a DUAL-CORE system?<br />Can anyone tell me?<br /><br />Regards,<br />Dominik<br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2005-11-26 04:45:35 by Dom</div>
+   </div>
+   <div class="post" id="post-168259">
+    <div class="subject"><a href="#post-168259">Re: Thread Synchronization</a></div>
+    <div class="body">initialization: <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/initializecriticalsectionandspincount.asp">InitializeCriticalSectionAndSpinCount()</a><br /><br />ThreadProc code:<br /><br />1) <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/entercriticalsection.asp">EnterCriticalSection()</a><br />2) do the work<br />3) <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/leavecriticalsection.asp">LeaveCriticalSection()</a><br /><br />deinitialization: <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/deletecriticalsection.asp">DeleteCriticalSection()</a><br /><br />much shorter, much better and guaranteed to work even on 78 CPUs :)</div>
+    <div class="meta">Posted on 2005-11-26 05:18:29 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168260">
+    <div class="subject"><a href="#post-168260">Re: Thread Synchronization</a></div>
+    <div class="body">Dom, the code is unreliable even on single core systems. Guess what will happen if thread switch occurs right after &quot;inc access_var&quot; instruction.<br /><br />Just follow ti_mo_n&#39;s suggestion... </div>
+    <div class="meta">Posted on 2005-11-26 05:43:26 by arafel</div>
+   </div>
+   <div class="post" id="post-168261">
+    <div class="subject"><a href="#post-168261">Re: Thread Synchronization</a></div>
+    <div class="body">Wow did you try it on a 78 cpu computer?&nbsp; ;)</div>
+    <div class="meta">Posted on 2005-11-26 06:52:30 by roticv</div>
+   </div>
+   <div class="post" id="post-168262">
+    <div class="subject"><a href="#post-168262">Re: Thread Synchronization</a></div>
+    <div class="body">I don&#39;t know why exactly but you have to add a lock prefix to be safe with multiple CPUs. arafel, it works even if there is a thread switch (all registers are saved including the flags)<br /><br />ti_mo_n is right. It&#39;s better to use EnterCriticalSection(). In fact the function starts with an inc to try to acquire the lock.</div>
+    <div class="meta">Posted on 2005-11-26 07:20:15 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-168264">
+    <div class="subject"><a href="#post-168264">Re: Thread Synchronization</a></div>
+    <div class="body">You can modify your code to use xadd or xchg, too. <br /><pre><code><br />RequestAccess proc pLock:PTR DWORD<br />@@:<br />mov ecx,pLock<br />mov eax,1<br />xadd dword ptr,eax<br />inc eax<br />jz @GotAccess<br />invoke Sleep,0<br />jmp @B<br />@GotAccess:<br />ret<br />RequestAccess endp<br /></code></pre><br /><br /><pre><code><br />LockVar proc pLock:PTR BYTE<br />@@:<br />mov al,1<br />mov ecx,pLock<br />xchg byte ptr,al<br />or al,al<br />jz @GotAccess<br />invoke Sleep,0<br />jmp @B<br />@GotAccess:<br />ret<br />LockVar endp<br /></code></pre><br /><br />Critical sections are good, since they also check which thread is requesting access to them, thus <br /><br />some proc<br />invoke EnterCriticalSection,addr csect<br />invoke EnterCriticalSection,addr csect<br />ret<br />some endp<br /><br />will run perfectly. Only that a critical_section takes 24 bytes ^^&#39;, instead of 1 or 4. <br /><br /><br /> On PCs with 2 or more cpus, it&#39;s good to use a &quot;spin lock loop&quot; - before going to &quot;Sleep,0&quot;. EnterCriticalSection has it implemented: it tries to lock the critical_section ~4000 times, before calling Sleep(). On single-cpu systems, the &quot;spin count&quot; value is 0 (set by Windows automatically). <br /><br />The &quot;lock&quot; prefix: <br />This instruction is a prefix that causes the CPU assert bus lock<br />&nbsp; &nbsp; &nbsp; &nbsp; signal during the execution of the next instruction.&nbsp; Used to<br />&nbsp; &nbsp; &nbsp; &nbsp; avoid two processors from updating the same data location.&nbsp; The<br />&nbsp; &nbsp; &nbsp; &nbsp; cpu always asserts lock during an XCHG  with memory operands.&nbsp; This<br />&nbsp; &nbsp; &nbsp; &nbsp; should only be used to lock the bus prior to XCHG,&nbsp; MOV, IN and<br />&nbsp; &nbsp; &nbsp; &nbsp; OUT instructions.<br /></div>
+    <div class="meta">Posted on 2005-11-26 07:28:51 by Ultrano</div>
+   </div>
+   <div class="post" id="post-168268">
+    <div class="subject"><a href="#post-168268">Re: Thread Synchronization</a></div>
+    <div class="body"><div class="quote">Wow did you try it on a 78 cpu computer?&nbsp; ;)</div><br />:P<br /><br /><div class="quote">will run perfectly. Only that a critical_section takes 24 bytes ^^&#39;, instead of 1 or 4. </div><br />20 bytes of RAM are not very expensive nowadays ^^&quot; ;)</div>
+    <div class="meta">Posted on 2005-11-26 07:54:59 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-168304">
+    <div class="subject"><a href="#post-168304">Re: Thread Synchronization</a></div>
+    <div class="body">Also, it&#39;s worth mentioning that (unless my memory fails me), critical sections don&#39;t just sleep after spinning - they do a blocking wait, which takes no CPU time.<br /></div>
+    <div class="meta">Posted on 2005-11-27 13:38:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-168306">
+    <div class="subject"><a href="#post-168306">Re: Thread Synchronization</a></div>
+    <div class="body">Hmm isn&#39;t Sleep(0) better on single-cpu systems?&nbsp; Sleep(0) immediately switches to another thread (of the same priority) - thus we&#39;ll more likely lock the section sooner (because the thread that locked it will be executed sooner, and thus the object will be unlocked sooner). Actually SwitchToThread() might be better, but it&#39;s not implemented in Win98-like OSes. <br /><br />Wasn&#39;t blocking-waiting actually about &quot;no cpu electrical power&quot;, but still taking cycles?</div>
+    <div class="meta">Posted on 2005-11-27 15:16:57 by Ultrano</div>
+   </div>
+   <div class="post" id="post-168307">
+    <div class="subject"><a href="#post-168307">Re: Thread Synchronization</a></div>
+    <div class="body">I guess it depends on how you look at it. Sleep(0) won&#39;t give lower-priority threads a chance, and will still give a (somewhat artificial) CPU usage of 100%. Sleep(1) (or some other small amount) is better. This would still end up wasting cycles though, especially if the thread is going to block for a larger amount of time. You can reduce the amount of cycles wasted by increasing the Sleep() amount, but that gives a higher latency.<br /><br />On the other hand, blocking on an object really does take 0% CPU time while the thread is blocking - it&#39;s removed from the scheduler&#39;s ready-list, and thus isn&#39;t even <strong>considered</strong> for execution. Only when the object is triggered will the scheduler spend time on the thread - by iterating through the object&#39;s &quot;waiting for trigger&quot; list and re-activating the threads (unless they&#39;re also waiting on other condition(s)).<br /><br />The method to choose, of course, depends on how long you&#39;re likely to be waiting for the object to trigger. If you almost never have to wait for the object, CRITICAL_SECTION is good because of it&#39;s spin-then-wait strategy. If you&#39;ll almost always have to wait, doing WaitForSingleObject right away could be better. And if you&#39;re doing some kernel-level driver stuff and must have as low latency as possible (at the expense of burning cycles), spinlock without blocking waits can be appropriate.<br /><br />But Sleep(0) is the devil :)<br /></div>
+    <div class="meta">Posted on 2005-11-27 15:35:51 by f0dder</div>
+   </div>
+   <div class="post" id="post-168309">
+    <div class="subject"><a href="#post-168309">Re: Thread Synchronization</a></div>
+    <div class="body">Btw, some useful info about thread sync:<br />http://www.iseran.com/Win32/CodeForSpeed/multithreading.html</div>
+    <div class="meta">Posted on 2005-11-27 16:39:26 by Ultrano</div>
+   </div>
+   <div class="post" id="post-168324">
+    <div class="subject"><a href="#post-168324">Re: Thread Synchronization</a></div>
+    <div class="body">thanks for your comments...<br />so critical sections might be the way to go, unless<br />my source with a lock prefix would be ok, i assume.<br />Dom</div>
+    <div class="meta">Posted on 2005-11-28 14:57:35 by Dom</div>
+   </div>
+   <div class="post" id="post-168328">
+    <div class="subject"><a href="#post-168328">Re: Thread Synchronization</a></div>
+    <div class="body"><div class="quote"><br /> arafel, it works even if there is a thread switch (all registers are saved including the flags)<br /></div><br /><br />Heh, I know about flag register being saved on taks switch... <br />At first I thought that the access_var could be erroneously modified by other thread if switched before the jz. Anyway, I was wrong.&nbsp; :oops:</div>
+    <div class="meta">Posted on 2005-11-28 17:20:31 by arafel</div>
+   </div>
+  </div>
+ </body>
+</html>

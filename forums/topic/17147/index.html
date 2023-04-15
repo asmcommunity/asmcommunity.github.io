@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>local api hooking problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17147" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17147">local api hooking problem</a></p>
+   <div class="post" id="post-132963">
+    <div class="subject"><a href="#post-132963">local api hooking problem</a></div>
+    <div class="body">I am trying to do a local api hook for the purposes of debuging. I thought it would be as simple as replacing the address of the imported function with the address of the hook procedure (in the import table). When I try to write to the the import table I am getting an access violation. Is this the correct way to hook apis locally? or is there a better way?<br />OS is windows xp pro</div>
+    <div class="meta">Posted on 2004-02-08 23:04:20 by ENF</div>
+   </div>
+   <div class="post" id="post-132977">
+    <div class="subject"><a href="#post-132977">local api hooking problem</a></div>
+    <div class="body">That should work, as long as you don't need to hook GetProcAddress'ed imports... sounds a bit weird that you get access violations while modyfying the IAT, though? Sure you're patching the correct address? Otherwise, try WriteProcessMemory, or temporarily using VirtualProtect - I don't think I've ever seen the IAT in non-writable sections though...</div>
+    <div class="meta">Posted on 2004-02-09 02:45:47 by f0dder</div>
+   </div>
+   <div class="post" id="post-132996">
+    <div class="subject"><a href="#post-132996">local api hooking problem</a></div>
+    <div class="body">Maybe this help... using seh</div>
+    <div class="meta">Posted on 2004-02-09 07:23:15 by comrade</div>
+   </div>
+   <div class="post" id="post-133019">
+    <div class="subject"><a href="#post-133019">local api hooking problem</a></div>
+    <div class="body"><strong>comrade</strong><br />Nice example code  :alright:<br />I wonder what would happen if this tenique where used on a 9x system, since DLL memory is shared then would other apps calling MessageBoxIndirectA generate an exception as well?<br /><br /><strong>f0dder</strong><br />As far as I know I'm writing to the correct address.<br /><br /><br />Here is the code I was using to hook the api<br /><pre><code>.386                    <br />.model flat,stdcall <br />option casemap&#58;none <br /><br />include \masm32\include\windows.inc <br />include \masm32\include\user32.inc <br />include \masm32\include\kernel32.inc <br />include \masm32\include\advapi32.inc<br /><br />includelib \masm32\lib\user32.lib <br />includelib \masm32\lib\kernel32.lib <br />includelib \masm32\lib\advapi32.lib<br /><br />.data<br />szText db &quot;Local API Hook&quot;,0<br />szUser32 db &quot;user32.dll&quot;,0<br />NameMessageBoxA db &quot;MessageBoxA&quot;, 0<br />.data?<br />ImageBase dd ?<br />.code<br />start&#58;<br />    invoke GetModuleHandle, NULL<br />    mov ImageBase, eax<br />    mov esi, ImageBase<br />    assume esi&#58;PTR IMAGE_DOS_HEADER<br />    cmp &#91;esi&#93;.e_magic, 'ZM'<br />    jne Quit<br />        add esi, &#91;esi&#93;.e_lfanew<br />        assume esi&#58;PTR IMAGE_NT_HEADERS<br />        cmp &#91;esi&#93;.Signature, 'EP'<br />        jne Quit<br />            mov esi, &#91;esi&#93;.OptionalHeader.DataDirectory.VirtualAddress+8<br />            add esi, ImageBase<br />            assume esi&#58;PTR IMAGE_IMPORT_DESCRIPTOR<br />@@&#58;         <br />            mov ecx, 11<br />            mov edi, &#91;esi&#93;.Name1<br />            add edi, ImageBase <br />            push edi<br />            push esi<br />            mov esi, offset szUser32<br />            cld<br />            repz cmpsb<br />            pop esi<br />            pop edi<br />            je @f<br />            add esi, SIZEOF IMAGE_IMPORT_DESCRIPTOR<br />            jmp @b<br />@@&#58; <br />            mov edi, &#91;esi&#93;.OriginalFirstThunk<br />            add edi, ImageBase ;edi pointer to IMAGE_THUNK_DATA array<br />            mov esi, &#91;esi&#93;.FirstThunk<br />            add esi, ImageBase ;esi points to IMAGE_THUNK_DATA array<br />            assume esi&#58;NOTHING<br />            assume edi&#58;NOTHING<br />;@@&#58;    <br />            call HookAPI<br />            add edi, 4<br />            add esi, 4<br />            cmp BYTE PTR &#91;esi&#93;, 0<br />            jnz @b<br />Quit&#58;<br />    invoke MessageBox, NULL, addr szText, NULL, MB_OK<br />    invoke ExitProcess, 0<br />HookAPI&#58;<br />    push edi<br />    push esi<br />    <br />    mov esi, &#91;edi&#93;<br />    add esi, ImageBase<br />    ;esi pointer to IMAGE_IMPORT_BY_NAME<br />    add esi, 2<br />    mov edi, offset NameMessageBoxA<br />    mov ecx, 12<br />    cld<br />    repe cmpsb<br />    pop esi<br />    pop edi<br />    jne NoPatch   <br />    mov eax, offset HookMessageBoxA<br />    mov &#91;esi&#93;, eax; crash here<br />NoPatch&#58;<br />    retn 0<br />HookMessageBoxA PROC hwnd&#58;DWORD, lpText&#58;DWORD, lpTitle&#58;DWORD, dwFlag&#58;DWORD<br />    ;hook proc code<br />    ret<br />HookMessageBoxA ENDP<br /><br />end start<br /></code></pre><br /><br />EDIT<br />Works after calling VirtualProtect on the address.</div>
+    <div class="meta">Posted on 2004-02-09 13:47:03 by ENF</div>
+   </div>
+   <div class="post" id="post-133036">
+    <div class="subject"><a href="#post-133036">local api hooking problem</a></div>
+    <div class="body"><div class="quote"><br />comrade</strong><br />Nice example code  :alright:<br />I wonder what would happen if this tenique where used on a 9x system, since DLL memory is shared then would other apps calling MessageBoxIndirectA generate an exception as well?<br /><br /></div><br /><br />yeah, its pretty lame</div>
+    <div class="meta">Posted on 2004-02-09 19:43:18 by comrade</div>
+   </div>
+   <div class="post" id="post-141230">
+    <div class="subject"><a href="#post-141230">Far away easy way to do the same</a></div>
+    <div class="body">Of course this is only for debugging propourses as you need, then and only then this is better, but anyway this is very easy to understand, and is very simple and short code.</div>
+    <div class="meta">Posted on 2004-05-16 02:50:05 by mauricioprado</div>
+   </div>
+  </div>
+ </body>
+</html>

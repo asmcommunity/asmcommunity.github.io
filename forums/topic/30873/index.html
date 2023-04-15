@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>push one byte - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30873" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=30873">push one byte</a></p>
+   <div class="post" id="post-215946">
+    <div class="subject"><a href="#post-215946">push one byte</a></div>
+    <div class="body">Hi guys, I haven&#039;t been here for a long time, now I&#039;m back with a doubt hehe.&nbsp; I&#039;m using GAS, at&amp;t syntax and I am trying to push a character into the stack, <br /><pre><code>push %al</code></pre><br />but an error is returned to me <br /><div class="quote">suffix or operands invalid for &#039;push&#039;</div><br /><br />Why can&#039;t I to push a byte into the stack?<br /><br />Thanx in advance<br /><br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2012-04-11 13:21:43 by massem</div>
+   </div>
+   <div class="post" id="post-215947">
+    <div class="subject"><a href="#post-215947">Re: push one byte</a></div>
+    <div class="body">Because your stack is not 8-bit.<br />It&#039;s either 16-bit (real mode/DOS/Win16), 32-bit (Win32, linux etc) or 64-bit (x64 version of Windows, linux etc).<br />You should always push the full register.<br />So if you are using 16-bit, push ax, if you use 32-bit, push eax, and if you use 64-bit, push rax.<br />Do the same when you pop, et voila, your byte is preserved (as is the rest of the register, which you may or may not care about).<br /><br />You don&#039;t want to misalign your stack anyway.</div>
+    <div class="meta">Posted on 2012-04-11 14:10:08 by Scali</div>
+   </div>
+   <div class="post" id="post-215948">
+    <div class="subject"><a href="#post-215948">Re: push one byte</a></div>
+    <div class="body">:( these are not good news. I want to concatenate <strong>characters </strong>and I don&#039;t know how. I thought that maybe push them into a stack.&nbsp; Do u have any idea about how can I concatenate characters? <br /><br />Thank u for your reply </div>
+    <div class="meta">Posted on 2012-04-11 14:46:03 by massem</div>
+   </div>
+   <div class="post" id="post-215949">
+    <div class="subject"><a href="#post-215949">Re: push one byte</a></div>
+    <div class="body">If characters can generally be conceived of as byte-sized numerical values, then how would you go about concatenating them?</div>
+    <div class="meta">Posted on 2012-04-11 18:57:40 by SpooK</div>
+   </div>
+   <div class="post" id="post-215952">
+    <div class="subject"><a href="#post-215952">Re: push one byte</a></div>
+    <div class="body"><div class="quote"><br />If characters can generally be conceived of as byte-sized numerical values, then how would you go about concatenating them?<br /></div><br /><br />Ups... I didn&#039;t know that...&nbsp; mmm i don&#039;t know how to solve this problem. I have a string saved in a buffer, in this buffer I have an IP number. I would like to parse it in certain way that I can obtain the IP number. At the beginning, I thought to read the buffer every 4bytes, but then I realised what happens if the ip is like this 192.168.1.100 If I read it I will be received 192.168.1.100 plus garbage. Then I thought read character by character and concatenating.. but as Spook told me I can&#039;t do that.<br />So I don&#039;t have any clue how to solve it... any&nbsp; idea?</div>
+    <div class="meta">Posted on 2012-04-12 06:39:46 by massem</div>
+   </div>
+   <div class="post" id="post-215953">
+    <div class="subject"><a href="#post-215953">Re: push one byte</a></div>
+    <div class="body">Hi Marce,<br /><br />To address the original question, while you can&#039;t push a single byte, you could subtract &quot;enough&quot; from %esp to make a buffer, and &quot;movb&quot; single bytes into this buffer to concatenate &#039;em. I&#039;m not sure that&#039;s really what you want to do, though.<br /><br />As I understand it, you&#039;ve got an IP in the form of text - &quot;192.192.1.100&quot; - and you want to convert it to an integer(?). For internet/socket purposes, this probably wants to be in &quot;standard byte order&quot; - that is, big-endian (not really &quot;standard&quot; on x86).<br /><br />As you probably know, I&#039;m &quot;devout Nasmist&quot; but as it happens I have an &quot;atoi&quot; routine translated to Gas/AT&amp;T syntax (helping &quot;Anders&quot;):<br /><pre><code><br />atoi:	<br />		pushl	%ebp<br />		movl	%esp, %ebp<br />		pushl	%ebx<br />		movl	8(%ebp), %edx<br /><br />		xorl	%eax, %eax # zero result<br />		xorl	%ebx, %ebx # and sign indicator<br />		cmpb	$&#039;-&#039;, (%edx)<br />		jnz	getintloop<br />		incl	%edx # skip the &#039;-&#039;<br />		incl	%ebx # and set the &quot;sign indicator&quot;<br />getintloop:<br />		movsx	(%edx), %ecx # get a character<br />		incl	%edx # and get ready for next one<br /># make sure we have a valid character<br />		cmpb	$&#039;0&#039;, %cl<br />		jl	invalid<br />		cmpb	$&#039;9&#039;, %cl<br />		ja	invalid<br /># multiply result by ten, subtract &#039;0&#039; from character, and add it<br />		leal	(%eax, %eax, 4), %eax<br />		leal	-0x30(%ecx, %eax, 2), %eax<br /><br />		jmp	getintloop<br />invalid:<br />		testl	%ebx, %ebx<br />		jz	ispositive<br />		negl	%eax<br />ispositive:<br />		popl	%ebx<br />		movl	%ebp, %esp<br />		popl	%ebp<br />		ret<br /></code></pre><br />This is &quot;C callable&quot; - expects the address of the string on the stack, and returns an integer in %eax. It &quot;trashes&quot; %ecx and %edx (as C allows). It returns when it encounters any invalid character (not representing a decimal digit). It does not check for overflow, just &quot;rolls over&quot;. While the C folk can only use the integer returned in %eax, in asm we can use the &quot;trashed&quot; %ecx and %edx as well! %ecx (just %cl, really) is the invalid character that ended processing - if it&#039;s &#039;.&#039;, there&#039;s more to do. %edx is the &quot;next position&quot; in the string. To process &quot;192.168.1.100&quot;, you&#039;d call it four times, each time saving the value returned - it&#039;ll fit in a byte, even though it&#039;s in %eax - and shifting or rotating (depending if you want little-endian or big-endian) into a single 32-bit integer.<br /><br />Is that what you want to do? Can you figure out how to use that &quot;atoi&quot; to do it? I think I have such a routine, but not in AT&amp;T syntax. I can probably help you &quot;translate&quot; it but, to be honest, the more I use Gas, the better I like Nasm! See what you can do with it, if that&#039;s really what you want to do...<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2012-04-12 15:08:16 by fbkotler</div>
+   </div>
+   <div class="post" id="post-215958">
+    <div class="subject"><a href="#post-215958">Re: push one byte</a></div>
+    <div class="body">Frank,<br /><br /><div class="quote"><br />As I understand it, you&#039;ve got an IP in the form of text - &quot;192.192.1.100&quot; - and you want to convert it to an integer(?). For internet/socket purposes, this probably wants to be in &quot;standard byte order&quot; - that is, big-endian (not really &quot;standard&quot; on x86).<br /></div><br /><br />Hrm, I totally didn&#039;t read his post that way. The way I read his question, he has a string<br />which (amongst other things) contains an IP address and he wants to tokenize the IP out of<br />the string.<br /><br />massem,<br /><br />If that&#039;s the case, then it would be really nice if you could share with us an example of the<br />string itself. Given that the IP number is the first digit based token in the string, my approach would be to scan the string for<br />byte(0x20)&#039;s and checking the next byte for a numeric value. Upon finding a numeric value, I<br />would save the index to that byte and then scan until I saw 3 byte(0x2E)&#039;s followed by another<br />byte(0x20). When I reached this byte(0x20) I would replace it with a byte(0) and treat the<br />stored index as a pointer to the string. If I haven&#039;t completely confused you, try giving us<br />an example of the text and I might be able to draft up an example. (As it is, I&#039;m running DOS<br />and posting on the forum is a bit of a pain. :P)<br /><br />Regards,<br />Bryant<br /><br /></div>
+    <div class="meta">Posted on 2012-04-15 02:24:03 by Synfire</div>
+   </div>
+   <div class="post" id="post-215959">
+    <div class="subject"><a href="#post-215959">Re: push one byte</a></div>
+    <div class="body">Yeah, I think I did a:<br /><pre><code><br />jmp hasty_conclusion<br /></code></pre><br /><br />Suppose, for the sake of argument, that we have a buffer with some text in it. We suspect that this text may (or may not) include an IP in the form of a &quot;dotted quad&quot; (or more than one?) - not necessarily the first or only numerical value. Would a routine to extract any such pattern(s) make an &quot;interesting exercise&quot;?<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2012-04-15 23:35:10 by fbkotler</div>
+   </div>
+   <div class="post" id="post-215964">
+    <div class="subject"><a href="#post-215964">Re: push one byte</a></div>
+    <div class="body">Hi guys, thanks for your replies.&nbsp; My program intends to connect to whatismyip.com, receive the response from the server and then parsing it in order to obtain the ip assigned.&nbsp; Finally, this ip is saved in a file.<br />I could do almost everything... my big problem is related to the parsing.&nbsp; <br />For instance I have this response:<br /><pre><code>HTTP/1.1 200 OK<br />Content-Type: text/javascript; charset=UTF-8<br />Cache-Control: no-cache, no-store, max-age=0, must-revalidate<br />....<br />....<br />200.69.104.1</code></pre><br /><br />I saved the response in a buffer and I parsed it up to the ip, discarding the characters which are not the ip. Now, it&#039;s time to read the ip and save it in another buffer. My idea was to use &quot;lodsb&quot; to load a single byte in %al and then push it into a stack.. but.. you told me I cannot do that.... so... how can I obtain the ip in the right order to, later, be saved in a file?<br /><br />thanx in advance<br />marce<br /><br /></div>
+    <div class="meta">Posted on 2012-04-20 14:54:03 by massem</div>
+   </div>
+   <div class="post" id="post-215965">
+    <div class="subject"><a href="#post-215965">Re: push one byte</a></div>
+    <div class="body">Heh. I wondered if this was still &quot;getmyip&quot; (I think you called it &quot;iplog&quot;?). What I found was that the first read of the socket (after sending our request) was &quot;cruft&quot; and the second read was our IP. I wasn&#039;t sure it &quot;always&quot; happened that way, so I didn&#039;t count on that. I did ASSume that our IP was the last thing in the buffer and &quot;backed up&quot; to find the beginning. Knowing where it started and the length, I just wrote it to stdout... but any other file descriptor should work. Don&#039;t really need to move it to a separate buffer unless you want to.<br /><br />But if you&#039;ve got a character in %al - via lodsb or some other way - you could move it to another buffer with stosb (or some other way). If you want to push/pop, you could pushl %eax - just remember when you popl it, only one byte is &quot;interesting&quot;...<br /><br />It occurred to me that asking a remote host what our IP is must be the &quot;hard way&quot;. My machine must know what my IP is! AFAIK, it&#039;s part of an outgoing packet but is apparently &quot;hidden&quot; in the bowels of the socketcall mechanism. There &quot;must&quot; be a way to access this information, but I don&#039;t know what it is. Any ideas?<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2012-04-21 00:53:51 by fbkotler</div>
+   </div>
+   <div class="post" id="post-215966">
+    <div class="subject"><a href="#post-215966">Re: push one byte</a></div>
+    <div class="body">After creating a <strong>socket</strong> the function <strong>bind</strong> will attach a newly created socket to an address and port on your local machine.&nbsp; Simply use <strong>getsockname</strong> to retrieve which address and port is associated with that socket.</div>
+    <div class="meta">Posted on 2012-04-21 10:14:25 by p1ranha</div>
+   </div>
+   <div class="post" id="post-215967">
+    <div class="subject"><a href="#post-215967">Re: push one byte</a></div>
+    <div class="body"><div class="quote"><br />It occurred to me that asking a remote host what our IP is must be the &quot;hard way&quot;. My machine must know what my IP is! AFAIK, it&#039;s part of an outgoing packet but is apparently &quot;hidden&quot; in the bowels of the socketcall mechanism. There &quot;must&quot; be a way to access this information, but I don&#039;t know what it is. Any ideas?</div><br /><br />Your machine knows what your IPs (plural) are (you can have multiple network interfaces, and even multiple IPs per network interface).<br />I believe the usual way to obtain your IPs is this:<br />1) Use <a target="_blank" href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms738527(v=vs.85).aspx">gethostname()</a> to get the hostname of your machine<br />2) Use <a target="_blank" href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms737530(v=vs.85).aspx">getaddrinfo()</a> to get the list of IPs for your hostname.<br />(or the older, deprecated function <a target="_blank" href="http://msdn.microsoft.com/en-us/library/windows/desktop/ms738524(v=vs.85).aspx">gethostbyname()</a>, which also returns a list of IPs).</div>
+    <div class="meta">Posted on 2012-04-21 15:22:28 by Scali</div>
+   </div>
+   <div class="post" id="post-215968">
+    <div class="subject"><a href="#post-215968">Re: push one byte</a></div>
+    <div class="body">I&#039;m absolutely horrible in GAS code, the AT&amp;T syntax totally throws me for&nbsp; a loop. lol<br /><br />That being said (and using Frank&#039;s atoi code as a reference) I came up with this  code to give you an idea of what to do. This function takes the address of the buffer containing your HTTP response from the whatismyip.com automation page and the size of the buffer as it&#039;s parameters. <br /><br /><pre><code>get_ip:<br />	pushl %ebp<br />	movl %esp, %ebp<br /><br />	movl 8(%ebp), %esi<br />	movl 12(%ebp), %ecx<br />	<br />find_previous_newline:<br />	movb (%esi, %ecx, 1), %al<br />	decl %ecx<br />	<br />	cmpb $&#039;\n&#039;, %al<br />	jne find_previous_newline<br /><br />	incl %ecx<br />	incl %ecx<br />	<br />	leal (%esi, %ecx, 1), %eax<br /><br />	movl %ebp, %esp<br />	popl %ebp<br />	ret</code></pre><br /><br />I hope this works for ya.<br /><br /><strong>EDIT</strong> The following is a test I ran while I was under linux. Worked fine.<br /><br /><pre><code>.text<br /><br />.globl _start<br />_start:<br />	pushl $response_size<br />	pushl $response<br />	call get_ip<br /><br />	movl $response_size, %edx<br />	subl %ecx, %edx<br />	movl %eax, %ecx<br />	movl $1, %ebx<br />	movl $4, %eax<br />	int $0x80<br />	<br />	movl $0, %ebx<br />	movl $1, %eax<br />	int $0x80<br /><br /># get_ip(s, l)<br /># @brief extract the IP from the end of input.<br /># @param s : address of the source string.<br /># @param l : length of the source string.<br /># @return eax : pointer to beginning of IP.<br /># @return ecx : number of bytes from end of string.<br />get_ip:<br />	pushl %ebp<br />	movl %esp, %ebp<br /><br />	movl 8(%ebp), %esi<br />	movl 12(%ebp), %ecx<br />	<br />find_previous_newline:<br />	movb (%esi, %ecx, 1), %al<br />	decl %ecx<br />	<br />	cmpb $&#039;\n&#039;, %al<br />	jne find_previous_newline<br /><br />	incl %ecx<br />	incl %ecx<br />	<br />	leal (%esi, %ecx, 1), %eax<br /><br />	movl %ebp, %esp<br />	popl %ebp<br />	ret<br /><br />.data<br /><br />response:<br />	.ascii &quot;HTTP/1.1 200 OK\r\nContent-Type: text/javascript; charset=UTF-8\r\nCache-Control: no-cache, no-store, max-age=0, must-revalidate\r\n\r\n200.69.104.1&quot;<br />	response_size = . - response</code></pre></div>
+    <div class="meta">Posted on 2012-04-23 23:20:25 by Synfire</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19822" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19822">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></p>
+   <div class="post" id="post-152335">
+    <div class="subject"><a href="#post-152335">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">Hello!<br /><br />My code is being executed on the Ring0 running on win98. Now I'd like to write something in the beginning of the API MessageBoxW of the dll &quot;user32.dll&quot;, because as you know this DLL is protected by the OS, but running my code on ring0, I can do anything... Considering the fact that I am alread on ring0, how do I write something there?<br /><br />Thank you!</div>
+    <div class="meta">Posted on 2004-11-04 08:31:42 by Nildo</div>
+   </div>
+   <div class="post" id="post-152337">
+    <div class="subject"><a href="#post-152337">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">under win98 you won't need ring0 per se to write to user32.dll.</div>
+    <div class="meta">Posted on 2004-11-04 08:47:36 by lifewire</div>
+   </div>
+   <div class="post" id="post-152339">
+    <div class="subject"><a href="#post-152339">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body"><div class="quote">under win98 you won't need ring0 per se to write to user32.dll.</div><br /><br />Ok, so, 2 questions... Why nothing happens when I try to write something (in memory) into user32.dll? The OS does not returns any error but it does not work. I think thats because its loaded into the shared arena &gt; 0x80000000, and its protected. So, what to do to write something there?<br /><br />Question2: I'll need ring0 to write into the memory of system applications. But since I'm at ring0, I don't know what to do, coz I think I'll get error if IU try to use WriteProcessmemory (or any API) from Ring0...<br /><br />Thanx  :-D</div>
+    <div class="meta">Posted on 2004-11-04 08:53:31 by Nildo</div>
+   </div>
+   <div class="post" id="post-152356">
+    <div class="subject"><a href="#post-152356">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body"><div class="quote">under win98 you won't need ring0 per se to write to user32.dll.</div><br /><br />So, how to write  :?</div>
+    <div class="meta">Posted on 2004-11-04 13:22:38 by Nildo</div>
+   </div>
+   <div class="post" id="post-152362">
+    <div class="subject"><a href="#post-152362">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">Just write. IIRC, normally the R/O page flag is ignored in ring 0.<br /><br />SInce the code is in the shared region, you needn't care about address contexts.</div>
+    <div class="meta">Posted on 2004-11-04 16:11:32 by japheth</div>
+   </div>
+   <div class="post" id="post-152374">
+    <div class="subject"><a href="#post-152374">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body"><div class="quote">Just write. IIRC, normally the R/O page flag is ignored in ring 0.<br /><br />SInce the code is in the shared region, you needn't care about address contexts.</div><br /><br />But when I write, nothing happens, the code that I write in that location does not take effect... look:<br /><br /><pre><code>Retu &#58;= $c3; // a RET<br />Proc &#58;= OpenProcess&#40; PROCESS_ALL_ACCESS, True, GetCurrentProcessId&#40;&#41; &#41;;<br />ProcAddr &#58;= GetProcAddress&#40; GetModuleHandle&#40; 'user32.dll' &#41;, 'MessageBoxW' &#41;;<br />WriteProcessMemory&#40; Proc, ProcAddr, @Retu, 1, BytesWriten &#41;;</code></pre><br /><br />I've translated to pascal, to be easier to see what I'm doing.<br />The WriteProcessMemory returns True and the BytesWriten returns 1, but the changes that I made didn't take effect... But it works at any other DLL wich is not in the Shared area...<br /><br /> :?  :?  :?</div>
+    <div class="meta">Posted on 2004-11-04 20:16:03 by Nildo</div>
+   </div>
+   <div class="post" id="post-152378">
+    <div class="subject"><a href="#post-152378">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">you have to turn off write protection on these pages using VxD calls on win95/98<br /><br />This is a snippet from an API hook by yoda:<br /><pre><code><br />INCLUDELIB  Lib\K32Lib.lib<br />VxDCall4    PROTO &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD<br /><br />ObtainWriteAccessInSharedArea9x PROC USES EBX ESI EDI, p &#58; LPVOID, dwc &#58; DWORD<br />	; calc page addr/size<br />	mov     ecx, dwc<br />	add     ecx, 4096<br />	shr     ecx, 12                                                        ; ECX -&gt; page count<br />	mov     edi, p<br />	shr     edi, 12                                                        ; EDI -&gt; page index/addr<br />	<br />	; perform VxDCall<br />	push    PC_STATIC or PC_WRITEABLE or PC_USER                           ; OR  mask<br />	push    0                                                              ; AND mask<br />	push    ecx<br />	push    edi<br />	push    _PageModifyPermissions<br />	call    VxDCall4<br />	ret<br />ObtainWriteAccessInSharedArea9x ENDP</code></pre></div>
+    <div class="meta">Posted on 2004-11-04 21:04:54 by comrade</div>
+   </div>
+   <div class="post" id="post-152381">
+    <div class="subject"><a href="#post-152381">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">Can you please explain what is the purpose of this write :-?</div>
+    <div class="meta">Posted on 2004-11-04 23:20:16 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-152382">
+    <div class="subject"><a href="#post-152382">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">to write to system protected area of memory...</div>
+    <div class="meta">Posted on 2004-11-04 23:25:15 by comrade</div>
+   </div>
+   <div class="post" id="post-152387">
+    <div class="subject"><a href="#post-152387">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">Comrade, thanks for your code.<br /><br />There are many good reasons why one wants to write to dlls in the shared region. <br /><br />An example I was working on: the VC toolkit 2003 C++ compiler doesn't run on win98SE because it uses some &quot;wide&quot; functions (like CreateFileW) which are just dummies in win98. A self-written shared dll may catch those calls and then implement a simple workaround.</div>
+    <div class="meta">Posted on 2004-11-05 01:09:54 by japheth</div>
+   </div>
+   <div class="post" id="post-152394">
+    <div class="subject"><a href="#post-152394">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body">WriteProcessMemory doesn't accept high addresses IIRC. Use a normal write operation. However, if the function you want to overwrite is too small or not unique, you have to modify the export directory instead to point to your function.</div>
+    <div class="meta">Posted on 2004-11-05 03:53:32 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-152395">
+    <div class="subject"><a href="#post-152395">Ok, I'm in Ring0... And now? How to &quot;deprotect&quot; an</a></div>
+    <div class="body"><div class="quote">WriteProcessMemory doesn't accept high addresses IIRC. Use a normal write operation. However, if the function you want to overwrite is too small or not unique, you have to modify the export directory instead to point to your function.</div><br /><br />Yes! I've alread donne this!<br />Its for an API Hooking system that I'm doing... Then I've encautered (dunno if this word exists, LoL) this problem :P<br /><br />I'll test what everyone said and I'll post the results! Thanx very mutch ppl!</div>
+    <div class="meta">Posted on 2004-11-05 04:03:24 by Nildo</div>
+   </div>
+  </div>
+ </body>
+</html>

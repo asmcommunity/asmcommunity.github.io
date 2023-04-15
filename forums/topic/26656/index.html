@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>HTODW.ASM from M32LIB - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26656" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26656">HTODW.ASM from M32LIB</a></p>
+   <div class="post" id="post-192471">
+    <div class="subject"><a href="#post-192471">HTODW.ASM from M32LIB</a></div>
+    <div class="body">One of reasons why I'm doing optimizations is 'cause I'm dummy :)
+I just can't keep in my head long pieces of code to analyze.
+Then I short the code so it can fit my head.
+As to the subject I have a lot of emotions to express, but also I have
+limited ability to express myself in English so I'll the second
+(after music) international language - code.
+1. First glance at the code (I put ! to the lines of importance)
+      mov Result, 0
+!      xor ecx, ecx
+      mov edi, String
+      invoke lstrlen, String
+      mov ebx, 16
+      mov esi, eax
+
+      .while esi != 0
+        mov al, 
+          .if al >= "0" && al <= "9"
+            sub al, "0"
+          .elseif al >= "a" && al <= "f"
+            sub al, "a"
+            add al, 10
+          .else
+            sub al, "A"
+            add al, 10
+          .endif
+        movzx eax, al
+!       mov ecx, esi
+	------------
+xor ecx,ecx
+.... no use of ecx and then
+mov ecx,esi
+Truly mysterious code indeed ...
+Let's kill it :) I mean xor ecx,ecx 
+2. Second glance (without dead code)
+      mov Result, 0
+      mov edi, String
+      invoke lstrlen, String
+      mov ebx, 16
+      mov esi, eax
+
+      .while esi != 0
+        mov al, 
+          .if al >= "0" && al <= "9"
+            sub al, "0"
+          .elseif al >= "a" && al <= "f"
+!            sub al, "a"
+!            add al, 10
+          .else
+!            sub al, "A"
+!            add al, 10
+          .endif
+Well... strange enough...
+Must be done for educational purpose
+	x=y-"a"+10 = y -("a"-10)
+	so let's change it too
+     sub al,"a"-10
+and  sub al,"A"-10
+It lets us to kill two lines end make it shorter.
+
+3. 3rd glance
+   Look at
+          .if al >= "0" && al <= "9"
+            sub al, "0"
+          .elseif al >= "a" && al <= "f"
+            sub al, "a"-10
+          .else
+            sub al, "A"-10
+          .endif
+What is the purpose of this code?
+The purpose of the code is 
+ a) Determine of which one of three not overlapped arrays belongs the value
+of al (the arrays consist characters which represent hex figures)
+ b) Convert the value to corresponding hex number.
+The code looks nice and comprehensive.
+Is it? Oh, NO!
+The real code is:
+
+:00401045 3C30                    cmp al, 30
+:00401047 7208                    jb 00401051
+:00401049 3C39                    cmp al, 39
+:0040104B 7704                    ja 00401051
+:0040104D 2C30                    sub al, 30
+:0040104F EB0E                    jmp 0040105F
+:00401051 3C61                    cmp al, 61
+:00401053 7208                    jb 0040105D
+:00401055 3C66                    cmp al, 66
+:00401057 7704                    ja 0040105D
+:00401059 2C57                    sub al, 57
+:0040105B EB02                    jmp 0040105F
+:0040105D 2C37                    sub al, 37
+
+13 commands! And with strange ADD al,10 there would be 15!
+Are we need all of them?
+No, not at all!
+Because the three arrays not overlapped we need only to compare edge numbers:
+	cmp al,'a'
+	jb ifA
+	sub al,'a'-10
+	jmp vodka
+ifA:	cmp al,'A'
+	jb figure
+	sub al,'A'-10
+	jmp vodka
+figure:	sub al,'0'
+vodka: ....
+it makes the same but with 9 commands
+if you prefer increasing order you can change it to
+	cmp al,'9'
+	ja ifA
+	sub al,'0'
+	jmp vodka
+ifA:	cmp al,'F'
+	ja a
+	sub al,'A'-10
+	jmp vodka
+a:	sub al,'a'-10
+vodka:  ....
+
+It's usual, and still not well optimized code :)
+Actually we can make it by 7 commands not 9
+	cmp al,'A'
+	jb figure ;it's below 'A' means it's from '012...' array
+	sub al,'a'-10  ;let's try guess may it's from 'abc...' array
+	jns vodka  ;are we lucky then go to finish
+	add al,20h ;we are not lucky and we correct result
+	jmp vodka
+figure: sub al,'0'
+vodka: ...
+So we short it to 7 commands and the most important thing - we decrease
+number of cond. jumps.
+Cond. jumps is OK if they most probably about to happen, but if they not -
+they flash pipes and it is really B-A-A-A-D.
+So I hate jcc which has not at least 90% odds to happen.
+Let s</div>
+    <div class="meta">Posted on 2001-01-21 10:33:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

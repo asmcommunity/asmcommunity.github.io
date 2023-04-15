@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>FindFirstFile, FindNextFile - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26797" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26797">FindFirstFile, FindNextFile</a></p>
+   <div class="post" id="post-193039">
+    <div class="subject"><a href="#post-193039">FindFirstFile, FindNextFile</a></div>
+    <div class="body">Hi All,
+I'm having trouble with the routine below. If I run it as written, it only finds all of the top level directories, but it works. If I change the line
+      .if    !(eax & FILE_ATTRIBUTE_DIRECTORY)
+to
+      .if    (eax & FILE_ATTRIBUTE_DIRECTORY)
+This is the way it should be (?), it runs to the bottom of the first nested directory and gets stuck in a loop.
+Please help me find the problem.
+
+<pre><code>
+.data
+szDot         db '.',0
+szDotDot      db '..',0
+szStar        db '*',0
+szBackSlash   db '\',0
+szSearchStart db 'C:',0
+wfd WIN32_FIND_DATA<>
+
+;invoke FindAllFiles,addr szSearchStart
+;==========================================================================
+
+FindAllFiles proc PathStr:DWORD
+
+LOCAL DisplayPathStr:BYTE
+LOCAL SearchPathStr:BYTE
+LOCAL PathBuffer:BYTE
+LOCAL CmpByte:BYTE
+LOCAL Compare1:DWORD
+LOCAL Compare2:DWORD
+
+;Create 'Display' Path String
+invoke lstrcpy,addr DisplayPathStr,PathStr
+invoke lstrlen,addr DisplayPathStr
+mov    cl,byte ptr
+mov    CmpByte,cl
+invoke lstrcmp,addr CmpByte,addr szBackSlash
+.if    eax != 0
+   invoke lstrcat,addr DisplayPathStr,addr szBackSlash
+.endif
+
+;Create 'Search' Path String
+invoke lstrcpy,addr SearchPathStr,PathStr
+invoke lstrlen,addr SearchPathStr
+mov    cl,byte ptr
+mov    CmpByte,cl
+invoke lstrcmp,addr CmpByte,addr szBackSlash
+.if    eax != 0
+   invoke lstrcat,addr SearchPathStr,addr szBackSlash
+   invoke lstrcat,addr SearchPathStr,addr szStar
+.else
+   invoke lstrcat,addr SearchPathStr,addr szStar
+.endif
+
+;Begin the search
+invoke FindFirstFile,addr SearchPathStr,addr wfd
+.if    eax != INVALID_HANDLE_VALUE
+   mov    hSearch,eax
+   .while eax != ERROR_NO_MORE_FILES
+      mov    eax,wfd.dwFileAttributes
+      .if    !(eax & FILE_ATTRIBUTE_DIRECTORY)
+         invoke lstrcmp,offset wfd.cFileName,addr szDot
+         mov    Compare1,eax
+         invoke lstrcmp,offset wfd.cFileName,addr szDotDot
+         mov    Compare2,eax
+         .if   (Compare1 != 0) && (Compare2 != 0)
+            invoke lstrcpy,addr PathBuffer,addr DisplayPathStr
+            invoke lstrcat,addr PathBuffer,offset wfd.cFileName
+            invoke FindAllFiles,addr PathBuffer
+         .endif
+      .else
+;Do something with the file (we are just adding it to a listbox)
+         invoke lstrcpy,addr PathBuffer,addr DisplayPathStr
+         invoke lstrcat,addr PathBuffer,offset wfd.cFileName
+         invoke SendMessage,hListBox,LB_ADDSTRING,0,addr PathBuffer
+      .endif
+      invoke FindNextFile,hSearch,addr wfd
+      invoke GetLastError
+   .endw
+   invoke FindClose,hSearch
+.endif
+ret
+
+FindAllFiles endp
+
+;==========================================================================
+</code></pre></div>
+    <div class="meta">Posted on 2001-02-06 13:11:00 by anon</div>
+   </div>
+   <div class="post" id="post-193040">
+    <div class="subject"><a href="#post-193040">FindFirstFile, FindNextFile</a></div>
+    <div class="body">a logical and is && i think</div>
+    <div class="meta">Posted on 2001-02-07 10:32:00 by (scalp)</div>
+   </div>
+   <div class="post" id="post-193041">
+    <div class="subject"><a href="#post-193041">FindFirstFile, FindNextFile</a></div>
+    <div class="body">Yes, but I'm using the bitwise and.
+But the problem seems to be that after you run out of files to 'find' at the bottom of some nested subdirs, and FindClose is invoked. What should happen next is FindNextFile gets invoked again (this does happen) but the 'path' is incorrect and I kepp finding the same file over and over in a endless loop.</div>
+    <div class="meta">Posted on 2001-02-07 11:18:00 by anon</div>
+   </div>
+  </div>
+ </body>
+</html>

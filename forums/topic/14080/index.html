@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>32-bit protected mode near call instruction timing..wierd be - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14080" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=14080">32-bit protected mode near call instruction timing..wierd be</a></p>
+   <div class="post" id="post-108794">
+    <div class="subject"><a href="#post-108794">32-bit protected mode near call instruction timing..wierd be</a></div>
+    <div class="body">greetz all<br /><br />i was messing around with plain 32-bit protected mode code to determine instruction timings of a piece of code i had written using the pentium RDTSC instruction. here is a fragment of my code which does a trivial measurement---<br /><br />trial:<br />	ret<br /><br />start:<br />                db 0fh, 31h ;RDTSC<br />	mov , eax     ;read start counter<br />	mov , edx<br />	<br />	call trial<br />	<br />	db 0fh, 31h ;RDTSC<br />	mov , eax      ;read end counter<br />	mov , edx<br /><br />this code gave me a difference of 10h (16 clock cycles) neglecting the reading instructions themselves. i did this code under plain old DOS using my own small 32-bit protected mode shell with all interrupts disabled so i knew that this section of the code was the only section executing (my idt was not initialized, so no question of any irq either).<br /><br />now comes the wierd part. i just made a small change to simulate the fact that trial was located a bit far from this call location ---<br /><br />trial:<br />	ret<br />align 4<br />db 8192 dup(0) ; roughly 2 page sepearation<br /><br />start:<br />                db 0fh, 31h ;RDTSC<br />	mov , eax     ;read start counter<br />	mov , edx<br />	<br />	call trial<br />	<br />	db 0fh, 31h ;RDTSC<br />	mov , eax      ;read end counter<br />	mov , edx<br /><br />and holy moly my counter reading was 120h again neglecting the reading instructions themselves. this is really wierd. my question is<br /><br />&quot;does the instruction clock cycle for the near call instruction in 32-bit mode depend on how far the destination address of the call is ?&quot;<br /><br />i know i am going wrong somewhere. i hope i am wrong :) for the sake of computing saneness. i would request anyone to plz shed some light on this issue.<br />i am having the same problem with the far/near jump too. <br /><br />awaiting a reply<br /><br />best regards<br />jmpf00d</div>
+    <div class="meta">Posted on 2003-06-30 11:10:11 by jmpf00d</div>
+   </div>
+   <div class="post" id="post-108800">
+    <div class="subject"><a href="#post-108800">32-bit protected mode near call instruction timing..wierd be</a></div>
+    <div class="body">If the code is not in the cache then you are timing your memory. ;)  You could confirm this by executing the code twice and only timing the second run.  Also, don't forget to use a serializing instruction (CPUID) to clear the instructions out of the CPU.</div>
+    <div class="meta">Posted on 2003-06-30 11:43:04 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-108805">
+    <div class="subject"><a href="#post-108805">32-bit protected mode near call instruction timing..wierd be</a></div>
+    <div class="body">greetz<br /><br />yep indeed, i knew i was doing something wrong. it was due to a branch prediction penalty.<br /><br />i changed the code to this ---<br /><br />trial:<br />   ret<br />   inc eax  ; 1 micro-op instruction uv paired<br />   inc eax<br />   inc eax<br />   inc eax<br />db 8192 dup(90h) ; nops<br /><br /><br />thats it, guess what i got the same 10h for my timing ;)<br /><br />well, i would like to know more about how exactly u can place ur code so that it falls in the cache of the CPU. i know u need to mess around with some jmps to bring instructions in the cache, but i would like to have a small tutorial on that if anyone can provide the same ;)<br /><br />thnx a lot<br /><br />best regards<br />jmpf00d</div>
+    <div class="meta">Posted on 2003-06-30 11:54:07 by jmpf00d</div>
+   </div>
+   <div class="post" id="post-108830">
+    <div class="subject"><a href="#post-108830">32-bit protected mode near call instruction timing..wierd be</a></div>
+    <div class="body"><div class="quote">but i would like to have a small tutorial on that if anyone can provide the same </div> <br /><br />maybe you'll find something at <a target="_blank" href="http://www.agner.org/">Agner Fog's</a> &quot;How to optimize for the Pentium? microprocessors &quot;.<br />It deals with some cache-issues.<br />Hope you'll find what you're lookin for :)<br /><br />/edmund</div>
+    <div class="meta">Posted on 2003-06-30 17:13:47 by edmund</div>
+   </div>
+   <div class="post" id="post-108843">
+    <div class="subject"><a href="#post-108843">32-bit protected mode near call instruction timing..wierd be</a></div>
+    <div class="body">greetz edmund<br /><br />thnx for the url, but i got that one already ;).<br /><br />yeah, i understand now that the BTB and the serialization play a major role in the timing of the isntructions. i am experimenting now with various options, and will get back with anything wierd i notice.<br /><br />thnx once more.<br /><br />best regards<br />jmpf00d</div>
+    <div class="meta">Posted on 2003-06-30 21:37:12 by jmpf00d</div>
+   </div>
+   <div class="post" id="post-108851">
+    <div class="subject"><a href="#post-108851">32-bit protected mode near call instruction timing..wierd be</a></div>
+    <div class="body">greetz all<br /><br />well i performed some tests and again i have some wierd outputs which i wish to clarify.<br /><br />i was measuring the instruction cycle for a far jmp in 32-bit protected mode. my construct was this ---<br /><br />    db      0eah    ; far jump opcode<br />    dd      offset mypack ; offset<br />    dw      code32_idx ; selector for CS<br />    nop<br /><br />    mypack:<br /><br />now i got a measure of around 20 clock cycles for this. however when i changed it to this --<br /><br />    db      0eah    ; far jump opcode<br />    dd      offset mypack ; offset<br />    dw      code32_idx ; selector for CS<br />    nop<br />    db 16384 dup(90h)<br />    mypack:<br /><br />just to simulate a far jmp to a location which is farther. the clock cycles shot up to<br />1184.<br /><br />again, this clock cycle depended on the db xxxx dup(90h), if i changed it from 16384 to 8192 it reduced to about 850 clock cycles. i am really confused as to how an instruction timing can differ depending on the destination address. can anyone throw some light on this.<br /><br />i use the CPUID to serialize but i measure the worst case performace in a single iteration. i want to measure the worst case performance so i dont want it to be in the cache :). and the above is what i got. varying clock cycles depending upon the destination address of the far jmp.<br /><br />awaiting a reply.<br /><br />best regards<br />jmpf00d</div>
+    <div class="meta">Posted on 2003-06-30 22:44:30 by jmpf00d</div>
+   </div>
+  </div>
+ </body>
+</html>

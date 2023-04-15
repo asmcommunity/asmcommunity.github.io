@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>little task: vc++ code to masm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27742" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27742">little task: vc++ code to masm</a></p>
+   <div class="post" id="post-197780">
+    <div class="subject"><a href="#post-197780">little task: vc++ code to masm</a></div>
+    <div class="body">could someone of you please translate the following code to masm? i've problems with it. btw: i coudn't find PKBDLLHOOKSTRUCT anywhere........why?
+
+<pre><code>
+LRESULT CALLBACK LowLevelKeyboardProc(int nCode, 
+   WPARAM wParam, LPARAM lParam) {
+
+   BOOL fEatKeystroke = FALSE;
+   char what[100];
+   if (nCode == HC_ACTION) {
+      switch (wParam) {
+      case WM_KEYDOWN:  case WM_SYSKEYDOWN:
+      case WM_KEYUP:    case WM_SYSKEYUP: 
+         PKBDLLHOOKSTRUCT p = (PKBDLLHOOKSTRUCT) lParam;
+         fEatKeystroke = 
+            ( (p->vkCode == VK_TAB) && ((p->flags & LLKHF_ALTDOWN) != 0) ) ||
+            ( (p->vkCode == VK_ESCAPE) && ((p->flags & LLKHF_ALTDOWN) != 0) ) ||
+            ( (p->vkCode == VK_ESCAPE) && ((GetKeyState(VK_CONTROL) & 0x8000) != 0) )||
+            ( (p->vkCode == 46) && ( (p->flags & LLKHF_ALTDOWN) != 0 ) && 
+			( (GetKeyState(VK_CONTROL) & 0x8000) != 0)); 		 
+		    //its possible to add other keys....
+		    //the 46 means del
+	     break;
+      }
+   }
+   return(fEatKeystroke ? 1 : CallNextHookEx(NULL, nCode, wParam, lParam));
+}
+</code></pre>
+
+thank you very much</div>
+    <div class="meta">Posted on 2001-04-22 06:50:00 by [SaFc0n]</div>
+   </div>
+   <div class="post" id="post-197781">
+    <div class="subject"><a href="#post-197781">little task: vc++ code to masm</a></div>
+    <div class="body">the  API is 
+
+typedef struct tagKBDLLHOOKSTRUCT {
+    DWORD     vkCode;
+    DWORD     scanCode;
+    DWORD     flags;
+    DWORD     time;
+    ULONG_PTR dwExtraInfo;
+} KBDLLHOOKSTRUCT, *PKBDLLHOOKSTRUCT;</div>
+    <div class="meta">Posted on 2001-04-23 11:41:00 by newbie</div>
+   </div>
+   <div class="post" id="post-197782">
+    <div class="subject"><a href="#post-197782">little task: vc++ code to masm</a></div>
+    <div class="body">Not entirely confidant this is correct...
+Even if it is correct, it isn't nice looking, or probably particularly quick...
+
+But here is my version of the code:
+<pre><code>
+PROC LowLevelKeyboardProc nCode:DWORD, wParam:DWORD, lParam:DWORD
+  LOCAL fEatKeystroke:DWORD
+  LOCAL what 100:BYTE
+
+  mov fEatKeystroke, FALSE
+
+  mov eax, nCode
+  cmp eax, HC_ACTION
+  jne end
+    mov eax, wParam
+
+    cmp eax, WM_KEYDOWN
+    je @F
+    cmp eax, WM_KEYUP
+    je @F
+    cmp eax, WM_SYSKEYDOWN
+    je @F
+    cmp eax, WM_SYSKEYUP
+    jne end
+@@: ;(vkCode == VK_TAB) && (flags & LLKHF_ALTDOWN != 0)
+    mov edx, lParam
+    mov eax, (PKBDLLHOOKSTRUCT PTR ).flags
+    and eax, LLKHF_ALTDOWN
+    jz @F
+    mov eax, (PKBDLLHOOKSTRUCT PTR ).vkCode
+    cmp eax, VK_TAB
+    jne @F
+    mov fEatKeystroke, TRUE
+    jmp end
+@@: ;(vkCode == VK_ESCAPE) && (flags & LLKHF_ALTDOWN != 0)
+    mov eax, (PKBDLLHOOKSTRUCT PTR ).flags
+    and eax, LLKHF_ALTDOWN
+    jz @F
+    mov eax, (PKBDLLHOOKSTRUCT PTR ).vkCode
+    cmp eax, VK_ESCAPE
+    jne @F
+    mov fEatKeystroke, TRUE
+    jmp end    
+@@: ;(GetKeyState(VK_CONTROL) & 0x8000) != 0 ...
+    invoke GetKeyState, VK_CONTROL
+    and eax, 8000h
+    jz end
+    mov edx, lParam
+
+    ;... && (vkCode == VK_ESCAPE)
+
+    mov eax, (PKBDLLHOOKSTRUCT PTR ).vkCode
+    cmp eax, VK_ESCAPE
+    jne @F
+    mov fEatKeystroke, TRUE
+    jmp end
+@@: ;... && (vkCode == 46) && ((flags & LLKHF_ALTDOWN) != 0)
+    ; eax still = vkCode
+    cmp eax, 46
+    jne end
+    mov eax, (PKBDLLHOOKSTRUCT PTR ).flags
+    and eax, LLKHF_ALTDOWN
+    jz end
+    mov fEatKeystroke, TRUE
+
+end: ;return(fEatKeystroke ? 1 : CallNextHookEx(NULL, nCode, wParam, lParam))
+
+  mov eax, fEatKeystroke
+  or eax, eax
+  jnz end2
+
+  invoke CallNextHookEx, NULL, nCode, wParam, lParam
+
+end2:
+  ret
+
+LowLevelKeyboardProc endp
+</code></pre>
+
+If you want me to explain it (and my thinking), I will do.
+But chances are it is just plain wrong, so my explaining my thinking probably won't help too much :P
+
+Mirno</div>
+    <div class="meta">Posted on 2001-04-23 13:44:00 by Mirno</div>
+   </div>
+  </div>
+ </body>
+</html>

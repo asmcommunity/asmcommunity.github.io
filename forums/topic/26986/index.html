@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How do you check for response from a server? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26986" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26986">How do you check for response from a server?</a></p>
+   <div class="post" id="post-194017">
+    <div class="subject"><a href="#post-194017">How do you check for response from a server?</a></div>
+    <div class="body">How can i check a response from a server?
+
+Ex:
+
+Say i log onto an SMTP server. I get this response: 
+
+"220     mail.smtp.com SendMail v5.0 Ready"
+
+My program would say:
+
+"Helo localhost"
+
+The server would say:
+
+"250     Hello, 127.0.0.1 pleased to meet you."
+
+Etc...
+
+
+So my question is how can i check for the 220 & 250???
+That way, once the program has "seen" the response from the server, then it can continue on with the next part of the code. Know what i mean??? Any help is appreciated. Later for now.
+
+Thanks!
+Nok.<pre><code><pre><code></code></pre></div>
+    <div class="meta">Posted on 2001-02-22 17:18:00 by Nokturnal</div>
+   </div>
+   <div class="post" id="post-194018">
+    <div class="subject"><a href="#post-194018">How do you check for response from a server?</a></div>
+    <div class="body">You can store received data in a buffer and every time data is added, check if the buffer contains a full line (CR, LF or CRLF terminated). If not, just wait for more data. If yes, examine the response code by taking the first three bytes from the buffer and then proceed with your code according to the response code (after you've deleted the line in the buffer).
+hope this helps,
+Thomas</div>
+    <div class="meta">Posted on 2001-02-22 17:23:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-194019">
+    <div class="subject"><a href="#post-194019">How do you check for response from a server?</a></div>
+    <div class="body">Here's some code I used for my HTTP server, maybe it's of some use to you:
+<pre><code>
+;RECEIVEBUFFERSIZE equ  XXXXXXXX ;max buffer size
+;ReceivedData db RECEIVEBUFFERSIZE dup (?)         Received data buffer
+;CurrentBufferSize dd   ?          Current number of bytes in buffer
+;
+
+
+; ---- traces buffer for lines (CR/LF/CRLF) and calls a routine for every line ----
+; ---- returns 1 on success ---
+UpdateBuffer proc  uses edx ecx esi ebx
+xor esi, esi
+@ub_trymore:
+    mov edx, offset ReceivedData 
+    mov ecx, edx
+    add ecx, CurrentBufferSize
+;---------- Scan for CR/LF------------
+    .WHILE (edx<ecx)
+        mov bl, byte ptr 
+        .IF bl==0Dh
+            mov bl,byte ptr 
+            .IF bl==0Ah
+                inc edx
+            .ENDIF
+            inc edx
+            jmp @found1
+        .ELSEIF bl==0Ah
+            inc edx
+            jmp @found1
+        .ENDIF
+        inc edx
+    .ENDW
+    jmp @not_found
+@found1:
+    inc esi
+    push edx
+    push ecx
+    sub edx, offset ReceivedData
+    ; !!!!!!!!! your command routine here !!!!!!!!
+    ; ReceivedData contains the next full line received, NOT 0-terminated, but edx 
+    ; now points to the end of the line so you can pass edx to your procedure 
+    pop ecx
+    pop edx
+    ; --- now the line is deleted and the data after the line is shift back ---
+    mov ebx, ecx
+    sub ebx, edx
+    ; ebx = nr of bytes 2 copy
+    mov CurrentBufferSize,ebx
+    mov ecx, offset ReceivedData
+    mov eax, edx
+    add eax, ebx
+    .WHILE ecx<eax
+        mov bl, byte ptr 
+        mov byte ptr , bl
+        inc ecx
+        inc edx
+    .ENDW
+    jmp @ub_trymore
+@not_found:
+    mov eax, esi
+ret
+UpdateBuffer endp
+
+
+;------ your receive routine -----------
+    mov eax, RECEIVEBUFFERSIZE
+    sub eax, CurrentBufferSize      ;eax = free buffer space
+    .IF eax==0 ;no space left 
+        invoke UpdateBuffer ;try to free data in the buffer
+        .IF eax==NULL ;not possible to free data?
+            ;BUFFER OVERFLOW HERE!!!!!!!!!!!!!!
+            mov CurrentBufferSize, 0
+        .ELSE         ;successfully freed data
+            mov eax, RECEIVEBUFFERSIZE
+            sub eax, CurrentBufferSize ;calculate new free space
+        .ENDIF
+    .ENDIF
+    mov     ecx, offset ReceivedData
+    add     ecx, CurrentBufferSize
+    invoke  recv, hSocket, ecx, eax, NULL ;add data to buffer
+    add     CurrentBufferSize, eax ;update size
+    invoke  UpdateBuffer ;check for lines
+</code></pre>
+
+Thomas</div>
+    <div class="meta">Posted on 2001-02-22 17:40:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-194020">
+    <div class="subject"><a href="#post-194020">How do you check for response from a server?</a></div>
+    <div class="body">Great! Thanks Thomas!!!
+I owe ya one.</div>
+    <div class="meta">Posted on 2001-02-22 20:32:00 by Nokturnal</div>
+   </div>
+  </div>
+ </body>
+</html>

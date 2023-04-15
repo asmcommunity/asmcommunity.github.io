@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Partial Register Stall - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12306" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12306">Partial Register Stall</a></p>
+   <div class="post" id="post-94685">
+    <div class="subject"><a href="#post-94685">Partial Register Stall</a></div>
+    <div class="body">After reading the intel document on optimisation, I was wondering about the partial register stalls. It is said that <br /><br /><div class="quote"><br />Special cases of reading and writing small and large register pairs are implemented in<br />Pentium Pro and Pentium II processors in order to simplify the blending of code across<br />processor generations. The special cases are implemented for XOR and SUB when using<br />EAX, EBX, ECX, EDX, EBP, ESP, EDI and ESI as shown in the following examples:<br /></div><br /><br />So is it better to change the following code<br /><br /><pre><code><br />@@&#58;<br />	mov		ax,WORD PTR&#91;ebx+ecx&#93;<br />	mov		BYTE PTR&#91;edi+edx&#93;,al<br />	test	al,al<br />	jz		@F<br />	inc		edx<br />	add		ecx,2<br />	jmp		@B<br />@@&#58;<br /></code></pre><br /><br />to<br /><pre><code><br />@@&#58;<br />	xor		eax,eax<br />	mov		ax,WORD PTR&#91;ebx+ecx&#93;<br />	mov		BYTE PTR&#91;edi+edx&#93;,al<br />	test	al,al<br />	jz		@F<br />	inc		edx<br />	add		ecx,2<br />	jmp		@B<br />@@&#58;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-09 09:31:29 by roticv</div>
+   </div>
+   <div class="post" id="post-94690">
+    <div class="subject"><a href="#post-94690">Partial Register Stall</a></div>
+    <div class="body">Partial register stall means that when you change a partial register (examples - ah, bx, cl, etc) the whole register is assumed to be changed by the instruction, for the purposes of the pairing optimisations done by the CPU. If the documentation says that there are special cases coded in to not assume this behavior of assuming the whole register has been changed, they probably mean that, for example, changing al with one of those instructions you mentioned does not make the processor think that ah has been changed.<br /><br />I think that the top 2 instructions of the code you gave didn't pair anyway, since the second one depends on the first, so I think that the second alternative isn't probably faster. By the way, all discussion about pairing applies only to the first generation of pentium processors (up to and including the pentium mmx).<br /><br />What xor is good for is to break dependency chains, but this only works in newer processors. In case you don't know, breaking a dependency chain means making the processor aware that from that point on, a register's content doesn't depend on what it was before.<br /><br /><br /><br />Err, I think the info above might not be completely accurate. From Agner's fog optimization manual:<br /><br />&quot;Partial register stall is a problem that occurs when you write to part of a 32 bit register and later read from the whole register or a bigger part of it.&quot;<br /><br />Read chapter 19 from this:<br /><br /><a target="_blank" href="http://www.agner.org/assem/pentopth.zip">http://www.agner.org/assem/pentopth.zip</a> <br /><br /></div>
+    <div class="meta">Posted on 2003-04-09 09:54:06 by Knightmare</div>
+   </div>
+   <div class="post" id="post-95041">
+    <div class="subject"><a href="#post-95041">Partial Register Stall</a></div>
+    <div class="body">Also isn't &quot;movzx eax, &quot; better than &quot;xor eax,eax / mov ax, &quot; on modern processors?</div>
+    <div class="meta">Posted on 2003-04-10 02:22:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-95045">
+    <div class="subject"><a href="#post-95045">Partial Register Stall</a></div>
+    <div class="body"><strong></strong><br />Sure it is.</div>
+    <div class="meta">Posted on 2003-04-10 02:32:54 by Maverick</div>
+   </div>
+   <div class="post" id="post-101034">
+    <div class="subject"><a href="#post-101034">Partial Register Stall</a></div>
+    <div class="body">Why is it better?<br /><br />xor is pairable in the U or V pipe<br />mov is pairable in the U or V pipe<br /><br />movzx is not pairable<br /><br />Intel - Appendix A integer pairing tables.<br /><br />I hope this document is correct for modern processors...</div>
+    <div class="meta">Posted on 2003-05-04 02:05:20 by V Coder</div>
+   </div>
+   <div class="post" id="post-101035">
+    <div class="subject"><a href="#post-101035">Partial Register Stall</a></div>
+    <div class="body">AFAIK, it is always better to work with the full register (32-bit) on latest Intels.</div>
+    <div class="meta">Posted on 2003-05-04 02:11:03 by comrade</div>
+   </div>
+   <div class="post" id="post-101048">
+    <div class="subject"><a href="#post-101048">Partial Register Stall</a></div>
+    <div class="body"><strong>V Coder</strong>, partial register stall do not happen on the Pentium plain or its MMX variant. They use actual registers, which are directly written to by the instruction.<br /><br />However, on the P6 core (Pentium Pro, Pentium 2, and Pentium 3), the problem of partial register stalls arived. It is almost certainly a problem with the Pentium 4 core too as it uses a similar mechanism, although it has not been typified yet.<br />The problem occurs because, in order to get the throughput of the several separate execution engines, they have a bank of mappable registers. So <em>eax</em> does not exist in the same sense as it did on older processors, it is a pointer to a part of this register block. In fact there are pointers for EVERY register in this block, including <em>ax, ah,</em> and <em>al</em>. It takes up to 7 clocks to unify the separate registers. So even though <em>al</em> is a sub-part of <em>eax</em> it will take up to 7 clocks for the processor to sort out the pointers.<br /><br />The stall occurs because the processor assumes that all is right with the world, and that the pointers are correct. It is not until slightly later on in the pipeline that the processor realises &quot;oops this isn't the correct data&quot;, at which point it must flush the pipeline, re-load it with the stalled instruction at the top of the re-loaded stream, and continue. This process will take a lot longer than 7 clocks! So if there is a partial register access directly (or within 7 clocks) behind a load/modification of a register, then a partial register stall will be hit.<br /><br /><br />In the code below, the addition of the xor will not solve anything though!<br />It effectively does:<br />#1 Put register in known zero state<br />#2 Spoil lower half of register for 7 clocks<br />#3 Use bad low quarter of register, and stall<br />#4 test now unified low quarter of register....<br /><br /><pre><code><br />@@&#58;<br />	mov		al,BYTE PTR&#91;ebx+ecx+1&#93; ; Not sure about the + 1!<br />	mov		BYTE PTR&#91;edi+edx&#93;,al<br />	test	al,al<br />	jz		@F<br />	inc		edx<br />	add		ecx,2<br />	jmp		@B<br />	mov		mov ax, WORD PTR&#91;ebx+ecx&#93;<br />@@&#58;<br /></code></pre><br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-05-04 04:48:53 by Mirno</div>
+   </div>
+   <div class="post" id="post-101075">
+    <div class="subject"><a href="#post-101075">Partial Register Stall</a></div>
+    <div class="body">Exact same results:<pre><code>_0&#58;	mov		al, BYTE PTR &#91;ebx + ecx&#93; ; no +1 needed<br />	add		ecx, 2<br /><br />	mov		BYTE PTR &#91;edi + edx&#93;, al<br />	inc		edx<br /><br />	test		al, al<br />	jnz		_0<br /><br />; delete each instruction for values not needed...<br />	sub		ecx, 2<br />	dec		edx<br />	mov		ah, BYTE PTR &#91;ebx + ecx + 1&#93;</code></pre></div>
+    <div class="meta">Posted on 2003-05-04 09:14:34 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Crazy CreateWindow Crash - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7906" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=7906">Crazy CreateWindow Crash</a></p>
+   <div class="post" id="post-57617">
+    <div class="subject"><a href="#post-57617">Crazy CreateWindow Crash</a></div>
+    <div class="body">These two things are not quite the same. <br /><br />One assembles and runs fine with NASM whereas the other crashes with an access violation.<br />What's the difference? Which one crashes?<br /><br /><strong>Exhibit 1</strong><br /><br /><div class="quote"><br /><br />section .bss<br /><br />	lpMsg:		istruc	MSG		iend	;28 bytes<br />	lpwc:		istruc	WNDCLASS	iend	;40 bytes<br />	pHwnd:		resd			1<br />	phInst:		resd			1	<br />	lplpMsgBuf	resd			1	<br /><br />..............................................................................................................<br />..<br />..<br /><br />section .text<br /><br />wininvoke CreateWindowExA, 0, lpszClassName, &quot;Like My Window?&quot;, WS_OVERLAPPEDWINDOW |WS_VISIBLE, 0, 0, 640, 480, 0, 0, , 0<br /><br /></div><br /><br /><br /><br /><strong>Exhibit 2</strong><br /><br /><div class="quote"><br /><br /><br />section .bss<br /><br />	lpMsg:		istruc	MSG		iend	;28 bytes<br />	lpwc:		istruc	WNDCLASS	iend	;40 bytes<br />	pHwnd:		resd			1	<br />	lplpMsgBuf	resd			1	<br />        phInst:		resd			1<br />..............................................................................................................<br />..<br />..<br /><br />section .text<br /><br />wininvoke CreateWindowExA, 0, lpszClassName, &quot;Like My Window?&quot;, WS_OVERLAPPEDWINDOW |WS_VISIBLE, 0, 0, 640, 480, 0, 0, , 0<br /><br /></div><br /><br />(Note: For those who aren't used to NASM, all labels are automatically pointers. That explains both my naming convention and the manner in which I treat them. Wininvoke is a macro of my own creation that behaves a bit like MASM invoke)<br /><br /><br />You probably had to do a double take because the two aren't very different. The first one crashes as soon as it gets to the CreateWindowEx call whereas the other one runs without a hitch. The function seems to choke on the phInst variable. According to the debugger it attempted a read at fffffffffetc. The only difference is the order in which I reserve the bytes. phInst has changed places with lplpMsgBuf.<br /><br />I am quite new to x86 ASM (but not to Win32 programming in general) and boy, have I been banging my head against a wall for days. I feel good to have found the problem but I still don't know WHY it happens. I shudder having my programs crash inexplicably just because a variable isn't at the &quot;right&quot; address. Could it be an alignment issue? I must admit, I am quite dumb when it comes to that. <br /><br />Do you MASM and FASM users run into problems like this? I like NASM's paucity of keywords and directives as well as its consistent treatment of labels but if <strong>its</strong> hindering me I'll have to switch. Basically, I'm scared to start a substantial program becuase bugs like this are VERY tough to pin down. After all, there is nothing <strong>logically</strong> wrong with your program yet it crashes poof!<br /><br />As usual your input is much appreciated. :)</div>
+    <div class="meta">Posted on 2002-09-13 17:24:59 by Thanatos</div>
+   </div>
+   <div class="post" id="post-57622">
+    <div class="subject"><a href="#post-57622">Crazy CreateWindow Crash</a></div>
+    <div class="body">Thats very funny, but there must be something else happening. Whats the macro doing, it seems to be allowing inline strings :confused: .</div>
+    <div class="meta">Posted on 2002-09-13 18:28:50 by Eóin</div>
+   </div>
+   <div class="post" id="post-57627">
+    <div class="subject"><a href="#post-57627">Crazy CreateWindow Crash</a></div>
+    <div class="body">Heh...NASM's fancy smancy preprocessor allows such wizardry..<br /><br /><pre><code><br /><br />;Call a stdcall Win32 API function, bypassing IAT stub<br /><br />%imacro wininvoke 1-*<br />	%rep %0-1<br />		%rotate -1<br />		%ifstr %1                     <br />			private_macrO_pUsh_Str_1 %1<br />		%else<br />			push dword %1<br />		%endif<br />	%endrep<br />	%rotate -1<br />	extern __imp__%1<br />	call &#91;__imp__%1&#93;<br />%endmacro<br /><br /><br /><br />%macro private_macrO_pUsh_Str_1 1<br />	&#91;SECTION .rdata&#93;<br />        %%str_addr&#58;  db      %1, 0<br />	__SECT__<br />        push dword %%str_addr<br />%endmacro<br /><br /></code></pre><br /><br />Basically wininvoke rotates the macro args to the right until it gets to the function name. Each rotation, it uses the %ifstr directive to test if the argument is a string literal. If it is, it calls the private macro which switches to the rdata section, defines a string with a unique macro-local label, goes back to the code section (the __SECT__ macro does that) and pushes the address of the string unto the stack.  So to cut a long story short, the macro creates the appropriate entry in the data section for me. The side effect is that if you pass the same string n times it will get added to the data section n times. But that would be silly...heh.<br /><br />Anyway....I did a version without the inline string to see if it had any effect at all and  it didn't. The program crashed under the same conditions.<br /><br /><pre><code><br /><br />wininvoke CreateWindowExA, 0, lpszClassName, lpszWindowName, <br />WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 640, 480, 0, 0, &#91;phInst&#93;, 0<br /><br /></code></pre><br /><br />This was the <strong>only</strong> change from the previous version. Even the string lpszWindowName was already defined in the data section even though I didn't use it.</div>
+    <div class="meta">Posted on 2002-09-13 20:09:05 by Thanatos</div>
+   </div>
+   <div class="post" id="post-57634">
+    <div class="subject"><a href="#post-57634">Crazy CreateWindow Crash</a></div>
+    <div class="body">My guess is that somewhere lplpMsgBuf is being used as a message buffer.  You end up clobbering phInst and any function using phInst fails.</div>
+    <div class="meta">Posted on 2002-09-13 22:17:55 by tenkey</div>
+   </div>
+   <div class="post" id="post-57646">
+    <div class="subject"><a href="#post-57646">Crazy CreateWindow Crash</a></div>
+    <div class="body">I can attach the source if anyone wants to see it. It's nothing top secret.<br /><br />Anyway, that suggestion sounds quite reasonable tenkey...I had to ponder it for a while. I don't think it's a problem though. lplpMsgBug is just a DWORD pointer that gets set to the address of a dynamically allocated byte array by the FormatMessage win32 API function. In case one of the api calls fail (gracefully), I use it to print out a (supposedly) useful error message. <br /><br />So lplpMsgBuf only gets used if a previous win32 API function call fails. Furthermore, no memory sequentially beyond the pointer should be used because the memory is heap memory. I have to call LocalFree to get rid of it when I'm done. Given the scenario, It seems unlikely that overwriting phInst would be the  problem. However, I'm not against being wrong. At least I'd have a reason for this really strange behaviour.</div>
+    <div class="meta">Posted on 2002-09-13 23:27:04 by Thanatos</div>
+   </div>
+   <div class="post" id="post-57653">
+    <div class="subject"><a href="#post-57653">Crazy CreateWindow Crash</a></div>
+    <div class="body">I think I found the problem. The structure definitions must be doing something screwy under certain situations. istruc and iend and are implemented as macros and apparently my usage of them is incorrect. They are usually defined in the data section and all the members are usually filled out (with zeros if necessary). I figured that they could go in the bss section and it would result in the allocation of the right number of bytes. Apparently not.<br /><br />This code works.<br /><br /><pre><code><br /><br />section .bss<br /><br />	lpMsg&#58;		resb 			MSG_size<br />	lpwc&#58;		resb			WNDCLASS_size<br />	pHwnd&#58;		resd			1<br />	phInst&#58;		resd			1	<br />	lplpMsgBuf	resd			1	<br /><br /></code></pre><br /><br />I'll be using it from now on.<br /><br />NASM was designed to eliminate MASM's quirks but it sure has a few of its own.  I still don't know exactly why flipping the order of phInst and lplpMsgBuf stopped the access violation but at least I know how to avoid something like that in the future.</div>
+    <div class="meta">Posted on 2002-09-14 00:48:33 by Thanatos</div>
+   </div>
+  </div>
+ </body>
+</html>

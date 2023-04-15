@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>push'ing chars into stack to write them. problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25446" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25446">push'ing chars into stack to write them. problem</a></p>
+   <div class="post" id="post-186030">
+    <div class="subject"><a href="#post-186030">push'ing chars into stack to write them. problem</a></div>
+    <div class="body">Hi!<br />I&#39;m a total asm newbie. I&#39;m using NASM on GNU/Linux. I&#39;m trying to push 3 characters into stack and then print them, it does print 3 characters, but not the right ones.<br /><em>strace output:</em><br /><pre><code> strace ./write<br />..<br />write(1, &quot;A\0\0&quot;, 3A)&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; = 3<br />..<br /></code></pre><br /><br /><pre><code>section .data<br />	<br />section .text<br />	global _start<br /><br />_start:<br /><br />	push &#39;C&#39;<br />	push &#39;B&#39;<br />	push &#39;A&#39;<br /><br />	mov eax,4&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  <br />	mov ebx,1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  <br />	mov ecx,esp&nbsp; &nbsp; &nbsp;  <br />	mov edx,3&nbsp; &nbsp; <br />	&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />	int 80h&nbsp; &nbsp; &nbsp; &nbsp;  <br /><br />	mov eax,1&nbsp; &nbsp;  <br />	mov ebx,0&nbsp; &nbsp;  <br />	int 80h</code></pre><br />Here&#39;s the <em>write</em> system call:<br /><em>ssize_t write(int fd, const void *buf, size_t count);</em><br />I&#39;m not sure why it doesn&#39;t print <em>ABC</em>. It last argument in strace output &#39;3A&#39; looks strage also, it should be just 3 I guess. Thank you!</div>
+    <div class="meta">Posted on 2006-10-17 12:51:18 by Hyaku_</div>
+   </div>
+   <div class="post" id="post-186033">
+    <div class="subject"><a href="#post-186033">Re: push'ing chars into stack to write them. problem</a></div>
+    <div class="body"><strong>push &#39;A&#39;</strong> is in fact <strong>push dword 0x00000040</strong><br /><br />you should do <strong>push &#39;ABC&#39;</strong>, this is <strong>push dword 0x00424140</strong></div>
+    <div class="meta">Posted on 2006-10-17 14:18:17 by vid</div>
+   </div>
+   <div class="post" id="post-186034">
+    <div class="subject"><a href="#post-186034">pushing chars into stack to write them. problem </a></div>
+    <div class="body">By looking at the head of the &quot;Write&quot; procedure, you would be able to say that the second parameter is the pointer to the beginning of the characters not the characters themselves. Therefore, you should put those characters in adjacent places in the same segment and pass the pointer to the one with the memory location less than the others as the second parameter to the &quot;write&quot; routine.<br /><br />Here is an example of a procedure which fills the value of the AL, AH and the DL registers with the correct parameters.<br /><br /><pre><span style="font-size:2>.DATA<br />&nbsp; Char1&nbsp; &nbsp;  DB&nbsp; &nbsp; &nbsp; &#39;A&#39;<br />&nbsp; Char2&nbsp; &nbsp;  DB&nbsp; &nbsp; &nbsp; &#39;B&#39;<br />&nbsp; Char3&nbsp; &nbsp;  DB&nbsp; &nbsp; &nbsp; &#39;C&#39;<br />.CODE<br /><br />&nbsp; GetParams PROC NEAR<br />&nbsp; &nbsp; PUSH&nbsp; &nbsp; BP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Push the base pointer onto the stack<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BP , SP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Move the stack pointer to the base pointer<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BX , WORD PTR &nbsp; &nbsp; &nbsp; ; BX now points to the first parameter&#39;s offset<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  AL , BYTE PTR &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; AL is the first byte inside the parameter (AL=&#39;A&#39;)<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  AH , BYTE PTR &nbsp; &nbsp; ; AH is the second byte inside the parameter (AL=&#39;B&#39;)<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  DL , BYTE PTR &nbsp; &nbsp; ; DL is the third byte inside the parameter (AL=&#39;C&#39;)<br />&nbsp; &nbsp; POP&nbsp; &nbsp;  BP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Restore the base pointer<br />&nbsp; &nbsp; RET&nbsp; &nbsp;  0002h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Return to the calling procedure<br />&nbsp; GetParams ENDP<br />&nbsp; <br />&nbsp; START:<br />&nbsp; <br />&nbsp; &nbsp; PUSH&nbsp; &nbsp; OFFSET Char1<br />&nbsp; &nbsp; CALL&nbsp; &nbsp; GetParams<br /><br />&nbsp; END START</span></pre>Now the above example assumes that the offset pushed onto the stack is an offset inside the data segment. To make this more accurate you could also make the procedure accept the segment address of the variables like this:<br /><br /><pre><span style="font-size:2>&nbsp; GetParams PROC NEAR<br />&nbsp; &nbsp; PUSH&nbsp; &nbsp; ES&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Push the extra segment onto the stack<br />&nbsp; &nbsp; PUSH&nbsp; &nbsp; BP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Push the base pointer onto the stack<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BP , SP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Move the stack pointer to the base pointer<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BX , WORD PTR &nbsp; &nbsp; &nbsp; ; BX now points to the first parameter&#39;s offset<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  ES , WORD PTR &nbsp; &nbsp; &nbsp; ; ES now points to the segment parameter<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  AL , BYTE PTR ES:&nbsp; &nbsp; &nbsp;  ; AL is the first byte inside the parameter<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  AL , BYTE PTR ES: ; AH is the second byte inside the parameter<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  AL , BYTE PTR ES: ; DL is the third byte inside the parameter<br />&nbsp; &nbsp; POP&nbsp; &nbsp;  BP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Restore the base pointer<br />&nbsp; &nbsp; POP&nbsp; &nbsp;  ES&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Restore the extra segment<br />&nbsp; &nbsp; RET&nbsp; &nbsp;  0004h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Return and remove 2 WORDs from the stack<br />&nbsp; GetParams ENDP</span></pre>Good luck.</div>
+    <div class="meta">Posted on 2006-10-17 14:39:32 by XCHG</div>
+   </div>
+   <div class="post" id="post-186042">
+    <div class="subject"><a href="#post-186042">Re: push'ing chars into stack to write them. problem</a></div>
+    <div class="body">mov bp,B800 <br />mov es,bp<br />mov di,722<br />push &quot;A&quot;<br />push &quot;B&quot;<br />push &quot;C&quot;<br />pop ax<br />mov ah,0F<br />stosw<br />pop ax<br />mov ah,0F<br />stosw<br />pop ax<br />mov ah,0F<br />stosw<br /></div>
+    <div class="meta">Posted on 2006-10-17 21:37:44 by eek</div>
+   </div>
+  </div>
+ </body>
+</html>

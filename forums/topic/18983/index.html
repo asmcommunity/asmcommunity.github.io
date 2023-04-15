@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>a little trick - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18983" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=18983">a little trick</a></p>
+   <div class="post" id="post-146877">
+    <div class="subject"><a href="#post-146877">a little trick</a></div>
+    <div class="body">If anyone has scratched their head over superclassing a window they will know what I mean by this. It is always preferable, at least to me to store as much information with a window as possible, that way you aren't dealing with alot of memory variables. So generally in a subclassing I will store the oldWndProc in the GWL_USERDATA parameter of the window. This is fine and works well enough. However when you superclass a window you cannot affect class memory until *after* the window has been created. This is because Set/GetClassLong require a window handle of the class and not a class atom. So it would seem that there is no way to store the oldWndProc for a class in it's class memory allocated in WNDCLASSEX.cbClsExtra. Here is a solution to that connundrum if you are not assigning a class menu...<br /><br />First assign the string representation of the old WndProc to the lpszMenuName parameter:<br /><pre><code>; In the superclassing routine<br />mov D&#91;wcx.cbClsExtra&#93;,4<br />mov eax,&#91;wcx.lpfnWndProc&#93;<br />invoke wsprintf,offset buffer,&quot;%u&quot;,eax<br />add esp,12<br />lea eax,buffer<br />mov &#91;wcx.lpszMenuName&#93;,eax<br />mov D&#91;wcx.lpfnWndProc&#93;,OFFSET newWndProc<br /><br />invoke RegisterClassEx,ADDR wcx</code></pre><br />Then in your newWndProc you must process the WM_NCCREATE message to set the class DWORD:<br /><pre><code>cmp D&#91;uMsg&#93;,WM_NCCREATE<br />jne &gt;.NXTMSG<br />	; we stored the old proc in the menu name<br />	; that way there is no need to create a variable for it<br />	; This must be processed as the first message<br />	invoke GetClassLong,&#91;hwnd&#93;,GCL_MENUNAME<br />	invoke ascii2dw,eax<br />	invoke SetClassLong,&#91;hwnd&#93;,0,eax</code></pre><br />Once that is done there is no longer a need to track the oldWndProc pointer:<br /><pre><code>invoke GetClassLong,&#91;hwnd&#93;,0<br />invoke CallWindowProc,eax,&#91;hwnd&#93;,&#91;uMsg&#93;,&#91;wParam&#93;,&#91;lParam&#93;</code></pre></div>
+    <div class="meta">Posted on 2004-07-26 11:48:08 by donkey</div>
+   </div>
+   <div class="post" id="post-146946">
+    <div class="subject"><a href="#post-146946">a little trick</a></div>
+    <div class="body">There's a related trick you might be interested in: using the window properties APIs (SetProp, EnumProps, EnumPropsEx, GetProp, GlobalAddAtom, RemoveProp) you can store data in any window, associateing it with an atom.<br /><br />That way conflicts nearly impossible when super or subclassing, you can safely store your data in the window without worrying for an ill-behaved WndProc messing with it.<br /><br />For a speed increase we could store all our data in the heap and keep only the pointer with SetProp. Also the atom can be precalculated (instead of passing it's string as a parameter).</div>
+    <div class="meta">Posted on 2004-07-27 09:43:57 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-147066">
+    <div class="subject"><a href="#post-147066">a little trick</a></div>
+    <div class="body">(Offtopic)<br /><br />If GoAsm needs 'add esp' after 'invoke wsprintf' -<br />why it uses name &quot;invoke&quot; like MASM ...</div>
+    <div class="meta">Posted on 2004-07-29 05:42:20 by kero</div>
+   </div>
+   <div class="post" id="post-148005">
+    <div class="subject"><a href="#post-148005">a little trick</a></div>
+    <div class="body"><div class="quote"><br />(Offtopic)<br /><br />If GoAsm needs 'add esp' after 'invoke wsprintf' -<br />why it uses name &quot;invoke&quot; like MASM ... </div><br /><br />My guess is, that this function is declared as &quot;stdcall&quot; (the callee cleans the stack), but as we know (do we?) the wsprintf is a &quot;cdecl&quot; function (the caller is responsible for cleaning the stack)</div>
+    <div class="meta">Posted on 2004-08-13 02:26:15 by Morris</div>
+   </div>
+   <div class="post" id="post-148022">
+    <div class="subject"><a href="#post-148022">a little trick</a></div>
+    <div class="body">2  M.O.R.R.I.S.:<br /><br /><br />My offtopic wasn't about calling conventions.<br />It was note about name &quot;invoke&quot; for macros in Masm and GoAsm.<br /><br />In case of GoAsm we must wright<br /><br />1) invoke wsprintf,offset buffer,&quot;%u&quot;,eax<br />2) add esp,12<br /><br />In case of Masm we must write only<br />1) invoke wsprintf,offset buffer,&quot;%u&quot;,eax<br /><br />- do you guess what will be after 2) in Masm ?<br /><br />So again: <br />if macros &quot;invoke&quot; in Masm and &quot;invoke&quot; in GoAsm are such different -<br />why GoAsm didn't use another name instead of Masm's &quot;invoke&quot;...</div>
+    <div class="meta">Posted on 2004-08-13 05:01:45 by kero</div>
+   </div>
+   <div class="post" id="post-148023">
+    <div class="subject"><a href="#post-148023">a little trick</a></div>
+    <div class="body">Kero:<br /><br />if you declare in MASM wsprintf as a stdcall function with, say, 3 arguments, you could still call it by using &quot;invoke&quot; and the function will work, but you'd have to clear the stack yourself after the function returns.<br /><br />I do not know GoAsm, so I cannot say if this is general rule for calling cdecl functions or is it just wsprintf being declared as stdcall. Notice, that Donkey did not have to &quot;add esp,anything&quot; after <strong>invoke GetClassLong</strong></div>
+    <div class="meta">Posted on 2004-08-13 05:08:22 by Morris</div>
+   </div>
+   <div class="post" id="post-148026">
+    <div class="subject"><a href="#post-148026">a little trick</a></div>
+    <div class="body">2 Morris:<br /><br />i'm afraid we created flame in Donkey's thread...<br /><br />Let's go to my thread &quot;Need test code on XP/2k3 ...&quot;<br />(<a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=18853">http://www.asmcommunity.net/board/showthread.php?threadid=18853</a>) <br />- i use there 'wsprintfA proto C' and 33 arguments in my utility without add esp etc <br /><br /><br />But at first just play with code bellow:<br /><br /><br />.386<br />.model flat,stdcall<br />option casemap:none<br /><br /><br />include masm32includewindows.inc<br />include masm32includeuser32.inc<br />include masm32includekernel32.inc<br />includelib masm32libuser32.lib<br />includelib masm32libkernel32.lib<br /><br />wsprintfA proto C :DWORD,:DWORD,:VARARG<br />wsprintf equ &lt;wsprintfA&gt;<br /><br />.data<br />tt db &quot;OK&quot;,0<br />ft db &quot;%d&quot;,0<br />.data?<br />br db 16 dup (?)<br /><br />.code<br />start:<br />   push offset tt<br />   invoke wsprintf,addr br,addr ft,0<br /><br />;  add esp,4*3 	; TRY  SWITCH ON/OFF THIS LINE<br /><br />   pop eax<br />   cmp eax,offset tt<br />   jz @f<br />   xor eax,eax<br />@@:<br />   invoke MessageBox,0,addr br,eax,0<br />   invoke ExitProcess,0<br />end start</div>
+    <div class="meta">Posted on 2004-08-13 07:15:03 by kero</div>
+   </div>
+   <div class="post" id="post-148034">
+    <div class="subject"><a href="#post-148034">a little trick</a></div>
+    <div class="body">Hi,<br /><br />GoAsm does not adjust the stack after C calling convention calls so you have to do it yourself.If you check the output of MASM it inserts the code for you but GoAsm is designed to insert code as little as possible. For example it does not have .IF or .WHILE or any of the other high level constructs. The reason that it's this way is that GoAsm does not do type or parameter checking so it does not calculate the number of bytes pushed, it simply pushes them.<br /><br />But even with that the INVOKE from GoAsm is much better than MASM's which frankly is the worst of them all. For example in GoAsm I can do all of these thngs that are impossible in MASM without macros...<br /><pre><code>mov EAX,offset function<br />invoke EAX, &#91;Param1&#93;, &#91;Param2&#93;<br /><br />mov D&#91;pFunction&#93;, offset FunctionArray<br />mov eax,offset pFunction<br />mov edx, &#91;Index&#93;<br />invoke &#91;EAX+EDX*4&#93;, &#91;Param1&#93;, &#91;Param2&#93;<br /><br />invoke MyDll.DLL&#58;DllFunction, &#91;Param1&#93;, &#91;Param2&#93; ; No need for LoadLibrary/GetProcAddress<br />invoke MyLib.LIB&#58;LibFunction, &#91;Param1&#93;, &#91;Param2&#93;<br /><br />invoke Real4Func, 1.4567, 0.098<br /><br />invoke GetProcAddress, &#91;hLib&#93;, &quot;SomeFunction&quot;<br />mov &#91;pFunction&#93;, eax<br />invoke &#91;pFunction&#93;, &#91;Param1&#93;, &#91;Param2&#93;<br /><br />push MB_OK<br />invoke MessageBoxA, NULL, &quot;AnsiString&quot;, &quot;Caption&quot;<br /><br />invoke MessageBoxA, NULL, &quot;AnsiString&quot;, &quot;Caption&quot;, 0<br />invoke MessageBoxW, NULL, L&quot;UnicodeString&quot;, L&quot;Caption&quot;, 0<br /><br />mov eax,addr LocalString<br />invoke MessageBoxA, 0, EAX, Addr Local2, 0<br /><br />mov ??, offset ??<br />invoke ??, ??1, ??2</code></pre><br />So in reality I don't really miss the fact that MASM adds the ADD ESP,cbParams without asking me.</div>
+    <div class="meta">Posted on 2004-08-13 09:21:36 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

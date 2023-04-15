@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Article: manually loading a dll directly into memory - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20050" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=20050">Article: manually loading a dll directly into memory</a></p>
+   <div class="post" id="post-153666">
+    <div class="subject"><a href="#post-153666">Article: manually loading a dll directly into memory</a></div>
+    <div class="body">here: http://www.joachim-bauch.de/tutorials/load_dll_memory.html/en<br /><br />talks about manually parsing the pe header, allocating memory, relocs, etc.</div>
+    <div class="meta">Posted on 2004-12-03 09:57:16 by lifewire</div>
+   </div>
+   <div class="post" id="post-153950">
+    <div class="subject"><a href="#post-153950">Article: manually loading a dll directly into memory</a></div>
+    <div class="body">Really nice =)<br />Great work...</div>
+    <div class="meta">Posted on 2004-12-09 09:30:30 by c0mrad</div>
+   </div>
+   <div class="post" id="post-153952">
+    <div class="subject"><a href="#post-153952">Article: manually loading a dll directly into memory</a></div>
+    <div class="body">This is the a nice description of how to load a DLL manually regardless of what it is backed against (pagefile vs file).  However, there are a few points that the author did not discuss which are not handled.  Firstly, the DLL entry point is manually called with DLL_PROCESS_ATTACH and DLL_PROCESS_DETACH.  This is correct, however, the DLL entry point will not be called subsequently with other notifications (DLL_THREAD_ATTACH, DLL_THREAD_DETACH) and therefore may not operate as expected.  Also, due to a missing step, other DLLs will not be able to resolve exported symbols in the loaded DLL without using their own copy of the specialized symbol resolution routine (and knowing inherently where the module is loaded at).  The reason these two operations fail is because the library is not inserted into the module lists that are stored in the PEB_LDR_DATA which is found in the PEB.  If the author of the article were to manually do this then he would be able to fix both of these issues.  The requirement is that the loaded library have a LDR_MODULE structure allocated and  populated with the base address and a unique module file name (even though it's backed against memory) such that other DLLs can rely on finding it in the module lists when they are processing imports.<br /><br />I discussed an alternative approach to doing this in another thread which inherently resolves both issues described above and has the positive benefit of using the native loader provided by NTDLL (thus making it easier to write an implementation).  Here's what I described (pasted here again for convenience):<br /><br /><div class="quote"><br />There is another technique that you can use which is to hook the underlying file operations (NtOpenFile, NtCreateSection, NtMapViewOfFile, etc) used by NTDLL when mapping and loading a dynamic library. By hooking these routines you can emulate their operations against a region of memory rather than allowing them to operate against a file on disk. The basic concept to this approach is to use a unique file name that your hook routine will recognize as symbolizing the memory region that you wish to map as a library from memory. Once NtOpenFile is called with this unique file name you can return a unique file handle that will then be passed to NtCreateSection/NtOpenSection. Once this happens your hook routine can compare the passed in file handle with your unique file handle to see if it should perform emulation and return a unique section handle. Finally, NtMapViewOfSection will be called with your unique section handle. At this point all you need do is set the out pointer BaseAddress to the address in memory that you have already mapped the PE file at and return STATUS_IMAGE_NOT_AT_BASE. This will cause NTDLL to process relocations, handle bound imports and do everything that would typically be done when loading a DLL from disk.<br /><br />The above described technique is meant for use with DLL files, but can also work for executable files that are compiled with relocations (/FIXED:NO). It can also work for executable files that do not have relocations in scenarios where you can ensure that the address at which you mapped the executable in memory is the same as the load address that it expected to be mapped at (obviously). I'm unsure if this is helpful for the specific condition under which you wish to execute an image file only from memory but may at least be of some help.<br /><br />If you are curious about reading more about this approach you can reference <a target="_blank" href="http://www.hick.org/code/skape/papers/remote-library-injection.pdf">http://www.hick.org/code/skape/papers/remote-library-injection.pdf</a><br /></div><br /><br />Source code examples of the above technique can also be found in metasploit where it is used to achieve some interesting things (such as launching a VNC instance from a DLL inside an already running process).</div>
+    <div class="meta">Posted on 2004-12-09 10:08:47 by nohaven</div>
+   </div>
+   <div class="post" id="post-154038">
+    <div class="subject"><a href="#post-154038">Article: manually loading a dll directly into memory</a></div>
+    <div class="body">I've had some questions about PE-loading for some time now<br /><br />Does windows have some internal way to allocate / protect memory in chunks that are smaller than pagesize? Or is pagesize taken into account at link-time, so as to make sure that no two sections with conflicting permissions are mapped into the same physical page?<br /><br />Also, is just allocating ImageSize bytes of memory really okay? Let's say a PE specifies that one section of 1kb bytes is to be loaded at 40000h, and another 1kb section at 50000h. Those 2 kb worth of data would then take up 65 kb of memory, no? (If not allocated memory, at least reserved addresses)<br /><br />By the way, I used to have an example on my site that uses these kinds of techniques to load itself into another process, and then continue running as a thread in the remote process as if nothing happened. A very useful platform for hard-core debugging of server processes, at least it beats writing tons of threadprocs and pipe/MMF communications code. I'll mail it if someone wants it, site is down for now.</div>
+    <div class="meta">Posted on 2004-12-12 15:47:12 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-154075">
+    <div class="subject"><a href="#post-154075">Article: manually loading a dll directly into memory</a></div>
+    <div class="body"><div class="quote"><br />Does windows have some internal way to allocate / protect memory in chunks that are smaller than pagesize? Or is pagesize taken into account at link-time, so as to make sure that no two sections with conflicting permissions are mapped into the same physical page?<br /></div><br /><br />Windows NT is only capable of allocating memory in units of dwAllocationGranularity size (64KB).  This is why executable images and memory allocations always align on 16 page boundaries.  The exceptions to this rule are memory regions that are inserted by the kernel such as the PEB, TEB, and SharedUserData.  For an explanation for why Microsoft chose 64KB instead of page size alignment for memory allocations, please reference: <a target="_blank" href="http://weblogs.asp.net/oldnewthing/archive/2003/10/08/55239.aspx">http://weblogs.asp.net/oldnewthing/archive/2003/10/08/55239.aspx</a></div>
+    <div class="meta">Posted on 2004-12-13 09:48:52 by nohaven</div>
+   </div>
+  </div>
+ </body>
+</html>

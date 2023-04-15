@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>some memory managment problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27182" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27182">some memory managment problem</a></p>
+   <div class="post" id="post-194942">
+    <div class="subject"><a href="#post-194942">some memory managment problem</a></div>
+    <div class="body">i want to retrieve text from edit box using GlobalAlloc for buffer, but it seems i've some pb with memory :
+
+invoke SendMessageA, hEdit, WM_GETTEXTLENGTH, 0, 0
+add    eax,1   ;because WM_GETTEXTLENGTH doesn't include null character.
+mov    Length,eax
+invoke GlobalAlloc, GMEM_FIXED, Length
+mov    pMem,eax
+invoke SendMessageA, hEdit, WM_GETTEXT, Length, pMem 
+invoke MessageBoxA, 0, , 0, 0 
+
+but in result, i've not my text in my messagebox
+I've tried with  in SendMessage but don't work.
+what is the problem?:confused:</div>
+    <div class="meta">Posted on 2001-03-11 12:09:00 by gael</div>
+   </div>
+   <div class="post" id="post-194943">
+    <div class="subject"><a href="#post-194943">some memory managment problem</a></div>
+    <div class="body">Try doing it this way:
+
+      invoke GetWindowTextLength,hEdit
+      inc eax
+      mov ,eax
+      invoke SysAllocStringByteLen,0,Length
+      mov ,eax
+      invoke GetWindowText,hEdit,hMem$,Length
+      invoke SysAllocStringByteLen,0,Length
+      invoke MessageBox,hWin,addr hMem$,0,MB_OK
+
+Hope this works for you.....</div>
+    <div class="meta">Posted on 2001-03-11 15:05:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-194944">
+    <div class="subject"><a href="#post-194944">some memory managment problem</a></div>
+    <div class="body">thanks for your help :)
+I've found the problem :
+your way work as my code.
+
+here is my dialog proc :
+
+DialProc proc hwnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
+LOCAL hEdit:DWORD
+
+mov eax,uMsg
+cmp eax,WM_INITDIALOG
+jz  Ini
+cmp eax,WM_COMMAND
+jz  @here
+mov eax,0
+ret
+
+Ini :
+invoke GetDlgItem, hwnd, 101
+mov    hEdit,eax
+ret
+
+@here :
+
+invoke SendMessageA, hEdit, WM_GETTEXTLENGTH, 0, 0
+.
+.
+.
+DialProc endp
+
+In fact, the problem is on WM_INITDIALOG, GetDlgItem get my hEdit handle BUT when execution arrive @here, hEdit have another value !!
+so, i must declare hEdit in my .DATA section or (it work also)
+i must put the GetDlgItem just before SendMessageA.
+
+It seems that LOCAL hEdit:DWORD don't preserve value through the execution of the DialProc. (i was thinking the meaning of LOCAL was to declare variables inside the PROC)
+
+Is it normal? i mean : why hEdit value are overwritten??</div>
+    <div class="meta">Posted on 2001-03-11 17:48:00 by gael</div>
+   </div>
+   <div class="post" id="post-194945">
+    <div class="subject"><a href="#post-194945">some memory managment problem</a></div>
+    <div class="body">LOCAL does define variables for use 'just inside the proc,' but perhaps that doesn't mean what you think it means.
+
+They are defined EACH TIME THE PROC RUNS. IE, call the proc the first time, put '2' in some LOCAL var. Do some other work, then call the same proc, read the value of the same var.
+
+You have a 1 in 4294967295 chance of getting 2 back.
+
+Why? LOCALS are made on the stack, a fresh set gets made every time you call the proc (yes, even if you call the proc from itself). They have an indeterminate initial value.
+
+If you want to keep a value for a proc each time the proc runs, you need a GLOBAL variable, something in the .data area. Then your technique of caching dialog child handles will work just fine.</div>
+    <div class="meta">Posted on 2001-03-11 23:58:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

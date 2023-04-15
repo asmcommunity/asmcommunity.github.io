@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DLL Import Table. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15140" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15140">DLL Import Table.</a></p>
+   <div class="post" id="post-117664">
+    <div class="subject"><a href="#post-117664">DLL Import Table.</a></div>
+    <div class="body">I have a DLL(1) that uses another DLL(2). <br /><br />My Problem is that the DLL(2) has far to many exports to link dynamically<br />DLL(1) does a check by LoadLibrary to see if DLL(2) exists.<br /><br />Because the DLL(2) is in the import list of DLL(1). DLL(1) won't load if DLL(2) is not there.<br /><br />So my question is, Is it possible to write a PE Loader for a DLL or EXE that will load the file regardless.<br /><br />Then within the code check by using LoadLibrary to see if the DLL exists do use any of the functions.</div>
+    <div class="meta">Posted on 2003-09-10 08:29:22 by Pliers</div>
+   </div>
+   <div class="post" id="post-117679">
+    <div class="subject"><a href="#post-117679">DLL Import Table.</a></div>
+    <div class="body">I think /DELAYLOAD linker option could be of some help here.<br /><br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/vccore98/HTML/vcrefdelayload(delayloadimport).asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/vccore98/HTML/vcrefdelayload(delayloadimport).asp</a><br /><br /><a target="_blank" href="http://www.microsoft.com/msj/1298/hood/hood1298.aspx">http://www.microsoft.com/msj/1298/hood/hood1298.aspx</a></div>
+    <div class="meta">Posted on 2003-09-10 10:34:18 by Morris</div>
+   </div>
+   <div class="post" id="post-117780">
+    <div class="subject"><a href="#post-117780">DLL Import Table.</a></div>
+    <div class="body">yep, delayload is probably a good way to go...<br />I have a question, though - is it possible to manually catch DelayLoad errors (DLL couldn't load, missing export, whatever), and handle it gracefully in your app... or are you stuck with the hard windows termination of the app? I think I heard some whispers that SEH can be used for this, but I haven't messed much with delay-load.</div>
+    <div class="meta">Posted on 2003-09-11 15:05:30 by f0dder</div>
+   </div>
+   <div class="post" id="post-117829">
+    <div class="subject"><a href="#post-117829">DLL Import Table.</a></div>
+    <div class="body">That done the trick, Many thanks.<br /><br />Pliers.<br /><br />Is there a list of linker option anywhere ?</div>
+    <div class="meta">Posted on 2003-09-12 02:52:15 by Pliers</div>
+   </div>
+   <div class="post" id="post-117831">
+    <div class="subject"><a href="#post-117831">DLL Import Table.</a></div>
+    <div class="body">so what is the max number of exports that can be dynamically linked with out the delay option and with it..</div>
+    <div class="meta">Posted on 2003-09-12 03:07:06 by devilsclaw</div>
+   </div>
+   <div class="post" id="post-117832">
+    <div class="subject"><a href="#post-117832">DLL Import Table.</a></div>
+    <div class="body"><div class="quote"><br />so what is the max number of exports that can be dynamically linked with out the delay option and with it.. </div><br /><br />Unlimited?<br />I guess Pliers meant it would be painful to do GetProcAddress() on too many exports.</div>
+    <div class="meta">Posted on 2003-09-12 03:10:32 by Morris</div>
+   </div>
+   <div class="post" id="post-117833">
+    <div class="subject"><a href="#post-117833">DLL Import Table.</a></div>
+    <div class="body">It seems that LoadLibrary uses TLS memory and can fail if filled beyound it limits... it is talked about in the MSDN 2003 .NET<br /><br /><br />Windows 2000 and later 1088 indexes per process <br />Windows 98/Me 80 indexes per process <br />Windows 95<br />Windows NT 4.0 and earlier 64 indexes per process</div>
+    <div class="meta">Posted on 2003-09-12 03:24:02 by devilsclaw</div>
+   </div>
+   <div class="post" id="post-117834">
+    <div class="subject"><a href="#post-117834">DLL Import Table.</a></div>
+    <div class="body">Declare a global variable to contain the TLS index. For example: <br />static DWORD gdwTlsIndex;<br /><br />Use the TlsAlloc function during initialization to allocate the TLS index. For example, include the following call in the DllMain function during DLL_PROCESS_ATTACH: <br />gdwTlsIndex = TlsAlloc();<br /><br />For each thread using the TLS index, allocate memory for the data, then use the TlsSetValue function to store the address of the memory block in the TLS slot associated with the index. For example, include the following code in your DllMain during DLL_THREAD_ATTACH: <br />LPVOID lpvBuffer;<br />lpvBuffer = (LPVOID) LocalAlloc(LPTR, 256);<br />TlsSetValue(gdwTlsIndex, lpvBuffer);<br /><br />When a function requires access to the data associated with a TLS index, specify the index in a call to the TlsGetValue function. This retrieves the contents of the TLS slot for the calling thread, which in this case is a pointer to the memory block for the data. For example, include the following code in any of the functions in your DLL: <br />LPVOID lpvData;<br />lpvData = TlsGetValue(gdwTlsIndex);<br /><br />When each thread no longer needs to use a TLS index, it must free the memory whose pointer is stored in the TLS slot. When all threads have finished using a TLS index, use the TlsFree function to free the index. For example, use the following code in your DllMain during DLL_THREAD_DETACH: <br />lpvBuffer = TlsGetValue(gdwTlsIndex);<br />LocalFree((HLOCAL) lpvBuffer);<br />and the following code during DLL_PROCESS_DETACH:<br /><br />TlsFree(gdwTlsIndex);<br /><br /><br />It is safe to call other functions in Kernel32.dll, because this DLL is guaranteed to be loaded in the process address space when the entry-point function is called. It is common for the entry-point function to create synchronization objects such as critical sections and mutexes, and use TLS. Do not call the registry functions, because they are located in Advapi32.dll. If you are dynamically linking with the C run-time library, do not call malloc; instead, call HeapAlloc.</div>
+    <div class="meta">Posted on 2003-09-12 03:30:59 by devilsclaw</div>
+   </div>
+  </div>
+ </body>
+</html>

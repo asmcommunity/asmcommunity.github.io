@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>coinvoke - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=834" />
+  <link rel="prev" href="../?id=834&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=834">coinvoke</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=834&amp;page=1" style="">&laquo;</a><a href="../?id=834&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="834" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-5260">
+    <div class="subject"><a href="#post-5260">coinvoke</a></div>
+    <div class="body">Beyond this example, all I can say is look at as many code traces as you can.  I have spend hundreds of hours single stepping through code.  In a masocistic kind of way, it's helped me understand a great deal. :)<pre><code>Object&#58;  dd 12345678h<br />pObject&#58; dd OFFSET Object<br /><br />mov edx, OFFSET pObject      |   mov edx, pObject<br />mov edx, &#91;edx&#93;               |   mov edx, &#91;edx&#93;<br />  &#40;edx = OFFSET Object&#41;      |   &#40;edx = 12345678h&#41;<br /><br />mov edx, OFFSET pObject      |   mov edx, &#91;pObject&#93;<br />mov edx, &#91;edx&#93;               |   mov edx, &#91;edx&#93;<br />  &#40;edx = OFFSET Object&#41;      |   &#40;edx = 12345678h&#41;</code></pre>The OFFSET is just a number, but it is special in that this is relitive to where the code resides in memory.  If you use OFFSET, you are just moving a number into a register.  Just remember everything is a number in ASM.  Brackets (or memory references w/o brackets in MASM) get the number <strong>at</strong> another number (the memory address or number in a register).  I really hope this helps some.  ;)<br /><br />I almost did what I think <strong>Ernie</strong> almost did. :tongue:</div>
+    <div class="meta">Posted on 2001-08-29 00:01:31 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5263">
+    <div class="subject"><a href="#post-5263">coinvoke</a></div>
+    <div class="body">lol ok. I just tried a bunch of COM stuff. I also performed about 30 illegal operations :)<br /><br />I came to the conclustion that instead of using pInterface, but directly moving the pInterface into edx instead of moving from pInterface to edx, then from  to edx.<br /><br />just all you have to do is  to edx.<br /><br />There. That's one optimization (I think) Tell me if I'm completely wrong again lol</div>
+    <div class="meta">Posted on 2001-08-29 00:22:55 by Kenny</div>
+   </div>
+   <div class="post" id="post-5264">
+    <div class="subject"><a href="#post-5264">coinvoke</a></div>
+    <div class="body">Wait never mind because you need pInterface later in the call.<br /><br />DOH!<br /><br />Ok, I've had enough. Ernie is the man.</div>
+    <div class="meta">Posted on 2001-08-29 00:26:56 by Kenny</div>
+   </div>
+   <div class="post" id="post-5265">
+    <div class="subject"><a href="#post-5265">coinvoke</a></div>
+    <div class="body">WAIT! What if it was stored in eax, would that work?<br /><br />Would it optimize anything?</div>
+    <div class="meta">Posted on 2001-08-29 00:27:45 by Kenny</div>
+   </div>
+   <div class="post" id="post-5272">
+    <div class="subject"><a href="#post-5272">optimization is possible</a></div>
+    <div class="body"><strong>Kenny:</strong><br /><div class="quote"><br />WAIT! What if it was stored in eax, would that work?<br /><br />Would it optimize anything? </div><br /><br />In this case you would get this:<br /><pre><code><br />mov edx, eax<br />mov edx, &#91;edx&#93;<br /></code></pre><br /><br />which can be optimized into this:<br /><pre><code><br />mov edx, &#91;eax&#93;<br /></code></pre><br /><br />For the class stuff I'm writing with NaN, we have a macro called method which is almost exactly the same as coinvoke.. And I have modified it some time ago to optimize it when you use registers.<br /><strong>note: in the class model, you don't have the 'mov edx, ', becase a class object pointer is something else than a COM object pointer (it doesn't use the indirect method with the vtbl pointer).. so keep this in mind</strong>.<br /><pre><code><br />METHOD MACRO pInterface&#58;REQ, Interface&#58;REQ, Function&#58;REQ, args&#58;VARARG<br />    LOCAL istatement, arg, invokereg<br />    IF &#40;OPATTR &#40;pInterface&#41;&#41; AND 00010000b<br />        invokereg EQU &lt;pInterface&gt;<br />    ELSE<br />        mov     edx, pInterface<br />        invokereg EQU &lt;edx&gt;<br />        FOR arg, &lt;args&gt;<br />            IFIDNI &lt;&amp;arg&gt;, &lt;edx&gt;<br />                .ERR &lt;edx is not allowed as a Method parameter&gt;<br />            ENDIF<br />        ENDM<br />        IFIDNI &lt;&amp;pInterface&gt;, &lt;edx&gt;<br />            .ERR &lt;edx is not allowed as a Method parameter&gt;<br />        ENDIF<br />    ENDIF<br />    istatement CATSTR &lt;invoke &#40;Interface PTR&#91;invokereg&#93;&#41;.&gt;,&lt;&amp;Function, invokereg&gt;<br />    IFNB &lt;args&gt;   <br />        istatement CATSTR istatement, &lt;, &gt;, &lt;&amp;args&gt; <br />    ENDIF <br />    istatement<br />ENDM<br /></code></pre><br /><br />for the coinvoke macro, I think you would only have to add 'mov edx, ' or something but I haven't tested it..<br /><br />IF (OPATTR (pInterface)) AND 00010000b <br />This line checks if the pInterface parameter is a register.. If it is, it sets invokereg to that register, if it's not, the parameter is assumed to be a variable, and the normal method (mov edx, variable), is used. As you can see, for the method macro, I could remove the check that warns you if you use edx as a parameter, when using a register as object pointer.. Because in this case, edx won't be used... But this is different with coinvoke because coinvoke always uses an additional mov edx, .<br /><br /><strong>Ernie</strong>: maybe you can use some optimizations of this for coinvoke.. <br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-08-29 02:11:06 by Thomas</div>
+   </div>
+   <div class="post" id="post-5273">
+    <div class="subject"><a href="#post-5273">coinvoke</a></div>
+    <div class="body">Afternoon, Kenny.<br /><br />Just a note to remind you that pInterface is a <u>pointer</u>. That's why you need the 'mov edx, ' after 'mov edx, pIterface'.<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2001-08-29 02:17:22 by Scronty</div>
+   </div>
+   <div class="post" id="post-5312">
+    <div class="subject"><a href="#post-5312">coinvoke</a></div>
+    <div class="body">Scronty: Yes, I didn't realize this at first. This whole vtable garbage threw me way off. I also had like 3 hours of sleep that night, so the combination didn't help any.<br /><br />Thomas: Yeah, that's what I was getting at, but I didn't know how to say it. Dang, I'm glad someone knows what I was trying to say :)<br /><br />-- ----------<br /><br />Wow, well, to make annother long story short, I think I finally get it now :) It'll just take a while to sink in :)<br /><br />THANKS SO MUCH THOUGH!!! You guys don't know how cool it is to help out a newbie like me. hehe<br />:alright:</div>
+    <div class="meta">Posted on 2001-08-29 14:10:35 by Kenny</div>
+   </div>
+   <div class="post" id="post-5338">
+    <div class="subject"><a href="#post-5338">coinvoke</a></div>
+    <div class="body">Kenny, <br /><br />Here's a corrected version of what I started last night:<br /><br />Maybe if I explain why that code works, you will see how MASM is representing the code. So here goes.... <br /><br />All addresses following are purely arbitrary for the sake of discussion, though they all are 32 bit quantities. <br /><br />Let's define some memory locations for a simple object (it's probably not a COM object, but that's OK for this discussion)<br /><br /><pre><code><br />address         contents<br /><br />Function1&#58;<br />0300 0000       function method 1 code<br />Function2&#58;<br />0300 1000       function method 2 code<br /><br />vtable&#58;<br />0380 0000       0300 0000 &#40;pointer to function 1&#41;<br />0380 0004       0300 1000 &#40;pointer to function 2&#41;<br /><br />object&#58;<br />0400 0000       0380 0000  &#40;pointer to vtable&#41;   <br /><br />ObjX&#58;           ;&#40;object reference&#41;<br />0500 0000       0400 0000  &#40;pointer to the object&#41;<br /><br /></code></pre><br /><br /><br /><br />Say I have an Object X, and I save a reference to Object X at address 05000000H. An object is a blob of data that holds pointers to function tables ( the infamous &quot;virtual&quot; or &quot;v-tables&quot;). These tables hold pointers to functions. <br /><br />By a pointer I mean at address 05000000H I can find a value corrosponding to address of the object itself, in other words 04000000H is stored at 05000000H. <br /><br />Now since an object points to a v-table, address 04000000H would hold the address of a list of functions. That list is the vtable, located at 0300000H (plus). Address 0300000H holds the starting address of the first function, address 03000004 holding the 2nd function, and so on. <br /><br /><br />code:--------------------------------------------------------------------------------<br />mov edx,   ; brackets optional here, will always do 'mov edx, [04000000H]'<br />mov edx,    ; brackets mandetory<br />invoke .0    ; call function 1  (ignore the arguments for now)<br />--------------------------------------------------------------------------------<br /><br /><br /><br />Let's do this again slow and in english: <br /><br /><br />code:--------------------------------------------------------------------------------<br />mov into edx the contents of address <br />{ObjX = 05000000H, value at that address is 04000000H<br />  so edx is now 04000000H}<br /><br />mov into edx the contents of the address held in edx<br />{edx = 04000000H, value at this address is 03800000H<br /> so edx is now 03800000H}<br /><br />invoke the function at address held in edx+0<br />{edx = 03800000H, we add zero offset for the 1st function,<br />  look at address 03800000H, value at this address is 00300000H<br />  so we jump to (call) address 00300000H}<br />--------------------------------------------------------------------------------<br /><br />That's the best I can explain it.<br /><br />Good luck.</div>
+    <div class="meta">Posted on 2001-08-29 18:24:42 by Ernie</div>
+   </div>
+   <div class="post" id="post-5339">
+    <div class="subject"><a href="#post-5339">coinvoke</a></div>
+    <div class="body">Thomas and Nan,<br /><br />  I sure wish you guys would hurry up and publish so I could follow along with what you are doing.<br /><br />  Yes, it's true coinvoke could be slightly optiomized for register usage, but since I don't use my registers that way...   ;-)<br /><br />  It's my library and I'll keep it as it is.  <br /><br />  Actually, one should never assume the eax, ecx and edx registers get left as they were anyway, and that's pretty flimsy, but that's my reason for not changing coinvoke.</div>
+    <div class="meta">Posted on 2001-08-29 18:30:25 by Ernie</div>
+   </div>
+   <div class="post" id="post-5424">
+    <div class="subject"><a href="#post-5424">coinvoke</a></div>
+    <div class="body">Ok Ernie...<br /><br />lol No wonder I was confused! COM is pretty pointless dude!<br /><br />There are so many other, more efficient ways of doing things than that. That's like using a database to store the locations of your programs PROCs :)<br /><br />Well whatever. I guess Microsoft is pretty full of themselves.<br /><br />So, if I knew ahead of time what the vtable was going to point to, I could theoretically make my COM code faster right?</div>
+    <div class="meta">Posted on 2001-08-30 16:42:24 by Kenny</div>
+   </div>
+   <div class="post" id="post-5445">
+    <div class="subject"><a href="#post-5445">coinvoke</a></div>
+    <div class="body">Certianly, <strong>Kenny</strong>, but your program might break if the COM objects you used changed - like new versions.  That is one of the reasons for COM - it was intended to be a more flexible way for code reuse.  More flexible than PROCs in a DLL is what I mean, and I believe it accomplishes that.<br /><br />&lt;RANT-CELL charge-mode=ON&gt;Machines are cheaper than people and computers are getting faster - people aren't.  So, they can pay you bunches of money to write reusable code, fire you in a year, and use your code after you've died.  I need to move this to the ranting section of the board...&lt;RANT-CELL charge-mode=STANDBY&gt;</div>
+    <div class="meta">Posted on 2001-08-30 18:45:05 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5599">
+    <div class="subject"><a href="#post-5599">coinvoke</a></div>
+    <div class="body">Sure, if you know the address you can call it direct. That's called procedual code, and it has nothing to do with COM objects.<br /><br />The whole point is you DO NOT know where the object will be. You probably didn't write it. Nor do you have to know where it is. It could be in a dll running in your process, or another .exe in another process. It could be around the world and you're connecting to it over a network.<br /><br />To COM, it don't matter. All that matters is the binary layout of these members. <br /><br />COM hands you an object pointer and off you go.<br /><br />When I use my CoLib to make an object, I place the vtable in the .data section of my program, and the object is created on the heap (the COM heap that is). When MSVC makes an object, that table is created on the fly (mostly for inheritance reasons) in the object itself. When *using* an object, you don't care where that is, because you follow the rule by following this binary pattern.<br /><br />BTW, when talking to an object not in your own process (other .exe or computer), the COM parts of the operating systems create what's known as a proxy object. The proxy's binary layout looks, you guessed it, just like the same layout pObj-&gt;pVTble-&gt;pMethod as if the object was running in your process. COM sticks some dll code in there so when you run what you *think* is one method in your own process, you actually call in the remoting code to access the object where it really resides.<br /><br />I'll suggest you go read my first tut on acessing COM objects and try to see *why* it's done this way. (get the copy off hutch's site in SP2, the one on my site has been reported to have a Word virus inside and I havn't disinfected it yet).</div>
+    <div class="meta">Posted on 2001-08-31 16:09:55 by Ernie</div>
+   </div>
+   <div class="post" id="post-5600">
+    <div class="subject"><a href="#post-5600">coinvoke</a></div>
+    <div class="body">I think I will :)<br /><br />I'm converting the DX8 includes to FASM, because fasm is easier for me to program in, and I have the source to it. I'm sure knowing what I'm doing will help out a little :)</div>
+    <div class="meta">Posted on 2001-08-31 16:12:39 by Kenny</div>
+   </div>
+   <div class="post" id="post-6597">
+    <div class="subject"><a href="#post-6597">coinvoke</a></div>
+    <div class="body">Hello Kenny.  Consider this:<br /><br />When you call QuerryInterface() the system creates a &quot;pointer&quot; to a vtable - pVtbl.  It would be nice if QuerryInterface returned this pointer in the pInterface variable.  But it does'nt it returns it's ADDRESS.  So pInterface ACTUALLY holds a &quot;pointer to a pointer&quot;.  That is why you need the two moves in coinvoke.<br /><br />mov edx, pInterface         ; get the ptr to pVtbl<br />mov edx,                 ; get pVtbl (now edx points to vtable)<br /><br />Hope this helps<br /><br /><br />GF</div>
+    <div class="meta">Posted on 2001-09-08 10:43:21 by gfalen</div>
+   </div>
+   <div class="post" id="post-6680">
+    <div class="subject"><a href="#post-6680">coinvoke</a></div>
+    <div class="body">hehe thanks so much. :alright: <br /><br />I've actually learned a bunch since I posted this last. Recently I wrote a macro for FASM that does COM style invoking.<br /><br /><pre><code><br />macro calldx object,proc,&#91;arg&#93;      ; invoke COM method<br /> &#123; ..args equ<br />   ..invoke = $ &#125;<br /> &#123; ..args equ arg ..args &#125;<br /> &#123; if ..invoke = $<br />   if ~ ..args in &lt;&gt;<br />   push ..args<br />   end if<br />   mov eax,object<br />   push eax<br />   mov eax,&#91;eax&#93;<br />   call &#91;eax+proc+0ch&#93;<br />   end if &#125;<br /><br />macro mcalldx number,object,proc,&#91;arg&#93;     ; invoke multiple COM methods of the same type<br /> &#123; ..args equ<br />   ..invoke = $ &#125;<br /> &#123; ..args equ arg ..args &#125;<br /> &#123; if ..invoke = $<br />   if ~ ..args in &lt;&gt;<br />   push ..args<br />   end if<br />   repeat number<br />   mov eax,object<br />   push eax<br />   mov eax,&#91;eax&#93;<br />   call &#91;eax+proc+0ch&#93;<br />   end repeat<br />   end if &#125; <br /></code></pre></div>
+    <div class="meta">Posted on 2001-09-09 13:43:55 by Kenny</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=834&amp;page=1" style="">&laquo;</a><a href="../?id=834&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="834" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

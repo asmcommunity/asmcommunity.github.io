@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Base64 encoding algorithm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27865" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27865">Base64 encoding algorithm</a></p>
+   <div class="post" id="post-198386">
+    <div class="subject"><a href="#post-198386">Base64 encoding algorithm</a></div>
+    <div class="body">The Base64 algorithm is fairly simple:
+
+Step 1. grab 3 byte (24 bit) from the in-stream
+Step 2. cut the 3 bytes into four 6bit values
+Step 3. use the four values as index pointers into this string:
+
+<pre><code>
+"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+</code></pre>
+
+Step 4. Grab the ASCII chars and write them into the out-stream
+Step 5. repeat until there is nothing more to encode
+
+Note: the last time step 1. is performed you will either read 3, 2, or 1 byte from the in-stream. If you read 1 byte it will encode into 2 chars and then 2 chars (==) will be added to the out-stream as padding. If you read 2 bytes they will encode into 3 chars with  1 char (=) as padding. This means the out-stream is always a multiple of 4 chars.
+
+My version of this algo:
+
+<pre><code>
+.486
+.model flat, stdcall
+.data
+        alphabet        db "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        
+.code
+base64encode PROC source:DWORD, destination:DWORD, sourcelen:DWORD
+        push edi
+        push esi
+        push ebx
+        mov  esi, source
+        mov  edi, destination
+@@base64loop:
+        xor eax, eax
+        .IF sourcelen == 1
+                lodsb
+                mov ecx, 2
+                mov edx, 03D3Dh    ; == + 00h
+                dec sourcelen 
+        .ELSEIF sourcelen == 2
+                lodsw 
+                mov ecx, 3
+                mov edx, 03Dh      ; = + 00h     
+                sub sourcelen, 2
+        .ELSE
+                lodsd
+                mov ecx, 4
+                xor edx, edx
+                dec esi
+                sub sourcelen, 3                          
+       .ENDIF
+
+        bswap eax
+
+        @@:
+        mov   ebx, eax             ;instead of: push eax
+        and   eax, 0FC000000h      ;get the last 6 high bits
+        rol   eax, 6               ;rotate them into al
+        mov   al,  byte ptr   ;get encode character
+        stosb                      ;write to destination
+        mov   eax, ebx             ;instead of: pop eax
+        shl   eax, 6               ;shift left 6 bits
+        dec   ecx
+        jnz   @B                   ;loop
+        
+        cmp   sourcelen, 0
+        jnz   @@base64loop         ;main loop
+        
+        mov   eax, edx      ;add padding and null terminate
+        stosd               ;  "     "    "     "     "
+
+        pop   ebx
+        pop   esi
+        pop   edi
+        ret
+base64encode ENDP
+</code></pre>
+
+Comments? I tried to write it as a compromise between speed and size.
+
+This message was edited by Zynaps, on 5/1/2001 12:01:47 PM</div>
+    <div class="meta">Posted on 2001-05-01 12:00:00 by Zynaps</div>
+   </div>
+  </div>
+ </body>
+</html>

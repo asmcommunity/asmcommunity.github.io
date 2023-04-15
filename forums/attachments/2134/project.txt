@@ -1,0 +1,470 @@
+.386
+
+.model flat, stdcall
+
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\gdi32.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\msvcrt.inc
+include \masm32\include\user32.inc
+includelib \masm32\lib\gdi32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\msvcrt.lib
+includelib \masm32\lib\user32.lib
+
+WinMain proto :DWORD, :DWORD, :DWORD, :DWORD
+
+.data
+ClassName db "Parent", 0
+ChildClassName db "Child", 0
+AppName db "Project", 0
+gfirstime dd 1
+
+.data?
+hInstance dd ?
+CommandLine dd ?
+ChildHandlesArray HWND 13 dup(?)
+apt POINT 100 dup(<>)
+g5width dd ?
+g5height dd ?
+
+.code
+start:
+	invoke GetModuleHandle, NULL
+	mov    hInstance, eax
+
+	invoke GetCommandLine
+	mov    CommandLine, eax
+
+	invoke WinMain, hInstance, NULL, CommandLine, SW_SHOWDEFAULT
+	invoke ExitProcess, eax
+
+WinMain PROC hInst:HINSTANCE, hPrevInst:HINSTANCE, CmdLine:LPSTR, CmdShow:DWORD
+	LOCAL wcex:WNDCLASSEX
+	LOCAL msg:MSG
+	LOCAL hwnd:HWND
+	
+	mov wcex.cbSize, SIZEOF WNDCLASSEX
+	mov wcex.style, CS_HREDRAW or CS_VREDRAW
+	mov wcex.lpfnWndProc, OFFSET WndProc
+	mov wcex.cbClsExtra, NULL
+	mov wcex.cbWndExtra, NULL
+	push hInst
+	pop wcex.hInstance
+	mov wcex.hbrBackground, COLOR_WINDOW+1
+	mov wcex.lpszMenuName, NULL
+	mov wcex.lpszClassName, OFFSET ClassName
+	invoke LoadIcon, NULL, IDI_APPLICATION
+	mov wcex.hIcon, eax
+	mov wcex.hIconSm, eax
+	invoke LoadCursor, NULL, IDC_ARROW
+	mov wcex.hCursor, eax
+
+	invoke RegisterClassEx, ADDR wcex
+	
+	mov wcex.lpfnWndProc, OFFSET ChildWndProc
+	mov wcex.cbWndExtra, 4
+	mov wcex.lpszClassName, OFFSET ChildClassName
+	mov wcex.hIcon, NULL
+	mov wcex.hIconSm, NULL
+
+	invoke RegisterClassEx, ADDR wcex
+
+	invoke CreateWindowEx, NULL, ADDR ClassName, ADDR AppName,\
+			WS_OVERLAPPEDWINDOW,\
+			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,\
+			NULL, NULL, hInst, NULL
+	mov hwnd, eax
+
+	invoke ShowWindow, hwnd, SW_SHOWNORMAL
+	invoke UpdateWindow, hwnd
+
+	.WHILE TRUE
+		invoke GetMessage, ADDR msg, NULL, 0, 0
+		.BREAK .IF (!eax)
+		invoke TranslateMessage, ADDR msg
+		invoke DispatchMessage, ADDR msg
+	.ENDW
+
+	mov eax, msg.wParam
+	ret
+WinMain endp
+
+WndProc PROC hwnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	LOCAL cxClient:DWORD
+	LOCAL cyClient:DWORD
+	LOCAL rect:RECT
+	LOCAL tempx:DWORD
+	LOCAL tempy:DWORD
+	LOCAL i:DWORD
+	LOCAL temp:DWORD	; y
+	LOCAL temp1:DWORD	; x
+	LOCAL temp2:DWORD	; width
+	LOCAL temp3:DWORD	; height
+	LOCAL temp4:DWORD	; a temp
+	LOCAL temp5:DWORD	; another temp
+
+	.if uMsg==WM_CREATE
+; filling the ChildHandlesArray(13013, ..., 13001)	
+		mov ecx, 13
+		push esi
+		xor esi, esi
+	label1::
+		mov edx, 13000
+		add edx, ecx
+		push ecx
+		invoke CreateWindowEx, NULL, ADDR ChildClassName, NULL,\
+			WS_CHILDWINDOW or WS_VISIBLE,\
+			0, 0, 0, 0,\
+			hwnd, edx, hInstance, NULL
+		mov [ChildHandlesArray+esi], eax
+		add esi, 4
+		pop ecx
+		loop label1
+		pop esi
+
+	.elseif uMsg==WM_SIZE
+		mov eax, lParam
+		mov edx, eax
+		and eax, 0FFFFh
+		shr edx, 16
+		mov cxClient, eax; Client width
+		mov cyClient, edx; Client height
+		
+;		.if cxClient == 0
+;			mov cxClient, 1
+;		.endif
+;		
+;		.if cyClient == 0
+;			mov cyClient, 1
+;		.endif
+
+		finit
+	
+; child windows 1..4
+		mov temp2, 4
+		fld1				; 1
+		fild temp2			; 4, 1
+		fdivp ST(1), ST(0)	; 1/4
+		fild cxClient		; cxClient, (1/4)
+		fmulp ST(1), ST(0)	; cxClient * (1/4)
+		fistp temp2			; temp2 = ST(0), FPU stack balanced
+
+		mov temp3, 7
+		fld1				; 1
+		fild temp3			; 7, 1
+		fdivp ST(1), ST(0)	; 1/7
+		fild cyClient		; cxClient, (1/7)
+		fmulp ST(1), ST(0)	; cxClient * (1/7)
+		fistp temp3			; temp3 = ST(0), FPU stack balanced
+
+		mov ecx, 4
+		push esi
+		xor esi, esi
+		push edi
+		xor edi, edi
+	label2::
+		mov i, edi
+
+		mov temp1, 4
+		fild i				; i
+		fild temp1			; 4, i
+		fdivp ST(1), ST(0)	; i/4
+		fild cxClient		; cxClient, (i/4)
+		fmulp ST(1), ST(0)	; cxClient * (i/4)
+		fistp temp1			; temp1 = ST(0), FPU stack balanced
+
+		push ecx
+		invoke MoveWindow, [ChildHandlesArray+esi], temp1, 0, temp2, temp3, TRUE
+		inc edi
+		add esi, 4
+		pop ecx
+		loop label2
+
+		mov eax, temp2
+		mov temp4, eax		; cxClient * (1/4)
+
+; child windows 7..12
+		mov temp, 6
+		fild temp			; 6
+		mov temp, 7
+		fild temp			; 7, 6
+		fdivp ST(1), ST(0)	; 6/7
+		fild cyClient		; cyClient, (6/7)
+		fmulp ST(1), ST(0)	; cyClient * (6/7)
+		fistp temp			; temp = ST(0), FPU stack balanced
+
+		mov eax, temp
+		mov temp5, eax		; cyClient * (6/7)
+
+		mov temp2, 8
+		fld1				; 1
+		fild temp2			; 8, 1
+		fdivp ST(1), ST(0)	; 1/8
+		fild cxClient		; cxClient, (1/8)
+		fmulp ST(1), ST(0)	; cxClient * (1/8)
+		fistp temp2			; temp2 = ST(0), FPU stack balanced
+
+		mov ecx, 6
+		xor esi, esi
+		add esi ,24
+		xor edi, edi
+	label3::
+		mov i, edi
+
+		mov temp1, 8
+		fild i				; i
+		fild temp1			; 8, i
+		fdivp ST(1), ST(0)	; i/8
+		fild cxClient		; cxClient, (i/8)
+		fmulp ST(1), ST(0)	; cxClient * (i/8)
+		fistp temp1			; temp1 = ST(0), FPU stack balanced
+
+		push ecx
+		invoke MoveWindow, [ChildHandlesArray+esi], temp1, temp, temp2, temp3, TRUE
+		inc edi
+		add esi, 4
+		pop ecx
+		loop label3
+		pop edi
+		pop esi
+
+		mov eax, temp3
+		mov temp, eax		; cxClient * (1/7)
+
+; child window 5
+		mov temp2, 3
+		fild temp2			; 3
+		mov temp2, 4
+		fild temp2			; 4, 3
+		fdivp ST(1), ST(0)	; 3/4
+		fild cxClient		; cxClient, (3/4)
+		fmulp ST(1), ST(0)	; cxClient * (3/4)
+		fistp temp2			; temp = ST(0), FPU stack balanced
+
+		mov temp3, 5
+		fild temp3			; 5
+		mov temp3, 7
+		fild temp3			; 7, 5
+		fdivp ST(1), ST(0)	; 5/7
+		fild cyClient		; cyClient, (5/7)
+		fmulp ST(1), ST(0)	; cyClient * (5/7)
+		fistp temp3			; temp = ST(0), FPU stack balanced
+		invoke MoveWindow, [ChildHandlesArray+16], 0, temp, temp2, temp3, TRUE
+
+; child window 6
+		invoke MoveWindow, [ChildHandlesArray+20], temp2, temp, temp4, temp3, TRUE
+		
+; child window 13
+		invoke MoveWindow, [ChildHandlesArray+48], temp2, temp5, temp4, temp, TRUE
+		
+		mov eax, temp2
+		mov g5width, eax		; cxClient * (3/4)
+		
+		mov eax, temp3
+		mov g5height, eax		; cyClient * (5/7)
+
+    	.if gfirstime
+    		invoke SendMessage, hwnd, WM_USER, NULL, NULL
+    		mov gfirstime, 0
+    	.endif
+
+    .elseif uMsg==WM_USER
+    	
+    	invoke GetTickCount
+		invoke crt_srand, eax
+
+; filling the star map x { [rand() % (10% - 2%) + 1%] + i * 10% }
+		mov ecx, 100
+		push esi
+		xor esi, esi
+		push edi
+		xor edi, edi
+	label4::
+		mov temp, 10
+		fild g5width		; cxClient * (3/4)
+		fild temp			; 10, cxClient * (3/4)
+		fdivp ST(1), ST(0)	; cxClient * (3/4) / 10
+		fistp temp			; temp = ST(0), FPU stack balanced
+		
+		push temp
+		
+		mov temp1, 50
+		fild g5width		; cxClient * (3/4)
+		fild temp1			; 50, cxClient * (3/4)
+		fdivp ST(1), ST(0)	; [cxClient * (3/4)] / 50
+		fistp temp1			; temp1 = ST(0), FPU stack balanced
+		mov eax, temp1
+		sub temp, eax		; 10% - 2%
+		
+		push ecx
+		invoke crt_rand, 32768
+		xor edx, edx
+		div temp			; modulo
+		
+		mov temp2, 100
+		fild g5width		; cxClient * (3/4)
+		fild temp2			; 100, cxClient * (3/4)
+		fdivp ST(1), ST(0)	; [cxClient * (3/4)] / 100
+		fistp temp2			; temp2 = ST(0), FPU stack balanced
+		mov eax, temp2
+		add edx, eax		; modulo remainder + 1%
+		mov tempx, edx		; [(rand() % 10% - 2%) + 1%]
+		mov eax, edi		; i
+		.if eax > 9
+			sub eax, 10
+			mov edi, eax
+		.endif
+		pop ecx
+		pop temp
+		mul temp			; i * 10%
+		add eax, tempx		; apt.x is ready
+		mov [apt+esi].x, eax
+		add esi, 8
+		inc edi
+		dec ecx
+		test ecx, ecx
+		jne label4
+		 
+; filling the star map y { [rand() % (10% - 2%) + 1%] + i * 10% }
+		mov ecx, 100
+		xor esi, esi
+		xor edi, edi
+	label5::
+		mov temp, 10
+		fild g5height		; cyClient * (5/7)
+		fild temp			; 10, cyClient * (5/7)
+		fdivp ST(1), ST(0)	; cyClient * (5/7) / 10
+		fistp temp			; temp = ST(0), FPU stack balanced
+		push temp
+		
+		mov temp1, 50
+		fild g5height		; cyClient * (5/7)
+		fild temp1			; 50, cyClient * (5/7)
+		fdivp ST(1), ST(0)	; cyClient * (5/7) / 50
+		fistp temp1			; temp1 = ST(0), FPU stack balanced
+		mov eax, temp1
+		sub temp, eax		; 10% - 2%
+		
+		push ecx
+		invoke crt_rand, 32768
+		pop ecx
+		xor edx, edx
+		div temp			; modulo   
+		
+		mov temp2, 100
+		fild g5height		; cyClient * (5/7)
+		fild temp2			; 100, cyClient * (5/7)
+		fdivp ST(1), ST(0)	; cyClient * (5/7) / 100
+		fistp temp2			; temp2 = ST(0), FPU stack balanced
+		mov eax, temp2
+		add edx, eax		; modulo remainder + 1%
+		mov tempy, edx		; [(rand() % (10% - 2%) + 1%]
+		mov eax, edi		; i
+		.if eax > 9 
+			sub eax, 10
+			mov edi, eax
+		.endif
+		pop temp1
+		mul temp1			; i * 10%
+		add eax, tempy		; apt.y is ready
+		mov apt[esi].y, eax
+		add esi, 8
+		inc edi
+		dec ecx
+		test ecx, ecx
+		jne label5
+		pop edi
+		pop esi
+
+    .elseif uMsg==WM_DESTROY
+		invoke PostQuitMessage, NULL
+
+	.else
+		invoke DefWindowProc, hwnd, uMsg, wParam, lParam
+		ret
+
+	.endif
+	xor eax,eax
+	ret
+WndProc endp
+
+ChildWndProc PROC hwnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+	LOCAL hdc:HDC
+	LOCAL ps:PAINTSTRUCT
+	LOCAL rect:RECT
+	LOCAL temp, temp1, temp2:DWORD
+
+	.if uMsg==WM_CREATE
+		invoke SetWindowLong,hwnd, 0, 0
+
+	.elseif uMsg==WM_LBUTTONDOWN
+		invoke GetWindowLong, hwnd, 0
+		xor eax, 1
+		invoke SetWindowLong, hwnd, 0, eax
+		invoke InvalidateRect, hwnd, NULL, FALSE
+
+	.elseif uMsg==WM_PAINT
+		invoke BeginPaint, hwnd, ADDR ps
+		mov hdc, eax
+		invoke GetClientRect, hwnd, ADDR rect
+		invoke Rectangle, hdc, 0, 0, rect.right, rect.bottom
+
+		invoke GetWindowLong, hwnd, 0
+		.if eax
+			invoke MoveToEx, hdc, 0, 0, NULL
+			invoke LineTo, hdc, rect.right, rect.bottom
+			invoke MoveToEx, hdc, 0, rect.bottom, NULL
+			invoke LineTo, hdc, rect.right, 0
+		.endif
+		
+; draw the stars
+		invoke GetWindowLong, hwnd, GWL_ID
+		.if eax == 13009
+			push esi
+			xor esi, esi
+			push edi
+			xor edi, edi
+			mov ecx, 10
+		label11::
+			dec ecx
+			push ecx
+			mov ecx, 10
+			add edi, 8
+			
+		label10::
+			mov eax, apt[esi].x
+			mov edx, apt[edi].y
+			add eax, 5
+			add edx, 5
+			
+			push ecx
+			invoke Ellipse, hdc, apt[esi].x, apt[edi].y, eax, edx
+			pop ecx
+			
+			add esi, 8
+			add edi, 8
+			loop label10
+
+			pop ecx
+			test ecx, ecx
+			jne label11
+			
+			pop edi
+			pop esi
+		.endif
+
+		invoke EndPaint, hwnd , ADDR ps
+	
+	.else
+		invoke DefWindowProc, hwnd, uMsg, wParam, lParam
+		ret
+
+	.endif
+	xor eax, eax
+	ret
+
+ChildWndProc endp
+end start

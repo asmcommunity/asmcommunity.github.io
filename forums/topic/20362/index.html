@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>using memcpy in assembly - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20362" />
+    <link rel="next" href="../?id=20362&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20362">using memcpy in assembly</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=20362&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=20362&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="20362" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=20362&amp;page=2">&gt;</a><a href="../?id=20362&amp;page=2">&raquo;</a></form>   <div class="post" id="post-155840">
+    <div class="subject"><a href="#post-155840">using memcpy in assembly</a></div>
+    <div class="body">Hi guys,<br /><br />I've got a program where I need to copy every other line of data (1440 bytes). The fastest way to do this small amount seems to be with memcpy. I've profiled it with the AMD memcpy, and it seems to be slightly slower. Anyways, I'm using inline assembly in my C++ function, and I would really like to use memcpy for the small data lines. I don't seem to be able to use the PROTO method mentioned in other threads. If anyone can give me a hand, I'd really appreciate it. I'm getting easily confused by the new syntax, I've only been trying assembly for two days. Thanks for the help.<br /><br />~Steve</div>
+    <div class="meta">Posted on 2005-01-15 22:10:32 by diehard2</div>
+   </div>
+   <div class="post" id="post-155842">
+    <div class="subject"><a href="#post-155842">using memcpy in assembly</a></div>
+    <div class="body">Steve,<br /><br />With a byte count of 1440 each copy action, I think from memory that the REP MOVSD opcode pair have the legs on most late model processors. Much over that and SSE2 code takes over and under about 200 bytes, indexed pointers are faster.<br /><br />Something that will effect any memory copy algo is whether the memory is aligned or not and with repeated copies of the type you mentioned, that may not be that easy to control.<br /><br />If you cannot control the alignment of each start address, you will actually be faster using BYTE copy.</div>
+    <div class="meta">Posted on 2005-01-16 02:39:49 by hutch--</div>
+   </div>
+   <div class="post" id="post-155845">
+    <div class="subject"><a href="#post-155845">using memcpy in assembly</a></div>
+    <div class="body"><div class="quote"><br />If you cannot control the alignment of each start address, you will actually be faster using BYTE copy.<br /></div><br />Or even better, copy 1-3 bytes until you're on an aligned address, then copy DWORDs.</div>
+    <div class="meta">Posted on 2005-01-16 05:18:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-155846">
+    <div class="subject"><a href="#post-155846">using memcpy in assembly</a></div>
+    <div class="body"><div class="quote"><br />Or even better, copy 1-3 bytes until you're on an aligned address, then copy DWORDs.</div><br />Something is missing in the above statement.  It assumes that both src and dest are off by the same bytes from the next DWORD boundary, in which case, I certainly agree that aligning and moving by DWORD is better.<br /><br />However, it may need profiling effort when src and dest cannot be at DWORD boundary at the same time.  Say, for example, &quot;char *p; memcpy(p, p+5, n);&quot; case.  I read somewhre that it is better to align dest argument, but it turned out that is not the case on my Pentium III.  Did anyone else test such cases?  I'd love to hear about them.</div>
+    <div class="meta">Posted on 2005-01-16 06:05:21 by Starless</div>
+   </div>
+   <div class="post" id="post-155849">
+    <div class="subject"><a href="#post-155849">using memcpy in assembly</a></div>
+    <div class="body">Thanks for the help guys, however (out of curiousity) is it possible to use memcpy in inline assembly? I'll probably try the repmovsd, that looks pretty good and I should be aligned. Unfortunately, my alignment depends upon other third party software, so it may be release dependent :evil: . Thanks a lot.<br /><br />~Steve</div>
+    <div class="meta">Posted on 2005-01-16 07:29:00 by diehard2</div>
+   </div>
+   <div class="post" id="post-155866">
+    <div class="subject"><a href="#post-155866">using memcpy in assembly</a></div>
+    <div class="body">Steve,<br /><br />Both the C runtimes and API functions will probably be off the pace as they usually have higher overhead with SEH and similar. but if you wanted to use either, you would call them at high level as there is no real gain in calling a high level function in asm.<br /><br />Theses types of functions are reasonably easy to write anyway and its probably to your advantage to write a number of them and just benchmark them to see which is faster in the context you are using.</div>
+    <div class="meta">Posted on 2005-01-16 18:11:51 by hutch--</div>
+   </div>
+   <div class="post" id="post-155868">
+    <div class="subject"><a href="#post-155868">using memcpy in assembly</a></div>
+    <div class="body">I've never seen a memcpy that sets up SEH - the idea is that the user sets up a SEH if he wants one. As for catching exeptions with a SEH, this is done by the system, doesn't have overhead when exceptions aren't generated, and has nothing to do with the memory copy routine.<br /><br />From Visual C++:<br /><div class="quote"><br />; The algorithm for forward moves is to align the destination to a dword<br />; boundary and so we can move dwords with an aligned destination.  This<br />; occurs in 3 steps.<br />;<br />;   - move x = ((4 - Dest &amp; 3) &amp; 3) bytes<br />;   - move y = ((L-x) &gt;&gt; 2) dwords<br />;   - move (L - x - y*4) bytes<br /></div><br />This basically means &quot;it's a pretty fast general purpose memcpy&quot;, although the overhead of the aligned copying has a bit overhead - but that's only really something to consider if you have time-critical code that involves copying a lot of very small buffers around.<br /><br />With intrinsic optimization on, <em>memcpy(blaaah, maaaah, 42*1024);</em> results in (the weird names are because of C++ name generation):<br /><pre><code><br />.text&#58;00000001		mov     esi, dword ptr ds&#58;?maaaah@@3PAXA<br />.text&#58;00000007		push    edi<br />.text&#58;00000008		mov     edi, dword ptr ds&#58;?blaaah@@3PAXA<br />.text&#58;0000000E		mov     ecx, 2A00h<br />.text&#58;00000013		rep movsd<br /></code></pre><br />That's right, directly inlined with no function call overhead.<br /><br />RtlMoveMemory (the windows API for memcpy() ) from WinXP is a &quot;rep movsd&quot; plus &quot;rem movsb&quot; to handle cases where the size isn't a multiple of four. It also handles situations where destination and source pointers overlap, and exits early if dst==src. Definitely no SEH or bloat there.<br /><br />Basically, don't be paranoid of your system, compiler or windows - have a look for yourself, and don't trust what random people say. In most cases, there won't be a reason to roll your own. If there are, you're either writing specialized code where assembly is necessary, or you should consider finding a better C++ compiler/library.</div>
+    <div class="meta">Posted on 2005-01-16 19:01:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-155884">
+    <div class="subject"><a href="#post-155884">using memcpy in assembly</a></div>
+    <div class="body">:-D <br /><br />There is an old expression in motor racing, &quot;When the flag drops, the bullsh*t stops&quot;.<br /><br /><div class="quote"><br />have a look for yourself, and don't trust what random people say.<br /></div><br /><br /><div class="quote"><br />write a number of them and just benchmark them to see which is faster in the context you are using<br /></div><br /><br />Benchmarking ends the bullsh*t.<br /><br />PS : Steve,<br /><br />I should have mentioned that if you are going to write some assembler copy routines, for performance reasons write the assembler in a seperate module and link it into your app as the best available compilers are not technically good enough to handle both manually written code and their own internal optimisation together.<br /><br />The magic words is ALWAYS benchmark algos of this type and design the benchmark to best fit the data you are going to be moving around. 1440 bytes is a relatively small byte count and the takeoff time will tend to matter to some extent. REP MOVSD code starts to be faster than incremented pointers on DWORD/BYTE style algos over about 200 / 250 bytes but if its truly critical and you have the hardware support available, its worth looking at a specially cooked MMX or SSE (2) algo dedicated to you byte count copy.</div>
+    <div class="meta">Posted on 2005-01-17 00:22:01 by hutch--</div>
+   </div>
+   <div class="post" id="post-155892">
+    <div class="subject"><a href="#post-155892">using memcpy in assembly</a></div>
+    <div class="body">Steve,<br /><br />Here is a quicky to try out. Its a general purpose REP MOVSD style algo that assumes the data is aligned to at least 4 bytes. Set yourself up some method of timing the operations in a reliable way and try out the algos you have available. If the data is aligned by at least 4 and this one runs OK, it can be tweaked and replaced with more dedicated code that should get your speed up some.<br /><br />Just save this code to a file and then build the file with ML.EXE with the /c /coff options so you have a complete OBJ module that you can link with the C code. You will need to write a C prototype using STDCALL for this algo.<br /><br /><pre><code><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />    .486                    ; force 32 bit code<br />    .model flat, stdcall    ; memory model &amp; calling convention<br />    option casemap &#58;none    ; case sensitive<br /><br />    .code<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />OPTION PROLOGUE&#58;NONE<br />OPTION EPILOGUE&#58;NONE<br /><br />align 4<br /><br />mcopy proc src&#58;DWORD,dst&#58;DWORD,ln&#58;DWORD<br /><br />    mov eax, esi            ; preserve ESI &amp; EDI<br />    mov edx, edi<br /><br />    cld<br />    mov esi, &#91;esp+4&#93;        ; src<br />    mov edi, &#91;esp+8&#93;        ; dst<br />    mov ecx, &#91;esp+12&#93;       ; ln<br /><br />    shr ecx, 2<br />    rep movsd<br /><br />    mov ecx, &#91;esp+12&#93;       ; ln<br />    and ecx, 3<br />    rep movsb<br /><br />    mov edi, edx            ; restore EDI &amp; ESI<br />    mov esi, eax<br /><br />    ret 12<br /><br />mcopy endp<br /><br />OPTION PROLOGUE&#58;PrologueDef<br />OPTION EPILOGUE&#58;EpilogueDef<br /><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />end<br /></code></pre></div>
+    <div class="meta">Posted on 2005-01-17 03:15:28 by hutch--</div>
+   </div>
+   <div class="post" id="post-155893">
+    <div class="subject"><a href="#post-155893">using memcpy in assembly</a></div>
+    <div class="body">&gt; is it possible to use memcpy in inline assembly?<br /><br />Use a macro instead of a proc:<br /><br /><pre><code><br />mcopy macro src,dst,ln<br /><br />    mov eax, esi            ; preserve ESI &amp; EDI<br />    mov edx, edi<br /><br />    cld<br />    mov esi, src        ; src<br />    mov edi, dst        ; dst<br />    mov ecx, ln       ; ln<br /><br />    shr ecx, 2<br />    rep movsd<br /><br />    mov ecx, ln       ; ln<br />    and ecx, 3<br />    rep movsb<br /><br />    mov edi, edx            ; restore EDI &amp; ESI<br />    mov esi, eax<br />    endm<br /></code></pre><br /><br /><br />&gt; Both the C runtimes and API functions will probably be off the pace as <br />&gt; they usually have higher overhead with SEH<br /><br />As f0dder already said, C runtime functions such as memcpy dont use SEH.</div>
+    <div class="meta">Posted on 2005-01-17 03:57:19 by japheth</div>
+   </div>
+   <div class="post" id="post-155895">
+    <div class="subject"><a href="#post-155895">using memcpy in assembly</a></div>
+    <div class="body">hmmmm,<br /><br />Shame API calls regularly DO use SEH.<br /><br />Stack overhead does not matter with REP MOVSD on 1440 bytes (tested) so there is no gain inlining the code. here is a DWORD size copy that is marginally faster on my Prescott PIV.<br /><br />The extra register usage is to prevent read after write stalls.<br /><br /><pre><code><br />; ?????????????????????????????????????????????????????????????????????????<br /><br />align 4<br /><br />OPTION PROLOGUE&#58;NONE <br />OPTION EPILOGUE&#58;NONE <br /><br />bcopy proc src&#58;DWORD,dst&#58;DWORD,ln&#58;DWORD<br /><br />    mov &#91;esp-4&#93;, ebx<br />    mov &#91;esp-8&#93;, esi<br />    mov &#91;esp-12&#93;, edi<br />    mov &#91;esp-16&#93;, ebp<br /><br />    mov esi, &#91;esp+4&#93;        ; src<br />    mov edi, &#91;esp+8&#93;        ; dst<br />    xor ebp, ebp<br /><br />  @@&#58;<br />    mov eax, &#91;esi+ebp&#93;<br />    mov ebx, &#91;esi+ebp+4&#93;<br />    mov ecx, &#91;esi+ebp+8&#93;<br />    mov edx, &#91;esi+ebp+12&#93;<br /><br />    mov &#91;edi+ebp&#93;,    eax<br />    mov &#91;edi+ebp+4&#93;,  ebx<br />    mov &#91;edi+ebp+8&#93;,  ecx<br />    mov &#91;edi+ebp+12&#93;, edx<br /><br />    add ebp, 16<br />    cmp ebp, &#91;esp+12&#93;       ; ln<br />    jl @B<br /><br />    mov ebx, &#91;esp-4&#93;<br />    mov esi, &#91;esp-8&#93;<br />    mov edi, &#91;esp-12&#93;<br />    mov ebp, &#91;esp-16&#93;<br /><br />    ret 12<br /><br />bcopy endp<br /><br />OPTION PROLOGUE&#58;PrologueDef <br />OPTION EPILOGUE&#58;EpilogueDef <br /><br />; ?????????????????????????????????????????????????????????????????????????<br /></code></pre></div>
+    <div class="meta">Posted on 2005-01-17 04:53:53 by hutch--</div>
+   </div>
+   <div class="post" id="post-155900">
+    <div class="subject"><a href="#post-155900">using memcpy in assembly</a></div>
+    <div class="body">API calls generally only set up SEH where it's needed. memcpy (RtlMoveMemory) doesn't set up a SEH (XP SP2 - but I doubt any other version does either). Look for yourself if you don't believe me.</div>
+    <div class="meta">Posted on 2005-01-17 06:49:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-155901">
+    <div class="subject"><a href="#post-155901">using memcpy in assembly</a></div>
+    <div class="body">&gt; Shame API calls regularly DO use SEH.<br /><br />I'm very ashamed having argued against M Hutchesson who obviously is *the* expert concerning C runtime topics.</div>
+    <div class="meta">Posted on 2005-01-17 07:06:34 by japheth</div>
+   </div>
+   <div class="post" id="post-155903">
+    <div class="subject"><a href="#post-155903">using memcpy in assembly</a></div>
+    <div class="body">Let's not fight people. Digressing from the main topic..</div>
+    <div class="meta">Posted on 2005-01-17 08:19:00 by roticv</div>
+   </div>
+   <div class="post" id="post-155905">
+    <div class="subject"><a href="#post-155905">using memcpy in assembly</a></div>
+    <div class="body">:-D <br /><br />You will have to forgive us mere mortals who try and answer questions to all comers on a subject as broad as Windows API functions and the range of C runtime libraries written since 1995 for 32 bit Windows.<br /><br />Now given that the member actually asked a question about writing some assembler code, I am in fact guilty of trying to help out here.<br /><br />If you can be bothered to download the vc 2005 beta, you will see some Intel supplied asm code for some of the C runtimes that may be better than some of the crap that has been around in the past but then when you try and answer a members question, you have to try and address what they were looking for in the first place, some info on writing a block copy routine dedicated to a particular task.  :roll:</div>
+    <div class="meta">Posted on 2005-01-17 08:23:16 by hutch--</div>
+   </div>
+   <div class="post" id="post-155906">
+    <div class="subject"><a href="#post-155906">using memcpy in assembly</a></div>
+    <div class="body">OK, lets get away from the memcpy question. Is there a way to call a C function from inline assembly? I see that its possible for non-inline. Also, what is SEH (new guy here)? Thanks.<br /><br />~Steve</div>
+    <div class="meta">Posted on 2005-01-17 08:47:13 by diehard2</div>
+   </div>
+   <div class="post" id="post-155907">
+    <div class="subject"><a href="#post-155907">using memcpy in assembly</a></div>
+    <div class="body">Steve,<br /><br />With a lot of messing around, it probably is possible but there is no gain by doing so as the compiler can easily handle a function call in what is usually a very efficient way.<br /><br />If you want to use a function call with inline assembler, you would break up the blocks so the you had something like this style of code.<br /><br /><pre><code><br />__asm&#123;<br />  ; asm code here<br />  &#125;<br /><br />  // make the function call here;<br /><br />__asm&#123;<br />  ; the rest of the asm code here<br />  &#125;<br /></code></pre><br /><br />SEH is Structured Exception Handling which is used by the OS at times to handle critical errors. If you crash an app with an error in it, it means that OS has handled the exception (error) because you have not. You can write this style of code yourself.</div>
+    <div class="meta">Posted on 2005-01-17 09:13:02 by hutch--</div>
+   </div>
+   <div class="post" id="post-155908">
+    <div class="subject"><a href="#post-155908">using memcpy in assembly</a></div>
+    <div class="body">&gt; the vc 2005 beta, you will see some Intel supplied asm code<br />&gt; for some of the C runtimes that may be better than some of the crap that <br />&gt; has been around in the past<br /><br />the VC 5 CRT source is part of the CD and it's easys to see:<br /><br />1. all the memcpy/strcpy stuff is written in ASM<br />2. it doesn't use SEH<br /><br />VC5 is from 1997!</div>
+    <div class="meta">Posted on 2005-01-17 09:38:49 by japheth</div>
+   </div>
+   <div class="post" id="post-155909">
+    <div class="subject"><a href="#post-155909">using memcpy in assembly</a></div>
+    <div class="body">hutch--, how exactly was your misinformation helpful?<br /><div class="quote"><br />Both the C runtimes and API functions will probably be off the pace as they usually have higher overhead with SEH and similar. <br /></div></div>
+    <div class="meta">Posted on 2005-01-17 10:09:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-155911">
+    <div class="subject"><a href="#post-155911">using memcpy in assembly</a></div>
+    <div class="body"><div class="quote">OK, lets get away from the memcpy question. Is there a way to call a C function from inline assembly? I see that its possible for non-inline. Also, what is SEH (new guy here)?</div><br /><br />Of course, you can call any C function from inline assembly.  But, each compiler has its own way of doing it.  For example, the free version of MSC (aka, VCToolkit == VC7.1) requires undecorated function names.  Like<br /><pre><code><br />/* memcpy&#40;p,q,10&#41; in inline assembly */<br />push 10<br />push q<br />push p<br />call memcpy<br />add esp,12<br /></code></pre><br /><br />For SEH, you might want to consult MSDN or SDK documentation for introduction.  (Maybe it is not in SDK documentation anymore.  It was included in Win95 SDK documentation, though.)  And, if you want to study more, read J Gordon's web page.<br /><br />Finally, as a general note, create a separte module if you need inline assembly.  Most compilers automatically turn off optimization for the module as a whole when they see inline assembly.  MSC was one of them and I personally do not use inline assembly except for testing.<br /><br />Now, OT.<br />The amount of incorrect claims in this thread about certain C compiler and its library is disturbing.  MS provided part of its library source code of MSC9 (aka Visual C 2.0) and MSC14 beta (aka VC2005) for public download.  Read and compare the source code and figure out what is going on.  And, &quot;Intel supplied asm code&quot; is quite imaginative.  That directory has been a part of platform specific source tree and has nothing to do with Intel-created code.</div>
+    <div class="meta">Posted on 2005-01-17 12:08:24 by Starless</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=20362&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=20362&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="20362" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=20362&amp;page=2">&gt;</a><a href="../?id=20362&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

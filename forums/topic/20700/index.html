@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Find system administrator - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20700" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20700">Find system administrator</a></p>
+   <div class="post" id="post-157727">
+    <div class="subject"><a href="#post-157727">Find system administrator</a></div>
+    <div class="body">Hello everybody,<br /><br />What is best method of finding who is system administrator?  actually any method is appreciated. <br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2005-03-05 10:25:25 by czDrillard</div>
+   </div>
+   <div class="post" id="post-157730">
+    <div class="subject"><a href="#post-157730">Find system administrator</a></div>
+    <div class="body">Hi,<br /><br />maybe this helps?!?<br /><br /><pre><code><br />;--------------------------------------------------------------------<br />; IsAdmin<br />; Returns TRUE if calling process &#40;you&#41; have Admin privileges and<br />; FALSE if you don't or in case of error.<br />;<br />; Copy IsAdmin proc and variables &#40;except those starting with Msg&#41; to<br />; your own program.<br />;--------------------------------------------------------------------<br /><br />.486<br />.MODEL		FLAT, STDCALL<br />option		casemap&#58;none	;case sensitive<br /><br />include		d&#58;\masm32\include\windows.inc<br />include		d&#58;\masm32\include\kernel32.inc<br />include		d&#58;\masm32\include\user32.inc<br />include		d&#58;\masm32\include\advapi32.inc<br />includelib	d&#58;\masm32\lib\user32.lib<br />includelib	d&#58;\masm32\lib\kernel32.lib<br />includelib	d&#58;\masm32\lib\advapi32.lib<br /><br />IsAdmin				PROTO<br /><br />ACCESS_READ			equ 1<br />ACCESS_WRITE		equ	2<br /><br />.data<br />MsgCaption			db &quot;IsAdmin&quot;, 0<br />MsgAdmin			db &quot;You have Admin privileges!&quot;, 0<br />MsgNoAdmin			db &quot;You don't have Admin privileges!&quot;, 0<br />siaNtAuthority		SID_IDENTIFIER_AUTHORITY &lt;SECURITY_NT_AUTHORITY&gt;<br /><br />.data?<br />GenericMapping		GENERIC_MAPPING &lt;?,?,?,?&gt;<br />ps					PRIVILEGE_SET &lt;&gt;<br /><br />.const<br /><br />.code<br />Start&#58;<br />	invoke	IsAdmin<br />	.if eax == TRUE<br />		invoke	MessageBox, NULL, ADDR MsgAdmin, ADDR MsgCaption, MB_OK<br />	.else<br />		invoke	MessageBox, NULL, ADDR MsgNoAdmin, ADDR MsgCaption, MB_OK<br />	.endif<br />	invoke	ExitProcess, 0<br />	<br />IsAdmin proc<br />LOCAL hToken &#58;DWORD<br />LOCAL psdAdmin &#58;DWORD<br />LOCAL dwACLSize &#58;DWORD<br />LOCAL hThread &#58;DWORD<br />LOCAL hProcess &#58;DWORD<br />LOCAL pACL &#58;DWORD<br />LOCAL psidAdministrators &#58;DWORD<br />LOCAL dwStructureSize &#58;DWORD<br />LOCAL dwStatus &#58;DWORD<br />LOCAL bRetVal &#58;DWORD<br /><br />	mov		psidAdministrators, 0<br />	mov		psdAdmin, 0<br />	mov		pACL, 0<br />	<br />	invoke	ImpersonateSelf, 2<br />	invoke	GetCurrentThread<br />	mov		hThread, eax<br />	invoke	OpenThreadToken, hThread, TOKEN_QUERY, FALSE, ADDR hToken<br />	.if eax == 0<br />		invoke	GetLastError<br />		.if eax != ERROR_NO_TOKEN<br />			mov		bRetVal, FALSE<br />			jmp		Exitus<br />		.endif<br />		invoke	GetCurrentProcess<br />		mov		hProcess, eax<br />		invoke	OpenProcessToken, hProcess, TOKEN_QUERY, ADDR hToken<br />		.if eax == 0<br />			mov		bRetVal, FALSE<br />			jmp		Exitus<br />		.endif<br />	.endif<br /><br />	invoke	AllocateAndInitializeSid, ADDR siaNtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, ADDR psidAdministrators<br />	invoke	LocalAlloc, LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH<br />	mov		psdAdmin, eax<br />	invoke	InitializeSecurityDescriptor, psdAdmin, SECURITY_DESCRIPTOR_REVISION<br />	invoke	GetLengthSid, psidAdministrators<br />	sub		eax, sizeof DWORD<br />	add		eax, sizeof ACL<br />	add		eax, sizeof ACCESS_ALLOWED_ACE<br />	mov		dwACLSize, eax<br />	invoke	LocalAlloc, LPTR, dwACLSize<br />	mov		pACL, eax<br />	invoke	InitializeAcl, pACL, dwACLSize, ACL_REVISION2<br />	invoke	AddAccessAllowedAce, pACL, ACL_REVISION2, ACCESS_READ OR ACCESS_WRITE, psidAdministrators<br />	invoke	SetSecurityDescriptorDacl, psdAdmin, TRUE, pACL, FALSE<br />	invoke	SetSecurityDescriptorGroup, psdAdmin, psidAdministrators, FALSE<br />	invoke	SetSecurityDescriptorOwner, psdAdmin, psidAdministrators, FALSE	<br />	invoke	IsValidSecurityDescriptor, psdAdmin<br />	mov		GenericMapping.GenericRead, ACCESS_READ<br />	mov		GenericMapping.GenericWrite, ACCESS_WRITE<br />	mov		GenericMapping.GenericExecute, 0<br />	mov		GenericMapping.GenericAll, ACCESS_READ OR ACCESS_WRITE<br />	mov		dwStructureSize, sizeof PRIVILEGE_SET<br />	invoke	AccessCheck, psdAdmin, hToken, ACCESS_READ OR ACCESS_WRITE, ADDR GenericMapping, ADDR ps, ADDR dwStructureSize, ADDR dwStatus, ADDR bRetVal<br />	.if eax == 0<br />		mov		bRetVal, FALSE<br />		jmp		Exitus<br />	.endif<br />	invoke	RevertToSelf<br />	<br />Exitus&#58;<br />	.if pACL != 0<br />		invoke	LocalFree, pACL<br />	.endif<br />	.if psdAdmin != 0<br />		invoke	LocalFree, psdAdmin<br />	.endif<br />	.if psidAdministrators != 0<br />		invoke	FreeSid, psidAdministrators<br />	.endif<br />	mov	eax, bRetVal<br />	ret<br />IsAdmin endp<br />end Start<br /></code></pre></div>
+    <div class="meta">Posted on 2005-03-05 15:23:16 by SamiP</div>
+   </div>
+   <div class="post" id="post-157764">
+    <div class="subject"><a href="#post-157764">Find system administrator</a></div>
+    <div class="body">Thanks SamiP   :alright:  <br /><br />Much appreciated.<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2005-03-06 21:07:48 by czDrillard</div>
+   </div>
+  </div>
+ </body>
+</html>

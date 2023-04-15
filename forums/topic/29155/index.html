@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Calculating number of digits from 64Bit-Unsigned-Integer - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29155" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=113">Low Level Concepts</a> &raquo; <a href="../?id=29155">Calculating number of digits from 64Bit-Unsigned-Integer</a></p>
+   <div class="post" id="post-205921">
+    <div class="subject"><a href="#post-205921">Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">Getting tired of searching for an effective algorithm which calculates the number of digits of a 64-Bit-unsigned-integer but<br />finding only long-winded binary-to-string-to-binary conversion routines I wrote my own one.<br /><br />The decimal part uses the coprocessor using this simple formula:<br /><br />numdigits = int(log(number64))+1<br /><br />The hexadecimal part uses the powerful BSR (&quot;bit scan reverse&quot;) instruction, which can also be considered as binary logarithm.<br /><br />Input:	EAX=Pointer qword ptr<br />Output:	EAX=number of digits<br />Changed:	EAX, EDX, FPU(S0...S2)<br /><br />Written for TASM, 32Bit.<br /><br />Thanks for any comments or suggestions.<br /><br /><pre><code>fpu_ctrlword	record fpucw_$1:3,fpucw_ic:1,fpucw_rc:2,fpucw_pc:2,fpucw_ie:1,fpucw_$2:1,fpucw_pm:1,fpucw_um:1,fpucw_om:1,fpucw_zm:1,fpucw_dm:1,fpucw_im:1<br /><br />;number64	dq 12345678901234<br />number64 dq 01fh<br /><br />main		proc @type_main argc:dword,argv:dword,argenv:dword<br />	mov eax,offset number64<br />	fninit<br /><br />;----Start Decimal part----------------------------------------------------------------------------<br />	push dx		;make room for FPU control word<br />	fnstcw	;save FPU control word<br />	push word ptr	;create a copy of FPU control word<br />	setflag word ptr,3 shl fpucw_rc		;set FPU rounding mode: truncate<br />	fldcw	;set the FPU rounding moude<br />	fld1		;&quot;1&quot;<br />	fldlg2	;log(2) = 1/log(2,10)<br />	fild qword ptr 	;load number64<br />	ftst		;test if number64 equals to zero<br />	fnstsw ax<br />	sahf		;set processor flags to FPU result for evaluation<br />	.if zero?<br />		fcompp	;throw away s0 and s1, leave &quot;1&quot;<br />	.else<br />		fyl2x		;s1 * log(2,s0) = log(2,s0) / log(2,10) = log(s0)<br />		fadd		;= log(s0)+1<br />	.endif<br />	fistp word ptr<br />	xor eax,eax<br />	pop ax	;load EAX with num of digits<br />	fldcw	;restore FPU control word<br />	pop dx	;throw away FPU control word space<br />;----End Decimal part----------------------------------------------------------------------------<br /><br />	mstr s1,&lt;&quot;The number %I64u contains %d decimal digits.&quot;,10&gt;<br />	call printf,offset s1,dword ptr number64+4 dword ptr number64,eax<br /><br /><br />	mov eax,offset number64<br /><br />;----Start Hexadecimal part----------------------------------------------------------------------------<br />	xor edx,edx		;initialize digit counter value in case number64 equals to zero<br />	bsr edx,dword ptr	;search for the first set bit in HIGH_DWORD<br />	.if zero?	;no bit was set<br />		bsr edx,dword ptr	;search the first set bit in LOW_DWORD<br />	.else<br />		add edx,32<br />	.endif<br />	xchg eax,edx<br />	shr eax,2<br />	inc eax<br />;----End Hexadecimal part----------------------------------------------------------------------------<br />	<br />	mstr s2,&lt;&quot;The number %I64Xh contains %d hexadecimal digits.&quot;&gt;<br />	call printf,offset s2,dword ptr number64+4 dword ptr number64,eax<br /><br />endmain:	ret<br />endp</code></pre></div>
+    <div class="meta">Posted on 2008-09-16 18:06:55 by TasmDev</div>
+   </div>
+   <div class="post" id="post-205922">
+    <div class="subject"><a href="#post-205922">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body"><div class="quote">the number of digits of a 64-Bit-unsigned-integer<br /><br />numdigits = int(log(number64))+1</div><br /><br />One small word of caution: You can load only a 64-Bit-<strong><u>signed</u></strong>-integer to the FPU. Your procedure should thus be restricted to a 63-Bit-unsigned-integer if you want to use it only for unsigned integers.<br /><br />If you intend to use it for 64-Bit-<strong><u>signed</u></strong>-integers, be sure to use &quot;fabs&quot; before you attempt to compute the log.<br /></div>
+    <div class="meta">Posted on 2008-09-16 22:11:30 by Raymond</div>
+   </div>
+   <div class="post" id="post-205923">
+    <div class="subject"><a href="#post-205923">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">That&#039;s fully correct. I overlooked this case. But assuming that such a large 64Bit unsigned number will never be committed to the procedure and a programmer pays attention to the argument I think &quot;fabs&quot; can be omitted for code space.</div>
+    <div class="meta">Posted on 2008-09-16 22:33:49 by TasmDev</div>
+   </div>
+   <div class="post" id="post-205924">
+    <div class="subject"><a href="#post-205924">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">Funny, you can load 128 bits to the gpu and do math and return a meaningful result via a texture.<br />Am I missing something?<br /></div>
+    <div class="meta">Posted on 2008-09-17 10:09:36 by Homer</div>
+   </div>
+   <div class="post" id="post-205926">
+    <div class="subject"><a href="#post-205926">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body"><div class="quote"><br />Funny, you can load 128 bits to the gpu and do math and return a meaningful result via a texture.<br />Am I missing something?<br /></div><br />Yes, certainly. You are in the wrong thread. But if you are able to program your &quot;gpu&quot; with this &quot;texture&quot; please post it here to suggest a better solution or leave this thread. Thank you.</div>
+    <div class="meta">Posted on 2008-09-17 19:36:53 by TasmDev</div>
+   </div>
+   <div class="post" id="post-205927">
+    <div class="subject"><a href="#post-205927">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">I didn&#039;t see a DO NOT DISTURB sign on the door, sorry about that.<br /><br />Actually its becoming quite common to use the gpu for general purpose processing - its a powerful number cruncher, and allows for 1x128 bit, 2x64 bit or 4x32bit parallel processing - you have this muscle that you never flex unless you&#039;re playing games, its a waste - search for GPGPU.<br /><br />Thank you, have a nice day.<br /></div>
+    <div class="meta">Posted on 2008-09-17 20:25:49 by Homer</div>
+   </div>
+   <div class="post" id="post-205928">
+    <div class="subject"><a href="#post-205928">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">Are you serious? If I get you right, a user shall buy a multi-monster-high-end-PC with a super-3D-power-wasting-multitexture-water-cooled graphic card just only to run a program which calculates the number of digits from a shitty integer? That&#039;s like breaking a butterfly on a wheel. But thanks for the proposal.</div>
+    <div class="meta">Posted on 2008-09-17 21:18:52 by TasmDev</div>
+   </div>
+   <div class="post" id="post-205929">
+    <div class="subject"><a href="#post-205929">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">TasmDev, it&#039;s true that for one simple calculation you don&#039;t need anything like GPGPU, super-uber parallelism, SSE78 optimization, etc. But what you asked for was a <strong>fast</strong> way to do this (or at least that&#039;s what I understand from your first post) and Homer suggested one. If you want to &quot;calculate the number of digits from a shitty integer&quot; then you can very well use the &quot;long-winded binary-to-string-to-binary conversion routines&quot;. Please state clearly what speeds are you aiming at so you won&#039;t get frustrated next time someone suggests you a solution.</div>
+    <div class="meta">Posted on 2008-09-17 21:26:53 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-205952">
+    <div class="subject"><a href="#post-205952">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">How about something like this:<br /><pre><code><br />mov edx,dword ptr ; load hi-dword<br />mov eax,dword ptr ; load lo-dword<br /><br />.if edx==0<br />&nbsp; &nbsp; &nbsp;cmp eax,10<br />&nbsp; &nbsp; &nbsp;jl _numDigitsIs1<br />&nbsp; &nbsp; &nbsp;cmp eax,100<br />&nbsp; &nbsp; &nbsp;jl _numDigitsIs2<br />&nbsp; &nbsp; &nbsp;cmp eax,1000<br />&nbsp; &nbsp; &nbsp;jl _numDigitsIs3<br />&nbsp; &nbsp; &nbsp;cmp eax,10000<br />&nbsp; &nbsp; &nbsp;jl _numDigitsIs4<br />...<br />.else<br />&nbsp; &nbsp;.. here in a bit more complicated way compare to 64-bit values<br />.endif<br /></code></pre><br />Just an idea. May be faster, may be slower, may be optimized, may lead to tricks<br /><br /><br />Homer: GPUs can only handle single-precision floats, only 2 recent ones added double-precision floats. You can&#039;t even do bit-fiddling ops like XOR/AND/OR. Maybe, just maybe that functionality is exposed/emulated in CUDA, but GL_NV_fragment_program4&#039;s doc only rejects that notion. <br />Whoops, it&#039;s documented in GL_NV_gpu_program4&nbsp; - it has xor/and/or/not instructions</div>
+    <div class="meta">Posted on 2008-09-19 09:58:57 by Ultrano</div>
+   </div>
+   <div class="post" id="post-205953">
+    <div class="subject"><a href="#post-205953">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">Shader constants are one or more 128 bit float, typically addressed as 4xreal4.<br />The trick then is to structure operations to take advantage of this ability, and to feed crafted data to the shader.<br /></div>
+    <div class="meta">Posted on 2008-09-19 11:37:44 by Homer</div>
+   </div>
+   <div class="post" id="post-206374">
+    <div class="subject"><a href="#post-206374">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body"><div class="quote"><br />But what you asked for was a <strong>fast</strong> way to do this (or at least that&#039;s what I understand from your first post) and Homer suggested one.</div><br /><br />Quite the contrary, the GPU would not be fast for this at all. Way too much latency to seriously consider it for doing non-parallel work.<br /><br />Using the slow-assed div instruction and dividing by 10 until the quotient is 0 would be many times faster that trying to shuttle data over to the GPU, running a shader, and then shuttling a result back.<br /><br />I&#039;m sure that GPGPU is all cool and shit, but come on... be realistic... it aint cool this time.. it would be a novel solution with no practical value at all<br /></div>
+    <div class="meta">Posted on 2008-12-02 03:38:26 by Rockoon</div>
+   </div>
+   <div class="post" id="post-206379">
+    <div class="subject"><a href="#post-206379">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">You are using the <strong>BSR</strong> for hex numbers. Why don&#039;t you use that procedure also for decimal numbers and use the result to pick the number of decimal digits from a look-up table which should take you less time to prepare with your calculator than the time it took to write your initial algo.<br /><br />I doubt you can devise a faster procedure. AND it would work for the full range of unsigned 64-bit integers.</div>
+    <div class="meta">Posted on 2008-12-02 20:43:26 by Raymond</div>
+   </div>
+   <div class="post" id="post-206388">
+    <div class="subject"><a href="#post-206388">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body"><div class="quote"><br />You are using the <strong>BSR</strong> for hex numbers. Why don&#039;t you use that procedure also for decimal numbers and use the result to pick the number of decimal digits from a look-up table which should take you less time to prepare with your calculator than the time it took to write your initial algo.<br /></div><br /><br />Consider that a 10-bit number can range from 512..1023 <br /><br />..so is a 10-bit number 3 digits, or 4? How will a lookup table help while still fitting on a practical storage medium (a 1TB drive wouldn&#039;t be big enough, would it?)<br /><br />Note the relationship between base-2 and base-16 that makes his hex techique possible.<br /><br /><br /></div>
+    <div class="meta">Posted on 2008-12-03 07:58:08 by Rockoon</div>
+   </div>
+   <div class="post" id="post-206390">
+    <div class="subject"><a href="#post-206390">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">Okay I wrote this based on Ultrano&#039;s suggestion. The code is written in BASM:<br /><br /><pre><code>Function GetDigitCount (Number : DWORD) : DWORD; Assembler; Register;<br />asm<br />&nbsp; (* EAX = Number *)<br />&nbsp; PUSH&nbsp; &nbsp; &nbsp; EDI<br />&nbsp; MOV&nbsp; &nbsp; &nbsp;  EDI , 10<br />&nbsp; MOV&nbsp; &nbsp; &nbsp;  EDX , EAX<br />&nbsp; XOR&nbsp; &nbsp; &nbsp;  EAX , EAX<br />&nbsp; MOV&nbsp; &nbsp; &nbsp;  ECX , 10 (* The number that EDX has to be compared to *)<br />&nbsp; MOV&nbsp; &nbsp; &nbsp;  EBX , 1&nbsp; (* The number of digits that have to be returned *)<br />&nbsp; @@Loop:<br />&nbsp; &nbsp; CMP&nbsp; &nbsp; &nbsp;  EDX , ECX<br />&nbsp; &nbsp; MOV&nbsp; &nbsp; &nbsp;  EAX , EBX<br />&nbsp; &nbsp; JL&nbsp; &nbsp; &nbsp; &nbsp; @@End<br />&nbsp; &nbsp; IMUL&nbsp; &nbsp; &nbsp; ECX , 10<br />&nbsp; &nbsp; INC&nbsp; &nbsp; &nbsp;  EBX<br />&nbsp; &nbsp; DEC&nbsp; &nbsp; &nbsp;  EDI<br />&nbsp; &nbsp; JNZ&nbsp; &nbsp; &nbsp;  @@Loop<br />&nbsp; @@End:<br />&nbsp; POP&nbsp; &nbsp; &nbsp;  EDI<br />end;</code></pre><br /><br />I compiled and tested it in Delphi 6 for 32-bit DWORD values.</div>
+    <div class="meta">Posted on 2008-12-03 09:42:55 by XCHG</div>
+   </div>
+   <div class="post" id="post-206392">
+    <div class="subject"><a href="#post-206392">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">MASM<br /><br /><pre><code>.data<br />??pow10 textequ &lt;1&gt;<br />POW10TABLE dq ??pow10<br />rept 19<br />	??pow10 CatStr ??pow10,&lt;0&gt;<br />	%dq ??pow10<br />endm<br /><br />.code<br />UInt64Log10 proc uses ebx edi esi uint64:qword<br />	mov eax,dword ptr uint64<br />	mov edx,dword ptr uint64+4<br />	lea ebx,POW10TABLE<br />	.if edx<br />		bsr ecx,edx<br />		add ecx,32+1<br />		imul ecx,ecx,1233<br />		shr ecx,12<br />		mov esi,eax<br />		mov edi,edx<br />		sub esi,<br />		sbb edi,<br />@@:		shr edi,31<br />		sub ecx,edi<br />		mov eax,ecx<br />		ret<br />	.endif<br />	bsr ecx,eax<br />	add ecx,1<br />	imul ecx,ecx,1233<br />	shr ecx,12<br />	mov edi,eax<br />	sub edi,<br />	jmp @B<br />	<br />UInt64Log10 endp<br /><br />UInt64Log2 proc uint64:qword<br />	mov edx,dword ptr uint64+4;hi<br />	mov eax,dword ptr uint64;lo<br />	cmp edx,1; if (edx&lt;1) { carry=1 } else { carry=0 } <br />	cmovnc eax,edx<br />	sbb edx,edx; set to -1 if carry<br />	bsr eax,eax<br />	and edx,-32<br />	lea eax,<br />	ret<br />UInt64Log2 endp<br /></code></pre></div>
+    <div class="meta">Posted on 2008-12-03 10:55:09 by drizz</div>
+   </div>
+   <div class="post" id="post-206416">
+    <div class="subject"><a href="#post-206416">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">Here&#039;s a procedure using BSR and a lookup table. Fast and efficient.<br /><br />- <em>lpsrc</em> is the memory address of the qword<br />- The number of digits in the decimal representation of the qword is returned in EAX<br />- Usage: invoke Ddigits, ADDR qword_source<br />- The source qword is not modified<br /><br /><pre><code>Ddigits proc uses ebx lpsrc :DWORD<br /><br />.data<br />ALIGN 4<br />digits&nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; &nbsp;1, 1, 1, 1, 2, 2, 2, 3<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; &nbsp;3, 3, 4, 4, 4, 4, 5, 5<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; &nbsp;5, 6, 6, 6, 7, 7, 7, 7<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; &nbsp;8, 8, 8, 9, 9, 9,10,10<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; 10,10,11,11,11,12,12,12<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; 13,13,13,13,14,14,14,15<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; 15,15,16,16,16,16,17,17<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; 17,18,18,18,19,19,19,19<br />lo_limit&nbsp; &nbsp; dd&nbsp; &nbsp; -1,-1,-1,9,-1,-1,63h,-1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; -1,3E7h,-1,-1,-1,270Fh,-1,-1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; 1869Fh,-1,-1,0F423Fh,-1,-1,-1,98967Fh<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; -1,-1,5F5E0FFh,-1,-1,3B9AC9FFh,-1,-1<br />hi_limit&nbsp; &nbsp; dd&nbsp; &nbsp; -1,540bE3FFh,-1,-1,4876E7FFh,-1,-1,0D4A50FFFh<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; -1,-1,-1,4E729FFFh,-1,-1,107A3FFFh,-1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; -1,0A4C67FFFh,-1,-1,-1,6FC0FFFFh,-1,-1<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; 5D89FFFFh,-1,-1,0A763FFFFh,-1,-1,-1,89E7FFFFH<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; 2,2,8,10h,17h,40h,80h,0E8h<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; 200h,400h,800h,918h,2000h,4000h,5AF3h,10000h<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; 20000h,38D7Eh,80000h,100000h,200000h,2386F2h,800000h,1000000h<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; 1634578h,4000000h,8000000h,0DE0B6B3h,20000000h,40000000h,80000000h,8AC72304h<br /><br />.code<br /><br />&nbsp; &nbsp; mov&nbsp; &nbsp;ebx,lpsrc<br />&nbsp; &nbsp; mov&nbsp; &nbsp;eax,<br />&nbsp; &nbsp; mov&nbsp; &nbsp;edx,<br />&nbsp; &nbsp; bsr&nbsp; &nbsp;ecx,edx&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;check high dword first<br />&nbsp; &nbsp; .if&nbsp; &nbsp;ZERO?&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;only a 32-bit number<br />&nbsp; &nbsp; &nbsp; &nbsp; bsr&nbsp; &nbsp;ecx,eax<br />&nbsp; &nbsp; &nbsp; &nbsp; .if&nbsp; &nbsp;ZERO?<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;ebx,ebx<br />&nbsp; &nbsp; &nbsp; &nbsp; .else<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; movzx ebx,digits<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .if&nbsp; &nbsp;eax &gt; lo_limit<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inc&nbsp; &nbsp;ebx<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .endif<br />&nbsp; &nbsp; &nbsp; &nbsp; .endif<br />&nbsp; &nbsp; .else<br />&nbsp; &nbsp; &nbsp; &nbsp; add&nbsp; &nbsp;ecx,32<br />&nbsp; &nbsp; &nbsp; &nbsp; movzx ebx,digits<br />&nbsp; &nbsp; &nbsp; &nbsp; cmp&nbsp; &nbsp;edx,hi_limit<br />&nbsp; &nbsp; &nbsp; &nbsp; .if&nbsp; &nbsp;ZERO?<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .if&nbsp; &nbsp;eax &gt; lo_limit<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inc&nbsp; &nbsp;ebx<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; .endif<br />&nbsp; &nbsp; &nbsp; &nbsp; .elseif !CARRY?<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; inc&nbsp; &nbsp;ebx<br />&nbsp; &nbsp; &nbsp; &nbsp; .endif<br />&nbsp; &nbsp; .endif<br />&nbsp; &nbsp; mov&nbsp; &nbsp;eax,ebx<br />&nbsp; &nbsp; ret<br /><br />Ddigits endp</code></pre><br /><br />I have tested it with all possible values of 2<sup>n</sup>, 2<sup>n</sup>-1, 10<sup>n</sup> and 10<sup>n</sup>-1, and all returned values were correct.<br /></div>
+    <div class="meta">Posted on 2008-12-04 20:33:54 by Raymond</div>
+   </div>
+   <div class="post" id="post-206817">
+    <div class="subject"><a href="#post-206817">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">That&#039;s the best solution I have ever seen!</div>
+    <div class="meta">Posted on 2009-02-07 14:14:12 by TasmDev</div>
+   </div>
+   <div class="post" id="post-206819">
+    <div class="subject"><a href="#post-206819">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">You could have done it easily by yourself if you had put your mind to it after I gave you the clue about a lookup table.<br /><br />Chalk it up to experience for your next challenge. ;)<br /></div>
+    <div class="meta">Posted on 2009-02-07 20:35:47 by Raymond</div>
+   </div>
+   <div class="post" id="post-207022">
+    <div class="subject"><a href="#post-207022">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body"><div class="quote"><br />Funny, you can load 128 bits to the gpu and do math and return a meaningful result via a texture.<br />Am I missing something?</div><br /><br />Neither nVidia nor ATi support 128 bit floats, as far as I know.<br />Their hardware normally works with 32-bit floats, but with GPGPU tasks they can process 64-bit precision at reduced performance.<br />I also don&#039;t know of any textures formats that would support 128 bit float.<br />4x real4 is not the same as 1x real16. You couldn&#039;t do a 128 bit log operation on the data.</div>
+    <div class="meta">Posted on 2009-03-10 07:09:57 by Scali</div>
+   </div>
+   <div class="post" id="post-207024">
+    <div class="subject"><a href="#post-207024">Re: Calculating number of digits from 64Bit-Unsigned-Integer</a></div>
+    <div class="body">A32R32G32B32 pixel format used as a vertex texture , and indexed via a pixelshader.<br /></div>
+    <div class="meta">Posted on 2009-03-10 08:57:59 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

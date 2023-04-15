@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Anti-debugging code ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29626" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=29626">Anti-debugging code ?</a></p>
+   <div class="post" id="post-209174">
+    <div class="subject"><a href="#post-209174">Anti-debugging code ?</a></div>
+    <div class="body">This is supposed to be some anti-debugging code but it isn&#039;t working right.<br /><br />When it&#039;s run, it immediately opens open Ollydbg.<br />When I step through it, it runs into problems at the call eax instruction.<br /><br />Is there a fix for this?<br /><br />Thanks.<br /><br />.DATA<br /><br />our_process_handle			dd -1<br /><br />.CODE<br /><br />start:<br /><br />&nbsp; &nbsp; &nbsp; lea eax,our_process_handle<br />	push eax<br />	mov ebx,esp<br />	push 0<br />	push 4<br />	push ebx<br />	push 7<br />	push dword ptr <br />	mov eax,077F5BDD8h<br />	call eax				; execute NtQueryInformationProcess<br />	pop ecx<br />	test eax,eax<br />	jl finish<br /><br />	cmp ecx,0<br />	<br />&nbsp; &nbsp; &nbsp; jge we_are_not_debugged<br /><br />	;int 3					; yes we are debugged!<br /><br /><br />	we_are_not_debugged:			; no debugger detected<br />	<br />finish:<br />		<br /><br />invoke ExitProcess,0<br /><br />end start<br /></div>
+    <div class="meta">Posted on 2009-10-14 11:20:44 by skywalker</div>
+   </div>
+   <div class="post" id="post-209176">
+    <div class="subject"><a href="#post-209176">Re: Anti-debugging code ?</a></div>
+    <div class="body">Take a few steps back and try to get an idea of The Bigger Picture.</div>
+    <div class="meta">Posted on 2009-10-14 11:36:15 by f0dder</div>
+   </div>
+   <div class="post" id="post-209177">
+    <div class="subject"><a href="#post-209177">Re: Anti-debugging code ?</a></div>
+    <div class="body">Just a quick question:<br /><br />Are you sure of the address of NtQueryInformationProcess?<br /><br />The reason that I ask is because your routine does not show the method you used to obtain this address (077F5BDD8h)<br /><br /></div>
+    <div class="meta">Posted on 2009-10-14 11:38:09 by madprgmr</div>
+   </div>
+   <div class="post" id="post-209180">
+    <div class="subject"><a href="#post-209180">Re: Anti-debugging code ?</a></div>
+    <div class="body">I have attached the article&nbsp; by Peter Ferrie, Senior Anti-Virus Researcher, Microsoft Corporation that the code came from.<br /><br />Andy<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2896" target="_blank">unpackers.pdf</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-10-14 15:09:31 by skywalker</div>
+   </div>
+   <div class="post" id="post-209181">
+    <div class="subject"><a href="#post-209181">Re: Anti-debugging code ?</a></div>
+    <div class="body">That&#039;s where I thought you got your code from; however, unless I missed that part I did not see a hard coded address for the call into NtQueryInformationProcess (listed in Section II Sub Section d paragrah iii)<br /><br />If you are going to hard code this address then you will need to have a section of code that goes out and finds its address on the system you are running<br /><br /></div>
+    <div class="meta">Posted on 2009-10-14 16:35:18 by madprgmr</div>
+   </div>
+   <div class="post" id="post-209412">
+    <div class="subject"><a href="#post-209412">Re: Anti-debugging code ?</a></div>
+    <div class="body"><div class="quote"><br />That&#039;s where I thought you got your code from; however, unless I missed that part I did not see a hard coded address for the call into NtQueryInformationProcess (listed in Section II Sub Section d paragrah iii)<br /><br />If you are going to hard code this address then you will need to have a section of code that goes out and finds its address on the system you are running<br /><br /></div><br /><br />I finally got it fixed.<br />The original code had the wrong API address for NTQuery...<br /><br />I attached the .exe.<br />I would appreciate if it could be tested on other NT versions besides XP Sp2.<br /><br />Thanks.<br /><br /><pre><code><br />; anti2.asm Anti-debug <br />;<br />.386<br />.MODEL FLAT, STDCALL<br />OPTION CASEMAP: NONE<br /><br /><br />&nbsp; &nbsp; include \masm32\include\windows.inc<br />&nbsp; &nbsp; include \masm32\include\user32.inc<br />&nbsp; &nbsp; include \masm32\include\kernel32.inc<br />&nbsp; &nbsp; include \masm32\include\advapi32.inc<br />&nbsp; &nbsp; include \masm32\include\shlwapi.inc<br />&nbsp; &nbsp; include \masm32\macros\macros.asm<br /><br />&nbsp; &nbsp; includelib&nbsp; \masm32\lib\kernel32.lib<br />&nbsp; &nbsp; includelib&nbsp; \masm32\lib\user32.lib<br />&nbsp; &nbsp; includelib&nbsp; \masm32\lib\advapi32.lib<br />&nbsp; &nbsp; includelib&nbsp; \masm32\lib\shlwapi.lib <br /><br /><br />.DATA<br /><br />our_process_handle&nbsp; &nbsp; &nbsp; &nbsp;  dd&nbsp;  -1<br />szFile_OK&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  db&nbsp;  &quot;Not being debugged.&quot;,0<br />szDebugged&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; db&nbsp;  &quot;Application being debugged!!&quot;,0 <br />szAppName&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  db&nbsp;  &quot;Box&quot;,0 <br /><br />.CODE<br /><br />start:<br /><br />&nbsp; lea eax,our_process_handle<br />&nbsp; push eax<br />&nbsp; mov ebx,esp<br />&nbsp; push 0<br />&nbsp; push 4<br />&nbsp; push ebx<br />&nbsp; push 7<br />&nbsp; push dword ptr <br />&nbsp; mov eax,07C90E01Bh&nbsp; ; API address - Used ASM2OP.exe <br />&nbsp; call eax&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; execute NtQueryInformationProcess<br />&nbsp; pop ecx<br />&nbsp; test eax,eax<br />&nbsp; jl finish<br /><br />&nbsp; cmp ecx,0<br />&nbsp; jge Not_debugged<br />&nbsp; <br />invoke&nbsp; MessageBox, NULL, addr szDebugged, addr szAppName,MB_OK<br />invoke ExitProcess,0<br />&nbsp; &nbsp;  <br />Not_debugged:&nbsp; &nbsp; &nbsp; &nbsp;  ; no debugger detected<br /><br />invoke&nbsp; MessageBox, NULL, addr szFile_OK, addr szAppName,MB_OK<br />invoke ExitProcess,0<br /><br />finish:<br /><br />end start<br /><br /></code></pre><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2919" target="_blank">anti2.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-10-30 17:16:30 by skywalker</div>
+   </div>
+   <div class="post" id="post-209414">
+    <div class="subject"><a href="#post-209414">Re: Anti-debugging code ?</a></div>
+    <div class="body"><div class="quote"><br />I finally got it fixed.<br />The original code had the wrong API address for NTQuery...<br /><br />I attached the .exe.<br />I would appreciate if it could be tested on other NT versions besides XP Sp2.<br /></div>Stop hardcoding API addresses or stop writing code.<br /><br />The only time it&#039;s acceptable to hardcode addresses is if you&#039;re writing shellcode... and shellcode isn&#039;t accepted around here, for pretty obvious reasons.</div>
+    <div class="meta">Posted on 2009-10-30 18:37:59 by f0dder</div>
+   </div>
+   <div class="post" id="post-209415">
+    <div class="subject"><a href="#post-209415">Re: Anti-debugging code ?</a></div>
+    <div class="body">XP ENU SP0: does not work.<br />XP ENU SP1: does not work.<br />XP ENU SP2: works.<br />XP RUS SP2: works.<br />XP ENU SP3: does not work.<br />2003 ENU SP0: does not work.<br />2003 ENU SP1: does not work.<br /><br />There ain&#039;t such thing as <strong>right</strong> address for <strong>NtQueryInformationProcess</strong>. How do you think, why we still use old-fashioned import tables to dynamically link to DLLs (aside from being completely nuts)?<br /><br />Using function that may be altered or unavailable in future versions of Windows is the sure path to problem. Calling it in obscure/viral way only makes it worse. With the same (or slightly greater) level of success (or failure) you may call service dispatcher via <strong>call [7FFE0300]</strong>/<strong>int 2E</strong>/<strong>sysenter</strong>.<br /><br />Are you trying to develop working anti-debugging scheme, or just trying all googlable variants? If the former is true, you have to be smarter than most of crackers&#039; community (they&#039;re hard-boiled and armed to teeth). If the latter, hmm... all <u>documented</u> anti-debugging tricks are defeated by definition.<br /><br />&quot;If it runs, it can be hacked.&quot;</div>
+    <div class="meta">Posted on 2009-10-30 18:39:19 by baldr</div>
+   </div>
+   <div class="post" id="post-209427">
+    <div class="subject"><a href="#post-209427">Re: Anti-debugging code ?</a></div>
+    <div class="body"><div class="quote"><br /><br />There ain&#039;t such thing as <strong>right</strong> address for <strong>NtQueryInformationProcess</strong>. How do you think, why we still use old-fashioned import tables to dynamically link to DLLs (aside from being completely nuts)?<br /><br />Using function that may be altered or unavailable in future versions of Windows is the sure path to problem. Calling it in obscure/viral way only makes it worse. With the same (or slightly greater) level of success (or failure) you may call service dispatcher via <strong>call [7FFE0300]</strong>/<strong>int 2E</strong>/<strong>sysenter</strong>.<br /><br />Are you trying to develop working anti-debugging scheme, or just trying all googlable variants? If the former is true, you have to be smarter than most of crackers&#039; community (they&#039;re hard-boiled and armed to teeth). If the latter, hmm... all <u>documented</u> anti-debugging tricks are defeated by definition.<br /><br />&quot;If it runs, it can be hacked.&quot;<br /></div><br /><br />Thanks baldr for the feedback.<br /><br />There is no reason to think the worst. Try to think positive.<br /><br />I am learning and that involves making some mistakes along the way.<br /><br />Take care,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Andy<br /><br /></div>
+    <div class="meta">Posted on 2009-10-31 10:41:23 by skywalker</div>
+   </div>
+   <div class="post" id="post-209436">
+    <div class="subject"><a href="#post-209436">Re: Anti-debugging code ?</a></div>
+    <div class="body">Somewhat perverted way to learn. May be you should take easier tutorials to examine? ;-)</div>
+    <div class="meta">Posted on 2009-11-01 04:52:36 by baldr</div>
+   </div>
+   <div class="post" id="post-209440">
+    <div class="subject"><a href="#post-209440">Re: Anti-debugging code ?</a></div>
+    <div class="body">It seems more like you are copy-pasting code, for whatever reason, rather than <strong>learning</strong>.</div>
+    <div class="meta">Posted on 2009-11-01 08:19:28 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to empty a buffer? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=233" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=233">How to empty a buffer?</a></p>
+   <div class="post" id="post-1177">
+    <div class="subject"><a href="#post-1177">How to empty a buffer?</a></div>
+    <div class="body">According to X-Calibre, repeating string instructions are slow on PPRO+. But anyway, it would be more effective to use dword movements rather than byte ones as have been demonstrated through replies to this thread.<br />With rep, you can do:<pre><code><br />push	edi	; let's not forget to save volative registers<br />xor	eax, eax	; we're storing 0s<br />mov	ecx, sizeof mybuffer shr 2	; how many dwords to clear<br />mov	edi, OFFSET mybuffer<br />rep	stosd<br />pop	edi</code></pre><br /><br />You might want to complete the storing with bytes if the buffer is not dword aligned like so:<pre><code><br />push	edi	; let's not forget to save volative registers<br />xor	eax, eax	; we're storing 0s<br />mov	ecx, sizeof mybuffer shr 2	; how many dwords to clear<br />mov	edi, OFFSET mybuffer<br />rep	stosd<br />mov	ecx, &#40;sizeof mybuffer&#41; AND 3<br />rep	stosb<br />pop	edi</code></pre><br /><br />With standard looping it can be accomplished like this:<pre><code><br />mov	edx, OFFSET mybuffer - 4<br />mov	ecx, sizeof mybuffer shr 2<br />xor	eax, eax<br />@@st&#58;	mov	dword ptr &#91;edx+ecx*4&#93;, eax<br />	dec	ecx<br />	jnz	@@st</code></pre><br /><br />This succesfully clears mybuffer and trashes edx, ecx and eax while doing so. You might want to go with this code to preserve as much registers as possible:<pre><code><br />mov	ecx, sizeof mybuffer shr 2<br />@@st&#58;	mov	&#91;mybuffer-4+ecx*4&#93;, 0<br />	dec	ecx<br />	jnz	@@st</code></pre><br />This only modifies ecx.<br /><br />Happy coding.</div>
+    <div class="meta">Posted on 2001-07-18 19:27:43 by comrade</div>
+   </div>
+   <div class="post" id="post-1179">
+    <div class="subject"><a href="#post-1179">How to empty a buffer?</a></div>
+    <div class="body">Oh and don't really use RtlZeroMemory() as SaVaGe suggested. It is okay, but if you are using assembly it would be best if you cleared memory. You will save some overhead too.</div>
+    <div class="meta">Posted on 2001-07-18 19:28:34 by comrade</div>
+   </div>
+   <div class="post" id="post-1203">
+    <div class="subject"><a href="#post-1203">How to empty a buffer?</a></div>
+    <div class="body">bAZiK,<br /><br />For simplicity, run a STOSD loop. It is to your advantage to make the buffer in DWORD intervals anyway and this means you don't have to clean up bytes at the end.<br /><br />Current optimisation on later machines in hardware make STOSD combined with REP reasonably fast, both testing and literature like Agner Fog's optimisation manual show that string instructions by themselves are slow but both MOVSD and STOSD are fast when used with the repeat prefix.<br /><br />If size is not a problem, the runtime in the MASM32 library is fast enough, its an unrolled loop of 8 x DWORD writes and the code is in the MASM32 library directory. The procedure is &quot;memfill&quot;.<br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-07-19 03:03:28 by hutch--</div>
+   </div>
+   <div class="post" id="post-1282">
+    <div class="subject"><a href="#post-1282">How to empty a buffer?</a></div>
+    <div class="body">Ok, I solved my Problem! Thanx all for your replies! (I love this MessageBoard <img src="http://www.plaudersmilies.de/smheart.gif" /> )</div>
+    <div class="meta">Posted on 2001-07-19 07:55:29 by bazik</div>
+   </div>
+   <div class="post" id="post-1292">
+    <div class="subject"><a href="#post-1292">How to empty a buffer?</a></div>
+    <div class="body">comrade, please do explain why using an api in this situation is not a good idea.<br /><br /><pre><code><br />...<br />.data?<br />mybuffer         db 512 dup &#40;?&#41;<br />...<br /><br />.code<br />...<br />mov mybuffer, szAnyTextFromControl<br />...<br />; ---- clear buffer here<br />...<br />invoke SendMessage, hEdit, WM_SETTEXT, addr mybuffer, 512<br />; editbox should be empty<br /></code></pre><br /><br />i would only considered as a bad idea to use api if it's in a loop and the code for clearing a buffer is being use more than once. there's no point of not using api if you just need to clear the buffer once.<br /><br />my suggestion is, use api if you're planning to clear the buffer once in a while when speed is not a factor.<br /><br />-- -----------------something for you to work on comrade--------<br /><pre><code><br />push	edi	; let's not forget to save volative registers<br />xor	eax, eax	; we're storing 0s<br />mov	ecx, sizeof mybuffer shr 2	; how many dwords to clear<br />mov	edi, OFFSET mybuffer<br />rep	stosd<br />pop	edi<br /><br />------and--------------------<br /><br />mov	edx, OFFSET mybuffer - 4<br />mov	ecx, sizeof mybuffer shr 2<br />xor	eax, eax<br />@@st&#58;	mov	dword ptr &#91;edx+ecx*4&#93;, eax<br />	dec	ecx<br />	jnz	@@st<br /><br />this code has problem. it will empty the buffer, except 2 char at the end.<br /><br /><br /><br /><br /><br />mov	ecx, sizeof mybuffer shr 2<br />@@st&#58;	mov	&#91;mybuffer-4+ecx*4&#93;, 0<br />	dec	ecx<br />	jnz	@@st<br /><br />this code also has problem. in that it only empty half of the buffer.<br /></code></pre><br /><br />those are not big deal. just something for you to look out.</div>
+    <div class="meta">Posted on 2001-07-19 09:19:37 by disease_2000</div>
+   </div>
+   <div class="post" id="post-1332">
+    <div class="subject"><a href="#post-1332">How to empty a buffer?</a></div>
+    <div class="body">Do not forget dword ptr after the mov :)</div>
+    <div class="meta">Posted on 2001-07-19 14:14:53 by comrade</div>
+   </div>
+   <div class="post" id="post-1442">
+    <div class="subject"><a href="#post-1442">How to empty a buffer?</a></div>
+    <div class="body">If it is a text buffer, you can clear it this way :<br /><br />mov buffer[0], 0<br /><br />(s)</div>
+    <div class="meta">Posted on 2001-07-20 11:17:58 by (scalp)</div>
+   </div>
+  </div>
+ </body>
+</html>

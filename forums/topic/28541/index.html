@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Counting bits (My source code) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28541" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28541">Counting bits (My source code)</a></p>
+   <div class="post" id="post-201901">
+    <div class="subject"><a href="#post-201901">Counting bits (My source code)</a></div>
+    <div class="body">I am flattered by the interest in this question, many thanks for all your input.
+
+To understand this better, perhaps I should step back a bit and explain why I am counting bits. 
+
+I am writing an anti-aliasing filter for text that must be very fast and have supercharged versions written in mmx and sse including a Pentium 4 version.
+
+The reason I have to antialias text is that I am drawing all the characters by hand using Beziers, and render all the text directly, without using the Windows text functions. At some point during the text creation process, which is happenning rapidly and repeatedly, the drawn characters must be run through the anti-alias filter to straighten out all the kinks from pixel boundaries. 
+
+The approach I have taken to do this is to render text to a buffer that is four times wider and four times higher, than the desired text and to output this to a one color monochrome bitmap.
+
+Therefore to deliver sharp clear text, all I have to do is count how many bits are set in a 4X4 block of pixels in the source bitmap and use the resulting value to lookup a greyscale index to set the pixel of the destination bitmap. The result is antialiased text and I will put up a URL later if someone wants to see the model.
+
+Here below is the full source code for the anti-alias filter which is just one procedure. Please feel free to use it if it is of use.
+
+Just quickly before I sign out, as I mentioned in my last note I just have a feeling that there is a technique I am missing that could count bits faster. Any gains in speed I find here will bring substantial gains to the speed of the entire software so this is a very good place to look for optimisation possibilities.
+
+
+Once again, thank you very much for all the input and suggestions. This is very helpful and appreciated.
+
+Source code follows.
+
+<pre><code>
+AntiAliasCharacter16	proc uses esi edi ebx ecx edx NumRows:DWord,NumPixelBytes:DWord
+ ;antialiasing filter takes a 16X scale mono bitmap (1 bit per pixel)
+ ;and scales it down to 1:1 and converts it to 24 bit RGB bitmap
+		LOCAL SrcPixX		:DWord
+		LOCAL Pix[32]			:DWord
+		LOCAL Mem32[8]		:DWord
+		LOCAL hDC			:DWord
+
+
+		.if !IdentityPage
+			mov edi,PaintDIB.pBits
+		.else
+			invoke GetDC,hWnd
+			mov hDC,eax
+			invoke CreateDIBSect,hDC,addr TempDIB,600,800
+			invoke CreateSolidBrush,PaperColor;0e0e0e0h;
+			invoke SelectObject,TempDIB.hDC,eax
+			push eax
+			invoke PatBlt,TempDIB.hDC,0,0,600,800,PATCOPY
+			pop eax
+			invoke SelectObject,TempDIB.hDC,eax
+			invoke DeleteObject,eax
+			invoke ReleaseDC,hWnd,hDC
+			mov edi,TempDIB.pBits
+		.endif
+		mov esi,ScaleDIB.pBits
+
+
+
+		mov eax,NumPixelBytes
+	  	shr eax,1
+		mov SrcPixX,eax
+		mov ebx,NumRows
+		DESTROW:
+			push ebx
+			push ecx
+		 	push esi
+			mov ebx,NumPixelBytes
+ 		  	shr ebx,3
+			DESTPIXEL:
+			 	  push ebx
+					mov eax,SrcPixX
+				   	  mov ecx,
+					.if ecx==0ffffffffh; && eax==0ffffffffh
+						mov ebx,eax
+
+						mov edx,
+						  shl ebx,1
+						 .if edx==0ffffffffh
+						     add ebx,eax
+							add ebx,esi
+
+							mov ecx,
+							.if ecx==0ffffffffh
+							  ;	add eax,ebx
+								mov edx,
+								.if edx==0ffffffffh
+									jmp SKIPPIXEL
+								.endif
+							.endif
+						.endif
+					.endif
+				  push esi
+				  push edi
+				  lea edi,Pix
+				  mov ecx,8
+				  xor eax,eax
+				  mov ebx,4
+				  rep stosd
+					lea edi,Pix
+                     NEXTPIXELPROCESS:
+                         push ebx
+                         add edi,32
+                         mov ebx,8   
+                         mov eax,
+                         NEXTNIBBLE:
+                           test ebx,ebx
+                           mov ecx,eax
+                         jz ENDNIBBLE
+                           and ecx,1
+                           shr eax,1
+                           mov edx,ecx
+						   dec ebx
+                           mov ecx,eax
+                           and ecx,1
+                           shr eax,1
+                           add edx,ecx</div>
+    <div class="meta">Posted on 2001-06-27 00:58:00 by chris</div>
+   </div>
+   <div class="post" id="post-201902">
+    <div class="subject"><a href="#post-201902">Counting bits (My source code)</a></div>
+    <div class="body">I have only noticed one pattern : when the nibble has an even number of bit set to 1, the least significant bit of the bit count is 1. For example :
+
+0000      0000   ; even number of bit set to 1, last bit is 0
+0001      0001   ; odd number of bit set to one, last bit is 1 
+0010      0001   ; same thing
+0011      0010   ; even number of bit set to 1, last bit is 0
+
+So you can set the last bit of the result with a test and a conditional mov :
+<pre><code>
+movzx  eax, nibble
+xor    ebx, ebx
+mov    ecx, 1
+test   eax, eax
+cmovp  ebx, ecx
+</code></pre>
+Now there are only two bit left :-)
+Do you know Karnaugh's table ? It's a technique used to find simplifications in boolean formula. In this case, the table for the 2nd bit is :
+<pre><code>
+    00  01 11 10
+00  0   0   1  0
+01  0   1   1  1
+11  1   1   0  1
+10  0   1   1  1
+</code></pre>
+The next step is to group the 1's by packet of 2,4 or 8.
+I've made the Karnaugh's table for these two bits, but I couldn't to find any simplifications.
+
+This message was edited by karim, on 6/28/2001 4:33:54 AM</div>
+    <div class="meta">Posted on 2001-06-27 15:29:00 by karim</div>
+   </div>
+   <div class="post" id="post-201903">
+    <div class="subject"><a href="#post-201903">Counting bits (My source code)</a></div>
+    <div class="body">The other thread kind of got mixed up. :)
+Using the mmx version of the AMD algo:<pre><code>
+mmMask_55: dq 05555555555555555h
+mmMask_33: dq 03333333333333333h
+
+movq mm1,mm0
+psrlq mm0,1 ;shift by q,d,w is same result
+pand mm0, mmMask_55
+psubq mm1,mm0 ;bit pairs are the sums
+
+movq mm0,mm1
+psrlq mm1,2
+pand mm0,mmMask_33
+pand mm1,mmMask_33
+paddb mm0,mm1 ;nibbles are the sums
+</code></pre>...is fairly easy, but then the sums have to be split out and then combined with three other nibble sums and then 16 dwords of RGBA data needs to be wrote to a buffer. :)  I'll have the whole thing in mmx...(before too long, :crosses fingers: )  Wasn't mmx made for this kind of thing?  What is the algo for the gray scale conversion?  I'd be best to do this in mmx, too.  And maybe combine this with another image while the data is in the mmx regs.
+
+This message was edited by bitRAKE, on 6/29/2001 1:44:14 AM</div>
+    <div class="meta">Posted on 2001-06-29 01:36:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201904">
+    <div class="subject"><a href="#post-201904">Counting bits (My source code)</a></div>
+    <div class="body">Thanks again for the great response, this has really been helpful.
+
+In answer to the question about greyscale.
+
+For the greyscale conversion I have a lookup table of 17 shades of grey. Adding up the bits in the 4X4 pixel group in the monochrome bitmap gives me the index to lookup the greyscale value. It works perfectly.</div>
+    <div class="meta">Posted on 2001-07-02 14:19:00 by Chris</div>
+   </div>
+   <div class="post" id="post-201905">
+    <div class="subject"><a href="#post-201905">Counting bits (My source code)</a></div>
+    <div class="body"><strong>Chris</strong>, is there a way to do the greyscale conversion algorithmically?  What is your table?  Is it a linear range between 255-0?  I'd like to do this without the memory access in MMX (ie no table).  This should be really fast!
+
+This message was edited by bitRAKE, on 7/2/2001 10:50:03 PM</div>
+    <div class="meta">Posted on 2001-07-02 22:45:00 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

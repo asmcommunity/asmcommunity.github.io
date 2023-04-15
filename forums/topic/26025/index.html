@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ConnectEx undocumented behaviour? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26025" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=26025">ConnectEx undocumented behaviour?</a></p>
+   <div class="post" id="post-189646">
+    <div class="subject"><a href="#post-189646">ConnectEx undocumented behaviour?</a></div>
+    <div class="body">I&#39;ve noticed an interesting and rather undocumented behaviour of the ConnectEx function in regards to Overlapped IO via IO Completion Port.<br />I have scoured the internet for relevant information, and the only reference I could find was another programmer whining about the same issue, with no replies.<br />If you can shed some light on this issue, I would be very grateful.<br /><br />The Problem:<br />When the Connection attempt is SUCCESSFUL, it seems ConnectEx issues TWO completion notifications for the SAME IO operation.<br />In order to identify &#39;Pending&#39; operations, I have something like this:<br /><br /><pre><code><br />call GetQueuedCompletionStatus<br />if FALSE<br />&nbsp; &nbsp; if pOVERLAPPED != 0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Deal with failed IO operation<br />&nbsp;  else<br />&nbsp; &nbsp; &nbsp; &nbsp; Check GetLastError() for WAIT_TIMEOUT (no io jobs were queued)<br />&nbsp; endif<br />else<br />&nbsp;  call WSAGetOverlappedResult ;make sure its not still PENDING completion<br />&nbsp;  if FALSE<br />&nbsp; &nbsp; &nbsp; &nbsp; Deal with failed or pending IO operation<br />&nbsp;  else<br />&nbsp; &nbsp; &nbsp; &nbsp; IO operation completed with success<br />&nbsp;  endif<br />endif<br /></code></pre><br /><br />I&#39;m seeing my &#39;outbound connect&#39; io operation complete TWICE, with SUCCESS both times.<br />That is to say, the above functions are both returning TRUE, and doing so TWICE for the same io job (CompletionKey and pOVERLAPPED the same in both notifications).<br /><br />I have not noticed any other (WSASend,WSARecv,AcceptEx) function doing this.<br />Why is it happening? How do I prevent it or deal with it?<br />Normally when an IO job completes, I want to throw that object back into a pool, or deallocate it, which I can hardly do if the same job is going to complete more than once!<br /><br />I have checked and rechecked my code to ensure I am not queuing this job twice.<br />I know I&#39;m not, and my debug spew confirms that.<br />I issue it ONCE, and it completes TWICE.<br />WEIRD-O-RAMA.<br /><br /></div>
+    <div class="meta">Posted on 2007-06-19 10:27:19 by Homer</div>
+   </div>
+   <div class="post" id="post-189647">
+    <div class="subject"><a href="#post-189647">Re: ConnectEx undocumented behaviour?</a></div>
+    <div class="body">The second notification isn&#39;t &quot;data received&quot;?<br /><br /><div class="quote"><br />The following operations are performed when a call to the ConnectEx function completes successfully: <br /><br />* A new connection is established. <br />* The first block of data is sent (optional). <br /></div><br /><br />Otherwise I don&#39;t know, sounds weird.<br /><br /></div>
+    <div class="meta">Posted on 2007-06-19 17:57:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-189648">
+    <div class="subject"><a href="#post-189648">Re: ConnectEx undocumented behaviour?</a></div>
+    <div class="body">f0dder - interesting concept.<br /><br />If I had sent data with the ConnectEx call (&#39;connectandsend&#39;), I would expect to see two notifications, with one of them (the second one) containing #bytes sent.<br />I supposed that if I had passed a valid buffer to ConnectEx, and told ConnectEx to send zero #bytes, then I would be seeing what I am in fact seeing (two completions, both with zero bytes transferred).<br />But I&#39;m not sending data with ConnectEx - in fact, I&#39;m not even passing a buffer for that, I&#39;m passing NULL as pSendBuffer, so I expected to only see the actual CONNECT completion notification.<br /><br />The only api function I feel is similar enough to warrant comparison is AcceptEx, which I am using, and which seems to behave as expected, noting that it offers AcceptAndReceive functionality, very similar to ConnectEx.<br /><br />Still, perhaps you&#39;re onto something here, it&#39;s certainly the most rational explanation I&#39;ve heard.<br />I might try performing a ConnectAndSend via ConnectEx with a valid sendbuffer and see what kind of notifications I receive.<br /></div>
+    <div class="meta">Posted on 2007-06-20 02:45:29 by Homer</div>
+   </div>
+   <div class="post" id="post-189649">
+    <div class="subject"><a href="#post-189649">Re: ConnectEx undocumented behaviour?</a></div>
+    <div class="body">I have performed a ConnectAndSend test, and guess what?<br />I GET THE SAME RESULT!<br /><br />In this case, I passed a small buffer to ConnectEx to send when the connection completed.<br />I received two completion notifications, the only difference to the previous test being that each of these reported the #bytes sent - if I was to naively accept this at face value, I am being told I sent that data twice :|<br /><br />I didn&#39;t get what I had expected, but I did prove this is a genuine issue.<br /></div>
+    <div class="meta">Posted on 2007-06-20 05:40:59 by Homer</div>
+   </div>
+   <div class="post" id="post-189650">
+    <div class="subject"><a href="#post-189650">Re: ConnectEx undocumented behaviour?</a></div>
+    <div class="body">Hm, this sounds pretty problematic to me. There&#39;s a few inconsistencies here and there with winsock, I remember some relatively erratic behaviour when playing with event-triggering sockets (but that&#39;s not really an issue if you design around it).<br /><br />I&#39;m still most inclined to think there&#39;s some weird-ass bug in your code, because if this is &quot;standard&quot; ConnectEx behaviour, it must&#39;ve been discovered before? Or is nobody but you using ConnectEx? I wonder if it&#39;s possible to get in contact with MS about this, but at the very least you&#39;d probably need to be able to duplicate the bug with some really simple proof-of-concept C code...<br /></div>
+    <div class="meta">Posted on 2007-06-20 06:56:51 by f0dder</div>
+   </div>
+   <div class="post" id="post-189651">
+    <div class="subject"><a href="#post-189651">Re: The Verdict - and the Workaround</a></div>
+    <div class="body">Well, I&#39;ve triple-checked my code, read and re-read all the relevant api documentation, and in the end, I settled for a cheesy workaround.<br />I am absolutely sure this is not a code bug, but it MAY be a threading issue, which is not mentioned in the formal documentation, thus it may be an implementation nuance, however I could be forgiven for assuming that an api designed to work consistently in a multithreaded environment actually does so.<br />My debug spew is copious, and shows object creation, event issues, event completions, api return values, pretty much everything.<br /><br />Anyway, for the benefit of the casual observer, I will describe my workaround.<br />I already had a StateFlag in my Session object (Session is what I called my ClientContext, as my iocp supports both inbound and outbound, client became a confusing term imho, and Session is more general).<br />I just defined a couple of equates (CONNECTED and NOTCONNECTED)<br />When I get a Connect Completion notification, I check the Session&#39;s flag to see if its NOTCONNECTED, and if so, I set it to CONNECTED and process the event.<br />When the second notification arrives, I&#39;ll see I am already CONNECTED, and disregard the notification.<br />It seemed like the cheapest and best solution.<br /><br />Footnote:<br />Previously I had defined this per-session state flag, but I wasn&#39;t using it from the iocp code, I had intended it to be used by &#39;Protocol Handlers&#39; (overloaded general IO event interface for specific network protocols). Now any classes that derive from &#39;Protocol&#39; must accept that the values 0 and 1 are reserved to mean not connected , and connected, respectively.<br /><br /><br /></div>
+    <div class="meta">Posted on 2007-06-20 08:37:38 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

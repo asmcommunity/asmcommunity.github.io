@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>macro troubles - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=886" />
+    <link rel="next" href="../?id=886&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=886">macro troubles</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=886&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=886&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="886" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=886&amp;page=2">&gt;</a><a href="../?id=886&amp;page=2">&raquo;</a></form>   <div class="post" id="post-5661">
+    <div class="subject"><a href="#post-5661">macro troubles</a></div>
+    <div class="body">First of all note that the example below is totally useless and will probably crash.. The real problem is too complicated to explain quickly so I've setup a simple example that has the same problem:<br /><br />say you have some data and types:<br /><pre><code><br />SomeData dd 44342,2343,23423,4234<br /><br />SomeStruct STRUCT<br /> Val1 dd ?<br /> Val2 dd ?<br />SomeStruct ENDS<br /><br />.code<br />    SomeFunctionPto TYPEDEF PROTO &#58;DWORD, &#58;DWORD<br /></code></pre><br /><br />What I want is (or at least seems) simple: doing this ....<br /><pre><code><br />push 2<br />push 1<br />call dword ptr &#91;SomeData + SomeStruct.Val2&#93;<br /></code></pre><br />with an invoke....<br />(btw the call is a call to a function which prototype is SomeFunctionPto)<br />The code above translates to:<br /><pre><code><br />.00001268&#58; 6A02              push      002<br />.0000126A&#58; 6A01              push      001<br />.0000126C&#58; FF151C314000       call      d,&#91;00040311C&#93;<br /></code></pre><br />which is correct.<br />now how should I use invoke to do this.. I've tried this:<br /><pre><code><br />invoke SomeFunctionPto PTR &#91;SomeData + SomeStruct.Val1&#93;, 1, 2<br /></code></pre><br />Which seems very logically but it produces this:<br /><pre><code><br />.00001273&#58; 6A02              push      002<br />.00001275&#58; 6A01              push      001<br />.00001277&#58; E89C1E0000        call      000002518<br /></code></pre><br />Why call 2518???? I'm totally lost on this one, i've tried everything, adding offsets ('offset SomeData'), trying different formats but I can't get it to work.. What's wrong?<br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-09-01 04:31:11 by Thomas</div>
+   </div>
+   <div class="post" id="post-5686">
+    <div class="subject"><a href="#post-5686">macro troubles</a></div>
+    <div class="body">This just worked for me:<br /><br />invoke SomeFunctionPto PTR .SomeStruct.Val2, 1, 2</div>
+    <div class="meta">Posted on 2001-09-01 10:51:37 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5690">
+    <div class="subject"><a href="#post-5690">macro troubles</a></div>
+    <div class="body">But I prefer this:<pre><code><br />SomeFunctionPto TYPEDEF PROTO &#58;DWORD, &#58;DWORD<br /><br />pSomeFunctionPto TYPEDEF PTR SomeFunctionPto<br /><br />SomeData dd 44342,2343,23423,4234<br /><br />SomeStruct STRUCT<br /> Val1 dd ?<br /> Val2 pSomeFunctionPto ?<br />SomeStruct ENDS<br /><br /><br />	invoke &#91;SomeData&#93;.SomeStruct.Val2, 1, 2</code></pre><br />You don't have to use the PTR every time you want to invoke the function - it's built into the STRUCT. :)</div>
+    <div class="meta">Posted on 2001-09-01 11:11:08 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5696">
+    <div class="subject"><a href="#post-5696">macro troubles</a></div>
+    <div class="body">Well I know that but in the code I want to use this, things are different... the structure is not directly related to the other offset like in your example.. but I will try the first method you posted.. Thanks,<br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-09-01 11:30:37 by Thomas</div>
+   </div>
+   <div class="post" id="post-5697">
+    <div class="subject"><a href="#post-5697">macro troubles</a></div>
+    <div class="body">Nope, that didn't work either..<br /><pre><code><br />invoke SomeFunctionPto PTR &#91;SomeData&#93;.SomeStruct.Val2, 1, 2<br /></code></pre><br /><br />also produces something like<br />push 2<br />push 1<br />call 2518 (not even call dword ptr [2518], just call 2518  :confused: )<br /><br />when I use this:<br /><pre><code><br /> mov eax, offset SomeData + SomeStruct.Val2<br /> invoke SomeFunctionPto PTR &#91;eax&#93;, 1, 2<br /></code></pre><br />it works but I want to avoid the use of the register... and that should be possible as I can do it with a call too.. when I add offset:<br /> invoke SomeFunctionPto PTR [<strong>offset</strong> SomeData + SomeStruct.Val2], 1, 2<br /><br />it gives me this error:<br /><br />error A2028: expression must be a code address<br /><br />:confused: <br />Thomas</div>
+    <div class="meta">Posted on 2001-09-01 11:41:08 by Thomas</div>
+   </div>
+   <div class="post" id="post-5699">
+    <div class="subject"><a href="#post-5699">macro troubles</a></div>
+    <div class="body">Well, they both work with the model that you provided. :)  Obviously, we need more information.  Or the error is somewhere else if this models your code sufficiently.</div>
+    <div class="meta">Posted on 2001-09-01 11:45:27 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5703">
+    <div class="subject"><a href="#post-5703">macro troubles</a></div>
+    <div class="body">I've attached the code that assembles... it is shown below too.. <br /><pre><code><br />.586<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />.data<br /><br /><br />SomeData    dd  344342,42342,23423,4234<br /><br />SomeStruct STRUCT<br />    Val1 dd ?<br />    Val2 dd ?<br />SomeStruct ENDS<br /><br />SomeFunctionPto TYPEDEF PROTO &#58;DWORD, &#58;DWORD<br /><br /><br />.code<br />start&#58;<br /> <br /> ; goal is to make these pieces of code output the same code..<br /> ; btw running the exe will probably result in a crash, it's just<br /> ; created so you can view the output<br /> <br /> db 8 dup &#40;90h&#41;  ;do a search on some nops in your fav hexeditor <br />                 ;to find this code in the .exe<br /><br /> <br /> <br /> ;=============================================<br /> ; 1. This is the right output&#58;<br /> ;=============================================<br /> push 2<br /> push 1<br /> call dword ptr &#91;SomeData + SomeStruct.Val2&#93;<br /> <br /> nop ;seperator<br /> ;=============================================<br /> ; 2. This SHOULD give the same output&#58; <br /> ;=============================================<br /> invoke SomeFunctionPto PTR &#91;SomeData + SomeStruct.Val2&#93;, 1, 2 <br /> <br /> nop ;seperator<br /> ;=============================================<br /> ; 3. This is what BitRake suggested but didn't work for me&#58;<br /> ;=============================================<br /> invoke SomeFunctionPto PTR &#91;SomeData&#93;.SomeStruct.Val2, 1, 2 <br /> <br /> nop ;seperator<br /> ;=============================================<br /> ; 4. This works but I don't want to use the register&#58;<br /> ;=============================================<br /> mov eax, offset SomeData + SomeStruct.Val2<br /> invoke SomeFunctionPto PTR &#91;eax&#93;, 6, 1<br /><br /> ; My goal is to make the invoke work, without using a <br /> ; register and &#40;important&#41; without modifying the structure<br /> ; or data... it should be possible but how..<br /> <br /> ; My output of this program is&#58;<br /> ; &#40;if yours is different without changing anything, maybe<br /> ;  something's wrong with my masm version?&#41;<br /> <br /> ; ----- nr 1 --- correct ------------------------------------<br /> ;.00001008&#58; 6A02             push      002<br /> ;.0000100A&#58; 6A01             push      001<br /> ;.0000100C&#58; FF1504204000     call      d,&#91;000402004&#93;<br /> <br /> ;.00001012&#58; 90               nop<br /> <br /> ; ----- nr 2 --- wrong -------------------------------------<br /> ;.00001013&#58; 6A02             push      002<br /> ;.00001015&#58; 6A01             push      001<br /> ;.00001017&#58; E8E80F0000       call      000001204  ;&lt;&lt; strange<br /> <br /> ;.0000101C&#58; 90               nop<br /> <br /> ; ----- nr 3 --- wrong as well -----------------------------<br /> ;.0000101D&#58; 6A02             push      002<br /> ;.0000101F&#58; 6A01             push      001<br /> ;.00001021&#58; E8DE0F0000       call      000001204 ;&lt;&lt;same here<br /> <br /> ;.00001026&#58; 90               nop<br /> <br /> ; ----- nr 4 --- correct, but I don't want to use it -------<br /> ;.00001027&#58; B804204000       mov       eax,000402004<br /> ;.0000102C&#58; 6A01             push      001<br /> ;.0000102E&#58; 6A06             push      006<br /> ;.00001030&#58; FF10             call      d,&#91;eax&#93;<br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2001-09-01 12:27:05 by Thomas</div>
+   </div>
+   <div class="post" id="post-5706">
+    <div class="subject"><a href="#post-5706">macro troubles</a></div>
+    <div class="body"><div class="quote">Well, they both work with the model that you provided. </div> <br />Not for me, when I assemble the code in my post above, I don't get the desired result as you can see in my dumps above.</div>
+    <div class="meta">Posted on 2001-09-01 12:32:57 by Thomas</div>
+   </div>
+   <div class="post" id="post-5709">
+    <div class="subject"><a href="#post-5709">macro troubles</a></div>
+    <div class="body">Why not just make a macro like invoke that does whatever you want it to do.<br /><br />Takes VARARG and pushes them like invoke, then takes the first varable and call dword ptr firstvariable ???<br /><br />I don't know masm syntax, or else I would explain.</div>
+    <div class="meta">Posted on 2001-09-01 12:42:00 by Kenny</div>
+   </div>
+   <div class="post" id="post-5711">
+    <div class="subject"><a href="#post-5711">macro troubles</a></div>
+    <div class="body">That would work but my first requirement is to use invoke... Because invoke has the advantages of type &amp; parameter count checking.<br />I think the only problem here is getting the right syntax for the memory location.. Somehow it works for call, but not for invoke.</div>
+    <div class="meta">Posted on 2001-09-01 12:56:25 by Thomas</div>
+   </div>
+   <div class="post" id="post-5712">
+    <div class="subject"><a href="#post-5712">macro troubles</a></div>
+    <div class="body">Nothing is wrong with your assembler. Of course, I'm wrong. :rolleyes:  My second method <u>does</u> produce the correct code.  Are you sure you can't use it?</div>
+    <div class="meta">Posted on 2001-09-01 12:58:32 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5715">
+    <div class="subject"><a href="#post-5715">macro troubles</a></div>
+    <div class="body">The problem is, as I said, that the structure and the offset are not directly related.. <br />I don't know if you've seen the object superclassing macro NaN wrote (as you have had contact with him), there after some calculations, two local symbols are used to form an offset. One is always 'offset something', but the other one can be either a structure member offset ('SomeStruct.Val2'), or just a number (0 or 4). the final offset in the invoke will be the sum of these two symbols.. So we can have:<br />call , but sometimes:<br />call . And in that case, we have nothing to do with the structure. <br /><br />But I still wonder why it does work when I use it in a call, but doesn't with invoke... It should be the same in my view...</div>
+    <div class="meta">Posted on 2001-09-01 13:13:43 by Thomas</div>
+   </div>
+   <div class="post" id="post-5721">
+    <div class="subject"><a href="#post-5721">macro troubles</a></div>
+    <div class="body">The assembler is making some assumptions about the PTR type - that's why it doesn't work.  Just need to find a way to override those assumptions.  I've been playing with the PROTO and can't figure it out?  This has to be an error in MASM - why should it assume a near call here?<br /><br />As to your reasoning for not using the second method:  I think the objects should be an instance of the structure. Like:<pre><code>SomeFunctionPto TYPEDEF PROTO &#58;DWORD, &#58;DWORD<br /><br />pSomeFunctionPto TYPEDEF PTR SomeFunctionPto<br /><br />SomeData SomeStruct2  &#123; &#123;44342,2343&#125;,23423,4234&#125;<br /><br />SomeStruct STRUCT<br /> Val1 dd ?<br /> Val2 pSomeFunctionPto ?<br />SomeStruct ENDS<br /><br />SomeStruct2 STRUCT<br /> SomeStruct &lt;&gt;<br /> dd ?<br /> dd ?<br />SomeStruct2 ENDS<br /><br />	invoke &#91;SomeData&#93;.SomeStruct2.Val2, 1, 2</code></pre>I don't think the data should be separated from the structure - it causes all kinds of problems. :)  I emailed NaN about this yesterday. ;)  Of course, this causes other problems.<br /><br />This produces the right code as well:<br /><br />pSomeFunctionPto TYPEDEF PTR SomeFunctionPto<br /><br />invoke pSomeFunctionPto PTR .SomeStruct.Val2, 1, 2</div>
+    <div class="meta">Posted on 2001-09-01 13:46:22 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5727">
+    <div class="subject"><a href="#post-5727">macro troubles</a></div>
+    <div class="body">I got it working!<br /><br />See the attached file...</div>
+    <div class="meta">Posted on 2001-09-01 14:29:31 by Kenny</div>
+   </div>
+   <div class="post" id="post-5732">
+    <div class="subject"><a href="#post-5732">macro troubles</a></div>
+    <div class="body">We use that method for calling an object's method, but things are different when calling a superclass method (the original method of the inherited object). The problem here is that the final offset where the dword value to call is, is not directly related to the structure anymore, there are values being substracted and added to get the right offset, so we can't use the type of a structure member in this case....<br />But I'll think about it, maybe we can use it anyways..</div>
+    <div class="meta">Posted on 2001-09-01 14:35:26 by Thomas</div>
+   </div>
+   <div class="post" id="post-5735">
+    <div class="subject"><a href="#post-5735">macro troubles</a></div>
+    <div class="body">Kenny (saw your post after I replied :rolleyes: ), thanks tons!<br />it works, however I don't seem to need the NEAR thing in the prototype.... So basically I can use this:<br /><pre><code><br /> funcptr TYPEDEF PTR SomeFunctionPto<br /> invoke funcptr PTR &#91;SomeData + SomeStruct.Val2&#93;, 1, 2 <br /></code></pre><br />(funcptr is a local macro symbol I will use in the final macro). <br />This way I don't have to add another typedef for each prototype.<br /><br />Thanks again :alright: <br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-09-01 14:42:19 by Thomas</div>
+   </div>
+   <div class="post" id="post-5736">
+    <div class="subject"><a href="#post-5736">macro troubles</a></div>
+    <div class="body">np man ;) All I did was read the MASM reference manual :P</div>
+    <div class="meta">Posted on 2001-09-01 14:46:06 by Kenny</div>
+   </div>
+   <div class="post" id="post-5771">
+    <div class="subject"><a href="#post-5771">macro troubles</a></div>
+    <div class="body">BitRake, <br /><br />   Thanx to these efforts, your comment you emailed me about concerning the syntax requirements are now lifted!!!! (Pretty happy about this).<br /><br />Now Function pointing requires as much work as a simple proc would (with the extra keystrokes for &quot;TYPEDEF&quot; )<br /><br />ie) Circ_setRadiusPto    TYPEDEF  PROTO  :DWORD, :DWORD<br /><br />This is NICE!..<br /><br />Also, we now don't require complicated struct entries (both thanx to Thomas' work here..)<br /><br />ie)  Method   dd ?  ; all that is required!<br /><br />Anywho.. Looks like today has been a good day of R&amp;D...  <br /><strong>PS:  THANX Kenny and BitRake for you help!!!</strong><br /><br />NaN</div>
+    <div class="meta">Posted on 2001-09-01 20:15:53 by NaN</div>
+   </div>
+   <div class="post" id="post-5773">
+    <div class="subject"><a href="#post-5773">macro troubles</a></div>
+    <div class="body"><strong>Kenny</strong>, see the end of my last post.  Nice to see you found the same solution. :)</div>
+    <div class="meta">Posted on 2001-09-01 20:19:03 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-5789">
+    <div class="subject"><a href="#post-5789">macro troubles</a></div>
+    <div class="body">HEHE! Nice! I guess great minds read the manual alike :)<br /><br />I hadn't seen your post when I posted because I hadn't refreshed.<br /><br />Well, good work. You beat me by 2 minutes :alright:</div>
+    <div class="meta">Posted on 2001-09-01 23:01:02 by Kenny</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=886&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=886&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="886" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=886&amp;page=2">&gt;</a><a href="../?id=886&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

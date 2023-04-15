@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>SmartJump? Message dispatcher Topic - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9623" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9623">SmartJump? Message dispatcher Topic</a></p>
+   <div class="post" id="post-71290">
+    <div class="subject"><a href="#post-71290">SmartJump? Message dispatcher Topic</a></div>
+    <div class="body">There have been quite a few discussions on howto dispatch messages<br />on this board. However I have never seen anyone talk about the one<br />found in the 'generic.asm' file wich comes with the masm32 pack.<br />This seems pretty good to me. Anyone know of any disadvantages/<br />advantages. From other methods like the one seen in Hutch's<br />'High speed message dispatcher '? <br /><br />I cant see why this would be any slower then other attempts ive seen.<br /><br />Example code:<br /><pre><code>&#91;color=sienna&#93;<br />;===== SmartJump<br />;SmartJump is a substitute for the block structure<br />;switch/case/select and if/elseif/endif.<br />;Immediately after each &quot;call SmartJump&quot; comes a jump table, in a<br />;format that you can readily figure out.<br />...<br />SmartJump&#58; pop edx;&#91;/@-&quot;Return address&quot; actually points at a jump table.<br />       @@&#58; cmp dword ptr cs&#58;&#91;edx&#93;,-1<br />	    	je @F<br />           cmp eax,cs&#58;&#91;edx&#93;<br />            je @F<br />	       add edx,8<br />	    	jmp @B<br />       @@&#58; jmp near ptr cs&#58;&#91;edx+4&#93;<br /><br />WndProc proc hWin&#58;DWORD,uMsg&#58;DWORD,wParam&#58;DWORD,lParam&#58;DWORD<br />	mov eax,uMsg<br />	call SmartJump<br />		dd WM_COMMAND,HandleCommand<br />		dd -1,DoDefWindowProc<br /><br />	HandleCommand&#58;<br />		movzx eax,word ptr wParam<br />		call SmartJump<br />			dd ID_New,HandleNew<br />			dd -1,Done0<br /><br />	Done&#58; xor eax,eax <br />		  ret<br /><br />	HandleNew&#58;<br />    	jmp Done0<br /><br />DoDefWindowProc&#58;<br />    pop ebp<br />    jmp DefWindowProc<br />...<br />&#91;/color&#93;</code></pre></div>
+    <div class="meta">Posted on 2002-12-16 21:52:00 by natas</div>
+   </div>
+   <div class="post" id="post-71464">
+    <div class="subject"><a href="#post-71464">SmartJump? DispatchMessage Topic</a></div>
+    <div class="body">Maybe everyone else is using the optimized SWITCH-CASE macros that were posted here some time ago.<br /><br />--- You may want to search for switch or case topics.<br /><br />The primary advantage is the ease of editting it.  Note: Check out how a C compiler handles <strong>switch</strong> statements when there are a lot of unused slots in its case list.<br /><br />* It is much easier to rearrange the table so that more frequently used messages are tested first.  With .IF - .ELSEIF, you must move whole blocks of code instead of a single line.<br /><br />* You do not need to worry about the order in which messages are placed in the table. Compare this with hutch's fast dispatch, where you must know the exact value of the message (not the EQU name).<br /><br />* Using the dispatch code (or any other compact dispatch code) instead of .IF - .ELSEIF allows you to treat each message handler as independent subroutines, rather than as nested blocks of code.<br /><br />* Slowness is due to the overhead of looping. In the case of .IF - .ELSEIF, the cost of cache misses might actually make it slower than the loop version. The alternate way of compare-and-jump logic looks like this:<br /><pre><code>    cmp eax,25<br />    je  HandleMessage25<br />    cmp eax,30<br />    je  HandleMessage30<br />    cmp eax,43<br />    je  HandleMessage43<br />    ; ...<br />    cmp eax,10<br />    je  HandleMessage10<br />    jmp HandleAllOtherMessages<br /></code></pre>The question is: Does branch prediction make the loop version faster than the above code? Or are loop overhead and an indirect jump costly enough to defeat branch prediction savings? Is there a break-even point?<br /><br />* The SmartJump routine is generic. It can be used anywhere you need a multiway branch (switch-case) based on a single integer value. (Except if one of the values you want to test is -1.)</div>
+    <div class="meta">Posted on 2002-12-17 14:59:08 by tenkey</div>
+   </div>
+   <div class="post" id="post-71493">
+    <div class="subject"><a href="#post-71493">SmartJump? DispatchMessage Topic</a></div>
+    <div class="body">natas,<br /><br />I confess I have not properly digested you code design here, not quite enough to work it out.<br /><br />tenkey,<br /><br />Have I missed something here ? The dispatcher design I posted required no more than the message name as it is usually used. With the macro,<br /><pre><code><br />      SetMessage MACRO wm_message<br />        mOFFSET CATSTR &lt;OFFSET MSG_&gt;,&lt;wm_message&gt;<br />        mov &#91;eax+wm_message*4&#93;, mOFFSET<br />      ENDM<br /></code></pre><br />You simply fed in the message name which is an equate and the label is determined after the name is appended to the &quot;MSG_&quot; text. What made it possible was the already known values of the messages from the include file, block fill the array with a default value and overwrite the spacific ones with the label offsets to process each message.<br /><br />i would agree that in the vast majority of cases that a normal Switch/Case,  Select Case, .IF block style of branching does the job fine and it can also be nested within other blocks with no problems. Where I see the use of a dispatcher that uses an array of addresses is if you have a very long and complex WndProc, you can pick up some speed gains there.<br /><br />The other aside is that a single dispatcher including the code to load the array is generally smaller that the same amount of branch testing code in a normal WndProc style procedure so you get a small gain in code size.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-12-17 18:29:31 by hutch--</div>
+   </div>
+   <div class="post" id="post-71520">
+    <div class="subject"><a href="#post-71520">SmartJump? DispatchMessage Topic</a></div>
+    <div class="body">Ack. I've forgotten how you set up the table. I'm thinking speed in all phases, which means defining the jump table completely statically with no setup code.<br /><br />This is due to extreme familiarity with some assembly code, where the tables are small enough and need to be ROMable.</div>
+    <div class="meta">Posted on 2002-12-17 22:04:32 by tenkey</div>
+   </div>
+   <div class="post" id="post-71534">
+    <div class="subject"><a href="#post-71534">SmartJump? DispatchMessage Topic</a></div>
+    <div class="body">&quot;I'm thinking speed in all phases, which means defining the jump table<br />completely statically with no setup code.&quot;<br /><br />It is the best. Pls, explain how to do that when &quot;the tables are not small enough..&quot;<br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2002-12-17 23:15:39 by lingo12</div>
+   </div>
+   <div class="post" id="post-71557">
+    <div class="subject"><a href="#post-71557">SmartJump? DispatchMessage Topic</a></div>
+    <div class="body">Tenkey,<br /><br />I actually did a version that had the block fill done in the initialised data section but it made the exe 4k larger for a non measurable gain in loading speed so I changed it to a block fill at runtime because it was a lot smaller and the speed at load did not matter.<br /><br />It is handy to be able to load labels at assemble time and there have been times when I have used things like arrays of zero terminated strings that are loaded in this manner.<br /><br />Lingo12,<br /><br />I guess there is only 2 ways to load data, statically or dynamically, I would hate to be confined to either. :tongue: <br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-12-18 02:42:08 by hutch--</div>
+   </div>
+   <div class="post" id="post-71853">
+    <div class="subject"><a href="#post-71853">SmartJump? DispatchMessage Topic</a></div>
+    <div class="body"><em>Thanks</em> for all the replys people. <strong>Tenkey</strong> you made alot of good points.<br />And I agree with what youre saying. The main reason why I actually posted<br />the code was so that someone could maybe decipher it for me. ( ;) ) But<br />a short time after I posted it I started to look into the things it did. And <br />I know what all the code actually does now. Its actually quite simple.<br /><br />Thanks</div>
+    <div class="meta">Posted on 2002-12-19 15:54:23 by natas</div>
+   </div>
+  </div>
+ </body>
+</html>

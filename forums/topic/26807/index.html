@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>RES files - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26807" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26807">RES files</a></p>
+   <div class="post" id="post-193082">
+    <div class="subject"><a href="#post-193082">RES files</a></div>
+    <div class="body">I made a skinned window based on SafcOn's little tutorial on his page.. compiled all my resourses needed and packed in a true color .bmp into the exe.
+
+The program works perfectly (i made it as a gift to a friend who just had a baby (the skin is a round picture frame with the baby photo... ahhh aint that nice :)  )
+
+My problem is it doenst work on Windows95 only... worked perfectly on ME and 98/98SE but not 95... Im totaly at a loss here because there is no fancy api calles. For this reason i can only assume it had something to do with the way the res got converted to .obj befor linking... does anyone know of such problems or has seen something like this in the past??? While i was playing around with the resorce compiler i got a "not 3.0 bitmap" error once (before i settled on the final .bmp), could it be a standard thing for bitmaps between win95 and win98??
+
+The windows95 users only see a " big green dot " on the screen (~~ the green is the set transparancy color when i compiled the RGN file outa the bitmap ) Code wise, the program still functions as normally, just the bmp is only a bmp for 98 or better users... :(
+
+Thanx again.
+NaN</div>
+    <div class="meta">Posted on 2001-02-08 01:20:00 by NaN</div>
+   </div>
+   <div class="post" id="post-193083">
+    <div class="subject"><a href="#post-193083">RES files</a></div>
+    <div class="body">The exe runs fine right? Now run time errors or anything?
+
+The first two things I would check is the implementation of the window region. Check your api reference to make sure it's all 95 compatable stuff. (Like you can't use a picture bigger than 8x8 pixels for the background of a window in win95, all other OS's don't have a size limit.) That kind of stuff.
+
+Then I would check the API used to load the bitmap from Resource there is about 3 or 4 ways to load a bitmap from a resource and they all do different stuff.
+Post a little more details after you've done this.
+See ya,
+Ben</div>
+    <div class="meta">Posted on 2001-02-08 01:55:00 by cyberben</div>
+   </div>
+   <div class="post" id="post-193084">
+    <div class="subject"><a href="#post-193084">RES files</a></div>
+    <div class="body">Ya, it works perfectly on win95... has the right graphical shape (an oval) without windowed edges.. just when it should display the pixel info it choses one color for all (green) ~ a big green dot!
+
+This is the setup code:
+<pre><code>
+.data
+        RsrcName	db "RANGE",0
+	    RsrcType	db "RGN",0
+	    RsrcHand	dd 0
+	    RsrcSize	dd 0
+	    RsrcPoint	dd 0
+	    ClientPoint	POINT <>
+    	xform		XFORM <>
+    	DlgRect		RECT <>
+
+.code
+ ...
+      m2m wc.hInstance,      hInst
+      invoke LoadBitmap,hInst,1000
+      invoke CreatePatternBrush,eax
+      mov wc.hbrBackground,  eax
+      mov wc.lpszMenuName,   NULL
+      mov wc.lpszClassName,  offset szClassName
+      invoke LoadIcon, hInstance, IDI_XANDER
+      mov hIcon, eax
+      m2m wc.hIcon,          hIcon
+      m2m wc.hIconSm,           hIcon
+      invoke LoadCursor,NULL,IDC_ARROW
+      mov wc.hCursor,        eax
+      m2m wc.hIconSm,        hIcon
+      invoke RegisterClassEx, ADDR wc
+
+      ;================================
+      ; Centre window at following size
+      ;================================
+
+      mov Wwd, 294
+      mov Wht, 263
+
+      invoke GetSystemMetrics,SM_CXSCREEN
+      invoke TopXY,Wwd,eax
+      mov Wtx, eax
+
+      invoke GetSystemMetrics,SM_CYSCREEN
+      invoke TopXY,Wht,eax
+      mov Wty, eax
+        ifdef DEBUGC
+          push eax
+          DPrint "About to create the window"
+          pop eax
+        endif        
+
+      invoke CreateWindowEx,WS_EX_LEFT,
+                            ADDR szClassName,
+                            ADDR szDisplayName,
+                            WS_POPUP,
+                            Wtx,Wty,Wwd,Wht,
+                            NULL,NULL,
+                            hInst,NULL
+      mov   hWnd,eax
+
+      invoke LoadMenu,hInst,600  ; menu ID
+      invoke SetMenu,hWnd,eax
+      invoke ShowWindow,hWnd,SW_SHOWNORMAL
+      invoke UpdateWindow,hWnd
+     
+      ...
+
+    .elseif uMsg == WM_CREATE
+	    ;Find the resource handle
+	 invoke	FindResource,hInstance,addr RsrcName,addr RsrcType
+	 mov	RsrcHand, eax
+
+        ;Load the resource data
+	invoke	LoadResource,hInstance,eax
+	mov	RsrcPoint, eax
+
+        ;Get the total size of the resource
+	invoke	SizeofResource,hInstance,RsrcHand
+	mov	RsrcSize, eax
+
+        ;Get a valid pointer to the data
+	invoke	LockResource,RsrcPoint
+	mov	RsrcPoint, eax
+	
+	;calculate x & y decals of the RGN
+	mov	ClientPoint.x, 0
+	mov	ClientPoint.y, 0
+	invoke	GetWindowRect,hWnd,addr DlgRect
+	invoke	ClientToScreen,hWnd,addr ClientPoint
+	mov	eax, ClientPoint.x
+	sub	eax, DlgRect.left
+	mov	xform.ex, eax
+	mov	eax, ClientPoint.y
+	sub	eax, DlgRect.top
+	mov	xform.ey, eax
+	
+	;set the scaling values (there, no particular scaling -> 1)
+	mov	xform.eM11, 1
+	mov	xform.eM22, 1
+
+	
+	;Convert Integers to Floating Point values
+	Int2Real32	xform.eM11
+	Int2Real32	xform.eM22
+	Int2Real32	xform.ex
+	Int2Real32	xform.ey
+	
+	;Finally call our function
+	
+	invoke	ExtCreateRegion,addr xform,RsrcSize,RsrcPoint
+	invoke	SetWindowRgn,hWin,eax,TRUE
+</code></pre>
+
+And the RC file:
+<pre><code>
+#define IDI_XANDER            500
+IDI_XANDER       ICON   MOVEABLE PURE LOADONCALL DISCARDABLE "Xander.ico"
+
+RANGE RGN "cut3.rgn"
+1000 BITMAP "fin.bmp"
+</code></pre>
+
+The RGN file was built with a RGN creator tool SaFcOn packed with his tutorial. Fin.bmp is the bitmap that apprears on 98 or better machines..
+
+NaN
+
+
+This message was edited by NaN, on 2/8/2001 7:25:25 PM</div>
+    <div class="meta">Posted on 2001-02-08 19:22:00 by NaN</div>
+   </div>
+   <div class="post" id="post-193085">
+    <div class="subject"><a href="#post-193085">RES files</a></div>
+    <div class="body">Hello again... I have done my homework and basically the code is done right according to MSDN..
+
+To further my thoughs the MSDN warns on this page:
+
+http://support.microsoft.com/support/kb/articles/Q67/8/83.ASP
+
+This:
+<pre><code>
+NOTE: If the resource was originally stored as a DDB, the bitmap returned will be in the DDB format. In other words, no conversion is done. 
+
+DDB - Device Dependant Bitmap 
+</code></pre>
+
+Which comes back to my first thought that it is how the RES file is packed/converted. This leads to the fact i useds "someone's" bitmap to RGN converter.. is there another way rather than using this utitlity?? (I am assuming here that the RGN utility i used creates a DDB where the palette is not being loaded properly in windows 95 ) 
+
+Another interesting point is the Resource Utility that Hutch has on his web page (think its a Borland product) wont display the packed bitmap out of the RES file, but will display the ICON created with it)
+
+Help Thoughts?? 
+
+Thanx again
+
+NaN</div>
+    <div class="meta">Posted on 2001-02-09 12:31:00 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

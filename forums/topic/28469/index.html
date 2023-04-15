@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Print_Hex16 code explained - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28469" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28469">Print_Hex16 code explained</a></p>
+   <div class="post" id="post-201358">
+    <div class="subject"><a href="#post-201358">Print_Hex16 code explained</a></div>
+    <div class="body">Hi
+
+i have received email asking to explain how this code snippet works
+
+taken from my OS code example, again i taked it from Linus i belive, so credit goes to him
+
+I know that is not Win32ASM but i beliv it can be very easy adapted to work in win (just remove the BIOS call and place the char in a buffer, then TextOut the buffer after conversion) Also EDX can be used for a 32bit print
+
+<pre><code>
+;=======================================================
+; print 16 bit value from DX in hexa format on Screen
+; DX register has the value to print
+; ======================================================
+Print_Hex16:
+      mov   cx, 4		; 4 hex digits   
+            
+PrintDigit:
+      rol   dx, 4		; rotate so that lowest 4 bits are used
+      mov   ax, 0E0Fh		; ah = request, al = mask for nybble
+      and   al, dl
+
+      add   al, 90h		; convert al to ascii hex (four instructions)
+      daa			; somebody  spent 1 hour 
+      adc   al, 40h		; to understand how this code works..
+      daa			; WOW!
+
+      int   10h      ; call BIOS to print char
+      loop  PrintDigit
+      ret
+;===========================================================
+</code></pre>
+
+I will skip over the BIOS output char function and the obviouse 4 digit loop to concentrate on the HARD part. ie the conversion.
+
+Now first you have to understand what are the needed output values: a hex ascii char
+- digits 0..9 (ASCII 30h...39h)
+- letters A,B,C,D,E,F (ASCII 41h...46h)
+
+the input value is trimed to the hex range:0..Fh
+
+Case 1. input is < 10decimal
+
+<pre><code>
+ADD AL,90H ;will generate a value in range 90h...99h, 
+DAA        ;will do nothing because is no adjust required
+ADC AL,40H ;will make it in range 0d0h...0d9h, CY=0
+DAA        ; adjust to 30h...39h because D is 3 over A=10=0
+</code></pre>
+
+Case 2. input is >10 decimal
+
+<pre><code>
+ADD AL,90H ;WILL GO TO 9Ah...9Fh
+DAA        ;will make it 00h...05h with Carry set
+ADC AL,40h ;will make it 41h...46h because of carry flag (+1)
+DAA        ; will make no adjust this time
+</code></pre>
+
+WOW you see how fast and with NO Jumps/IF's we made our HEX value now? ;)
+
+Hope now everybody understands this code snippet..
+It sure must be placed somewhere safe :D
+Code Gems or something
+
+This message was edited by BogdanOntanu, on 6/19/2001 8:08:09 PM</div>
+    <div class="meta">Posted on 2001-06-19 20:01:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-201359">
+    <div class="subject"><a href="#post-201359">Print_Hex16 code explained</a></div>
+    <div class="body">It's a gem, indeed, but it comes from Intel
+documentation originally, I believe. You
+want a hard one, BO? Try doing the reverse:
+al contains an ascii character "0"-"9" or
+"A"-"F", and we want to convert it to a
+"nibble" 0-0Fh by using bcd instructions
+such as daa, but no conditional jumps.</div>
+    <div class="meta">Posted on 2001-06-19 20:34:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201360">
+    <div class="subject"><a href="#post-201360">Print_Hex16 code explained</a></div>
+    <div class="body">I coded this two days ago. I'm just starting out with win32 asm (not asm itself). I thought that MessageBox returned the ID on the stack, but by accident (after coding the below), I forgot to pop eax off of the stack.
+
+<pre><code>
+         ;eax contains the 32bit value to be converted
+      mov   ecx, 0x10
+      mov   esi, Debug.message + 9
+   .ascii:
+      xor   edx, edx
+      div   ecx
+      add   dl, 0x30
+      cmp   dl, 0x3A
+      jl    .sto
+      add   dl, 7
+   .sto:
+      mov   , dl
+      dec   esi
+      cmp   eax, 0xF
+      jg    .ascii
+
+      add   al, 0x30
+      cmp   dl, 0x3A
+      jl    .stoL
+      add   al, 7
+   .stoL:
+      mov   , al
+      call  Prompt.debug
+
+
+;***------------
+Prompt:
+   .debug:
+      push  MB_OK + MB_ICONHAND
+      push  Debug.caption
+      push  Debug.message
+      push  0
+      call  
+      pop   eax
+      ret
+
+Debug:
+   .caption db 'Debug Message', 0
+   .message db '0xXXXXXXXz', 0
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-19 22:17:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201361">
+    <div class="subject"><a href="#post-201361">Print_Hex16 code explained</a></div>
+    <div class="body">But how to avoid conditional jumps, eet_1024? I don't know any way, and there may not be any way.</div>
+    <div class="meta">Posted on 2001-06-19 22:32:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201362">
+    <div class="subject"><a href="#post-201362">Print_Hex16 code explained</a></div>
+    <div class="body">Assembled with fasm, this will pop up a message box with the value stored in edx.  I'll create a version to do the reverse.
+
+
+<pre><code>
+format PE GUI
+entry Start
+
+include 'Win32.inc'
+
+;***---------------------------------------------------------------***
+section '.code' code readable executable
+Start:
+      mov   edx, 0x3A8D9B0F
+;***------------------------------------------------------***
+;***edx to hex string
+;***
+PopUp_Hex32:
+      mov   ecx, 0x08                  ;8 Hex digits
+      mov   esi, Debug.message + 2
+   .ascii:
+      rol   edx, 4                     ;Get the first digit
+      mov   al, 0x0F                   ;  ^^^^
+      and   al, dl                     ;  ^^^^
+      add   al, 0x90                   ;The kewl
+      daa                              ; 4 Instruction
+      adc   al, 0x40                   ; conversion
+      daa                              ; ^^^^^
+      mov   , al                  ;Store into message text
+      inc   esi                        ;Set to next offset
+      loop  .ascii
+
+      push  MB_OK + MB_ICONHAND
+      push  Debug.caption
+      push  Debug.message
+      push  0
+      call  
+      push  0
+      call  
+
+;***---------------------------------------------------------------***
+section '.data' data readable writeable
+
+Debug:
+   .caption db 'Debug Message', 0
+   .message db '0xXXXXXXXX', 0
+
+;***---------------------------------------------------------------***
+section '.idata' import data readable writeable
+
+  dd 0,0,0,rva kernel_name,rva kernel_table
+  dd 0,0,0,rva user_name,rva user_table
+  dd 0,0,0,0,0
+
+  kernel_table:
+    ExitProcess dd rva _ExitProcess
+    dd 0
+  user_table:
+    MessageBox dd rva _MessageBoxA
+    dd 0
+
+  kernel_name db 'KERNEL32.DLL',0
+  user_name db 'USER32.DLL',0
+
+  _ExitProcess dw 0
+    db 'ExitProcess',0
+  _MessageBoxA dw 0
+    db 'MessageBoxA',0
+</code></pre>
+
+This message was edited by eet_1024, on 6/19/2001 10:52:49 PM</div>
+    <div class="meta">Posted on 2001-06-19 22:48:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201363">
+    <div class="subject"><a href="#post-201363">Print_Hex16 code explained</a></div>
+    <div class="body">Here is ASCII to bin with no conditional jmp's (though loop could be considered one) using only 5 (3) instructions:
+<pre><code>
+;******************Asc_Hex.COM***********************
+;***ASCII Hex to Bin (covers upper and lower case)***
+;***Assebled with FAsm*******************************
+   use16
+   org 0x100
+
+   mov   si, String
+   mov   cx, 22      ;22 Digits in string
+Convert:
+   lodsb
+   mov   ah, al
+   and   ax, 0x400F  ;Mask for aad
+   rol   ah, 2       ;convert 0x40 to 0x01 for aad
+   sub   al, ah      ;Correct for 'A' != 0x40 (0x41 &not;&equiv; 0 mod 0xA)
+   aad               ;If ASCII =~ // then this will add 10
+   loop  Convert
+   ret
+
+String db '0123456789ABCDEFabcdef'
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-20 02:10:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201364">
+    <div class="subject"><a href="#post-201364">Print_Hex16 code explained</a></div>
+    <div class="body"><pre><code>
+ thanks go to bitRAKE for showing me what DAA can do and thanks
+ Bogdan for giving me that little OS source.
+
+ here's my explaination (might be abit clearer for those who st-
+ ill don't understand what DAA actually does with the Print_hex16
+ .)
+ ----------------------------------------------------------------
+
+
+ +-----------------------------------------+
+ | The great (D)isaster (A)fter (A)ddition |
+ +-----------------------------------------+
+
+   DAA adjust what's in AL. To fully understand it, i've played around with the debugger
+   with different number.
+
+   First, you have to keep in  mind that BCD doesn't deal with A..F alpha. If it sees it
+   will automatically convert it to decimal.And based on what i just said, A=0, B=1, C=2
+   D=3, E=4 and F=5 (ignore the first digit, which is always 1. eg: 10, 11, 12 ect...).
+
+   DAA also deals with overflow. So, if you have 90h as your number, DAA will not do any
+   thing, cause that looks like decimal already.
+
+   for example:
+
+   40h <--- daa will not change and thus, remains the same.
+   41h <--- daa doesn't change
+   42h <--- daa doesn't change
+   43h <--- daa doesn't change
+   44h <--- daa doesn't change
+   45h <--- daa doesn't change
+   46h <--- daa doesn't change
+   47h <--- daa doesn't change
+   48h <--- daa doesn't change
+   49h <--- daa doesn't change
+   ---------------------------
+   4Ah <--- daa will adjust it, because there's "A" in there! remember, BCD has no A or
+            F.
+
+            how it work is that it increment 4 and A becomes 0. (my way of thinkng might
+            not be right, but here it goes, maybe it will help you to understand what it
+            actually does:
+
+            A = 10 (in decimal). It take the first digit (1) and add it to 4 and thus, 4
+                                 becomes 5. And then DAA takes the second digit as its -
+                                 target (0). and now, we have 50h after DAA.)
+
+   00 <--- daa doesn't change
+   01 <--- daa doesn't change
+   02 <--- daa doesn't change
+   .....
+   09 <--- daa doesn't change
+
+   0A <--- you know what it does... first digit (0) becomes 1 (A becomes 0). Now, think -
+           very careful here. What is A(hex) in dec? 10! and that's exactly what DAA doe-
+           s. It make it look like decimal. But if the first digit(0) was 2 or 3. It wou-
+           ld increment it, and thus, becomes 3 and 4 respectively. BUT!! ONLY IF the SE-
+           COND DIGIT is GREATER THAN 9!!!.
+
+   now, our final test (note, every above example we've gone soo far has 0 in the CF).
+
+   90 <--- daa doesn't change
+   .....
+   99 <--- daa doesn't change
+
+   9A <--- daa changes. what will 9 becomes this time? (it will not become 10,, it will -
+                        becomes 0 (with CarryFlag SET) and A becomes 0.
+
+   9B <--- daa changes. 9 becomes 0 with CF set. B becomes 1.
+
+
+   and so on it goes...
+   
+ ----------------------------------------------------------------
+</code></pre>
+
+This message was edited by disease_2000, on 6/20/2001 1:12:40 PM
+
+This message was edited by disease_2000, on 6/20/2001 11:19:17 PM</div>
+    <div class="meta">Posted on 2001-06-20 13:12:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201365">
+    <div class="subject"><a href="#post-201365">Print_Hex16 code explained</a></div>
+    <div class="body">DAA works by adding 6 (ie A+6=10) to AL if the AF is set. Auxillary carry occurs from
+the lower nibble of al to the upper nibble.</div>
+    <div class="meta">Posted on 2001-06-20 17:36:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201366">
+    <div class="subject"><a href="#post-201366">Print_Hex16 code explained</a></div>
+    <div class="body">Let's see your code, disease. _eet's is the best
+I have seen so far, but I was hoping for something
+more like the bin-to-ascii manoeuvre, working on
+al alone, without splitting it into bitfields or
+using rol or similar.</div>
+    <div class="meta">Posted on 2001-06-20 23:01:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201367">
+    <div class="subject"><a href="#post-201367">Print_Hex16 code explained</a></div>
+    <div class="body"><pre><code>
+ sorry, it's my fault. I misread eet_ post again...</code></pre>:eek:
+<pre><code>i thought his code actually convert it to bin (ones and -
+ zeros...)
+ how embarrassing...
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-20 23:18:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201368">
+    <div class="subject"><a href="#post-201368">Print_Hex16 code explained</a></div>
+    <div class="body">The second listing I posted implemented the Print_Hex16 as a 32
+function (it also pop ups a message box with the result). The
+third listing converts an ASCII Hex digit in al to a bin in al.
+It also contains additional code to a string of ASCII Hex.
+  Last I checked, 11pm my time (Pacific), I thought my code
+converted to bin (if you were refering to the third example).</div>
+    <div class="meta">Posted on 2001-06-21 00:19:00 by eet_1024</div>
+   </div>
+   <div class="post" id="post-201369">
+    <div class="subject"><a href="#post-201369">Print_Hex16 code explained</a></div>
+    <div class="body">Here is another way, rather similar, one
+byte smaller (or two in 32-bit mode),
+and maybe an iota faster because no rol:
+
+.data
+cases db "0123456789ABCDEFabcdef"
+cases_ equ $-cases
+.code
+...
+mov esi,offset cases
+mov ecx,cases_
+loopit: lodsb
+call myxlat
+loop loopit
+...
+myxlat: sub al,40h
+cbw
+and ah,7
+add al,ah  ;i.e. add 7 if the input was "0"-"9"
+sub al,7
+and al,0Fh
+ret
+
+I suspect that with aad somewhere, it could be
+improved further.</div>
+    <div class="meta">Posted on 2001-06-21 06:37:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201370">
+    <div class="subject"><a href="#post-201370">Print_Hex16 code explained</a></div>
+    <div class="body">I never would of thought of using cbw.  I added into my code. The call
+instruction in your function eats up excessive time.
+
+<pre><code>
+   mov esi, Cases      ;FAsm works with addresses
+   mov ecx, Cases.Len  ;And provides some structure
+
+Convert:
+   lodsb
+   sub   al, 0x40
+   cbw
+   not   ah
+   and   ax, 0x010F  ;Mask for aad & Adjust
+   sub   al, ah      ;Correct for 'A' != 0x40 (0x41 ¬? 0 mod 0xA)
+   aad               ;If ASCII =~ // then this will add 10
+   loop  Convert
+   ret
+Cases:
+    .String db "0123456789ABCDEFabcdef"
+    .Len = $ - cases     ;In FAsm equ means value here, were = is constant
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-21 13:30:00 by eet_1024</div>
+   </div>
+  </div>
+ </body>
+</html>

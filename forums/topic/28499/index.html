@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>A simple question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28499" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28499">A simple question</a></p>
+   <div class="post" id="post-201615">
+    <div class="subject"><a href="#post-201615">A simple question</a></div>
+    <div class="body">As bitRAKE states, a word is infact a pair of bytes.
+An array is a series of elements of a given data type, each one consecutive to the previous element.
+
+This means that the memory layout is as such:
+<pre><code>
+....(some memory)....(start of your array of WORDS)aabbccddeeff
+</code></pre>
+mov bx, offset variable6 gives the offset of the first element in memory:
+<pre><code>
+aabbccddeeffgg
+|
+\-bx points here!
+</code></pre>
+if we add just one to bx, it will be pointing in such a way that what is read is the lower byte of element 1 of your array as the upper byte in your word, and the upper byte of element 2 is the lower byte of your selected WORD.
+
+This is because memory access is at a single byte granularity. In otherwords, you can access each individual byte of the memory.
+
+There are two points to make, firstly the line:
+<pre><code>add , WORD PTR 435</code></pre>
+seems a little confusing (at least to me...), I would change it to the following:
+<pre><code>add WORD PTR , 435</code></pre>
+As it seems a little more clear, ie you are adding 435 to what bx is pointing at.
+
+Secondly, if you are using a 32bit processor, you can effectivly double the speed of your loop by using all 32 data bits (this speed increase is of course assuming perfect memory, so it will not be quite double as caching overheads will be a greater percentage of running time).
+<pre><code>
+  mov bx, offset variable6
+  mov cx, 300 ;Dealing with two elements at a time.
+add_loop:
+  ;435 = 1B3h
+  add DWORD PTR , 01B301B3h
+  ;435 repeated twice for the two WORDs in our DWORD
+  add bx, 4
+  loop add_loop
+</code></pre>
+
+This should run on all 386 or above processors.
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-22 11:45:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201616">
+    <div class="subject"><a href="#post-201616">A simple question</a></div>
+    <div class="body">A register simply contains a number, how you or a particular instruction interprets that number is what makes the difference.
+
+By enclosing a register in square brackets (""), the assembler treats that register to a pointer to some memory.
+Say bx = n, this means  points to the n'th value in memory.
+
+Treat memory as a very large array of bytes:
+<pre><code>
+.data
+M    db 65536 dup (0) ;Every byte in one segment (old 16bit dos)
+
+.code
+; ---- Example 1 ----
+  mov bx, 0
+  mov BYTE PTR , 1 ;M[0] = 1
+  add bx, 1            ;bx = bx + 1
+  mov BYTE PTR , 1 ;M = 1 : bx = 1 so M[1] = 1
+
+; ---- Example 2 ----
+
+  mov bx, 0FFh
+
+@@: ;Reusable lable
+  mov BYTE PTR , bx
+  dec bx
+  jnz @B ;Jump backwards to the last reusable lable if ZF=0
+
+  ;This fills M[0] to M[0FFh (255)] with 0 to 0FFh respectively
+
+; ---- Example 3 ----
+  mov WORD PTR [0], 1111h
+       ;Put value 1 into the first WORD of memory
+  mov BYTE PTR [0], 22h 
+       ;Put 1 into the first BYTE of memory, overwriting whatever
+       ;was there previously
+
+  mov ax, WORD PTR [0]
+       ;ax = 1122h
+       ;     1111h from the first write (length WORD - 2 bytes)
+       ;       22h from the second write, overwriting the first
+       ;           byte of the WORD length write.
+</code></pre>
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-22 12:02:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201617">
+    <div class="subject"><a href="#post-201617">A simple question</a></div>
+    <div class="body">Your problem seems to be in the interpretation of the numbers.  BX is a number - everything is a number in assembly!  You can get that number:<pre><code>
+    mov ax, bx
+    push bx</code></pre>
+...or you can use that number to get memory:<pre><code>
+    mov ax, 
+    push WORD PTR </code></pre>
+...in this case the number BX is added to the segment register DS to determine where to start getting bytes.  Therefore, you can't add two <em>bytes</em> to BX unless you do:<pre><code>
+    xor cx, cx
+    add bl, al
+    adc bh, cl
+    add dl, ah
+    adc bh, cl</code></pre>
+...but you can add two to the number BX which is used as an offset in the memory access.
+
+This might sound confusing to you, but if you read enough of it you <em>will</em> understand it.  Get the manuals, read them cover to cover, code, and trace in a debugger.
+
+<em>Everything is a number, and you don't count. - bitRAKE</em>
+
+This message was edited by bitRAKE, on 6/22/2001 12:19:14 PM</div>
+    <div class="meta">Posted on 2001-06-22 12:15:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201618">
+    <div class="subject"><a href="#post-201618">A simple question</a></div>
+    <div class="body"><pre><code>
+ JCL, mind if i ask you a question?
+
+ Do you learn best when they're Picture that goes with words or
+ just pure words? (in the future i'm planing to create a website
+ that teaches asm programing in general. maybe your YES or NO
+ will help me to plan whether it should be Visual or
+ Text-oriented.) (i believe we all can it, it's just that we have
+ different ways of learning, some by pictures, some by words. so
+ it's a good idea that you know yourself.)
+
+ i'll skim through your code and tell you what it does, cause
+ the explaination is already there (by bitrake and mirno).
+
+   ========================
+   mov bx, offset variable6
+   mov cx, 600 ;this will tell LOOP to spin around the code 600 times!
+@1:add , 435
+   add bx, 2
+   loop @1
+
+ i've modified your code abit. no need for:
+ add word ptr . cause bx is already a word. it would make more
+ sense if you have: add byte ptr . and by the way,
+ WORD PTR 435 is LEGAL! if 435 is bigger than what a 16bit register
+ can hold, then WORD PTR will take the right amount (one that will
+ fit into a 16bit register)
+
+ 435 = 1B3 <-- and it's not over a word yet! so there's no point
+ of using WORD PTR.
+
+ i can see the purpose of your code. what it does is add 435
+ to every element that exist in variable6.
+
+ ------------------------------------------
+   mov bx, offset variable6
+   mov cx, 600
+@1:add , 435 ;note, the reason for  is because bx holds
+                 ;the offset of variable6. not having the [ and ]
+                 ;beside bx, add will simply add 435 into register
+                 ;bx instead of at memory location where variable6
+                 ;is.
+   add bx, 2     ; move on next element
+   loop @1       ;loop until cx = 0
+
+</code></pre>
+
+This message was edited by disease_2000, on 6/25/2001 2:08:28 AM</div>
+    <div class="meta">Posted on 2001-06-22 12:38:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201619">
+    <div class="subject"><a href="#post-201619">A simple question</a></div>
+    <div class="body">Hmm, I'm more centre-brained, reportedly so after taking a test at www.brain.com. So, I learn best with pictures and words, as the pictures would help me visualise when i can't. So, if u r making a tutorial in the future, it'll be helpful for newbies like me when it comes with pictures. Thanx, disease_2000!
+
+With regard to what Mirno has posted, the one with double word, dealing with 2 elements at the same time, does double word = 32bit? So, if it is 32 bit, it would be faster?
+
+I know that by:variable6 dw 600 dup (-11000) , i'm creating an array of: -11000 -11000 - 11000 ..... .....
+
+And since i have defined every element in variable6 by this command dw, as a WORD, i have to add bx, 2 to make the next loop jump to the next element? So, if my element is a doubleword, i should add bx, 4 to jump to the next element? Is this interpretation correct?
+
+By the way, i do not fully understand ur examples in ur second post, Mirno. :( I have not learnt some of the instructions yet.
+
+Also, in Bitrake's second post, it mentioned adc. What does it do?
+
+Disease_2000, u mentioned: add bx, 2   ;add is useful, you can square it by 2. ;)
+
+What do u mean by u can square it by 2?
+
+I have not fully grasped what u guys r trying to tell me.So i'll try to re-read ur replies several times to try to get it.
+
+By the way, can someone help me with another question of mine, which is in another thread called"template structures"?I have gotten no replies for it so far. :(</div>
+    <div class="meta">Posted on 2001-06-22 13:15:00 by JCL</div>
+   </div>
+   <div class="post" id="post-201620">
+    <div class="subject"><a href="#post-201620">A simple question</a></div>
+    <div class="body">DO u have icq? Disease_2000? If yes, then i could ask u easier!
+
+Last time u told me to download win32asm chat. But z8coder told me that it's being fixed now. So, we'll have to wait.
+
+So, could u go to www.zcoder.com:8000/login.htm? join the chat room there.
+
+I'm there now, with no one. :(</div>
+    <div class="meta">Posted on 2001-06-22 13:34:00 by JCL</div>
+   </div>
+   <div class="post" id="post-201621">
+    <div class="subject"><a href="#post-201621">A simple question</a></div>
+    <div class="body">ADC = Add with carry
+
+Sorry, I didn't comment any of the code.  CX(=CH:CL) is zero from the XOR instruction.  <pre><code>adc bh, cl</code></pre> ;just carry the byte overflow to the high byte.  The carry flag is set/clear by the ADD instruction.
+
+Even though you learn better from visual ideas, it would be a good idea to get a book.  For me the best way was from Intel, but I am used to reading this kind of material.  You might want to get Art of Assembly by Randy Hyde.  Re-reading is great when you don't have that much material, but reading a variety of material on the same idea is much better.  There is much material on the web, but I can't put that in my backpack, yet. :)
+
+Keep at it - it will <em>click</em> and you'll be talking and typing assembly like it was your native tonge!</div>
+    <div class="meta">Posted on 2001-06-22 13:43:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201622">
+    <div class="subject"><a href="#post-201622">A simple question</a></div>
+    <div class="body">How would add bx, bx square it?
+
+i thought by the operation of add, it just add the values of bx to bx? 
+
+Hmm, this is not starting to make sense.
+
+Is add bx, bx a special operation for squaring or just that i can't visualise it yet?</div>
+    <div class="meta">Posted on 2001-06-22 13:46:00 by JCL</div>
+   </div>
+   <div class="post" id="post-201623">
+    <div class="subject"><a href="#post-201623">A simple question</a></div>
+    <div class="body">Thanx for ur encouragement, bitRAKE! By the way, did disease_2000 stole that fish in his logo from u? :)
+
+I'm currently reading a very old tutorial on assembly, dated 1989.I'm planning to complete it b4 i jump to any other guide as i want to have a basic knowlege in ASM 1st. This way, I'll be able to revise my knowledge and learn new stuff when i start to read the tutorial by Randy Hyde or Iczelion.
+
+With regard to:"Sorry, I didn't comment any of the code. CX(=CH:CL) is zero from the XOR instruction. adc bh, cl ;just carry the byte overflow to the high byte. The carry flag is set/clear by the ADD instruction."
+
+I know that ur XOR instruction clears cx.(My tutorial told me b4) BUt there's one thing i can't visualise abt ax, bx, cx and dx registers. They all have upper and lower. And each would be a byte itself, combining to give u a WORD. However, is there a boundary between the al and ah? When they say: cl:ch or ch:cl, i dun really understand what they mean! Can explain?</div>
+    <div class="meta">Posted on 2001-06-22 13:59:00 by JCL</div>
+   </div>
+   <div class="post" id="post-201624">
+    <div class="subject"><a href="#post-201624">A simple question</a></div>
+    <div class="body">wow! didn't know that not having enough sleep can really mess up
+your mind. haha.
+
+ignore everything i said about square here.</div>
+    <div class="meta">Posted on 2001-06-22 14:20:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201625">
+    <div class="subject"><a href="#post-201625">A simple question</a></div>
+    <div class="body">You can visualize it like this:<pre><code>
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE   EAX
+----------------XXXXXXXXXXXXXXXX    AX
+----------------HHHHHHHH--------    AH
+------------------------LLLLLLLL    AL</code></pre>
+Each line above is part of the same register, but you only change the part that you access: eax, ax, ah, al (The letter <strong>E</strong> above means 32-bit register: eax, ebx, ecx, ...)
+
+This message was edited by bitRAKE, on 6/22/2001 4:11:52 PM</div>
+    <div class="meta">Posted on 2001-06-22 14:34:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201626">
+    <div class="subject"><a href="#post-201626">A simple question</a></div>
+    <div class="body">if your new & cant get the tutorials to work then heres one way how it works . go into the masm32 folder right click , create new folder, click the PROSTART.EXE hit "Set Target Dir" in prostart & find the new folder you created & select it & hit ok,hit the "Create Directory" & do the same thing open the new folder & then hit cancel.hit "Setup Paths" & enter these        c:\masm32\bin\ml.exe
+c:\masm32\bin\link.exe
+c:\masm32\bin\rc.exe
+c:\masm32\bin\cvtres.exe
+c:\masm32\include\
+c:\masm\lib\                                                     Hit the "Create Project" then it asks "build project ?" answer no .the only thing left to do is write your program in the ".asm" with note pad , word pad , note tab lite , or Qeditor then go into the new folder & click on makeit.bat which translates the ".asm" thingy into the Project.exe program .Qeditor lets you translate the ".asm" into Project.exe with the "build all"which is in the project tab .  <div class="quote"> will i need to download the direct x SDK & documentation for C++ yes 
+or noyes - but only for the version of DirectX that you are using.I purchased the current Platform SDK from Microsoft (the Feb' issue) and it only covered DirectX8. This was useless because I'm using the DirectX samples from 'http://bizarrecreations.webjump.com' which seems to use DirectX 1 to 3. I ended up having to go through each of the 'include' files to figure out how to use them. The only other solution would be to create my own 'include' files from the DirectX8 SDK - a job I'm not currently planning on doing. It would be handy to get my hands on the SDK documentation for DirectX 1 to 3 so that I could understand what each function did.<div class="quote"> how do i integrate the SDK into my masm32 if aplicable ?I've setupthe 'include'filesfrom 'http://bizarrecreations.webjump.com' in 'E:\masm32\include\directx' and 'E:\masm32\include\opengl', and them '*.lib' files in 'E:\masm32\lib'. In my programs, I just make sure the paths to the 'include' and '*.lib' files are correct.
+i.e.:
+#########################################
+include \masm32\include\windows.inc
+
+include \masm32\include\winmm.inc
+includelib \masm32\lib\winmm.lib
+include \masm32\include\kernel32.inc
+includelib \masm32\lib\kernel32.lib
+include \masm32\include\user32.inc
+includelib \masm32\lib\user32.lib
+include \masm32\include\gdi32.inc
+includelib \masm32\lib\gdi32.lib
+
+;============== WinExtra stuff
+include \masm32\include\directx\winextra\winextra.def
+include \masm32\include\directx\winextra\winprolog.def
+
+;============== DirectX includes
+include \masm32\include\directx\dinput.def
+include \masm32\include\directx\d3d.def
+include \masm32\include\directx\d3dmath.asm
+includelib \masm32\lib\ddraw.lib
+includelib \masm32\lib\dinput.lib
+#########################################
+To build a program, I use QEditor (which is supplied with Masm32). Open the '*.asm' file you want to use and select 'Project->Build All' from the file menu of QEditor. This will generate a '*.exe' file in the same directory as your '*.asm' file. To test your program (once it's assembled correctly), click the 'RUN' icon on the tool-bar (it's on the right-hand side) and double-click your program (the one with the '.exe' extension. Don't forget - you can only use 'Project->Build all' on the main assembly file for your program. If you are using multiple '*.asm' files and 'include'ing them within your main '*.asm' file, remember to only use 'Project->Build all' on the main one.<div class="quote"> i already have a program to mess with that uses direct draw . tell me one thing about it . is direct draw what the polygons are drawn with by the hardware & polygons are used like particals in formulas with x,y,z co-ordinance   y or n ? Yes-ishYou seem to have the basic idea. DirectDraw is pretty much the equivalent to S/VGA stuff. It's used to change the screen size/ resolution/ bit-depth, to do page flipping and to draw to video memory.
+Use can choose to use hardware acceleration or software emulation dep</div>
+    <div class="meta">Posted on 2001-06-22 18:34:00 by mr . IP</div>
+   </div>
+   <div class="post" id="post-201627">
+    <div class="subject"><a href="#post-201627">A simple question</a></div>
+    <div class="body">There are many fish in the sea.  Nice to see that he is resourceful.  Goto to my website to rip more gfx.  I like small animated GIF files,</div>
+    <div class="meta">Posted on 2001-06-22 18:38:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201628">
+    <div class="subject"><a href="#post-201628">A simple question</a></div>
+    <div class="body">bitrake, is that you? man. i was playing around...
+anyway, i'll take that off.</div>
+    <div class="meta">Posted on 2001-06-22 18:41:00 by disease_2000</div>
+   </div>
+   <div class="post" id="post-201629">
+    <div class="subject"><a href="#post-201629">A simple question</a></div>
+    <div class="body"><strong>Hiro</strong>, that's a cool effect we have here in this thread!
+
+<strong>Disease_2000</strong>, don't worry about it.  I see you like to change your gfx a lot - it's cool.</div>
+    <div class="meta">Posted on 2001-06-22 18:48:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201630">
+    <div class="subject"><a href="#post-201630">A simple question</a></div>
+    <div class="body">Thanx u guys for ur help. But regarding the upper and lower registers of ax, bx, cx and dx, can someone help me visualise it, explain to me whether there are any boundaries between the cl and ch. And wat does we actually mean by the symbol: CH:CL?</div>
+    <div class="meta">Posted on 2001-06-23 02:53:00 by JCL</div>
+   </div>
+   <div class="post" id="post-201631">
+    <div class="subject"><a href="#post-201631">A simple question</a></div>
+    <div class="body">What they mean by CH:CL, is that CX = CH:CL. In other words, CX is two BYTES long (or a WORD), and for convenience, you can access either half. The upper BYTE of CX is CH, and the lower BYTE is CL, so CH:CL = CX (the : means stick together).
+
+When dealing with these sub-registers, they act in exactly the same way as a big register does. Only difference is that they are smaller!
+Remember though that changing one register will affect the sub-registers:
+<pre><code>
+xor eax, eax   ; eax = 00000000h
+mov al, 0FFh   ; eax = 000000FFh
+add eax, 2h    ; eax = 00000101h
+               ; al  = 01h
+               ; ah  = 01h
+xor ah, ah     ; eax = 00000001h
+</code></pre>
+
+xor eax, eax will set the zero flag, as will xor ah, ah!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-06-25 04:18:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-201632">
+    <div class="subject"><a href="#post-201632">A simple question</a></div>
+    <div class="body">Hmm.. ok! Thanx Mirno!
+
+This is what u have mentioned in ur previous post:
+
+"if we add just one to bx, it will be pointing in such a way that what is read is the lower byte of element 1 of your array as the upper byte in your word, and the upper byte of element 2 is the lower byte of your selected WORD"
+
+Can u explain it more clearly?
+
+I dun really know what u r toking abt.</div>
+    <div class="meta">Posted on 2001-06-25 07:42:00 by JCL</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. ex. #6.3 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27511" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27511">Basics of Asm32 in opt. ex. #6.3</a></p>
+   <div class="post" id="post-196686">
+    <div class="subject"><a href="#post-196686">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body"><pre><code>
+;Paint_Proc had not been optimized before post #6.2
+;I do it now.
+;This is original Paint_Proc:
+
+Paint_Proc proc hWin:DWORD, hDC:DWORD
+
+    LOCAL caW :DWORD
+    LOCAL caH :DWORD
+    LOCAL tbH :DWORD
+    LOCAL sbH :DWORD
+    LOCAL Rct :RECT
+
+    invoke GetClientRect,hWin,ADDR Rct
+    m2m caW, Rct.right
+    m2m caH, Rct.bottom
+
+    invoke GetWindowRect,hToolBar,ADDR Rct
+    mov eax, Rct.bottom
+    sub eax, Rct.top
+    mov tbH, eax
+
+    invoke GetWindowRect,hStatus,ADDR Rct
+    mov eax, Rct.bottom
+    sub eax, Rct.top
+    mov sbH, eax
+
+    mov eax, caH
+    sub eax, sbH
+    mov caH, eax               ;?!
+
+    mov Rct.left, 0
+    m2m Rct.top, tbH
+    m2m Rct.right, caW
+    m2m Rct.bottom, caH ;?!
+
+    invoke DrawEdge,hDC,ADDR Rct,EDGE_SUNKEN,BF_RECT
+
+    return 0
+
+Paint_Proc endp
+;New version of Paint_Proc
+;Needless transiotions though locals removed
+
+Paint_Proc proc hWin:DWORD,hDC:DWORD
+
+ LOCAL Rct:RECT
+
+invoke GetWindowRect,hToolBar,ADDR Rct
+mov eax,Rct.bottom 
+sub eax,Rct.top        
+push eax		;former tbH
+
+invoke GetClientRect,hWin,ADDR Rct
+
+push Rct.right
+push Rct.bottom
+
+invoke GetWindowRect,hStatus,ADDR Rct
+
+mov eax,Rct.bottom
+pop edx		;previous Rct.bottom of hWin
+sub eax,Rct.top
+sub edx,eax
+
+mov Rct.bottom,edx
+mov Rct.left,0
+pop Rct.right	;previous Rct.right of hWin
+pop Rct.top              ;former tbH
+
+invoke DrawEdge,hDC,ADDR Rct,EDGE_SUNKEN,BF_RECT
+
+ret
+Paint_Proc endp
+
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-02 18:57:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196687">
+    <div class="subject"><a href="#post-196687">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">Svin,
+
+Have you considered making the RECT structure a global?
+
+If you only called GetWindowRect etc when a WM_SIZE message was received, then did the calculations it would be alot quicker, as you'd simply call
+
+<pre><code>
+invoke DrawEdge,hDC,ADDR Rct,EDGE_SUNKEN,BF_RECT
+</code></pre>
+
+in WM_PAINT (or PaintProc)
+
+Umbongo
+
+
+
+This message was edited by umbongo, on 4/3/2001 8:17:10 AM</div>
+    <div class="meta">Posted on 2001-04-03 07:58:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-196688">
+    <div class="subject"><a href="#post-196688">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">Good point.
+It the example I just wanted to show that
+there can be needless varaible transitions.
+It often happends in some asm procs.
+Since for programmers some time is hard to keep track
+of values in stack and registers.
+As for your idea it worth to think about.
+Thanks for reply.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-03 09:12:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196689">
+    <div class="subject"><a href="#post-196689">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">Well, I didn't get it how can I easily do it
+WM_SIZE.
+Can you write the code to give us an example?
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-03 10:07:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196690">
+    <div class="subject"><a href="#post-196690">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">Svin,
+
+It's a bit scrappy, but it does show the idea, the full source is at the end of the message.
+
+I created a copy of the variables, but prefixed them with size_ so we can tell where they are.
+
+I then put 
+<pre><code>
+invoke Size_proc,hWin
+</code></pre>
+as the first bit of the WM_SIZE message, this calulates the size of the rectangle, and stores it in size_Rct
+
+Now, all Paint_proc has to do, is draw the rectangle, WM_SIZE always comes before a paint, so it works fine. If the window hasn't changed, then you will just get a WM_PAINT, and the size_Rct is correct already.
+
+When the window is created you get a WM_SIZE so that covers the first call also.
+
+Umbongo
+
+<pre><code>
+.586
+.model flat,stdcall
+option casemap:none
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\comctl32.inc
+includelib kernel32.lib
+includelib user32.lib
+includelib comctl32.lib
+;##############################
+;Local macros
+szText MACRO Name, Text:VARARG
+ LOCAL lbl
+  jmp lbl
+    Name db Text,0
+  lbl:
+ENDM
+m2m MACRO M1, M2
+ push M2
+ pop   M1
+ENDM
+
+return MACRO arg
+ mov eax,arg
+ ret
+ENDM
+;================
+;Local prototypes
+;================
+
+WinMain PROTO
+WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
+TopXY     PROTO :DWORD,:DWORD
+Paint_Proc PROTO :DWORD,:DWORD
+Size_Proc PROTO :DWORD
+
+.data
+
+;
+; the globals to store the data in, you only really
+; need size_Rct - the others could be local to Size_proc
+
+size_caW dd 0
+size_caH dd 0
+size_tbH dd 0
+size_sbH dd 0
+size_Rct RECT <?>
+
+
+
+TheText db "Please Confirm Exit",0
+szDisplayName db "Comctl32 Demo",0
+hInstance              equ 400000h
+ClassName        db 1,0
+
+tbSelect db "You have selected",0
+TheMsg db "Assembler,Pure and Simple",0
+
+tb50 db "New File",0
+tb51 db "Open File",0
+tb52 db "Save File",0
+tb53 db "Cut",0
+tb54 db "Copy",0
+tb55 db "Paste",0
+tb56 db "Undo",0
+tb57 db "Search",0
+tb58 db "Replace",0
+tb59 db "Print",0
+
+ALIGN 4
+msgtbl dd offset tb50
+            dd offset tb51
+            dd offset tb52
+            dd offset tb53
+            dd offset tb54
+            dd offset tb55
+            dd offset tb56
+            dd offset tb57
+            dd offset tb58
+            dd offset tb59
+
+
+wc WNDCLASSEX <sizeof WNDCLASSEX, CS_HREDRAW or CS_VREDRAW or CS_BYTEALIGNWINDOW,\
+      offset WndProc,0,0,hInstance,0,0,COLOR_BTNFACE+1,600,offset ClassName,0>
+tbb  TBBUTTON <0,0,TBSTATE_ENABLED,TBSTYLE_SEP,0,0>
+
+; mov tbb.iBitmap,0
+; mov tbb.idCommand,0
+; mov tbb.fsState, TBSTATE_ENABLED
+; mov tbb.fsStyle, TBSTYLE_SEP
+; mov tbb.dwData,0
+; mov tbb.iString,0
+
+.data?
+
+hWnd               dd ?
+hStatus              dd ?
+hToolBar            dd ?
+msg   MSG<>
+.code
+start:
+
+
+   invoke WinMain
+
+   invoke ExitProcess,eax
+
+;#################################################################
+
+WinMain proc
+
+;------------------------------------------------------
+;Put LOCALs on stack
+;------------------------------------------------------
+
+Wwd equ 500
+Wht  equ 350
+
+invoke InitCommonControls
+xor ebx,ebx
+;================================
+;Fill WNDCLASSEX structure with required variables
+;==========================================
+
+   invoke LoadIcon,hInstance,500 ;icon ID
+   mov wc.hIcon,eax
+   mov wc.hIconSm,eax
+   invoke LoadCursor,ebx,IDC_ARROW
+   mov wc.hCursor,eax
+
+;============================
+;Center window at following size
+;============================
+
+   invoke GetSystemMetrics,SM_CXSCREEN
+
+   shr eax,1
+   sub eax,Wwd/2 
+   mov esi,eax    ;esi == Wtx
+
+   invoke GetSystemMetrics,SM_CYSCREEN
+
+   shr eax,1
+   sub eax,Wht/2
+   mov edi,eax
+   invoke RegisterClassEx,ADDR wc
+
+;esi = Wtx edi = Wty
+
+   invoke CreateWindowEx,WS_EX_LEFT,
+      eax,
+      offset szDisplayName,
+      WS_OVERLAPPEDWINDOW or WS_VISIBLE,
+      esi,edi,Wwd,Wht,
+      ebx,ebx,hInstance,ebx
+   mov hWnd,eax
+
+
+;==============================
+;Loop until PostQuitMessage is sent
+;==============================
+
+   StartLoop:</div>
+    <div class="meta">Posted on 2001-04-03 10:37:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-196691">
+    <div class="subject"><a href="#post-196691">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">Well, I got you wrong first time.
+I can say what I thought you'd meant:
+- We can use one global Rct  in .data? section (you put it in .data section and increased size
+without any needs) for all ocasions so we can leave out Rct local from Paint_Proc.
+It's not big deal - just one clock and 4 bytes but at least some gain of qaulity.
+- But the major oppotunity I saw in it - to use some values we already gets while
+in WM_SIZE handler - we move status and get something in lParam we can use.
+But after 5 minutes try I wasn't able to get it and thought you had already algo
+in your mind so I asked for it.
+For now I can not see any point to it that way, we just got additional proc and
+comulative speed is down. WM_PAINT handler is faster but WM_SIZE is slower
+and sum of old WM_PAINT and WM_SIZE is faster than in your version.
+As the result after resizing window will be painted slower and it doesn't matter
+were it would slowed in WM_SIZE handler or WM_PAINT - for the use it'll be the same.
+
+Anyway - don't pay too much attention to my tone :)
+While doing buisness I ruthless to myself and anybody.
+So if you have some idea and code - don't hesitate to send.
+I'll be waiting.
+Now I'm going to kill this task (calculation for edge using some gotten in
+WM_SIZE values)- if you'll do it faster - send solution.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-03 16:39:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196692">
+    <div class="subject"><a href="#post-196692">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body"><pre><code>
+...
+.data?
+Rct RECT <>
+.code
+...
+.ELSEIF eax == WM_SIZE
+
+	invoke GetWindowRect,hToolBar,ADDR Rct
+	mov eax,Rct.bottom 
+	sub eax,Rct.top        
+	push eax		;former tbH
+	
+	invoke GetClientRect,hWin,ADDR Rct
+	
+	push Rct.right
+	push Rct.bottom
+	
+	invoke GetWindowRect,hStatus,ADDR Rct
+	
+	mov eax,Rct.bottom
+	pop edx		;previous Rct.bottom of hWin
+	sub eax,Rct.top
+	sub edx,eax
+
+	
+	mov Rct.bottom,edx
+	mov Rct.left,0
+	pop Rct.right	;previous Rct.right of hWin
+	pop Rct.top              ;former tbH
+
+        mov edx,lParam	;edx= client area width
+        mov ecx,edx
+        shr  ecx,16
+        and edx,0FFFFFh
+        sub ecx, eax	
+
+invoke MoveWindow,hStatus,0,ecx,edx,ecx,TRUE
+invoke SendMessage,hToolBar,TB_AUTOSIZE,0,0             
+.ELSEIF eax == WM_PAINT
+
+ invoke BeginPaint,hWin,ADDR Ps
+ invoke DrawEdge,eax,ADDR Rct,EDGE_SUNKEN,BF_RECT
+ invoke EndPaint,hWin,ADDR Ps
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-03 19:58:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196693">
+    <div class="subject"><a href="#post-196693">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body"><div class="quote">
+For now I can not see any point to it that way, we just got additional proc and comulative speed is down. WM_PAINT handler is faster but WM_SIZE is slower and sum of old WM_PAINT and WM_SIZE is faster than in your version. As the result after resizing window will be painted slower and it doesn't matter
+were it would slowed in WM_SIZE handler or WM_PAINT - for the use it'll be the same.
+</div>
+
+This type of code will not be faster than WM_SIZE and WM_PAINT together, but put a counter in your program for the number of WM_SIZE messages verses the number of WM_PAINT messages, then use it as you would a normal program.
+
+You'll find that WM_PAINT is called alot more than WM_SIZE and that is where you will get the benefit.
+
+Combined, yes they will be slower, but so what? No-one spends their time continually re-sizing a window. 
+
+I was showing that you don't need to get the size of all your windows, client areas and do lots of calulations in WM_PAINT. Do it in WM_SIZE and painting can be alot smoother and simpler. 
+
+In this application you're talking about a window with a toolbar and a message box, yet you start talking about saving one clock cycle and 4 bytes, it's not the point is it? On my Ghz PIII I'm not going to notice 1 clock, hell on a 486 I'm not going to notice 1 clock. I will notice the benefit I get from using this technique in a large application which does lots of calculations which it need not do. 
+
+This kind of optimisation helps in large applications, rather than in a simple example, and most people are writing real apps not examples, so it should be of benefit to them.
+
+<div class="quote">
+If you'll do it faster - send solution.
+</div>
+
+I could, but you're interested in cycle counting and I'm more interesting in the big savings you get from a different perspective, or an alternative way of doing things.
+
+Have fun :)
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-04-04 07:00:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-196694">
+    <div class="subject"><a href="#post-196694">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">That is a great piece of knowledge <strong>umbongo</strong>.  I'll test it out on Win2K and commit it to memmory if that is the case - which I don't see how it couldn't be.  The longer the application runs the more cycles you save.  :)</div>
+    <div class="meta">Posted on 2001-04-04 07:26:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-196695">
+    <div class="subject"><a href="#post-196695">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body">umbongo:
+
+Man, had You carefully looked in my final version, you wouldn't have needed to start this ME VS YOU talk.
+Come on, umbongo, do we need all this "I could, but you're ..." statements?
+I final version I combined together all good things from yours and my ideas.
+I put calculations on WM_SIZE handler, but in addition leave out some needless procs, and reused
+results of calculations (for resizing status) wich is already gotten in filling Rct section.
+As the result.
+1. It is all done in WM_SIZE section as you preposed.
+2. Culculations themselve much faster
+3. Comultive size of code shorter.
+If you care you can observe all changes in D.Knuth style (he's my favorite algorithmist)
+step be step in scenarious. You'll how much improvements was done in size and speed.
+
+I talk code better than English, please, excuse if I don't comment size reduction and clock it.
+
+For the rest I can only say:
+1. I escep. stress Asm level optimization issues just 'cause it issue of "Basics of Asm32..."
+thread. And find it nassesery to clock it and culculate size in such a topics to prevent 
+speculations.
+2. Working on big apps in Asm is everyday buisness for me, and most of tecs a present
+here based on this expirience, but I'm going to argue with your satements for simple reasons.
+- While you find my aproach oposite to yours - I don't. The only difference in strategy my
+be just I pay more attention to real final realization of this aproaches.
+You think it's not of greate importance? Then I wouldn't force you to change you opinion :)
+
+- Practical words was said about WM_PAINT and WM_SIZE friquencies, and I already accepted it
+as you can see in the final version.
+The rest of words are just emotions leading to nowhere. 
+NoWhere is where I'm not going to go :)
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-04 10:30:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196696">
+    <div class="subject"><a href="#post-196696">Basics of Asm32 in opt. ex. #6.3</a></div>
+    <div class="body"><div class="quote">
+Come on, umbongo, do we need all this "I could, but you're ..." statements?
+</div>
+
+Well I can see now how that could be mis-interpreted as a dig, sorry if it annoyed you, I didn't mean to. I wasn't attacking you personally, I was trying to say we were using different approaches to optimisation.
+
+I guess I should have a better command of my own language! :)
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-04-04 11:08:00 by umbongo</div>
+   </div>
+  </div>
+ </body>
+</html>

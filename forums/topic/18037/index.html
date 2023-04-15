@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DebugActiveProcess -- freezing my apps :( - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18037" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=18037">DebugActiveProcess -- freezing my apps :(</a></p>
+   <div class="post" id="post-139219">
+    <div class="subject"><a href="#post-139219">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Hello!<br /><br />As I wrote in my previous posts I want to create an external logger for my application. I wanted to use code injection, but I found that there are too many problems with this method.<br /><br />I decided to use a dll and now I have problems with putting LoadLibrary code into the process.<br />I want to use DebugActiveProcess. I set the privilleges and the application returns a debug event CREATE_PROCESS_DEBUG_EVENT, so it means that the process was successufully set to being debugged.<br /><br />Unfortunately the process is suspended all the time :( and I can't even open it's window as it is like 'frozen' and I don't get any further debug exceptions etc.<br /><br />I'm sorry, but the code is in C++:<br /><br /><pre><code><br />#include &lt;windows.h&gt;<br />#include &lt;tlhelp32.h&gt;<br /><br />#define FILENAME &quot;WREX.EXE&quot;<br /><br />int APIENTRY WinMain&#40;HINSTANCE hInstance,<br />                     HINSTANCE hPrevInstance,<br />                     LPSTR     lpCmdLine,<br />                     int       nCmdShow&#41;<br />&#123;<br />	HANDLE tok;<br />	if &#40; OpenProcessToken&#40; GetCurrentProcess&#40;&#41;, TOKEN_ADJUST_PRIVILEGES, &amp;tok &#41; &#41; // settin' privilleges for WinNT<br />	&#123;<br />		LUID luid;<br />		TOKEN_PRIVILEGES tp;<br /><br />		LookupPrivilegeValue&#40; NULL, SE_SHUTDOWN_NAME, &amp;luid &#41;;<br />		tp.PrivilegeCount = 1;<br />		tp.Privileges&#91;0&#93;.Attributes = SE_PRIVILEGE_ENABLED;<br />		tp.Privileges&#91;0&#93;.Luid = luid;<br />		AdjustTokenPrivileges&#40; tok, FALSE, &amp;tp, NULL, NULL, NULL &#41;;<br /><br />		LookupPrivilegeValue&#40; NULL, SE_SECURITY_NAME, &amp;luid &#41;;<br />		tp.PrivilegeCount = 1;<br />		tp.Privileges&#91;0&#93;.Attributes = SE_PRIVILEGE_ENABLED;<br />		tp.Privileges&#91;0&#93;.Luid = luid;<br />		AdjustTokenPrivileges&#40; tok, FALSE, &amp;tp, NULL, NULL, NULL &#41;;<br /><br />		CloseHandle&#40;tok&#41;;<br />	&#125;<br /><br />	DWORD dwProcID = 0;<br />	PROCESSENTRY32 proc;<br />	HANDLE hProcess;<br /><br />	HANDLE snap = CreateToolhelp32Snapshot&#40; TH32CS_SNAPPROCESS, NULL &#41;; // this part is irrelevant as it only finds the process in memory<br /><br />	proc.dwSize = sizeof&#40;PROCESSENTRY32&#41;;<br /><br />	if &#40; Process32First&#40; snap, &amp;proc &#41; == FALSE &#41;<br />	&#123;<br />		return -1;<br />	&#125;<br />	for &#40; int i=0; i&lt;&#40;int&#41;strlen&#40;proc.szExeFile&#41;; i++ &#41;<br />	&#123;<br />		if &#40; &#40;proc.szExeFile&#91;i&#93;&gt;='a'&#41; &amp;&amp; &#40;proc.szExeFile&#91;i&#93;&lt;='z'&#41; &#41;<br />			proc.szExeFile&#91;i&#93;-=32;<br />	&#125;<br /><br />	if &#40; strstr&#40;proc.szExeFile, FILENAME&#41; != NULL &#41;<br />	&#123;<br />		hProcess = OpenProcess&#40; PROCESS_ALL_ACCESS, NULL, proc.th32ProcessID &#41;;<br />		dwProcID = proc.th32ProcessID;<br />	&#125;<br /><br />	while &#40; Process32Next&#40; snap, &amp;proc &#41; == TRUE &#41;<br />	&#123;<br />		for &#40; int i=0; i&lt;&#40;int&#41;strlen&#40;proc.szExeFile&#41;; i++ &#41;<br />		&#123;<br />			if &#40; &#40;proc.szExeFile&#91;i&#93;&gt;='a'&#41; &amp;&amp; &#40;proc.szExeFile&#91;i&#93;&lt;='z'&#41; &#41;<br />				proc.szExeFile&#91;i&#93;-=32;<br />		&#125;<br />		if &#40; strstr&#40;proc.szExeFile, FILENAME&#41; != NULL &#41;<br />		&#123;<br />			hProcess = OpenProcess&#40; PROCESS_ALL_ACCESS, NULL, proc.th32ProcessID &#41;;<br />			dwProcID = proc.th32ProcessID;<br />		&#125;<br />	&#125;<br /><br />	CloseHandle&#40;snap&#41;;<br /><br />	if &#40; dwProcID == 0 &#41;<br />		return -1;<br /><br />	DEBUG_EVENT DBEvent;<br /><br />	if &#40; DebugActiveProcess&#40;dwProcID&#41; == TRUE &#41;<br />	&#123;<br />		while &#40;1&#41;<br />		&#123;<br />	 		WaitForDebugEvent&#40; &amp;DBEvent, INFINITE &#41;;<br /> 			if &#40; DBEvent.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT &#41;<br />				break;<br />			if &#40; DBEvent.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT &#41; // this is the only event my app receives<br />			&#123;<br />				MessageBox&#40;0,&quot;Debugging started!&quot;,&quot;Ble&quot;,0&#41;;<br />			&#125;<br />			else if &#40; DBEvent.dwDebugEventCode == EXCEPTION_DEBUG_EVENT &#41;<br />			&#123;<br />				if &#40; DBEvent.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT &#41;<br />				&#123;<br />					ContinueDebugEvent&#40; DBEvent.dwProcessId, DBEvent.dwThreadId, DBG_CONTINUE &#41;;<br />					continue;<br />				&#125;<br />				ContinueDebugEvent&#40; DBEvent.dwProcessId, DBEvent.dwThreadId, DBG_EXCEPTION_NOT_HANDLED &#41;;<br />			&#125;<br />		&#125;<br />	&#125;<br />	else<br />	&#123;<br />		MessageBox&#40; 0, &quot;Can't debug!&quot;, &quot;&#58;&#40;&quot;, 0 &#41;;<br />		CloseHandle&#40;hProcess&#41;;<br />	&#125;<br /><br />	return 0;<br />&#125;<br /></code></pre></div>
+    <div class="meta">Posted on 2004-04-17 06:19:20 by blackd0t</div>
+   </div>
+   <div class="post" id="post-139222">
+    <div class="subject"><a href="#post-139222">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Did you have a look at Iczelion's debugging tutorials? <a target="_blank" href="http://win32assembly.online.fr/tut28.html">http://win32assembly.online.fr/tut28.html</a> and forward...</div>
+    <div class="meta">Posted on 2004-04-17 08:41:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-139225">
+    <div class="subject"><a href="#post-139225">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Yes, I did, they're great!<br /><br />But Iczelion is only describing in detail the process of debugging a process right after it's opening and I want to debug a process that is already in memory with DebugActiveProcess.<br /><br />When I call the function, though, the process freezes and there is nothing to do about it :(.</div>
+    <div class="meta">Posted on 2004-04-17 09:06:15 by blackd0t</div>
+   </div>
+   <div class="post" id="post-139228">
+    <div class="subject"><a href="#post-139228">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Actually I found out that even this method with running an application in debug mode freezes the application. In that case it has to have something to do with VC++ because in ASM everything works fine.<br /><br />If any of you have any idea what can be the cause of the problem please reply.</div>
+    <div class="meta">Posted on 2004-04-17 10:04:00 by blackd0t</div>
+   </div>
+   <div class="post" id="post-139230">
+    <div class="subject"><a href="#post-139230">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">IIRC you dont have to call OpenProcess.<br />Besides, the logic of your piece of code can be improved a lot.</div>
+    <div class="meta">Posted on 2004-04-17 10:10:22 by japheth</div>
+   </div>
+   <div class="post" id="post-139236">
+    <div class="subject"><a href="#post-139236">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Oh yeah, sorry, I copypasted the process finding code from my other app. OpenProcess is not needed for sure.</div>
+    <div class="meta">Posted on 2004-04-17 10:22:07 by blackd0t</div>
+   </div>
+   <div class="post" id="post-139263">
+    <div class="subject"><a href="#post-139263">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Please, can anyone check in VC++ if the following code works for them?<br />You'll have to pick an exe for debugging.<br />The idea is to check if the debugged application runs normally.<br /><br /><pre><code><br />#include &lt;windows.h&gt;<br />#include &lt;tlhelp32.h&gt;<br /><br />int APIENTRY WinMain&#40;HINSTANCE hInstance,<br />                     HINSTANCE hPrevInstance,<br />                     LPSTR     lpCmdLine,<br />                     int       nCmdShow&#41;<br />&#123;<br />	HANDLE tok;<br />	if &#40; OpenProcessToken&#40; GetCurrentProcess&#40;&#41;, TOKEN_ADJUST_PRIVILEGES, &amp;tok &#41; &#41;<br />	&#123;<br />		LUID luid;<br />		TOKEN_PRIVILEGES tp;<br /><br />		LookupPrivilegeValue&#40; NULL, SE_SHUTDOWN_NAME, &amp;luid &#41;;<br />		tp.PrivilegeCount = 1;<br />		tp.Privileges&#91;0&#93;.Attributes = SE_PRIVILEGE_ENABLED;<br />		tp.Privileges&#91;0&#93;.Luid = luid;<br />		AdjustTokenPrivileges&#40; tok, FALSE, &amp;tp, NULL, NULL, NULL &#41;;<br /><br />		LookupPrivilegeValue&#40; NULL, SE_SECURITY_NAME, &amp;luid &#41;;<br />		tp.PrivilegeCount = 1;<br />		tp.Privileges&#91;0&#93;.Attributes = SE_PRIVILEGE_ENABLED;<br />		tp.Privileges&#91;0&#93;.Luid = luid;<br />		AdjustTokenPrivileges&#40; tok, FALSE, &amp;tp, NULL, NULL, NULL &#41;;<br /><br />		CloseHandle&#40;tok&#41;;<br />	&#125;<br /><br />	OPENFILENAME ofn = &#123;0&#125;;<br />	char szName&#91;MAX_PATH&#93;;<br />	*szName = 0;<br />	ofn.lStructSize = sizeof&#40;OPENFILENAME&#41;;<br />	ofn.hwndOwner = NULL;<br />	ofn.lpstrFilter = NULL;<br />	ofn.lpstrFilter = &quot;Exe files &#40;*.exe&#41;\0*.exe\0All files &#40;*.*&#41;\0*.*\0&quot;;<br />	ofn.lpstrCustomFilter = NULL;<br />	ofn.nFilterIndex = 1;<br />	ofn.lpstrFile = &amp;szName&#91;0&#93;;<br />	ofn.nMaxFile = MAX_PATH;<br />	ofn.lpstrInitialDir = NULL;<br />	ofn.lpstrTitle = &quot;Open Text File&quot;;<br />	ofn.lpstrFileTitle = NULL;<br />	ofn.lpstrDefExt = &quot;EXE&quot;;<br />	ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_PATHMUSTEXIST | OFN_EXPLORER;<br /><br />	if &#40; GetOpenFileName&#40;&amp;ofn&#41;!=TRUE &#41;<br />	&#123;<br />		MessageBox&#40;0,&quot;Error opening file!&quot;,&quot;&#58;&#40;&quot;,0&#41;;<br />		return -1;<br />	&#125;<br /><br />	STARTUPINFO startinfo;<br />	PROCESS_INFORMATION pi;<br /><br />	GetStartupInfo&#40;&amp;startinfo&#41;;<br />	CreateProcess&#40; szName, NULL, NULL, NULL, FALSE, DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS, NULL, NULL, &amp;startinfo, &amp;pi &#41;;<br /><br />	DEBUG_EVENT DBEvent;<br /><br />		while &#40;1&#41;<br />		&#123;<br />	 		WaitForDebugEvent&#40; &amp;DBEvent, INFINITE &#41;;<br /> 			if &#40; DBEvent.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT &#41;<br />				break;<br />			if &#40; DBEvent.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT &#41;<br />			&#123;<br />				MessageBox&#40;0,&quot;Debugging started!&quot;,&quot;Ble&quot;,0&#41;;<br />			&#125;<br />			else if &#40; DBEvent.dwDebugEventCode == EXCEPTION_DEBUG_EVENT &#41;<br />			&#123;<br />				if &#40; DBEvent.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT &#41;<br />				&#123;<br />					ContinueDebugEvent&#40; DBEvent.dwProcessId, DBEvent.dwThreadId, DBG_CONTINUE &#41;;<br />					continue;<br />				&#125;<br />				ContinueDebugEvent&#40; DBEvent.dwProcessId, DBEvent.dwThreadId, DBG_EXCEPTION_NOT_HANDLED &#41;;<br />			&#125;<br />		&#125;<br />	return 0;<br />&#125;<br /></code></pre></div>
+    <div class="meta">Posted on 2004-04-17 13:47:32 by blackd0t</div>
+   </div>
+   <div class="post" id="post-139265">
+    <div class="subject"><a href="#post-139265">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Ok, I somehow managed to make it work, but I don't know how :)</div>
+    <div class="meta">Posted on 2004-04-17 15:34:07 by blackd0t</div>
+   </div>
+   <div class="post" id="post-139271">
+    <div class="subject"><a href="#post-139271">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">it was the spirit of this forum</div>
+    <div class="meta">Posted on 2004-04-17 21:28:33 by comrade</div>
+   </div>
+   <div class="post" id="post-139397">
+    <div class="subject"><a href="#post-139397">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Hi blackd0t !<br />Your code don't work, the debug process hanged. <br />I add a line: ContinueDebugEvent(DBEvent.dwProcessId, BEvent.dwThreadId, DBG_CONTINUE) at the end of while loop to allow debug process continue run. At the end, the app will run well.<br />Regards !</div>
+    <div class="meta">Posted on 2004-04-18 22:49:15 by TQN</div>
+   </div>
+   <div class="post" id="post-139431">
+    <div class="subject"><a href="#post-139431">DebugActiveProcess -- freezing my apps :(</a></div>
+    <div class="body">Afternoon, blackd0t.<br /><br />Please keep non-win32asm enquiries to <strong>The Heap</strong>, thank you.<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2004-04-19 06:04:54 by Scronty</div>
+   </div>
+  </div>
+ </body>
+</html>

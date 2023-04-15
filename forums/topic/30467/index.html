@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Help with SetPriorityClass() crash - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30467" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30467">Help with SetPriorityClass() crash</a></p>
+   <div class="post" id="post-214014">
+    <div class="subject"><a href="#post-214014">Help with SetPriorityClass() crash</a></div>
+    <div class="body">So, i have the following code assembled with NASM 64-bit mode:<br /><br /><pre><code>extern GetCurrentProcess<br />extern SetPriorityClass<br />extern	ExitProcess<br /><br />section .data<br />hProcess dq 0<br />NORMAL_PRIORITY_CLASS	equ 00000020h<br />REALTIME_PRIORITY_CLASS	equ 00000100h<br /><br />section .text<br />global _main<br /><br />_main:<br />	call	GetCurrentProcess<br />	mov		, rax<br /><br />	;call	_dummy<br /><br />	mov		rcx, rax<br />	mov		rdx, REALTIME_PRIORITY_CLASS<br />	call 	SetPriorityClass<br />	<br />	mov		rcx, 0<br />	call	ExitProcess<br />	<br />_dummy:<br />	push		rsp<br />	and		spl, 0F0h<br /><br />	mov		rcx, <br />	mov		rdx, REALTIME_PRIORITY_CLASS<br />	call	SetPriorityClass<br /><br />	pop		rsp<br />ret</code></pre><br /><br />As you can see, i have the line that says {call &nbsp; &nbsp;_dummy} commented out.<br />The reason is because when i call SetPriorityClass() from an outside procedure it crashes.<br />I don&#039;t get the reason why it is crashing when i call it from a procedure outside _main.<br />Any idea what is going wrong? I even tried aligning the stack but no luck.</div>
+    <div class="meta">Posted on 2011-02-05 01:56:47 by banzemanga</div>
+   </div>
+   <div class="post" id="post-214015">
+    <div class="subject"><a href="#post-214015">Re: Help with SetPriorityClass() crash</a></div>
+    <div class="body"><div class="quote"><br />So, i have the following code assembled with NASM 64-bit mode:<br /><br /><pre><code>extern GetCurrentProcess<br />extern SetPriorityClass<br />extern	ExitProcess<br /><br />section .data<br />hProcess dq 0<br />NORMAL_PRIORITY_CLASS	equ 00000020h<br />REALTIME_PRIORITY_CLASS	equ 00000100h<br /><br />section .text<br />global _main<br /><br />_main:<br />	call	GetCurrentProcess<br />	mov		, rax<br /><br />	;call	_dummy<br /><br />	mov		rcx, rax<br />	mov		rdx, REALTIME_PRIORITY_CLASS<br />	call 	SetPriorityClass<br />	<br />	mov		rcx, 0<br />	call	ExitProcess<br />	<br />_dummy:<br />	push		rsp<br />	and		spl, 0F0h<br /><br />	mov		rcx, <br />	mov		rdx, REALTIME_PRIORITY_CLASS<br />	call	SetPriorityClass<br /><br />	pop		rsp<br />ret</code></pre><br /><br />As you can see, i have the line that says {call &nbsp; &nbsp;_dummy} commented out.<br />The reason is because when i call SetPriorityClass() from an outside procedure it crashes.<br />I don&#039;t get the reason why it is crashing when i call it from a procedure outside _main.<br />Any idea what is going wrong? I even tried aligning the stack but no luck.<br /></div><br /><br />You must always allocate register shadow space on the stack when calling Win64 functions even if they don&#039;t appear to be used.&nbsp; Windows may internally be accessing those areas.&nbsp; Thus in your case, RSP may be overwritten causing the fault.<br /><br /><pre><code><br />&nbsp; &nbsp; sub&nbsp; &nbsp; rsp, 32<br />&nbsp; &nbsp; mov&nbsp;  rcx, <br />&nbsp; &nbsp; mov&nbsp;  rdx, REALTIME_PRIORITY_CLASS<br />&nbsp; &nbsp; call&nbsp; &nbsp; SetPriorityClass<br />&nbsp; &nbsp; add&nbsp; &nbsp; rsp, 32<br /></code></pre><br /><br />There are optimizations that can be made to this scheme but this should get you started.<br /></div>
+    <div class="meta">Posted on 2011-02-05 10:16:56 by p1ranha</div>
+   </div>
+   <div class="post" id="post-214018">
+    <div class="subject"><a href="#post-214018">Re: Help with SetPriorityClass() crash</a></div>
+    <div class="body"><div class="quote"><br /><pre><code><br />&nbsp; &nbsp; sub&nbsp; &nbsp; rsp, 32<br />&nbsp; &nbsp; mov&nbsp; &nbsp;rcx, <br />&nbsp; &nbsp; mov&nbsp; &nbsp;rdx, REALTIME_PRIORITY_CLASS<br />&nbsp; &nbsp; call&nbsp; &nbsp; SetPriorityClass<br />&nbsp; &nbsp; add&nbsp; &nbsp; rsp, 32<br /></code></pre><br /><br />There are optimizations that can be made to this scheme but this should get you started.<br /><br /></div><br /><br />Thanks it works. I remember reading about fastcall and moving the adjust pointer as a callee but never had a problem with it until now.<br /><br />Can you do explain me why 32? I can see it is 3*8 meaning 3 8-byte variables on the stack. But SetPriorityClass() only has 8*2 arguments.</div>
+    <div class="meta">Posted on 2011-02-05 14:18:26 by banzemanga</div>
+   </div>
+   <div class="post" id="post-214022">
+    <div class="subject"><a href="#post-214022">Re: Help with SetPriorityClass() crash</a></div>
+    <div class="body"><br />Actually it&#039;s 4*8 = 32 as Win64 uses a max of 4 64-bit registers, thus I always subtract a minimum of 32 bytes from RSP for all functions with 1 to 4 parameters.<br />Also <strong>very important</strong> to remember for fastcall is that the stack must always be properly aligned.&nbsp; So even if you only have 3 parameters you <strong>MUST</strong> evenly align the stack by multiples of 16 prior to making the call.&nbsp; The macros in the NASMX package goes through great pains to ensure proper stack alignment when defining procedures and invoking function calls.<br /><br /></div>
+    <div class="meta">Posted on 2011-02-06 11:40:32 by p1ranha</div>
+   </div>
+  </div>
+ </body>
+</html>

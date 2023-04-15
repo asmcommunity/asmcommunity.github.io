@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Process Walk in NT - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18803" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=18803">Process Walk in NT</a></p>
+   <div class="post" id="post-145572">
+    <div class="subject"><a href="#post-145572">Process Walk in NT</a></div>
+    <div class="body">As most of you know I have been playing with the more low level functions in NT lately and this is a process walk without using the PSAPI or ToolHelp32 DLL's, not very useful I guess but the information is more extensive than you would get with either form of process walk :<br /><br />First the structures necessary :<br /><br /><pre><code>VM_COUNTERS STRUCT<br />	PeakVirtualSize			DD<br />	VirtualSize			DD<br />	PageFaultCount			DD<br />	PeakWorkingSetSize		DD<br />	WorkingSetSize			DD<br />	QuotaPeakPagedPoolUsage		DD<br />	QuotaPagedPoolUsage		DD<br />	QuotaPeakNonPagedPoolUsage	DD<br />	QuotaNonPagedPoolUsage		DD<br />	PagefileUsage			DD<br />	PeakPagefileUsage		DD<br />ENDS<br /><br />CLIENT_ID STRUCT<br />	UniqueProcess	DD<br />	UniqueThread	DD<br />ENDS<br /><br />SYSTEM_THREAD STRUCT<br />	KernelTime		DQ<br />	UserTime		DQ<br />	CreateTime		DQ<br />	WaitTime		DD<br />	StartAddress		DD<br />	ClientId		CLIENT_ID &lt;&gt;<br />	Priority		DD<br />	BasePriority		DD<br />	ContextSwitches		DD<br />	ThreadState		DD // 2=running; 5=waiting<br />	WaitReason		DD<br />ENDS<br /><br />UNICODE_STRING	STRUCT<br />	Length			DW<br />	MaximumLength		DW<br />	Buffer			DD<br />ENDS<br /><br />SYSTEM_PROCESS_INFORMATION STRUCT<br />	Next				DD<br />	ThreadCount			DD<br />	Reserved01			DD<br />	Reserved02			DD<br />	Reserved03			DD<br />	Reserved04			DD<br />	Reserved05			DD<br />	Reserved06			DD<br />	CreateTime			DQ<br />	UserTime			DQ<br />	KernelTime			DQ<br />	usName				UNICODE_STRING &lt;&gt;<br />	BasePriority			DD<br />	UniqueProcessId			DD<br />	InheritedFromUniqueProcessId	DD<br />	HandleCount			DD<br />	Reserved07			DD<br />	Reserved08			DD<br />	VmCounters			VM_COUNTERS &lt;&gt;<br />	CommitCharge			DD<br />	Threads				SYSTEM_THREAD &lt;&gt;<br />ENDS</code></pre><br /><br />Now the process walk :<br /><br /><pre><code>DATA SECTION<br />	textbuffer DB MAX_PATH DUP &#40;?&#41;<br />	outbuffer DB MAX_PATH DUP &#40;?&#41;<br />	pBuffer DD ?<br /><br />CODE SECTION<br /><br />Start&#58;<br />	; This buffer needs to be huge it is the whole snapshot in one place<br />	invoke VirtualAlloc,0,20000h,MEM_COMMIT,PAGE_READWRITE<br />	mov &#91;pBuffer&#93;,eax<br /><br />	; Take a process snapshot<br />	invoke NTDLL&#58;NtQuerySystemInformation, 5, &#91;pBuffer&#93;, 20000h, 0<br />	mov edi,&#91;pBuffer&#93;<br />	L0&#58;<br />	mov ebx,&#91;edi+SYSTEM_PROCESS_INFORMATION.UniqueProcessId&#93;<br />	or ebx,ebx<br />	jz &gt;L1<br />		mov eax,&#91;edi+SYSTEM_PROCESS_INFORMATION.usName.Buffer&#93;<br />		movzx edx,W&#91;edi+SYSTEM_PROCESS_INFORMATION.usName.Length&#93;<br />		invoke WideCharToMultiByte,0,0,eax,edx,offset textbuffer,256,0,0<br />		invoke wsprintfA,offset outbuffer,&quot;PID %u Process name %s&quot;, <br />			ebx, offset textbuffer<br />		add esp,16<br />		; outbuffer format = &quot;PID 144 Process name SMSS.EXE&quot;<br />		PrintString&#40;outbuffer&#41;<br />	L1&#58;<br />	mov eax,&#91;edi+SYSTEM_PROCESS_INFORMATION.Next&#93;<br />	add edi,eax<br />	or eax,eax<br />	jnz &lt;L0<br />	&#58;<br />	invoke VirtualFree,&#91;pBuffer&#93;,0,MEM_RELEASE<br /><br />	invoke ExitProcess,0</code></pre></div>
+    <div class="meta">Posted on 2004-07-07 12:20:07 by donkey</div>
+   </div>
+   <div class="post" id="post-145574">
+    <div class="subject"><a href="#post-145574">Process Walk in NT</a></div>
+    <div class="body">Just as a technical note, the Threads field of the SYSTEM_PROCESS_INFORMATION can be more than 1 structure, there is 1 for each thread but there is a minimum of 1 (ofcourse). This is the reason behind using the Next field to walk to the next process.</div>
+    <div class="meta">Posted on 2004-07-07 12:33:32 by donkey</div>
+   </div>
+   <div class="post" id="post-145584">
+    <div class="subject"><a href="#post-145584">Process Walk in NT</a></div>
+    <div class="body">Is there anything similar to Win9x?</div>
+    <div class="meta">Posted on 2004-07-07 15:10:55 by comrade</div>
+   </div>
+   <div class="post" id="post-145589">
+    <div class="subject"><a href="#post-145589">Process Walk in NT</a></div>
+    <div class="body">Hi comrade<br /><br />No, there is nothing like this in Win9x, I am thinking about finding a way to get the bottom and top addresses of the process database in shared memory (above 2Gig) and walking through that, but the docs on 9x are pretty limited and hard to find. The Platform SDK and DDK no longer have much about them, most of this information is from the DDK so I am looking through my archives for my copy of the 98 DDK.</div>
+    <div class="meta">Posted on 2004-07-07 16:29:46 by donkey</div>
+   </div>
+   <div class="post" id="post-145619">
+    <div class="subject"><a href="#post-145619">Process Walk in NT</a></div>
+    <div class="body">Comrade,<br /><br />MS doesn't support Win9x as NT systems.</div>
+    <div class="meta">Posted on 2004-07-08 05:27:45 by Vortex</div>
+   </div>
+   <div class="post" id="post-145621">
+    <div class="subject"><a href="#post-145621">Process Walk in NT</a></div>
+    <div class="body">Great stuff, Donkey :)<br />Can you think of a way to hide from this? :tongue:</div>
+    <div class="meta">Posted on 2004-07-08 05:52:29 by Homer</div>
+   </div>
+   <div class="post" id="post-145643">
+    <div class="subject"><a href="#post-145643">Process Walk in NT</a></div>
+    <div class="body"><div class="quote"><br />Great stuff, Donkey :)<br />Can you think of a way to hide from this? :tongue: </div><br /><br />No, I can' think of a way though I have not really tried, most of the HideProcess type applications use a ToolHelp32 or PSAPI API hook to hide themselves so they would probably be ineffective here. But I have no way of testing it.</div>
+    <div class="meta">Posted on 2004-07-08 13:47:56 by donkey</div>
+   </div>
+   <div class="post" id="post-145647">
+    <div class="subject"><a href="#post-145647">Process Walk in NT</a></div>
+    <div class="body">most also <strong>do</strong> hook NtQuerySystemInformation</div>
+    <div class="meta">Posted on 2004-07-08 13:54:04 by Drocon</div>
+   </div>
+   <div class="post" id="post-145678">
+    <div class="subject"><a href="#post-145678">Process Walk in NT</a></div>
+    <div class="body">That's what I was driving at :)</div>
+    <div class="meta">Posted on 2004-07-08 18:57:46 by Homer</div>
+   </div>
+   <div class="post" id="post-145702">
+    <div class="subject"><a href="#post-145702">Process Walk in NT</a></div>
+    <div class="body"><div class="quote"><br />Comrade,<br /><br />MS doesn't support Win9x as NT systems. </div><br /><br />MS doesn't support undocumented functions either, yet there is this undocumented process walk!</div>
+    <div class="meta">Posted on 2004-07-08 23:01:12 by comrade</div>
+   </div>
+   <div class="post" id="post-145703">
+    <div class="subject"><a href="#post-145703">Process Walk in NT</a></div>
+    <div class="body">Hi comrade,<br /><br />I have found my copy of the 98DDK but have some other stuff in NT to finish first. I imagine there is a way to walk the processes though. I have to go through the DDK to find out some stuff about how process handles are assigned in 9x anyway, I need to walk the processes in order to translate the obfuscated handle value to a PID, 9x is so incredibly lame in the way it assigns PIDs.<br /><br />What I am thinking is that I can get the fs:[18] address and round it down to the nearest page boundary then walk up till there are no more processes. Have to try it out soon, it would not be possible to hide a process from that walk.</div>
+    <div class="meta">Posted on 2004-07-08 23:23:45 by donkey</div>
+   </div>
+   <div class="post" id="post-145705">
+    <div class="subject"><a href="#post-145705">Process Walk in NT</a></div>
+    <div class="body">The obsuficated PID was uncovered by Pietrik, no?</div>
+    <div class="meta">Posted on 2004-07-08 23:50:03 by comrade</div>
+   </div>
+   <div class="post" id="post-145706">
+    <div class="subject"><a href="#post-145706">Process Walk in NT</a></div>
+    <div class="body">I am not sure who found it first, Jibz told me about it. My problem is that it is based on fs:[18], and in 9x that changes from process to process, it is static in NT. So I need to find a way to get the offset at fs:[18] in a remote process given only it's handle.</div>
+    <div class="meta">Posted on 2004-07-09 00:07:44 by donkey</div>
+   </div>
+   <div class="post" id="post-145708">
+    <div class="subject"><a href="#post-145708">Process Walk in NT</a></div>
+    <div class="body">Sounds like a job for a remote thread (process injection) :)<br />Alternatively, there's always the (very slow) debugapi ?</div>
+    <div class="meta">Posted on 2004-07-09 00:23:28 by Homer</div>
+   </div>
+   <div class="post" id="post-145711">
+    <div class="subject"><a href="#post-145711">Process Walk in NT</a></div>
+    <div class="body">Nah, can't do it with anything like that, it is for my system library. I have a GetPIDFromhProcessNT function and would like a similar one for 9x. I am looking at a process walk through the PDB database. I can check the fs:[30h] address against the handle I have to see if it de-obfuscates to the same as the PID in the PDB entry. Or something like that, I haven't really planned it all out yet as I have put it on a back burner while I explore the NT low level stuff.</div>
+    <div class="meta">Posted on 2004-07-09 01:03:06 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

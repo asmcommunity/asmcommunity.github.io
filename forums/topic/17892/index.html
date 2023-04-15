@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>subclassing edit control + MDI child - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17892" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17892">subclassing edit control + MDI child</a></p>
+   <div class="post" id="post-138178">
+    <div class="subject"><a href="#post-138178">subclassing edit control + MDI child</a></div>
+    <div class="body">I grabbed from example4 (MULTIWIN) and changed it around for my own evil editing purposes.. what I did, I commented out the child1 which uses the same hwnd as the main window, left child2 alone and created a runtime editbox control and put it on the main window.<br /><br />I am subclassing the edit control, and it seems to work but when I click on my floating child2 system buttons such as the X to close or the _ to minimize around it doesn't get the message..  and yes I don't child2 to be clipped by my main window, I intend for it to be a pop-up frame&amp;client (MDI child).  Does it have to do with the HMENU?<br /><br />what am I doing wrong?  Run the program</div>
+    <div class="meta">Posted on 2004-04-06 23:55:20 by drarem</div>
+   </div>
+   <div class="post" id="post-138179">
+    <div class="subject"><a href="#post-138179">subclassing edit control + MDI child</a></div>
+    <div class="body">when the editbox doesn't have the focus (comment out the SetFocus in the subclassed proc), the pop-up window does respond to the CLOSE, MINIMIZE, MAXIMIZE, etc.. buttons</div>
+    <div class="meta">Posted on 2004-04-07 00:12:48 by drarem</div>
+   </div>
+   <div class="post" id="post-138183">
+    <div class="subject"><a href="#post-138183">subclassing edit control + MDI child</a></div>
+    <div class="body">change this line:      <br />invoke ShowWindow,hWnd,SW_SHOWNORMAL<br />to:<br />invoke ShowWindow,hChild2,SW_SHOWNOACTIVATE<br /><br />delete the following line in WndProc2:<br />invoke SetFocus,hwndEdit<br /><br />delete the following line in EditWndProc:<br />xor eax,eax</div>
+    <div class="meta">Posted on 2004-04-07 02:33:31 by smurf</div>
+   </div>
+   <div class="post" id="post-138189">
+    <div class="subject"><a href="#post-138189">subclassing edit control + MDI child</a></div>
+    <div class="body">thanks, it works much better :)<br /><br />I did it piecemail, I removed the xor eax,eax and the SetFocus.. now it works.   Will have to research SW_SHOWNOACTIVE flag.</div>
+    <div class="meta">Posted on 2004-04-07 04:10:11 by drarem</div>
+   </div>
+   <div class="post" id="post-138561">
+    <div class="subject"><a href="#post-138561">subclassing edit control + MDI child</a></div>
+    <div class="body">Thanks for your help but now I have a new issue:<br /><br />It works on windoze 2000 but not on XP.  It does the EM_LINEFROMCHAR ok, eax is populated with the correct indexed line number, eg. 0,1,2,etc..<br />the EM_GETLINE always returns a blank line - in other words, it had no effect on the cmdLine() character buffer.<br /><br />Here is the creation of the edit box:<br /><pre><code><br />.data<br />  hwndEdit dd 0<br />  guiEDIT db &quot;EDIT&quot;,0<br />  cmdLine       db 128 dup &#40;0&#41;<br />..<br /><br />.code<br />...<br />      szText MainWindowTitle,&quot;Main Window&quot;<br /><br />      invoke CreateWindowEx,WS_EX_LEFT,<br />                            ADDR szClassName,<br />                            ADDR MainWindowTitle,<br />                            WS_OVERLAPPEDWINDOW,<br />                            Wtx,Wty,Wwd,Wht,<br />                            NULL,NULL,<br />                            hInst,NULL <br />               mov hWnd,eax<br /><br />    	sub Wwd,32<br />    	sub Wht,64<br />    	invoke CreateWindowEx,WS_EX_CLIENTEDGE,addr guiEDIT,NULL, WS_CHILD or WS_VISIBLE or ES_MULTILINE or WS_VSCROLL,<br />    						12,12,Wwd,Wht,hWnd,NULL,hInstance,NULL<br /><br />		mov hwndEdit,eax<br />		invoke SetWindowLong,hwndEdit,GWL_WNDPROC,addr EditWndProc <br />		mov OldWndProc,eax<br /></code></pre><br /><br /><br />and then there's the SendMessage API stuff from the subclassed EditWndProc..<br /><br /><pre><code><br /><br />EditWndProc proc hWin   &#58;DWORD,<br />              uMsg   &#58;DWORD,<br />              wParam &#58;DWORD,<br />              lParam &#58;DWORD<br /><br />LOCAL NDY&#58;DWORD<br /><br />	.if uMsg==WM_CHAR<br />                  mov eax,wParam<br />		push eax<br />	  .if al==VK_RETURN<br />		invoke SendMessage, hwndEdit, EM_LINEFROMCHAR, -1, 0<br />		mov NDY,eax<br /><br />	 	invoke SendMessage,hwndEdit,EM_GETLINE,NDY,addr cmdLine<br /><br />&lt;=====   cmdLine is unchanged, as if the  SendMessage,..,EM_GETLINE,..  had no effect on it.<br />..<br />..<br />..<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2004-04-10 18:28:18 by drarem</div>
+   </div>
+   <div class="post" id="post-138599">
+    <div class="subject"><a href="#post-138599">subclassing edit control + MDI child</a></div>
+    <div class="body">;//you need to set the first word in your buffer (cmdLine) to the max size the string you get from the edit box will be. this word will ultimately be overwritten by the string itself.<br />mov word ptr cmdLine, 128 ;//add this line<br />invoke SendMessage,hwndEdit,EM_GETLINE,NDY,addr cmdLine<br /><br />not sure if this will solve ur problem. i dont have windows xp to test it on.</div>
+    <div class="meta">Posted on 2004-04-11 07:38:04 by smurf</div>
+   </div>
+   <div class="post" id="post-138636">
+    <div class="subject"><a href="#post-138636">subclassing edit control + MDI child</a></div>
+    <div class="body">wow you are awesome, thanks again :)<br /><br />I had it prefilled with 127 spaces and a '0' at the end but having it initialized with 0's<br />and putting the number into the string works great.<br /><br />Now to test on win2k again =)</div>
+    <div class="meta">Posted on 2004-04-11 18:58:53 by drarem</div>
+   </div>
+  </div>
+ </body>
+</html>

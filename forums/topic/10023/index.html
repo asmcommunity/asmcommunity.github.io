@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Using Function local variables - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10023" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=10023">Using Function local variables</a></p>
+   <div class="post" id="post-74899">
+    <div class="subject"><a href="#post-74899">Using Function local variables</a></div>
+    <div class="body">I had converted this from the MASM code(Meaning I didn't do the original). If I declare the lpMsgBuffer up in the data section it works just fine. What I am tring to do now is, be able to not have to remember to do this in every program.<br /><br /><pre><code><br />	proc HandleError, lpTitle<br />    	lpMsgBuffer	dd	?<br />		enter<br /><br />			; calculate language ID, asm version of MAKELANGID<br />			mov cx, SUBLANG_DEFAULT<br />			shl ecx, 10<br />			;or  cx, LANG_NEUTRAL		; LANG_NEUTRAL = 0, nothing necessary<br /><br />			; Setup parameters for FormatMessage, normal pushing to use some<br />			; params directly &#40;e.g. GetLastError returns the ID in eax, but I<br />			; can't use this register in &quot;invoke&quot;&#41;<br /><br />			push NULL					; we don't need this<br />			push 0						; min. size of output buffer if we use<br />										; FORMAT_MESSAGE_ALLOCATE_BUFFER<br />;			lea  eax, lpMsgBuffer 		; get address of our buffer<br />;			push eax					; address of buffer<br /><br />			push lpMsgBuffer<br /><br />			push ecx					; our language ID, calculated above<br />			call &#91;GetLastError&#93;			; get error number<br />			push eax					; push return value = error ID<br />			push NULL					; can be used to format a string, we don't need it<br />			mov edx, FORMAT_MESSAGE_ALLOCATE_BUFFER or FORMAT_MESSAGE_FROM_SYSTEM<br />			push edx					; some flags, check your doc for more<br />			call &#91;FormatMessage&#93;			; here we go<br />			<br />			; Display error-message<br />			invoke MessageBox, NULL, &#91;lpMsgBuffer&#93;, &#91;lpTitle&#93;, MB_OK or MB_ICONSTOP<br /><br />			; free memory<br />			invoke LocalFree, &#91;lpMsgBuffer&#93;<br />		<br />			return<br />			<br />		leave<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-07 16:04:00 by jInuQ</div>
+   </div>
+   <div class="post" id="post-74904">
+    <div class="subject"><a href="#post-74904">Using Function local variables</a></div>
+    <div class="body">Shouldn't there be:<br /><pre><code><br />lea  eax, &#91;lpMsgBuffer&#93;<br />push eax<br /></code></pre><br />instead of &quot;push lpMsgBuffer&quot;?</div>
+    <div class="meta">Posted on 2003-01-07 16:18:23 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-74906">
+    <div class="subject"><a href="#post-74906">Using Function local variables</a></div>
+    <div class="body">That's the thing, when i do:<br /><pre><code><br />section '.data' data readable writeable<br />lpMsgBuffer dd ?<br /><br />section '.code' code readable executable<br />	proc HandleError, lpTitle<br />		enter<br /><br />			; calculate language ID, asm version of MAKELANGID<br />			mov cx, SUBLANG_DEFAULT<br />			shl ecx, 10<br />			;or  cx, LANG_NEUTRAL		; LANG_NEUTRAL = 0, nothing necessary<br /><br />			; Setup parameters for FormatMessage, normal pushing to use some<br />			; params directly &#40;e.g. GetLastError returns the ID in eax, but I<br />			; can't use this register in &quot;invoke&quot;&#41;<br /><br />			push NULL					; we don't need this<br />			push 0						; min. size of output buffer if we use<br />										; FORMAT_MESSAGE_ALLOCATE_BUFFER<br />;			lea  eax, lpMsgBuffer 		; get address of our buffer<br />;			push eax					; address of buffer<br /><br />			push lpMsgBuffer<br /><br />			push ecx					; our language ID, calculated above<br />			call &#91;GetLastError&#93;			; get error number<br />			push eax					; push return value = error ID<br />			push NULL					; can be used to format a string, we don't need it<br />			mov edx, FORMAT_MESSAGE_ALLOCATE_BUFFER or FORMAT_MESSAGE_FROM_SYSTEM<br />			push edx					; some flags, check your doc for more<br />			call &#91;FormatMessage&#93;			; here we go<br />			<br />			; Display error-message<br />			invoke MessageBox, NULL, &#91;lpMsgBuffer&#93;, &#91;lpTitle&#93;, MB_OK or MB_ICONSTOP<br /><br />			; free memory<br />			invoke LocalFree, &#91;lpMsgBuffer&#93;<br />		<br />			return<br />			<br />		leave<br /></code></pre><br />And do it like this it works.</div>
+    <div class="meta">Posted on 2003-01-07 16:23:15 by jInuQ</div>
+   </div>
+   <div class="post" id="post-74916">
+    <div class="subject"><a href="#post-74916">Using Function local variables</a></div>
+    <div class="body">You can also use this macro from the latest FASMW includes:<br /><pre><code><br />macro push arg<br /> &#123; if _#arg in &lt;_addr arg,_ADDR arg&gt;<br />    local ..arg,..op<br />    label ..arg at arg<br />    virtual at 0<br />     mov eax,..arg<br />     load ..opcode from 0<br />    end virtual<br />    if ..opcode = 0A1h<br />     push arg<br />    else<br />     lea edx,..arg<br />     push edx<br />    end if<br />   else if +arg eq arg | arg +0 eq arg 0<br />    push arg<br />   else<br />    local ..continue<br />    call ..continue<br />    db arg,0<br />    ..continue&#58;<br />   end if &#125;<br /></code></pre><br />And then do:<br /><pre><code><br />push ADDR &#91;lpMsgBuffer&#93;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-07 16:45:15 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-74976">
+    <div class="subject"><a href="#post-74976">Using Function local variables</a></div>
+    <div class="body">Doing lea eax,  works.<br /><br />Thanks for the help.</div>
+    <div class="meta">Posted on 2003-01-07 23:16:37 by jInuQ</div>
+   </div>
+  </div>
+ </body>
+</html>

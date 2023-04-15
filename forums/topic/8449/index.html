@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>MMX Packing/Unpacking ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8449" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8449">MMX Packing/Unpacking ?</a></p>
+   <div class="post" id="post-61755">
+    <div class="subject"><a href="#post-61755">MMX Packing/Unpacking ?</a></div>
+    <div class="body">Hi!<br /><br />Today I started to take a look at MMX coding, and everything is going fine. Until now it's just one thing that I don't understand. How does packing and unpacking work? How/when should I use it? <br /><br />I would appreciate an example that shows how the single bytes are changing when packing/unpacking. I think it's much easier to understand that way.<br /><br /><br />Thanks,<br />Delight</div>
+    <div class="meta">Posted on 2002-10-14 15:18:59 by Delight</div>
+   </div>
+   <div class="post" id="post-61784">
+    <div class="subject"><a href="#post-61784">MMX Packing/Unpacking ?</a></div>
+    <div class="body">Often the pack/unpack instructions are used to move data around - lining it up for other operations.<br />In the folowing code that is the case:<br /><pre><code>; &#91; A B C D &#93;<br />; &#91; E F G H &#93;  X  &#91; W X Y Z &#93;  =  &#91; AW+BX+CY+DZ  EW+FX+GY+HZ  IW+JX+KY+LZ   ? &#93;<br />; &#91; I J K L &#93;<br /><br />; 16 bit numbers are scaled to a fixed point size of&#58;<br />; 1.111 1111 1111 1111 ; first bit is sign bit<br />NUMBER_SCALE EQU 15 ; 1 / 2^15<br /><br />	pMatrix EQU &#91;esp +  8&#93; ; 4x3 transform matrix pointer<br />	pVector EQU &#91;esp + 12&#93; ; source vectors pointer<br />	iNumVec EQU &#91;esp + 16&#93; ; number of vectors to transform<br />	pResult EQU &#91;esp + 20&#93; ; destination for transformed vectors<br /><br />	mov	ecx,iNumVec<br />	mov	eax,pMatrix<br />	lea	edx,&#91;ecx*8&#93; ; size of source/dest vector buffer<br />	neg	ecx<br /><br />; load entire 3x4 matrix<br />	movq	mm0,&#91;eax +  0&#93;<br />	movq	mm1,&#91;eax +  8&#93;<br />	movq	mm2,&#91;eax + 16&#93;<br /><br />	mov eax,edx<br />	add	edx,pVector<br />	add	eax,pResult<br />NextVect&#58;<br />	; Load vector &#40;4 16-bit elements&#41; into reg<br />	movq	mm3,&#91;edx + ecx*8&#93;<br />	inc	ecx<br /><br />	movq	mm4,mm3		;copy to other regs for use by 3 pmadds<br />	pmaddwd	mm3,mm0		;multiply row0 X vector<br /><br />	movq	mm5,mm4<br />	pmaddwd	mm4,mm1		;multiply row1 X vector<br /><br />	movq	mm6,mm3		; A1 A2<br />	pmaddwd	mm5,mm2		;multiply row2 X vector<br /><br />	punpckldq mm3,mm4	; B2 A2<br />	punpckhdq mm6,mm4	; B1 A1<br /><br />	movq	mm4,mm5		;add row2 high and low order 32-bit results<br />	punpckhdq mm5,mm5	;	psrlq	mm5,32<br /><br />	paddd	mm3,mm6		; B1+B2 A1+A2<br />	paddd	mm5,mm4<br /><br />	psrad	mm3,NUMBER_SCALE-2<br />	psrad	mm5,NUMBER_SCALE-2<br /><br />	packssdw mm3,mm5	; pack dwords into words<br />; might need to mask off high word of MMX reg?<br />	movq	&#91;eax + ecx*8 - 8&#93;,mm3 ; store resulting vector<br /><br />	jnz	NextVect	;then loop back to do the next one.</code></pre>Other times you will need to expand words/bytes to dwords/words to perform operations on them - in this case the second operand is zero to clear the upper part (for unsigned) or second operand is the data to expand and an arithmic shift is performed to sign extend the data:<pre><code>; unsigned unpack of low words into dwords<br />pxor mm7, mm7 ; zero<br />punpcklwd mm0, mm7<br /><br />; signed unpack of low words into signed dwords<br />punpcklwd mmY, mm0 ; first operand can be any MMX register<br />psard mmY, 16 ; fill upper word with sign</code></pre>Of course an unsigned shift could be used for the unsigned unpack, but in a loop you'll want to use a spare register for zero if you have one to reduce the unpack to one instruction.</div>
+    <div class="meta">Posted on 2002-10-14 20:46:19 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

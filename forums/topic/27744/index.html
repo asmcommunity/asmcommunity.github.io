@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>how to gather the debug info. ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27744" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27744">how to gather the debug info. ?</a></p>
+   <div class="post" id="post-197788">
+    <div class="subject"><a href="#post-197788">how to gather the debug info. ?</a></div>
+    <div class="body">Dear Sirs:
+Is there any tip and trick to gather the debug information from the kernel-mode driver (eg: the output string of "DbgPrint") without using the kernel debugger (SoftwareICE or WinDebug) ???</div>
+    <div class="meta">Posted on 2001-04-22 07:57:00 by rl</div>
+   </div>
+   <div class="post" id="post-197789">
+    <div class="subject"><a href="#post-197789">how to gather the debug info. ?</a></div>
+    <div class="body">Yes there is. You've got to start the program yourself, 
+however, or get DEBUG access another way, (Probably easy, just never tried it.)
+
+You use WaitForDebugEvent API to wait for the OUTPUT_DEBUG_STRING_EVENT event, then respond to that. As 
+an example for using the debugging API's, use this program that I wrote as a crashguard for s3's Cinchy Server. All it does is close and restart the program if it causes an 
+exception, but you get the idea.
+
+<pre><code>
+.386
+.model flat, stdcall
+option casemap :none   ; case sensitive
+
+      include \masm32\include\windows.inc
+      
+      include \masm32\include\user32.inc
+      include \masm32\include\kernel32.inc
+      
+      includelib \masm32\lib\user32.lib
+      includelib \masm32\lib\kernel32.lib
+
+DebugThread PROTO :DWORD
+
+.data
+ProcessInfo         PROCESS_INFORMATION    <0>
+StartupInfo         STARTUPINFO            <0>
+DebugEvent          DEBUG_EVENT            <0>
+szPathName1         db                     "Server.exe", 0
+szKernel32          db                     "Kernel32.dll", 0
+szProcName          db                     "RegisterServiceProcess", 0
+
+.data?
+ThreadID            dd ?
+ThreadHwnd          dd ?
+RSP                 dd ?
+
+.code
+
+start:
+
+; Try to hide ourselves so we don't worry the user by not 
+; responding to Ctrl-Alt-Del. (No messageloop 
+; implemented,we just close when the main program is closed.
+
+    invoke  GetModuleHandle, addr szKernel32
+    or eax, eax
+    jz NoHide
+    invoke  GetProcAddress, eax, addr szProcName
+    or eax, eax
+    jz NoHide
+    mov , eax
+    push 1
+    push 0
+    call RSP
+NoHide:
+
+; fill some StartUpInfo fields (only si_cb is enough for now)
+    mov    StartupInfo.cb, sizeof STARTUPINFO
+
+@@:
+
+; Create thread to handle Debug loop
+    invoke  CreateThread, NULL, 0, offset DebugThread, 0, 0, offset ThreadID
+    mov    ThreadHwnd, eax
+   
+; We don't do anything until the thread exits 
+    invoke WaitForSingleObject, ThreadHwnd, INFINITE
+
+; If the thread exits, there is a serious error in the app we're debugging. Kill it
+; and then start it again.
+    invoke TerminateProcess, DebugEvent.dwProcessId, 0
+
+jmp @B
+
+
+; The main debugging callback proc. As it's a callback, preserve all the important registers.
+
+DebugThread proc uses ebx ecx edx esi edi Param :DWORD
+
+    invoke CreateProcess, NULL, offset szPathName1, NULL, NULL, FALSE, DEBUG_ONLY_THIS_PROCESS+NORMAL_PRIORITY_CLASS, NULL, NULL, offset StartupInfo, offset ProcessInfo
+    .if eax != TRUE
+        invoke ExitProcess, 0
+    .endif
+    
+DebugLoop:
+
+    invoke WaitForDebugEvent, offset DebugEvent, INFINITE
+    
+    .if DebugEvent.dwDebugEventCode==EXIT_PROCESS_DEBUG_EVENT
+
+        ; ContinueDebugEvent just closes the handle to the process so the process object can be freed.
+        ; The EXIT_PROCESS_DEBUG_EVENT message means the app was terminated by user, so we can exit as well.
+        
+        invoke ContinueDebugEvent, DebugEvent.dwProcessId, DebugEvent.dwThreadId, DBG_CONTINUE
+        invoke ExitProcess, 0
+        
+    .elseif DebugEvent.dwDebugEventCode==EXCEPTION_DEBUG_EVENT
+
+        ; Check if the exception wasn't a breakpoint, I've noticed a breakpoint occurs after
+        ; loading user32.dll, and we don't want to exit then. Since it was an exception, we
+        ; do have to resume the thread.
+        
+        .if DebugEvent.u.Exception.pExceptionRecord.ExceptionCode==EXCEPTION_BREAKPOINT
+            invoke ResumeThread, DebugEvent.dwThreadId
+        .else
+            invoke ExitThread, -1    ; exit thread and restart the app we're watching
+        .endif
+        
+    .endif
+
+    invoke ContinueDebugEvent, DebugEvent.dwProcessId, DebugEvent.dwThreadId, DBG_CONTINUE
+    
+    jmp DebugLoop
+
+DebugThread endp
+
+end start
+</code></pre>
+
+This should help!
+
+Edited: Added some linebreaks and removed useless ret in DebugThread.
+
+
+This message was edited by Qweerdy, on 4/22/2001 8:40:52 AM</div>
+    <div class="meta">Posted on 2001-04-22 08:37:00 by Qweerdy</div>
+   </div>
+  </div>
+ </body>
+</html>

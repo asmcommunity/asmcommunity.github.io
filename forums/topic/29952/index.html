@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Decimal String to QWORD - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29952" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=29952">Decimal String to QWORD</a></p>
+   <div class="post" id="post-211482">
+    <div class="subject"><a href="#post-211482">Decimal String to QWORD</a></div>
+    <div class="body">Today I needed a function to convert a decimal string (8 bit ascii) into a binary value with 64-bit precision.<br />OA32 didn&#039;t have one, so I threw this together.<br />If anyone feels like writing a better version, I&#039;ll replace it... but it seems to work ok for what I needed.<br /><br /><pre><code><br />;Cheap and nasty proc to convert decimal string to QWORD in EDX::EAX<br /><br />.data<br />multipliers qword 1, 10, 100, 1000, 10000, 100000,1000000,10000000,100000000,1000000000,10000000000<br />			qword 100000000000,1000000000000,10000000000000,100000000000000,1000000000000000<br />			qword 10000000000000000, 100000000000000000, 1000000000000000000, 10000000000000000000<br />.code			<br />dec2qword proc uses esi ebx pString<br />LOCAL Accum:qword<br />LOCAL sign, cnt<br />	<br />	qdmov Accum,0<br />	mov sign,+1<br />	mov esi, pString<br />	.if byte ptr==&quot;-&quot;<br />		mov sign,-1<br />		inc esi<br />	.elseif byte ptr==&quot;+&quot;<br />		inc esi<br />	.endif<br />	invoke lstrlen,esi<br />	add esi,eax<br />	dec esi<br />	mov cnt,eax<br />	<br />	xor ebx,ebx<br />	.while ebx&lt;cnt<br />		push ebx<br />		mov eax,ebx<br />		shl eax,3	;*sizeof qword<br />		lea edx, multipliers<br />		add eax,edx<br />		mov edx,.QuadWord.HiDWord<br />		mov eax,.QuadWord.LoDWord<br />		push eax<br />		movzx eax,byte ptr<br />		sub al,30h<br />		mov ebx,eax<br />		pop eax		<br />		qdmul<br />		qqadd Accum, edx::eax<br />		dec esi<br />		pop ebx<br />		inc ebx<br />	.endw<br />	.if sign==-1<br />		mov eax,Accum.QuadWord.LoDWord<br />		mov edx,Accum.QuadWord.HiDWord<br />		mov Accum.QuadWord.LoDWord,0<br />		mov Accum.QuadWord.HiDWord,0<br />		qqsub Accum, edx::eax<br />	.endif<br />	mov eax,Accum.QuadWord.LoDWord<br />	mov edx,Accum.QuadWord.HiDWord<br />	ret<br />dec2qword endp<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2010-04-28 05:18:13 by Homer</div>
+   </div>
+   <div class="post" id="post-211485">
+    <div class="subject"><a href="#post-211485">Re: Decimal String to QWORD</a></div>
+    <div class="body">Not claiming that mine is better, but I wrote these a few years ago. I&#039;ll just link them here for comparison&#039;s sake:<br />http://srcvault.scali.eu.org/cgi-bin/Syntax/Syntax.cgi?ParseRadix.asm<br />http://srcvault.scali.eu.org/cgi-bin/Syntax/Syntax.cgi?PrintRadix.asm<br /><br />Edit: one idea that may be useful is that my routines try to use 32-bit operations where possible, and only use full 64-bit arithmetic when required.<br />They can also be used for any radix, so you can use this routine for binary, octal, decimal, hexadecimal etc, by simply specifying 2, 8, 10 or 16 as radix.</div>
+    <div class="meta">Posted on 2010-04-28 06:10:37 by Scali</div>
+   </div>
+   <div class="post" id="post-211494">
+    <div class="subject"><a href="#post-211494">Re: Decimal String to QWORD</a></div>
+    <div class="body">A quick attempt:<br /><br /><pre><code><br />udec2qword proc uses ebx ecx esi edi pString<br />	xor eax,eax ; result LOW<br />	xor edx,edx ; result HIGH<br />	<br />	<br />	mov ebx,pString<br />	<br />	movzx ecx,byte ptr<br />	<br />	cmp ecx,&#039;-&#039;<br />	je _negative<br />	<br />	align 16 ; actually, better align the proc itself, and then tune the _again2 with _negative<br /> &nbsp; &nbsp;_again:<br />	sub ecx,&#039;0&#039;<br />	mov esi,eax<br />	mov edi,edx<br />	cmp ecx,9<br />	ja _done<br />	<br />	add eax,eax<br />	adc edx,edx<br />	inc ebx<br />	<br />	shld edi,esi,3<br />	shl &nbsp;esi,3<br />	add esi,ecx<br />	movzx ecx,byte ptr<br />	adc eax,esi ; ** correction, was ADD<br />	adc edx,edi<br />	<br />	<br />	jmp _again<br />	_done:<br />	ret<br />	<br />	<br />	<br /> &nbsp;_negative:<br />	inc ebx<br />	movzx ecx,byte ptr<br />	align 16<br /> &nbsp; &nbsp;_again2:<br />	sub ecx,&#039;0&#039;<br />	mov esi,eax<br />	mov edi,edx<br />	cmp ecx,9<br />	ja _done2<br />	<br />	add eax,eax<br />	adc edx,edx<br />	inc ebx<br />	<br />	shld edi,esi,3<br />	shl &nbsp;esi,3<br />	add esi,ecx<br />	movzx ecx,byte ptr<br />	adc eax,esi ; **** correction. Was ADD<br />	adc edx,edi<br />	<br />	<br />	jmp _again2<br />	_done2:<br />	printh edx<br />	printh eax<br />	<br />	;dec eax<br />	;sbb edx,0<br />	;xor eax,-1<br />	;xor edx,-1<br />&nbsp; &nbsp; neg&nbsp; &nbsp;  edx ; correction 2<br />&nbsp; &nbsp; neg&nbsp; &nbsp;  eax<br />&nbsp; &nbsp; sbb&nbsp; &nbsp;  edx, 0<br />	<br />	<br />	ret<br />udec2qword endp<br /></code></pre><br /><br />The eax:edx negation needs improvement, I don&#039;t remember any ideas on how to do it. <br />The code is simply<br /><pre><code><br />int64 result=0;<br />while(ecx=digit){<br /> &nbsp; &nbsp;result = result*10 + ecx; // = result+result + (result*8) + ecx;<br />}<br /></code></pre><br /><br /><br />Edit: correction &quot;add eax,esi&quot; -&gt; &quot;adc eax,esi&quot;. <br />correction 2: fixed the 64-bit negation as baldr noted. </div>
+    <div class="meta">Posted on 2010-04-28 13:45:30 by Ultrano</div>
+   </div>
+   <div class="post" id="post-211496">
+    <div class="subject"><a href="#post-211496">Re: Decimal String to QWORD</a></div>
+    <div class="body"><div class="quote"><br />The eax:edx negation needs improvement<br /></div><br /><br />Definitely, because <strong>dec eax</strong> leaves <strong>CF</strong> intact. ;-)<br />Scali&#039;s functions contain right code for 64-bit <strong>neg</strong>; my multiple-precision (i.e. additional <strong>adc</strong>/<strong>neg</strong>s can follow) variant is<br /><br /><pre><code><br />&nbsp; &nbsp; &nbsp; &nbsp; neg&nbsp; &nbsp;  eax<br />&nbsp; &nbsp; &nbsp; &nbsp; adc&nbsp; &nbsp;  edx, 0<br />&nbsp; &nbsp; &nbsp; &nbsp; neg&nbsp; &nbsp;  edx<br /></code></pre></div>
+    <div class="meta">Posted on 2010-04-28 15:42:03 by baldr</div>
+   </div>
+   <div class="post" id="post-211497">
+    <div class="subject"><a href="#post-211497">Re: Decimal String to QWORD</a></div>
+    <div class="body">Thanks :) . Fixed it. </div>
+    <div class="meta">Posted on 2010-04-28 15:50:35 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How slow IS it? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29953" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29953">How slow IS it?</a></p>
+   <div class="post" id="post-211489">
+    <div class="subject"><a href="#post-211489">How slow IS it?</a></div>
+    <div class="body">This is inspired by a comment from Scali in the &quot;need help with stacks&quot; thread. He observes - correctly, AFAIK - that code using &quot;aam&quot; and &quot;aad&quot; and the like is very slow. Okay, but &quot;how slow?&quot; (preliminary indications are &quot;a lot&quot;!). I&#039;ve gotten some &quot;funny&quot; answers (IMO) trying to investigate similar things. For example, a &quot;short&quot; way to convert a nybble to a hex digit involves &quot;das&quot;. I know it&#039;s &quot;slow&quot;, but how bad? Putting it into my &quot;timing harness&quot;, it jumps around all over the place! Initially, I was investigating push/pop vs mov on a K6-300. push/pop was faster (slightly, I don&#039;t recall the numbers). On a K6-2-500, it was reported that mov was twice as fast. My current P-IV (yeah, I know) shows mov faster, as expected, but it seems to matter how many times you do it! That isn&#039;t too unexpected, I guess... but &quot;more is faster&quot; sure is!<br /><br />I&#039;ll attach the entire thing - Linux-specific, and uses &quot;-f bin&quot;, no linker... if there&#039;s any interest, I can try to come up with a more &quot;portable&quot; version - but here&#039;s the meat of it:<br /><br /><pre><code><br />&nbsp; &nbsp; xor eax, eax<br />&nbsp; &nbsp; cpuid<br />&nbsp; &nbsp; rdtsc<br />&nbsp; &nbsp; push edx<br />&nbsp; &nbsp; push eax<br /><br />;------------------<br />; code to time<br /><br />;times REPT_COUNT mov eax, 0<br />;times REPT_COUNT xor eax, eax<br /><br />;times REPT_COUNT dec eax<br />; times REPT_COUNT sub eax, byte 1<br /><br /><br />%rep REPT_COUNT<br />;push eax<br />;pop eax<br /><br />;mov eax, <br />;mov , eax<br /><br />;&nbsp; &nbsp; das<br /><br />%endrep<br /><br />;-------------------<br /><br />&nbsp; &nbsp; xor eax, eax<br />&nbsp; &nbsp; cpuid<br />&nbsp; &nbsp; rdtsc<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; pop ebx<br />&nbsp; &nbsp; sub eax, ebx<br />&nbsp; &nbsp; pop ecx<br />&nbsp; &nbsp; sbb edx, ecx<br />&nbsp; &nbsp; sub eax, THIS_EMPTY_LOOP<br />&nbsp; &nbsp; sbb edx, 0<br /><br />&nbsp; &nbsp; mov edi, ascbuf<br />&nbsp; &nbsp; call u64toda<br /><br />; will need a suitable &quot;printstring&quot; and &quot;exit&quot; for &#039;doze<br />...<br /></code></pre><br /><br />As the comments indicate, &quot;THIS_EMPTY_LOOP&quot; is defined to a number that mostly gives zero for the code with everything commented out, as shown. &quot;REPT_COUNT&quot; can be most conveniently defined on the command line...<br /><br /><pre><code><br />; &quot;tune&quot; this so an empty loop gives zero, most often,<br />; on your machine.<br />THIS_EMPTY_LOOP equ 384<br /><br />; define this on the command line to Nasm,<br />; or uncomment it here, if you prefer...<br />; REPT_COUNT equ 1 ; 10000<br /></code></pre><br /><br />Then we uncomment, say the push/pop pair, assemble it with &quot;nasm -f bin -dREPT_COUNT=1 timeit.asm&quot; - gives 8, on my P-IV. Re-assemble with &quot;-dREPT_COUNT=2&quot; - gives 4. Wha? &quot;REPT_COUNT=3&quot; gives 12.<br /><br />Okay, comment the push/pop lines again and uncomment the mov pair. Assembled with &quot;-dREPT_COUNT=1&quot; gives 8 - same as push/pop. REPT_COUNT=2 gives 8 again. REPT_COUNT of three gives 4! This isn&#039;t cycles-per-iteration, this is total cycles for three repetitions of the code! At this rate, we&#039;ll be doing it in negative time! But no, REPT_COUNT of 4 gives 12...<br /><br />At least the numbers usually repeat (barring the occasional outlier). Uncommenting &quot;das&quot; gives results all over the lot, no matter the REPT_COUNT. 104, 104, 104, 96, 96, 64, 104, 96, 96, 76 - for one instance of &quot;das&quot;! &quot;aam&quot; looks more consistent...<br /><br />Can anyone explain these &quot;strange&quot; results? Am I doing something wrong?<br /><br />Best,<br />Frank<br /><br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3118" target="_blank">timeit.asm</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-04-28 10:34:19 by fbkotler</div>
+   </div>
+   <div class="post" id="post-211491">
+    <div class="subject"><a href="#post-211491">Re: How slow IS it?</a></div>
+    <div class="body">Better check your timing framework :) . <br /><br /><pre><code><br />INSPECT_ME macro<br />	mov &nbsp; &nbsp; ax, 10 shl 8<br />	aad<br />	aam<br />	mov &nbsp; &nbsp; al, 8<br />	sub &nbsp; &nbsp; al, 3<br />	xchg &nbsp; &nbsp;ah, al<br />	aad<br />endm<br /></code></pre><br /><br />C2D E8500<br /><br />This takes 10 cycles &nbsp;per loop. When I put it 10 times in the loop-body, it takes 103 cycles, so no surprises. <br />Measuring the aad/das alone results in 2-3 cycle latency. <br />If I procomment the &quot;mov ax,&quot; making the pipeline stall or create input values that are possibly nasty for the instructions, the 103 cycles become 177 or 230. <br /><br />A real benchmark remains: a real usage of the instructions, with real data to feed it. <br /><br />Btw, aad/das,etc are not documented anymore in the latest Intel optimization manuals. (no info on latency/throughput)</div>
+    <div class="meta">Posted on 2010-04-28 12:09:49 by Ultrano</div>
+   </div>
+   <div class="post" id="post-211493">
+    <div class="subject"><a href="#post-211493">Re: How slow IS it?</a></div>
+    <div class="body"><div class="quote"><br />Better check your timing framework :) . <br /></div><br /><br />I guess! 10 cycles, you say? That seems unexpectedly fast, no? I get 88 cycles for that code, 76 cycles for a naive implementation of approximately the same calculation using &quot;mul&quot; and &quot;div&quot;. Curiously, cranking &quot;REPT_COUNT&quot; up to 10, they nearly even out at 1028 vs 1020. (Suggesting that maybe &quot;Baldr&#039;s code&quot; isn&#039;t as slow as Scali - or I - would have expected.)<br /><br />Thanks for the feedback, Ultrano! I&#039;ll keep lookin&#039;...<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2010-04-28 13:41:25 by fbkotler</div>
+   </div>
+   <div class="post" id="post-211495">
+    <div class="subject"><a href="#post-211495">Re: How slow IS it?</a></div>
+    <div class="body"><div class="quote"><br />I guess! 10 cycles, you say? That seems unexpectedly fast, no?</div><br /><br />Depends on how you look at it.<br />10 cycles for 7 instructions on a CPU that has a maximum throughput of 4 instructions per cycle? Doesn&#039;t sound very good.<br />I would say that on average you should be able to get 2 instructions per cycle in practice.<br />It is well possible that the optimal solution is longer in terms of instructioncount, but executes much more efficiently.<br />One of the fastest routines in the last <a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=29696.45">small challenge</a> was 14 instructions long, and executed in 7 cycles, and that included calling overhead.</div>
+    <div class="meta">Posted on 2010-04-28 14:35:08 by Scali</div>
+   </div>
+   <div class="post" id="post-211501">
+    <div class="subject"><a href="#post-211501">Re: How slow IS it?</a></div>
+    <div class="body">Okay. When you said &quot;VERY SLOW&quot; (which matches my expectations), I was expecting worse than that. I still don&#039;t know where 10 cycles comes from - f0dder&#039;s &quot;yodel&quot;? ...and I don&#039;t know why I&#039;m getting 88 cycles...<br /><br />This is why I generally like to shoot for &quot;small&quot; code - easier to keep score. :)<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2010-04-28 21:27:45 by fbkotler</div>
+   </div>
+  </div>
+ </body>
+</html>

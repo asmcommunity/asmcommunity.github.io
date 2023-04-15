@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>previous instance solution - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26294" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26294">previous instance solution</a></p>
+   <div class="post" id="post-191001">
+    <div class="subject"><a href="#post-191001">previous instance solution</a></div>
+    <div class="body">hi,
+how to retrieve if a previous instance is running? i know that hPrevInstance i always NULL in win32, and looked in the win32 knowledge base for a solution. there was an example with CreateFileMapping in c++ but i have one problem: this (HANDLE)0xFFFFFFFF doesnt work in asm.
+.............
+oh shit, i tried without (HANDLE) before, but wrote only six FFFFFF instead of eight. oh f***! ok, but nevertheless, some of you perhaps can learn from this. so here is the asm source for it:
+
+.data ?
+hmapping HANDLE ?
+
+.data
+instcheck db "my app",0
+
+invoke CreateFileMapping,00FFFFFFFFh,NULL,PAGE_READONLY,0,32,addr instcheck
+   mov hmapping,eax
+   .if eax==NULL 
+   	;it failed, put in your code here
+   .endif
+   invoke GetLastError
+   .if eax==NULL 
+   	;everything is ok, there doesnt exist a previous instance
+   .elseif eax==ERROR_ALREADY_EXISTS
+	;there is one existing
+        invoke CloseHandle,hmapping
+   	invoke ExitProcess,NULL
+   .else 
+   	;another error
+   .endif
+
+this method to retrieve if a previous instance is running is based on creating smth in the memory, that is checked if it exists when starting your app. dunno exactly what it does, but it works!
+
+cya</div>
+    <div class="meta">Posted on 2000-12-09 11:59:00 by [SaFc0n]</div>
+   </div>
+   <div class="post" id="post-191002">
+    <div class="subject"><a href="#post-191002">previous instance solution</a></div>
+    <div class="body">A somewhat easier approach is to create a shared data section in your prog. Put a variable that you will use as a flag there and initialize it to 0. When your prog is loaded, it should check the value of that variable to see if it's 0. If it is, it can be safely assumed that it's the first and only instance. Then it changes the value of that var to something other than 0. If the user runs another instance of your prog, your prog will see that the variable is not 0 and thus knows instantly that it's not the first instance,</div>
+    <div class="meta">Posted on 2000-12-09 21:29:00 by Iczelion </div>
+   </div>
+   <div class="post" id="post-191003">
+    <div class="subject"><a href="#post-191003">previous instance solution</a></div>
+    <div class="body">I used semaphores. Here's the code I used which is adapted from the Win32 Skeleton on Iczelions page. This assumes two things. One you don't already have a variable called hWnd for your main window. Two that you have a variable called "szClassName" which is a string containing your windows class name. This is important because it uses the class name to locate the second instance if it is running.
+Just call this procedure at the beggining of your winmain procedure, and your app should never load twice! (It even pops pops up the second instance if it's minimized!)
+
+Have fun!
+See ya,
+Ben
+
+;############################################################################
+; Start of OnlyOneInstance
+;############################################################################
+OnlyOneInstance PROC
+		LOCAL	hSemaphore:HANDLE
+		LOCAL	hWnd:DWORD
+
+		INVOKE	CreateSemaphore, NULL, 0h, 1h, ADDR szClassName
+		mov	hSemaphore,eax
+
+		INVOKE	GetLastError
+		cmp	eax,ERROR_ALREADY_EXISTS
+		je	caseEXISTS
+		cmp	eax,ERROR_SUCCESS
+		je	caseONLYONE		;if not equal then CreateSemaphore failed so
+		jmp	caseFIND		;return FALSE to exit by trying FindWindow
+
+caseONLYONE:	mov	eax,TRUE		;created Semaphore will prevent other instances
+		jmp	caseRETURN		;return TRUE to continue
+
+caseEXISTS:	INVOKE	CloseHandle, hSemaphore
+
+caseFIND:	INVOKE	FindWindow, ADDR szClassName, NULL
+		test	eax,eax
+		jz	caseRETURN		;return FALSE (eax=0) to exit
+
+		INVOKE	GetLastActivePopup, eax
+                mov     hWnd,eax            ;eax=hMainWnd or hPopupWnd
+
+                INVOKE  IsIconic, hWnd
+		test	eax,eax
+		jz	@F
+
+                INVOKE  ShowWindow, hWnd, SW_RESTORE
+		xor	eax,eax
+		jmp	caseRETURN		;return FALSE (eax=0) to exit
+
+@@:             INVOKE  SetForegroundWindow, hWnd
+		xor	eax,eax			;return FALSE (eax=0) to exit
+
+caseRETURN:	ret
+OnlyOneInstance	ENDP
+;############################################################################
+; End of OnlyOneInstance
+;############################################################################</div>
+    <div class="meta">Posted on 2000-12-09 23:27:00 by cyberben </div>
+   </div>
+   <div class="post" id="post-191004">
+    <div class="subject"><a href="#post-191004">previous instance solution</a></div>
+    <div class="body">Here is an easy way to do it, place this code BEFORE the WNDCLASSEX structure but AFTER the class name code.
+
+      szText szClassName,"Your_App_Class"
+
+      invoke FindWindow,ADDR szClassName,NULL
+      mov IsWin, eax
+
+      .if IsWin != NULL
+        invoke ShowWindow,IsWin,SW_RESTORE
+        invoke SetForegroundWindow,IsWin
+        mov eax, 0
+        ret
+      .endif
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2000-12-10 04:41:00 by hutch-- </div>
+   </div>
+   <div class="post" id="post-191005">
+    <div class="subject"><a href="#post-191005">previous instance solution</a></div>
+    <div class="body">hutch, you're right, but what if you aren't using a window?? hey Iczelion, can you please briefly explain me how to create a shared data section? tnx man. 
+cya</div>
+    <div class="meta">Posted on 2000-12-10 05:52:00 by [SaFc0n] </div>
+   </div>
+   <div class="post" id="post-191006">
+    <div class="subject"><a href="#post-191006">previous instance solution</a></div>
+    <div class="body">use a Mutex, it's real simple.. look them up in the win32 api reference</div>
+    <div class="meta">Posted on 2000-12-14 07:24:00 by Zynaps </div>
+   </div>
+   <div class="post" id="post-191007">
+    <div class="subject"><a href="#post-191007">previous instance solution</a></div>
+    <div class="body">This works for me.
+
+.data
+
+myinstance   byte "instance",0
+....
+....
+
+WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+
+LOCAL  hmutex :HANDLE
+ 
+
+	.if uMsg==WM_CREATE
+
+              invoke OpenMutex,GENERIC_ALL,FALSE,addr myinstance         
+                  mov hmutex,eax
+                .if hmutex == 0
+                  invoke CreateMutex,NULL,TRUE,addr myinstance         
+                .else
+                      " do something "
+                .endif
+                
+......
+.....</div>
+    <div class="meta">Posted on 2000-12-14 07:42:00 by jop </div>
+   </div>
+  </div>
+ </body>
+</html>

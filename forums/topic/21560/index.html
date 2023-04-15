@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>OpenProcess Error - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21560" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21560">OpenProcess Error</a></p>
+   <div class="post" id="post-162756">
+    <div class="subject"><a href="#post-162756">OpenProcess Error</a></div>
+    <div class="body">I&#39;ve been coding apps using OpenProcess for a while now. But I&#39;ve just encountered a problem with a new app I&#39;ve wrote. I use the following code:<br /><br />invoke OpenProcess,PROCESS_ALL_ACCESS,NULL,target_PID<br /><br />It doesn&#39;t open it and the LastError is ERROR_NOACCESS. I&#39;ve also tried just VM_READ, and it still doesn&#39;t work. I&#39;ve stepped through the code in OllyDbg, and everything is fine. I&#39;ve checked the process ID aswell, and that&#39;s OK. Do I have to call something else to allow my app to access this process?<br /><br />Thanks</div>
+    <div class="meta">Posted on 2005-08-03 16:16:02 by syc0</div>
+   </div>
+   <div class="post" id="post-162761">
+    <div class="subject"><a href="#post-162761">Re: OpenProcess Error</a></div>
+    <div class="body">Which kind of user account do you run this from? I guess it should work from any account that has administrative privileges. If you don&#39;t give up :). If you have, there might be some security token you need to grant yourself access to programatically, perhaps the debug token.<br /></div>
+    <div class="meta">Posted on 2005-08-03 19:36:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-162764">
+    <div class="subject"><a href="#post-162764">Re: OpenProcess Error</a></div>
+    <div class="body">try to attempt to obtain SeDebugPrivilege<br /><br /><pre><code><br />	call	<br />	stdcall ,eax,TOKEN_ADJUST_PRIVILEGES+TOKEN_QUERY,OFFSET hToken<br />	stdcall ,0,OFFSET szSeDebugPriv,OFFSET tkp.Privileges<br />	mov	,1<br />	mov	,SE_PRIVILEGE_ENABLED<br />	stdcall ,,0,OFFSET tkp,0,0,0<br /><br />	szSeDebugPriv	db	&quot;SeDebugPrivilege&quot;,0<br />	hToken		dd ?<br />	tkp		TOKEN_PRIVILEGES<br /></code></pre></div>
+    <div class="meta">Posted on 2005-08-03 22:57:29 by comrade</div>
+   </div>
+   <div class="post" id="post-162771">
+    <div class="subject"><a href="#post-162771">Re: OpenProcess Error</a></div>
+    <div class="body">Is this on an NT based OS such as XP?<br />Is the target process in fact a system Service?<br />If such is the case, you can&#39;t use this method, it doesn&#39;t work.<br /><br /></div>
+    <div class="meta">Posted on 2005-08-04 01:13:52 by Homer</div>
+   </div>
+   <div class="post" id="post-162786">
+    <div class="subject"><a href="#post-162786">Re: OpenProcess Error</a></div>
+    <div class="body">This a simple code, i was used that killing system services<br /><pre><code><br />BOOL KillNTSytemServiceProcess(<br />&nbsp; &nbsp; IN DWORD dwProcessId<br />&nbsp; &nbsp; )<br />{<br />&nbsp; &nbsp; HANDLE hProcess;<br />&nbsp; &nbsp; DWORD dwError;<br /><br />&nbsp; &nbsp; hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessId);<br />&nbsp; &nbsp; if (hProcess == NULL)<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; if (GetLastError() != ERROR_ACCESS_DENIED)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return FALSE;<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; OSVERSIONINFO osvi;<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; osvi.dwOSVersionInfoSize = sizeof(osvi);<br />&nbsp; &nbsp; &nbsp; &nbsp; GetVersionEx(&amp;osvi);<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; if (osvi.dwPlatformId != VER_PLATFORM_WIN32_NT)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return SetLastError(ERROR_ACCESS_DENIED), FALSE;<br /><br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; TOKEN_PRIVILEGES Priv, PrivOld;<br />&nbsp; &nbsp; &nbsp; &nbsp; DWORD cbPriv = sizeof(PrivOld);<br />&nbsp; &nbsp; &nbsp; &nbsp; HANDLE hToken;<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; if (!OpenThreadToken(GetCurrentThread(),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  FALSE, &amp;hToken))<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (GetLastError() != ERROR_NO_TOKEN)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return FALSE;<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (!OpenProcessToken(GetCurrentProcess(),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &amp;hToken))<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return FALSE;<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br /><br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; Priv.PrivilegeCount = 1;<br />&nbsp; &nbsp; &nbsp; &nbsp; Priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;<br />&nbsp; &nbsp; &nbsp; &nbsp; LookupPrivilegeValue(NULL, SE_DEBUG_NAME,<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  &amp;Priv.Privileges[0].Luid);<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; if (!AdjustTokenPrivileges(hToken, FALSE, &amp;Priv, sizeof(Priv),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  &amp;PrivOld, &amp;cbPriv))<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; dwError = GetLastError();<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; CloseHandle(hToken);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return SetLastError(dwError), FALSE;<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)<br />&nbsp; &nbsp; &nbsp; &nbsp; {<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; CloseHandle(hToken);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return SetLastError(ERROR_ACCESS_DENIED), FALSE;<br />&nbsp; &nbsp; &nbsp; &nbsp; }<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessId);<br />&nbsp; &nbsp; &nbsp; &nbsp; dwError = GetLastError();<br /><br /><br />&nbsp; &nbsp; &nbsp; &nbsp; AdjustTokenPrivileges(hToken, FALSE, &amp;PrivOld, sizeof(PrivOld),<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; NULL, NULL);<br />&nbsp; &nbsp; &nbsp; &nbsp; CloseHandle(hToken);<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; if (hProcess == NULL)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; return SetLastError(FALSE), NULL;<br />&nbsp; &nbsp; }<br /><br /><br />&nbsp; &nbsp; if (!TerminateProcess(hProcess, (UINT)-1))<br />&nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; dwError = GetLastError();<br />&nbsp; &nbsp; &nbsp; &nbsp; CloseHandle(hProcess);<br />&nbsp; &nbsp; &nbsp; &nbsp; return SetLastError(dwError), FALSE;<br />&nbsp; &nbsp; }<br /><br />&nbsp; &nbsp; CloseHandle(hProcess);<br />&nbsp; &nbsp; return TRUE;<br /><br />}<br /></code></pre></div>
+    <div class="meta">Posted on 2005-08-04 10:51:13 by Criminal2</div>
+   </div>
+   <div class="post" id="post-162787">
+    <div class="subject"><a href="#post-162787">Re: OpenProcess Error</a></div>
+    <div class="body">Hmmm, killing system services?<br /></div>
+    <div class="meta">Posted on 2005-08-04 11:01:33 by f0dder</div>
+   </div>
+   <div class="post" id="post-162798">
+    <div class="subject"><a href="#post-162798">Re: OpenProcess Error</a></div>
+    <div class="body">Thanks for the replies everyone. I&#39;m running Windows 2000 with full admin privileges. It&#39;s not a system service either, just a standard program. I guess it uses some kind of priority function. I&#39;ll give the suggestions a try anyway.</div>
+    <div class="meta">Posted on 2005-08-04 13:51:38 by syc0</div>
+   </div>
+  </div>
+ </body>
+</html>

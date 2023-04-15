@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Stability when port from 9x to 2000/XP - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10922" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=10922">Stability when port from 9x to 2000/XP</a></p>
+   <div class="post" id="post-82347">
+    <div class="subject"><a href="#post-82347">Stability when port from 9x to 2000/XP</a></div>
+    <div class="body">Hi,<br />This is an issue that Microsoft doesn't seem to document very well.<br />I've got a small 100% asm app called EVE, that is unbreakable on<br />Win 9x, but there are stability issues on 2000/XP.<br />A little while ago, EVE was crashing just after startup, as soon as<br />someone tried &quot;File/Open...&quot; -- the process just disappeared, no<br />error message at all. Funny thing, this was on some 2000/XP systems,<br />but not all -- I have at home two installations, NT5/beta1 and XP, and EVE<br />worked fine, which was enormously frustrating.<br /><br />Anyway, I eventually found, by a process of exhaustive elimination<br />and enormous help from various testers, that by moving a single<br />string from .DATA to .CODE (the string is read only), it worked on<br />2000/XP.<br />This lead me to think that maybe data has to be aligned, which I had<br />never bothered about before. So, I've made sure all 32-bit data is<br />preceded with &quot;ALIGN 4&quot;.<br /><br />However, some people are still reporting crashes. These are happening<br />outside EVE, in an API func, don't yet know which one/s, but I've just<br />stuck a heap of extra code into EVE that tracks the last API call and I have<br />an auto &quot;talkback&quot; feature in EVE so on a crash people can send me a<br />email bug report (v3.23). So, I hope to find out which API func is being naughty.<br /><br />But, I wonder. I recall a thread in this forum, someone mentioned that<br />*all* addresses passed as parameters to API funcs should be DWORD<br />aligned ... is this true? This would mean that I would even have to align<br />all strings to start on DWORD alignment. Anyone got any thoughts on this?<br /><br />Regards,<br />Barry Kauler<br /><a target="_blank" href="www.goosee.com">www.goosee.com</a></div>
+    <div class="meta">Posted on 2003-02-17 17:06:44 by bkauler</div>
+   </div>
+   <div class="post" id="post-82362">
+    <div class="subject"><a href="#post-82362">Stability when port from 9x to 2000/XP</a></div>
+    <div class="body">Barry,<br /><br />I have heard comments of this type before but I have yet to see code that fails through not having aligned string data. Almost exclusively the reason why you get some code that fails in 2k/xp that runs on 9x has to do with register preservation.<br /><br />There are a few instances where return values are important where in 9x you can ignore them but in 2k/xp you will get a failure.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-02-17 18:02:42 by hutch--</div>
+   </div>
+   <div class="post" id="post-84094">
+    <div class="subject"><a href="#post-84094">Stability when port from 9x to 2000/XP</a></div>
+    <div class="body">This is an extract from a thread earlier this year:<br /><br />-------------------------------<br />things to remembre on NT: register preservation is even more important than on 9x (though you wont get BSODs from not following it). stack must be 4-byte aligned (not a problem unless you're *messing* with the stack). and you must return 0 (&quot;xor eax, eax&quot;) in dlgproc if you don't handle the message. none of these should cause a &quot;invalid win32 app&quot; peldr messagebox though.<br /><br /><br />__________________<br />ka-ching<br /><br />-------------------------<br /><br /><br />Right. Additionally, an important thing I've not read anywhere is that on NT systems all data pointers you pass to the API must be DWORD aligned. This maybe wasn't documented explicitly because is no problem in C/C++, since the compiler takes care of it, but in asm it's an issue.<br /><br />Generally, the problem happens when one defines some structures in his/her source, and those structures aren't made DWORD aligned. A more common problem than it may seem.<br /><br /><br />__________________<br />Greets,<br />Maverick<br />----------------------------------------<br /><br />Okay, can we say that the advice to align pointers passed to APIs is NOT necessary?<br /><br />Leave that one. What about the stack...<br />In a procedure, if I have local data:<br />  LOCAL var1:BYTE<br /><br />Isn't that going to place a single byte on the stack, thus misaligning it?<br />...or, maybe it doesn't matter within a procedure?<br /><br />It would be interesting to examine asm list file output of Win32 C/C++ or other high level language compiler, to see what they are doing.<br /><br />In my case, I have always known the rules for register preservation, so that's not the problem. I seem to have an alignment problem. I've been going thru my app<br />DWORD aligning stuff, ... no crash reports from users this week!</div>
+    <div class="meta">Posted on 2003-02-28 03:18:36 by bkauler</div>
+   </div>
+   <div class="post" id="post-84105">
+    <div class="subject"><a href="#post-84105">Stability when port from 9x to 2000/XP</a></div>
+    <div class="body">Remember esp should be aligned to 4</div>
+    <div class="meta">Posted on 2003-02-28 05:52:38 by roticv</div>
+   </div>
+   <div class="post" id="post-84314">
+    <div class="subject"><a href="#post-84314">Stability when port from 9x to 2000/XP</a></div>
+    <div class="body">Aah, yes, I have just checked something.<br />I've got this func with a single local byte variable:<br /><br />func1 PROC STDCALL<br />  LOCAL var1:BYTE<br /><br />I used Jeremy Gordon's excellent debugger and found that it assembled as:<br /><br />  push ebp<br />  mov ebp,esp<br />  add esp,-4<br /><br />Which means that MASM is intelligent and actually allocated 4 bytes on the<br />stack for the byte data.</div>
+    <div class="meta">Posted on 2003-03-01 06:32:15 by bkauler</div>
+   </div>
+  </div>
+ </body>
+</html>

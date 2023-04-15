@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Damn Registry - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27679" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27679">Damn Registry</a></p>
+   <div class="post" id="post-197509">
+    <div class="subject"><a href="#post-197509">Damn Registry</a></div>
+    <div class="body">Anyone,
+
+  I'm still having trouble with the RegQueryInfoEx API!  This is driving me nucking futs!  Your help is apprechiated; here's a portion of my source
+
+-------------------------<code start>-----------------------
+
+.386
+.model flat, stdcall
+option casemap:none
+
+include C:\masm32\include\windows.inc
+include C:\masm32\include\kernel32.inc
+includelib C:\masm32\lib\kernel32.lib
+include C:\masm32\include\user32.inc
+includelib C:\masm32\lib\user32.lib
+include C:\masm32\include\comdlg32.inc
+includelib C:\masm32\lib\comdlg32.lib
+include C:\masm32\include\shell32.inc
+includelib C:\masm32\lib\shell32.lib
+include C:\masm32\include\advapi32.inc
+includelib C:\masm32\lib\advapi32.lib
+
+GetError PROTO :DWORD, :DWORD
+
+.data
+...
+Reg_Key db "somekey\somewhere\",0
+Key_Name db "(Default)",0
+QueryVal db "RegQueryValueEx",0
+OpenKey db "RegOpenKeyEx",0
+KeySize dd 200
+
+.data?
+...
+hKey dd ?
+Key_Value dd ?
+Key_Type dd ?
+Error dd ?
+
+.code
+start:
+...
+invoke RegOpenKeyEx, HKEY_CLASSES_ROOT, ADDR Reg_Key, 0, KEY_ALL_ACCESS, ADDR hKey
+.IF EAX==ERROR_SUCCESS
+invoke RegQueryValueEx, hKey, ADDR Key_Name, NULL, ADDR Key_Type, ADDR Key_Value, ADDR KeySize
+.IF EAX==ERROR_SUCCESS
+blah blah
+.ELSE
+invoke GetError, ADDR QueryVal, EAX
+.ENDIF
+.ELSE
+invoke GetError, ADDR OpenKey, EAX
+.ENDIF
+invoke RegCloseKey, hKey
+.ENDIF
+.ENDIF
+invoke ExitProcess, EAX
+
+GetError PROC MsgTitle :DWORD, ErrorVal :DWORD
+invoke FormatMessage, FORMAT_MESSAGE_FROM_SYSTEM, NULL, ErrorVal, LANG_NEUTRAL, ADDR Error, 512, NULL
+invoke MessageBox, NULL, ADDR Error, MsgTitle, MB_OK + MB_ICONERROR
+ret
+GetError endp
+
+end start
+
+-----------------------<code end>---------------------------
+
+.......I get an error saying that it "can't find the specified file", which I believe it's reffering to the Key_Name.  I dunno.......
+
+Blah,
+*unknown*</div>
+    <div class="meta">Posted on 2001-04-17 18:14:00 by *unknown*</div>
+   </div>
+   <div class="post" id="post-197510">
+    <div class="subject"><a href="#post-197510">Damn Registry</a></div>
+    <div class="body">Well it's hard to say,
+
+if that error is at the beginning of the file i would say change your pointer names, may be the compiler is irritated by those,
+to open the registry key, try RegCreateKey/KeyEx i had a problem with RegOpenkey too.
+
+If it doesn't work send me the whole source via mail, i see what i can do...
+So far hope that helps, 
+Olli</div>
+    <div class="meta">Posted on 2001-04-17 18:26:00 by Typhoon</div>
+   </div>
+   <div class="post" id="post-197511">
+    <div class="subject"><a href="#post-197511">Damn Registry</a></div>
+    <div class="body">....no chief, I tried RegCreateKeyEx too.  You're right about the pointers though, although it's me that's confused....not the compiler.  If someone could explain to me the different pointers used in the Reg API's I'd apprechiate it alot.......
+
+Who said that?
+*unknown*</div>
+    <div class="meta">Posted on 2001-04-18 01:10:00 by *unknown*</div>
+   </div>
+   <div class="post" id="post-197512">
+    <div class="subject"><a href="#post-197512">Damn Registry</a></div>
+    <div class="body">please post your complete code so i can take a look at it.
+
+smurf</div>
+    <div class="meta">Posted on 2001-04-18 01:21:00 by smurf</div>
+   </div>
+   <div class="post" id="post-197513">
+    <div class="subject"><a href="#post-197513">Damn Registry</a></div>
+    <div class="body">Im not to keen with Registry stuff, but studying the API reference, i see one possible problem...
+
+The RegQueryValueEx API states:
+<div class="quote">
+lpcbData
+
+Points to a variable that specifies the size, in bytes, of the buffer pointed to by the lpbData parameter. When the function returns, this variable contains the size of the data copied to lpbData. 
+
+If the buffer specified by lpbData parameter is not large enough to hold the data, the function returns the value ERROR_MORE_DATA, and stores the required buffer size, in bytes, into the variable pointed to by lpcbData.
+ 
+If lpbData is NULL, and lpcbData is non-NULL, the function returns ERROR_SUCCESS, and stores the size of the data, in bytes, in the variable pointed to by lpcbData. This lets an application determine the best way to allocate a buffer for the value key's data. 
+</div>
+
+Your Buffer that you point to is a DWORD, which is 4 bytes at best, but you pass a reference to the Query (KeySize) which gives indication that the buffer size is 200 bytes long..  This might confuse the M$ monster machine, or at least it could fill data over your error message (ERROR data value), giving you random results for an error message.
+
+I would clean it up to this, and de-bug some more:
+<pre><code>
+.data
+KeySize dd 200
+
+.data?
+...
+hKey dd ?
+Key_Value dd 201 DUP (?)
+Key_Type dd ?
+Error dd ?
+
+.code
+
+all the same...
+
+</code></pre>
+
+As well if your still short of answers, try and find out if it at least will give you the size of the data (outlined in the above quote, by making the "addr Key_Value" become "NULL" in the invoke to RegQueryValueEx.
+
+NaN</div>
+    <div class="meta">Posted on 2001-04-18 01:57:00 by NaN</div>
+   </div>
+   <div class="post" id="post-197514">
+    <div class="subject"><a href="#post-197514">Damn Registry</a></div>
+    <div class="body">.......so last night I tried just using NULL and it worked.  It makes sense after I read what NaN posted, but at the time it seemed odd.
+
+Thanx for the help guys,
+*unknown*</div>
+    <div class="meta">Posted on 2001-04-18 18:11:00 by *unknown*</div>
+   </div>
+  </div>
+ </body>
+</html>

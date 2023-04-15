@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>question on registers, etc... code pasted - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=878" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=878">question on registers, etc... code pasted</a></p>
+   <div class="post" id="post-5602">
+    <div class="subject"><a href="#post-5602">question on registers, etc... code pasted</a></div>
+    <div class="body">In my venture to customize and hide some of the stuff, I stumble along this.. spent an hour searching through the forum until I was light-headed and at my wits end for what I know is a simple answer and then I will say 'doh!' and slap myself on the head once again:<br /><br /><br /><br /><br />Paint_Proc proc hDC:DWORD, x:DWORD, y:DWORD, XWid:DWORD, YWid:DWORD, <strong>lstyle:BYTE, lcolor:DWORD</strong><br /><br />    LOCAL hPen      :DWORD<br />    LOCAL hPenOld   :DWORD<br />    LOCAL hBrush    :DWORD<br />    LOCAL hBrushOld :DWORD<br /><br />    LOCAL lb        :LOGBRUSH<br /><br />    invoke CreatePen,0,1,lcolor<br />    mov hPen, eax<br />; lbstyle was BS_SOLID<br /><br />    <strong>mov lb.lbStyle, lstyle</strong><br />    <strong>mov lb.lbColor, lcolor</strong><br />    mov lb.lbHatch, NULL<br /><br />It gives me an invalid instruction error. I tried moving the lstyle to AL, AX, EAX, I still can't make any progress.<br /><br />The BYTE does not agree with the DWORD. Also from what I understand, I cannot move memory to memory data. Must be to a register.<br /><br />What would be the syntax to get the above to work properly? I assume I need to also move lcolor to a 16-bit register, then move the register to the lb.lbColor...<br /><br />Thank you for your time  =)</div>
+    <div class="meta">Posted on 2001-08-31 16:30:00 by drarem</div>
+   </div>
+   <div class="post" id="post-5603">
+    <div class="subject"><a href="#post-5603">question on registers, etc... code pasted</a></div>
+    <div class="body">Hey, heres a tip when troubleshooting...  You can read and trust all the references you want, but the bottom line is what the compiler gets to see.<br /><br />Everything on the surface would appear to be ok (which is why your posting this), the only place a prob would be (if there is as the compiler is suggesting), would be in:<br /><br />mov lb.lbStyle, lstyle <br /><br />lb.lbStyle is part of a structure, so we check the API reference and get:<div class="quote">typedef struct tagLOGBRUSH { // lb <br /><br />   UINT     lbStyle; <br />   COLORREF lbColor; <br />   LONG     lbHatch; <br />} LOGBRUSH;</div><br /><br />Unsigned int eh?, sound odd to me ~ remember this was written for C++ folk.  The bottom line is what the compiler gets to read.  So next i check Windows.inc (where all structs are defined (well most)).<div class="quote">LOGBRUSH STRUCT<br />  lbStyle  DWORD      ?<br />  lbColor  DWORD      ?<br />  lbHatch  DWORD      ?<br />LOGBRUSH ENDS</div><br /><br />Ahh ha!.. now it makes more sense!.. Your trying to move a BYTE into a DWORD... and the compilers doesnt like it...<br /><br />Solution: change the param to :DWORD or do something like this:<br /><pre><code><br />  xor eax, eax<br />  mov al, lstyle<br />  mov lb.lbStyle, eax<br /></code></pre><br /><br />I wouldnt slap your head over this :) ,  its easy to TRUST what you read..<br /><br />NaN<br /><br />Oh!! Ya, I almost over looked this, This is realy the problem (the above is just me blabbering, take what you can from it ;)  ).  You cant MOV from memory to memory!!  &quot;lstyle&quot; is on the stack segment (in memory) and your trying to place it in &quot;lb.lbStyle&quot; which is also in stack memeory.   So my solution gets around this as well, by using eax as a swapping register.  You could also use push/pop like this:<br /><br /><pre><code><br />  push lstyle<br />  pop   lb.lbStyle<br /></code></pre><br /><br />I dont use this alot, but if i remember, pushing a byte will actually push a full DWORD with the leading 24 bits 0'd.<br /><br />Anyways, hope i helped... (and not confused you :) )<br />NaN</div>
+    <div class="meta">Posted on 2001-08-31 16:55:21 by NaN</div>
+   </div>
+   <div class="post" id="post-5605">
+    <div class="subject"><a href="#post-5605">question on registers, etc... code pasted</a></div>
+    <div class="body">Nan -<br /><br />     thank you :)  works great! <br /><br /><br />    what i did try was:<br /><br />    mov al,lstyle<br />    mov lb.lbStyle, ax    &lt;==== I kept thinking in 8 bit terms<br /><br />    Now I get it that eax = extended ax? = doubleword. And I see now why you can't move from memory to memory, as the data is stored in the stack.<br /><br />Need to have the win32api reference handy.  Forgot about the push lstyle and pop lb.lbStyle, making a mental note - ouch!..<br /><br />I am forever in your debt.. and the debt isn't gettin any smaller.</div>
+    <div class="meta">Posted on 2001-08-31 17:18:12 by drarem</div>
+   </div>
+   <div class="post" id="post-5635">
+    <div class="subject"><a href="#post-5635">question on registers, etc... code pasted</a></div>
+    <div class="body">al = register ax low 8 bits<br />ah = register ax high 8 bits<br />ax = <br />eax = [16 bits]<br /><br />so If I were to mov al, 0ffh<br />this is what it would look like:<br />eax: 000000ffh<br />ax:00ffh<br />ah:00h<br />al:0ffh<br /><br />mov ah, 0ffh<br />eax: 0000ff00h<br />ax: 0ff00h<br />ah: 0ffh<br />al: 00h<br /><br />same goes for all the other registers, just exchange the register letter... bx, bl, bh, cx, ch, cl, dx, dh, dl<br /><br />sorta see it now?</div>
+    <div class="meta">Posted on 2001-08-31 23:13:31 by Kenny</div>
+   </div>
+  </div>
+ </body>
+</html>

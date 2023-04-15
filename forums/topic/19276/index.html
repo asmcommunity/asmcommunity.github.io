@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>C to Asm translation problem... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19276" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=19276">C to Asm translation problem...</a></p>
+   <div class="post" id="post-148827">
+    <div class="subject"><a href="#post-148827">C to Asm translation problem...</a></div>
+    <div class="body">I'm about to translate this C-code into Asm.<br /><br />How can this be translated:<br /><br /><br />???== I don't know. <br /><br /><br />case WM_CREATE:<br />hdc = GetDC (hwnd);<br />GetTextMetrics (hdc, &amp;tm);<br />cxChar = tm.tmAveCharWidth;       ???<br /><br />is this the same as:<br />mov tm.tmAveCharWidth,cxChar<br />cxCaps = (tm.tmPitchAndFamily &amp; 1 ? 3 : 2) * cxChar / 2 ;       ???<br />cyChar = tm.tmHeight + tm.tmExternalLeading;          ???<br /><br />ReleaseDC (hwnd,hdc);<br />return 0;<br /><br /><br />case WM_PAINT:<br />hdc = BeginPaint (hwnd,hdc) ;<br />for (i = 0 ; i &lt; NUMLINES; i++)       ???</div>
+    <div class="meta">Posted on 2004-08-31 08:42:55 by The SharK</div>
+   </div>
+   <div class="post" id="post-148830">
+    <div class="subject"><a href="#post-148830">C to Asm translation problem...</a></div>
+    <div class="body">For first, its the other way around and you can't do memory to memory so try <br /><pre><code>mov eax,tm.tmAveCharWidth<br />mov cxChar,eax</code></pre><br /><br />And for third<br /><pre><code>mov eax,tm.tmHeight<br />add eax,tm.tmExternalLeading<br />mov cyChar,eax</code></pre><br /><br />For last<br /><pre><code>mov ecx,0<br />cmp ecx,NUMLINES<br />jle endLoop<br />startLoop&#58;<br /><br />	; this is the body of the loop where you can <br />	; do something, ecx is the &quot;i&quot; variable<br /><br />	add ecx,1	; increment and test ecx<br />	cmp ecx,NUMLINES<br />	jg startLoop<br />endLoop&#58;</code></pre></div>
+    <div class="meta">Posted on 2004-08-31 09:08:26 by Eóin</div>
+   </div>
+   <div class="post" id="post-148835">
+    <div class="subject"><a href="#post-148835">C to Asm translation problem...</a></div>
+    <div class="body">The second is messy, the first bit of it <br /><pre><code>&#40;tm.tmPitchAndFamily &amp; 1 ? 3 &#58; 2&#41;</code></pre><br />performs a check to see if tm.tmPitchAndFamily AND 1 is true or false (non zero or zero) if its ture the check returns 3, if false it returns 2. This can be coded with conditional jumps, conditional moves or some fancy binary operations. I'll give the easier to follow jumps version. Unfortunatly this is also the slower.<br /><pre><code>mov eax,tm.tmPitchAndFamily<br />and eax,1<br />jz falseResult<br /><br />trueResult&#58;<br />	mov eax,3<br />	jmp endCheck<br /><br />falseResult&#58;<br />	mov eax,2<br /><br />endCheck&#58;</code></pre><br />finally it performs some calculations with this result, thankfully its not too difficult<br /><pre><code>mov edx,cxChar	; edx = cxChar<br />shr edx,1	; edx divided by 2<br /><br />;assuming eax is still our result for previous bit<br />imul eax,edx	; eax = eax * edx<br />mov cxCaps,eax</code></pre><br /><br />I haven't tested this so ask if theres mistakes....</div>
+    <div class="meta">Posted on 2004-08-31 09:21:44 by Eóin</div>
+   </div>
+   <div class="post" id="post-148841">
+    <div class="subject"><a href="#post-148841">C to Asm translation problem...</a></div>
+    <div class="body"><pre><code>; Switch &#40;uMsg&#41;<br />    mov eax, uMsg<br />; case WM_XXX&#58;<br />    .if eax == WM_XXX<br />        &#58;   &#58;   &#58;<br />; case WM_YYY&#58;<br />    .elseif eax == WM_YYY<br />        &#58;   &#58;   &#58;<br />; case WM_CREATE&#58;<br />    .elseif eax == WM_CREATE<br /><br />    ; hdc = GetDC &#40;hwnd&#41;;<br />        invoke  GetDC, hwnd <br />        mov hdc, eax<br /><br />    ; GetTextMetrics &#40;hdc, &amp;tm&#41; , &amp; is address of value<br />        invoke  GetTextMetrics, hdc, addr tm<br /><br />    ; cxChar = tm.tmAveCharWidth; ???<br />        m2m cxChar, tm.tmAveCharWidth   ; 'm2m' in masm32 macro.asm<br /><br />    ; cxCaps = &#40;tm.tmPitchAndFamily &amp; 1 ? 3 &#58; 2&#41; <br />        mov eax, tm.tmPitchAndFamily<br />        and eax, 1  ;  Mask LSBit, maybe odd/even ?<br />        .if eax<br />            mov eax, 3  ; take 3, if LSBit=1 or odd<br />        .else<br />            mov eax, 2  ; take 2, if LSBit=0 or even<br />        .endif<br />        mov ebx, cxChar ;  * cxChar <br />        mul ebx         ; eax = eax * ebx<br />        shr eax, 1      ; / 2 ; ???<br />        mov cxCaps, eax<br /><br />    ; cyChar = tm.tmHeight + tm.tmExternalLeading; ???<br />        mov eax, tm.tmExternalLeading<br />        add eax, tm.tmHeight<br />        mov cyChar, eax<br /><br />    ; ReleaseDC &#40;hwnd,hdc&#41;;<br />        invoke  ReleaseDC, hwnd, hdc<br />        return 0                ; 'return' in masm32 macro.asm</code></pre><br />        <br />P.S: MASM(.if/.elseif) like C(Switch/Case), but not same! <br /><br />routine running in a (case) , when it run to end, will be continue to next Case compare. but (.elseif) not ..<br /><br />Ex: <pre><code>;    case    1<br />;    case    2<br />;    case    3<br />;        do  something<br />;       .break  ; not continue to case 4<br />;<br />;    case    4<br /><br />    .elseif eax==1 || eax==2 || eax==3<br />        do something<br /><br />    .elseif eax==4</code></pre>Can you guess my mean?<br /><br /><pre><code>; hdc = BeginPaint &#40;hwnd,hdc&#41; ;<br />    invoke  BeginPaint, hwnd, hdc<br />    mov hdc, eax<br /><br />; for &#40;i = 0 ; i &lt; NUMLINES; i++&#41; ???<br />;    BASIC, for i = 0 to NUMLINES-1 step 1<br />    mov i, 0<br />;---        --------------<br />_nx&#58;<br /><br />    ???<br /><br />    inc i               ; i++ is i=i+1<br />    .if i &lt; NUMLINES<br />        jmp _nx<br />    .endif<br />;---        --------------</code></pre></div>
+    <div class="meta">Posted on 2004-08-31 10:21:26 by Kestrel</div>
+   </div>
+   <div class="post" id="post-148866">
+    <div class="subject"><a href="#post-148866">C to Asm translation problem...</a></div>
+    <div class="body">The SharK,<br /><br />you can use the -S (or -Fa) switch of your c compiler to get a assembler output :wink: <br /><br />ancev</div>
+    <div class="meta">Posted on 2004-08-31 19:05:12 by ancev</div>
+   </div>
+   <div class="post" id="post-148904">
+    <div class="subject"><a href="#post-148904">C to Asm translation problem...</a></div>
+    <div class="body">&quot;cl /Od /FAs file.c&quot; or &quot;cl /o1 /FAs file.c&quot; are good methods to get asm listing from C code when you're in a hurry :) - if you use max optimizations (/Ox, or a longer hand-crafted list of options), the code isn't as easy to follow though..</div>
+    <div class="meta">Posted on 2004-09-01 05:07:02 by f0dder</div>
+   </div>
+   <div class="post" id="post-148941">
+    <div class="subject"><a href="#post-148941">C to Asm translation problem...</a></div>
+    <div class="body">guess I have to install VS 6.0  :)</div>
+    <div class="meta">Posted on 2004-09-01 11:41:07 by The SharK</div>
+   </div>
+   <div class="post" id="post-148943">
+    <div class="subject"><a href="#post-148943">C to Asm translation problem...</a></div>
+    <div class="body">Or VS2003 toolkit which is 100% free and pretty neat.</div>
+    <div class="meta">Posted on 2004-09-01 11:52:59 by f0dder</div>
+   </div>
+   <div class="post" id="post-148982">
+    <div class="subject"><a href="#post-148982">C to Asm translation problem...</a></div>
+    <div class="body"><div class="quote">The second is messy, the first bit of it <br /><pre><code>&#40;tm.tmPitchAndFamily &amp; 1 ? 3 &#58; 2&#41;</code></pre><br />performs a check to see if tm.tmPitchAndFamily AND 1 is true or false (non zero or zero) if its ture the check returns 3, if false it returns 2. This can be coded with conditional jumps, conditional moves or some fancy binary operations. I'll give the easier to follow jumps version. Unfortunatly this is also the slower.<br /><pre><code>mov eax,tm.tmPitchAndFamily<br />and eax,1<br />jz falseResult<br /><br />trueResult&#58;<br />	mov eax,3<br />	jmp endCheck<br /><br />falseResult&#58;<br />	mov eax,2<br /><br />endCheck&#58;</code></pre><br /></div><br />In this particular case you can do this:<br /><pre><code><br />; if 0001 then 0011<br />; if 0000 then 0010<br />; in both cases bit 0010 gets set<br /><br />mov eax,tm.tmPitchAndFamily<br />and eax,1<br />or eax,2<br /></code></pre></div>
+    <div class="meta">Posted on 2004-09-02 01:51:27 by Morris</div>
+   </div>
+  </div>
+ </body>
+</html>

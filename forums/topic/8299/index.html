@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Dll loading - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8299" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8299">Dll loading</a></p>
+   <div class="post" id="post-60667">
+    <div class="subject"><a href="#post-60667">Dll loading</a></div>
+    <div class="body">I have been reading about memory managment in win32,<br />When we have one dll that is used by two different<br />programs, and if that dll is not loaded at same linear<br />(virtual) memory base in both processes then dll is <br />physicly loaded two different physical memory bases (RAM)<br />thus we have 2 copies of dll instead of having one.<br /><br />I dont understand why is this the problem for windows,<br />why win32 cant just load that dll in RAM and by paging<br />put reference to that physical memory in 2 different linear<br />memory addreses in different processes????<br /><br />for example: we have processes A and B and they use same dll<br />but in process B prefered address for dll is already commited<br />so dll must be loaded at some other address<br />now<br />process A loads dll at X linear address<br />process B loads dll at Y linear address<br /><br />so in RAM dll is loaded at say 10000 and 20000<br />now why cant windows assign RAM address 10000 to X in process A<br />and in the same time to Y in process B<br />i mean what the problem? win only needs to change memory context of two processes..</div>
+    <div class="meta">Posted on 2002-10-05 16:06:47 by Mikky</div>
+   </div>
+   <div class="post" id="post-60685">
+    <div class="subject"><a href="#post-60685">Dll loading</a></div>
+    <div class="body">Wouldn't that mean that both processes uses the same variables (and functions) in the dll, eg process A alters an variable in the dll, then Process B reads the variable. Or process A calls an function, and mean while process B calls the same function at the (same address); that could open a whole new world of possible errors/exceptions/etc. :rolleyes:<br /> Example 1 could be an problem <em>or</em> that could be something that's wanted ( ((in)directly) sharing data between processes).</div>
+    <div class="meta">Posted on 2002-10-05 18:13:23 by scientica</div>
+   </div>
+   <div class="post" id="post-60707">
+    <div class="subject"><a href="#post-60707">Dll loading</a></div>
+    <div class="body">The problem is that the dll in process B should be relocated.<br />That means that every peace of code that directly references memory should be changed to point at new memory address.<br />Let's see:<br /><pre><code>.text&#58;10001027 FF 75 08              push    &#91;ebp+uType&#93;            ; uType<br />.text&#58;1000102A 68 &#91;b&#93;00 30 00 10&#91;/b&#93;        push    offset aTestFunction   ; lpCaption<br />.text&#58;1000102F 68 &#91;b&#93;0E 30 00 10&#91;/b&#93;        push    offset aThisIsDll      ; lpText<br />.text&#58;10001034 6A 00                 push    0                      ; hWnd<br />.text&#58;10001036 E8 05 00 00 00        call    MessageBoxA</code></pre><br /><br /><pre><code>.reloc&#58;10004000 00 10 00 00         dd 1000h            ; Page RVA<br />. . . . .<br />.reloc&#58;1000400C 2B 30               dw 302Bh            ; Type of reloc = 3, Offset = 2Bh<br />.reloc&#58;1000400E 30 30               dw 3030h            ; Type of reloc = 3, Offset = 30h</code></pre><br /><br />Instructions at 1000102A and 1000102F reference memory directly:<br /><pre><code>push offset 10003000h<br />push offset 1000300Eh</code></pre><br />But it's valid only for ImageBase = 10000000h<br />If dll is loaded at different address, say 20000000h, the loader needs to look into .reloc section,<br />and find which addresses should be patched. You can see that we need to patch (bold highlited above):<br /><br />Page RVA + Offset + ImageBase (see PE-format description for details)<br /><br />1000h + 2Bh + ImageBase = <strong>1000102Bh</strong><br />1000h + 30h + ImageBase = <strong>10001030h</strong><br /><br />We should add offset = NewImageBase - PrefferedImageBase = 20000000h - 10000000h = 10000000h<br />And after relocating the code looks like this:<br /><pre><code>.text&#58;20001027 FF 75 08              push    &#91;ebp+uType&#93;            ; uType<br />.text&#58;2000102A 68 &#91;b&#93;00 30 00 20&#91;/b&#93;        push    offset aTestFunction   ; lpCaption<br />.text&#58;2000102F 68 &#91;b&#93;0E 30 00 20&#91;/b&#93;        push    offset aThisIsDll      ; lpText<br />.text&#58;20001034 6A 00                 push    0                      ; hWnd<br />.text&#58;20001036 E8 05 00 00 00        call    MessageBoxA</code></pre><br />And our two instructions at 2000102A and 2000102F reference now right memory addresses:<br /><pre><code>push offset 20003000h<br />push offset 2000300Eh</code></pre><br />Since the code was patched in second dll but remains the same in first one,<br />it's not possible to load it at the same physical memory.<br /><br />Hope it's clear now.</div>
+    <div class="meta">Posted on 2002-10-06 07:06:17 by Four-F</div>
+   </div>
+   <div class="post" id="post-60744">
+    <div class="subject"><a href="#post-60744">Dll loading</a></div>
+    <div class="body">woah.. great response 4-F<br />it really clears some things up although its still little foggy, i guess i will have to read it tomorow few more times again to get it completly<br /><br />on the other hand, logicaly i still think that this could be doned without duplicating dll in physical memory... loader relocates memory locations in virtual memory so its not soupose to affect physical memory right?... in the other words windows low level drivers will physicly load dll then windows will say to pe loader <br />to relocate variables in in process B and after that is doned loader should put references of that relocated variables to points in the same variables as process A...... thus we dont need duplicating<br /><br />like this<br /><div class="quote"><br /><br />virtual mem    |  physical mem<br />-----------------+-------------------<br />A                    |<br />+----------------+-&gt; DLL variable<br />B (after reloc) |<br /></div><br /><br />or blah... sorry if i am talking nonsences maybe i have not readed all needed stuff to completly understand all this, but i wroted this by logic thinking</div>
+    <div class="meta">Posted on 2002-10-06 16:49:31 by Mikky</div>
+   </div>
+   <div class="post" id="post-60787">
+    <div class="subject"><a href="#post-60787">Dll loading</a></div>
+    <div class="body"><div class="quote"><em>loader relocates memory locations in virtual memory so its not soupose to affect physical memory right?...</em></div>Wrong.<br /><div class="quote"><em>in the other words windows low level drivers will physicly load dll then windows will say to pe loader to relocate variables in in process B and after that is doned loader should put references of that relocated variables to points in the same variables as process A...... thus we dont need duplicating</em></div>It's nonsense. Every dll has to have it's own data section. If data section is relocated (placed at different virtual address), all references to it should be changed and it causes patching code section. If dll's code cection is patched in second process but not patched in first one you have two different sections and you can't share it.<br /><strong>Mikky</strong>, please read my post above carefully once more. Then make simple prototype and look inside it under debugger.</div>
+    <div class="meta">Posted on 2002-10-07 04:05:12 by Four-F</div>
+   </div>
+  </div>
+ </body>
+</html>

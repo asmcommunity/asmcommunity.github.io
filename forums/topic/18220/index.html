@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>FFT problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18220" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=18220">FFT problem</a></p>
+   <div class="post" id="post-140925">
+    <div class="subject"><a href="#post-140925">FFT problem</a></div>
+    <div class="body">I wrote my own version of the FFT algorithm, based on the &quot;<em>Numerical Receipes in C</em>&quot; book, and on <strong>NaN</strong>'s assembly implementation. In my application I separated the Real and Imaginary parts of the complex numbers, because I thought it would be much clear, much organized. Also I could make two simultaneous real FFT-s this way.<br /><br />The surprise came when I tested my FFT for 4 million values: it is <em><strong>extremely slow</strong></em>. It is approximately 2.7 times slower on my P4 2GHz than the C implementation in the book when the Real and Imaginary parts are NOT separated.<br />I optimized the calculation, I use only 3 local variable, etc. Does the separation of the vectors counts so much? I think the many cache misses due to the non-consecutive memory accesses slows down my algorithm. I did not thought the memory accesses can harm so much the algorithm.<br /><br />How can the memory acceses be optimized in this case, when the Real and Imaginary parts are separated? Or what are your suggestions?<br />Thanks for your help and patience in advance.<br /><br />Here is my implementation:<br /><pre><code><br />fpuFFT proc Real&#58;DoubleVector, Imag&#58;DoubleVector, N&#58;DWORD<br />    LOCAL mmax&#58;DWORD<br />    LOCAL wpr, wpi&#58;REAL8<br /><br />    pusha				; Save all the registers<br /><br />    ; Bit Reversal section<br />    mov		esi, &#91;Real&#93;		; Array with the Real parts<br />    mov		edi, &#91;Imag&#93;		; Array with the Imaginary parts<br />    xor		eax, eax		; i = 0<br />    xor		ebx, ebx		; j = 0<br />    mov		ecx, &#91;N&#93;<br />    sub		ecx, 1			; N - 1<br />@1&#58; cmp		eax, ebx		; i &lt; j ?<br />    jae		@F			; Jump if False<br />    fld		REAL8 ptr &#91;esi+eax*8&#93;	; Swap&#40;Real&#91;i&#93;, Real&#91;j&#93;&#41;<br />    fld		REAL8 ptr &#91;esi+ebx*8&#93;<br />    fstp	REAL8 ptr &#91;esi+eax*8&#93;<br />    fstp	REAL8 ptr &#91;esi+ebx*8&#93;<br />    fld		REAL8 ptr &#91;edi+eax*8&#93;	; Swap&#40;Imag&#91;i&#93;, Imag&#91;j&#93;&#41;<br />    fld		REAL8 ptr &#91;edi+ebx*8&#93;<br />    fstp	REAL8 ptr &#91;edi+eax*8&#93;<br />    fstp	REAL8 ptr &#91;edi+ebx*8&#93;<br />@@&#58; mov		edx, &#91;N&#93;<br />    shr		edx, 1			; m = N / 2<br />@2&#58; jz		@F			; Jump if False<br />    cmp		ebx, edx			; j &gt;= m ?<br />    jb		@F			; Jump if False<br />    sub		ebx, edx			; j -= m<br />    shr		edx,1			; m &gt;&gt;= 1<br />    jmp		@2			; Next m<br />@@&#58; add		ebx, edx			; j += m<br />    add		eax, 1			; i++<br />    sub		ecx, 1			; Decrement counter<br />    jnz		@1			; Next i<br />	<br />    ; Danielson-Lanczos section<br />    fldz				; wr<br />    xor		ecx, ecx<br />    fldz				; wi<br />    inc		ecx			; mmax = 1<br />@3&#58; cmp		&#91;N&#93;, ecx		; N &gt; mmax ?<br />    jbe		@6			; Jump if False<br />    fcompp				; Free wr and wi<br />    fld1				; wr = 1.0<br />    fldz				; wi = 0.0<br />    mov		&#91;mmax&#93;, ecx<br />    fldpi<br />    fidiv	DWORD ptr &#91;mmax&#93;		; theta = pi / mmax<br />    shl		ecx, 1			; istep<br />    fmul	&#91;Half&#93;			; 0.5 * theta<br />    fsincos				; sin&#40;0.5 * theta&#41;, cos&#40;0.5 * theta&#41;<br />    fmul	st, st&#40;1&#41;<br />    fadd	st, st			; sin&#40;theta&#41;<br />    fstp	&#91;wpi&#93;<br />    fmul	st, st			; wtemp * wtemp<br />    fadd	st, st			; 2 * wtemp * wtemp<br />    fchs				; -2 * wtemp * wtemp<br />    xor		edx, edx		; m = 0<br />    fstp	&#91;wpr&#93;<br />@4&#58; cmp		edx, &#91;mmax&#93;		; m &lt; mmax ?<br />    jae		@3<br />    mov		eax, edx		; i = m<br />@5&#58; cmp		eax, &#91;N&#93;		; i &lt; N ?<br />    jae		@F			; Jump if False<br />    mov		ebx, eax<br />    add		ebx, &#91;mmax&#93;		; j = i + mmax<br />    fld		REAL8 ptr &#91;esi+ebx*8&#93;	; Real&#91;j&#93;<br />    fld		REAL8 ptr &#91;edi+ebx*8&#93;	; Imag&#91;j&#93;<br />    fld		st&#40;2&#41;			; wi<br />    fmul	st, st&#40;1&#41;		; wi * Imag&#91;j&#93;<br />    fld		st&#40;4&#41;			; wr<br />    fmul	st, st&#40;3&#41;		; wr * Real&#91;j&#93;<br />    fsubrp	st&#40;1&#41;, st		; tempr<br />    fld		st&#40;3&#41;			; wi<br />    fmul	st, st&#40;3&#41;		; wi * Real&#91;j&#93;<br />    fld		st&#40;5&#41;			; wr<br />    fmul	st, st&#40;3&#41;		; wr * Imag&#91;j&#93;<br />    faddp	st&#40;1&#41;, st		; tempi<br />    fld		REAL8 ptr &#91;edi+eax*8&#93;	; Imag&#91;i&#93;<br />    fld		st<br />    fadd	st, st&#40;2&#41;		; Imag&#91;i&#93; + tempi<br />    fstp	REAL8 ptr &#91;edi+eax*8&#93;	; New Imag&#91;i&#93;<br />    fsubrp	st&#40;1&#41;, st		; Imag&#91;i&#93; - tempi<br />    fstp	REAL8 ptr &#91;edi+ebx*8&#93;	; new Imag&#91;j&#93;<br />    fld		REAL8 ptr &#91;esi+eax*8&#93;	; Real&#91;i&#93;<br />    fld		st<br />    fadd	st, st&#40;2&#41;		; Real&#91;i&#93; + tempr<br />    fstp	REAL8 ptr &#91;esi+eax*8&#93;	; New Real&#91;i&#93;<br />    fsubrp	st&#40;1&#41;, st		; Real&#91;i&#93; - tempr<br />    fstp	REAL8 ptr &#91;esi+ebx*8&#93;	; New Real&#91;j&#93;<br />    add		eax, ecx		; i += istep<br />    fcompp				; Free Real&#91;j&#93; and Imag&#91;j&#93;<br />    jmp		@5<br />@@&#58; fld		st			; wi<br />    fmul	&#91;wpi&#93;			; wi * wpi<br />    fld		st&#40;2&#41;			; wr<br />    fmul	&#91;wpr&#93;			; wr * wpr<br />    fsubrp	st&#40;1&#41;, st<br />    fld		st&#40;2&#41;			; wr<br />    fmul	&#91;wpi&#93;			; wr * wpi<br />    fld		st&#40;2&#41;			; wi<br />    fmul	&#91;wpr&#93;			; wi * wpr<br />    faddp	st&#40;1&#41;, st<br />    faddp	st&#40;2&#41;, st		; New wi<br />    inc		edx			; m++<br />    faddp	st&#40;2&#41;, st		; New wr<br />    jmp		@4<br />@6&#58; fcompp				; Free wr and wi<br /><br />    popa				; Load all registers<br />    ret<br /><br />fpuFFT endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-05-12 09:41:01 by bszente</div>
+   </div>
+   <div class="post" id="post-140928">
+    <div class="subject"><a href="#post-140928">FFT problem</a></div>
+    <div class="body">Couple things come to mind right away:<br /><br />Does the C version use REAL8's?<br /><br />Can you do the calculations without actually physically swapping values?<br /><br />Maybe wpr, wpi can be kept on the FPU stack?</div>
+    <div class="meta">Posted on 2004-05-12 10:18:48 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-140969">
+    <div class="subject"><a href="#post-140969">FFT problem</a></div>
+    <div class="body">Thanks bitRAKE for your interest.<br /><br />Yes the C version use double precision. And the bit reversal section is necessary. But not the swapping part is the critical, the FFT itself. And keeping the wpr and wpi on the stack is not critical either. I made a disassembly of the C code, and the C code uses 10-12 local variables. So my version is much more optimized from this point of view.<br /><br />The inner loop of FFT is critical, because the indices are modifying with big steps. In consequence the elements will be almost always out of the cache, and this slows down the memory acces.</div>
+    <div class="meta">Posted on 2004-05-12 15:35:03 by bszente</div>
+   </div>
+   <div class="post" id="post-140985">
+    <div class="subject"><a href="#post-140985">FFT problem</a></div>
+    <div class="body">Forgive my ignorance of FFT's.  Are the stored values read again within the loop?  If not, much speed can be gained.<br /><br />Speaking of the P4, non-temporal stores would bypass the cache, but you would have to use SSE2 and it might be slower if the values are needed again without sufficient delay.</div>
+    <div class="meta">Posted on 2004-05-12 17:21:25 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-141037">
+    <div class="subject"><a href="#post-141037">FFT problem</a></div>
+    <div class="body">Hi bszente,<br /><br />You could use a table of sins &amp; cosines instead of computing them during the function (fsincos is costy!).</div>
+    <div class="meta">Posted on 2004-05-13 10:55:55 by John Kiro</div>
+   </div>
+   <div class="post" id="post-141147">
+    <div class="subject"><a href="#post-141147">FFT problem</a></div>
+    <div class="body">Oops.. I thought that the fsincos is used in a heavy loop, then I realized that the twiddles are computed reccursively (iterative approximation?).. Anyway, storing twiddles in a table could improve performance, but of course this isn't the reason that the C version is faster  :confused:<br /><br />A little thing you can do is to give FPU computation some time before FSTP (FXCH may help organize computation).<br /><br />A rough test for your function on my Celeron 766Hz showed that it takes about 50,000 clocks for N=256. Can you post your test results too?</div>
+    <div class="meta">Posted on 2004-05-14 14:09:40 by John Kiro</div>
+   </div>
+   <div class="post" id="post-141152">
+    <div class="subject"><a href="#post-141152">FFT problem</a></div>
+    <div class="body"><div class="quote"><br />Oops.. I thought that the fsincos is used in a heavy loop, then I realized that the twiddles are computed reccursively (iterative approximation?).. Anyway, storing twiddles in a table could improve performance, but of course this isn't the reason that the C version is faster  :confused:<br /><br />A little thing you can do is to give FPU computation some time before FSTP (FXCH may help organize computation).<br /><br />A rough test for your function on my Celeron 766Hz showed that it takes about 50,000 clocks for N=256. Can you post your test results too? </div><br />You might want to take Kiro's advice, the P4 isnt good with FPU instructions.</div>
+    <div class="meta">Posted on 2004-05-14 15:16:50 by x86asm</div>
+   </div>
+   <div class="post" id="post-141282">
+    <div class="subject"><a href="#post-141282">My results</a></div>
+    <div class="body">Hi, all of you.<br /><br />I am glad, for your interest in this topic. I couldn't answer quickly, because I was out of the town.<br /><br />My results for N=256 are around 65,000 clocks, it's pretty weird. This proves that unoptimized code on P4 gives worse results.<br />If I put the <strong><em>FXCH ST</em></strong> before the <em>FST</em> instruction in the inner loop, the number of cycles decrease to ~60,000. Definitely I should rearrange and rethink the implementation.<br /><br />Another solution would be to write it using the SSE instructions as bitRAKE said, especially because it has also some cache management version of the instructions.</div>
+    <div class="meta">Posted on 2004-05-17 05:39:33 by bszente</div>
+   </div>
+   <div class="post" id="post-141290">
+    <div class="subject"><a href="#post-141290">FFT problem</a></div>
+    <div class="body"><strong>bszente</strong>, it may not be fast, but I think I might finally understand what is happening in an FFT algorithm thanks to your easy to read code. :)</div>
+    <div class="meta">Posted on 2004-05-17 09:16:34 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-141305">
+    <div class="subject"><a href="#post-141305">FFT problem</a></div>
+    <div class="body">This site has some text about in-place vs. out-of-place FFT - the author claims his FFT method is a lot faster than in-place FFT'ing. Dunno if it's of any help, but here goes:<br /><a target="_blank" href="http://www.gamedev.net/reference/articles/article1349.asp">http://www.gamedev.net/reference/articles/article1349.asp</a></div>
+    <div class="meta">Posted on 2004-05-17 12:05:02 by f0dder</div>
+   </div>
+   <div class="post" id="post-141308">
+    <div class="subject"><a href="#post-141308">FFT problem</a></div>
+    <div class="body">I have been involved in FFT for a while.  Mostly as related to doing large number multiplication.  For people into FFT the version in Numerical C is well known as one of the slowest implementations.  It is easy to learn from though.  I got into it because I like to calculate PI to large numbers of digits.  <a target="_blank" href="http://pages.istar.ca/~lyster/chart.html">http://pages.istar.ca/~lyster/chart.html</a>  There is good discussion on an associated Yahoo forum about PI calculation which has a LOT of information on writing fast FFT.  They joke about the slower Numerical Recipes version.  <br /><br /><a target="_blank" href="http://groups.yahoo.com/group/pi-hacks/">http://groups.yahoo.com/group/pi-hacks/</a></div>
+    <div class="meta">Posted on 2004-05-17 12:48:14 by mark_larson</div>
+   </div>
+   <div class="post" id="post-141348">
+    <div class="subject"><a href="#post-141348">FFT problem</a></div>
+    <div class="body">I am extraordinaly glad to see you interested in this topic.<br /><br /><strong>bitRAKE</strong>, I'm appy to heart that my implementation is not so useless after all :) <br /><br />Thanks <strong>f0dder</strong> and <strong>Mark Larson</strong> for your helpful links, the pages contain exactly what I needed. I'm working on an image processing project, that's why I need very-very fast 2 dimensional FFT. And I also consider that the x86 based PCs are strong enough to make such calculations, if they are properly programmed.<br /><br />Thanks again.</div>
+    <div class="meta">Posted on 2004-05-18 07:13:03 by bszente</div>
+   </div>
+   <div class="post" id="post-141355">
+    <div class="subject"><a href="#post-141355">FFT problem</a></div>
+    <div class="body"><div class="quote"><br />I am extraordinaly glad to see you interested in this topic.<br /><br /><strong>bitRAKE</strong>, I'm appy to heart that my implementation is not so useless after all :) <br /><br />Thanks <strong>f0dder</strong> and <strong>Mark Larson</strong> for your helpful links, the pages contain exactly what I needed. I'm working on an image processing project, that's why I need very-very fast 2 dimensional FFT. And I also consider that the x86 based PCs are strong enough to make such calculations, if they are properly programmed.<br /><br />Thanks again. </div><br /><br />  There is one other place I forgot to mention.  They have been around for years, and have freely downloadable source.  It is called FFTW.  They tend to be near the front of the pack as far as speed goes.<br /><br /><br /><a target="_blank" href="www.fftw.org">www.fftw.org</a></div>
+    <div class="meta">Posted on 2004-05-18 09:21:12 by mark_larson</div>
+   </div>
+   <div class="post" id="post-142149">
+    <div class="subject"><a href="#post-142149">FFT problem</a></div>
+    <div class="body">I recommend to have a look into George Woltmans Prime95 code (<a target="_blank" href="http://www.mersenne.org/gimps/source23.zip">http://www.mersenne.org/gimps/source23.zip</a>). In the files called x***.mac are a lot of macro's for SSE2 - it's so far the fastest FFT for P3/K7/K8 and P4. FFTW reaches about 50% of that speed.<br /><br />The reason are not faster butterfly computations, but the used memory layout and caching strategies. And the programmer has to take care of TLBs. Just imagine: You have data from different memory locations in the cache (as it often happens with FFTs) - but you can't access them at the known cache latencies (e.g. 3 for K8 L1 cache) because there are not enough L1 TLB entries. It's difficult to circumvent this. An easier way is to use huge TLBs (available in newer linux kernels and Win 2003 Server). According to a scientific paper, FFTW got a speedup of 48% using huge TLBs.</div>
+    <div class="meta">Posted on 2004-05-26 02:39:29 by Dresdenboy</div>
+   </div>
+  </div>
+ </body>
+</html>

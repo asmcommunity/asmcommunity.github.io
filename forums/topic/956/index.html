@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>fastcall... bitrake, help :) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=956" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=956">fastcall... bitrake, help :)</a></p>
+   <div class="post" id="post-6191">
+    <div class="subject"><a href="#post-6191">fastcall... bitrake, help :)</a></div>
+    <div class="body">I'm about to start some NT kernel mode driver development, and<br />realized that most of the API is done through fastcall. And it doesn't<br />seem like masm natively supports FASTCALL in proc/proto :(.<br />So, it would seem like an ideal time to write a FASTCALL macro...<br />As far as I know, the first three parms are to be passed in EAX,ECX,EDX,<br />and the following pushed to the stack. Or perhaps it's only ECX and EDX<br />that are used... vmm.inc seems to have some code to do this, but<br />it's *very* confusing :/. Some nasm macros I found at mammons<br />site (I think) seem to use EAX,EDX,EBX. Time to write a little C app<br />that uses fastcall and disassemble it, I think ;).<br /><br />Ok. Here's how visual studio does it. First parameter is in ecx, next<br />in edx, and ther rest are pushed last-to-first on the stack. Cleanup<br />is done by the procedure, not the caller.</div>
+    <div class="meta">Posted on 2001-09-04 19:59:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-6194">
+    <div class="subject"><a href="#post-6194">fastcall... bitrake, help :)</a></div>
+    <div class="body">By the way, it's probably a bad idea to generate PROTOs for fastcall<br />functions. As I see it, the best would be to do something like the<br />following:<br /><br /><pre><code><br />IofCompleteRequest TEXTEQU &lt;@IofCompleteRequest@8&gt;<br />IofCompleteRequest EXTERN&#58;DWORD<br /></code></pre><br /><br />... or something similear. Any ideas? I'm currently working on a &quot;protoizer&quot;<br />that generates include files with PROTOs from vc-style import libraries.<br />It currently works pretty well for normal includes, and makes it<br />easy to use both unicode and ansi, and switch defaults, and all<br />sorts of good stuff :]. Now I just need to find a reasonable way to<br />handle them darn FASTCALLs.</div>
+    <div class="meta">Posted on 2001-09-04 20:15:21 by f0dder</div>
+   </div>
+   <div class="post" id="post-6211">
+    <div class="subject"><a href="#post-6211">fastcall... bitrake, help :)</a></div>
+    <div class="body">There, figured out how to set up the externdef and nice alias.<br />Now all I need is the FASTCALL macro :D. In case anybody are<br />interested, I've attached the protoize executable and source code.<br />It's pretty ugly, but does a good job.<br /><br /><pre><code><br />EXTERNDEF SYSCALL @IofCompleteRequest@8&#58;PROC<br />IofCompleteRequest TEXTEQU &lt;@IofCompleteRequest@8&gt;<br /></code></pre></div>
+    <div class="meta">Posted on 2001-09-04 22:14:55 by f0dder</div>
+   </div>
+   <div class="post" id="post-6303">
+    <div class="subject"><a href="#post-6303">fastcall... bitrake, help :)</a></div>
+    <div class="body">I'll certainly take a look....<pre><code>;* @ArgRev - Macro function returns a reversed order version of a<br />;* VARARG list.<br />;*<br />;* Params&#58;  arglist - arguments to be reversed<br />@ArgRev MACRO arglist&#58;VARARG<br />	LOCAL txt,arg<br />	txt TEXTEQU &lt;&gt;<br />%	FOR arg,arglist<br />		txt CATSTR &lt;arg&gt;, &lt;!,&gt;, txt<br />	ENDM<br /><br />	txt SUBSTR  txt, 1, @SizeStr&#40; %txt &#41; - 1<br />	txt CATSTR  &lt;!&lt;&gt;, txt, &lt;!&gt;&gt;<br />	EXITM txt<br />ENDM<br /><br />FASTCALL MACRO func&#58;REQ, pp1, pp2, pp3s&#58;VARARG<br />	LOCAL rpp3s<br />	IFNB &lt;pp1&gt;<br />		mov ecx,pp1<br />		IFNB &lt;pp2&gt;<br />			mov edx,pp2<br />			IFNB &lt;pp3s&gt;<br />				rpp3s TEXTEQU @ArgRev&#40;&amp;pp3s&#41;<br />				FOR pp3,&lt;rpp3s&gt;<br />					push pp3<br />				ENDM<br />			ENDIF<br />		ENDIF<br />	ENDIF<br />	call func<br />ENDM</code></pre>I haven't tested this, but it should just about get you all the way there?</div>
+    <div class="meta">Posted on 2001-09-05 19:03:07 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-6385">
+    <div class="subject"><a href="#post-6385">fastcall... bitrake, help :)</a></div>
+    <div class="body">Fastcall looks superior to stdcall, so why doesn't windows use it more often? I mean it saves at least 2 clock cycles (1 for the two pushes and 1 for the two pops)</div>
+    <div class="meta">Posted on 2001-09-06 17:15:32 by Kenny</div>
+   </div>
+   <div class="post" id="post-6389">
+    <div class="subject"><a href="#post-6389">fastcall... bitrake, help :)</a></div>
+    <div class="body">1) windows API needs to be available to multiple languages. Fastcall<br />might not be easy to implement in all languages.<br /><br />2) it's not always beneficial. In most APIs, saving a couple of clocks<br />doesn't matter at all. But fiddling registers around in your own code<br />could turn up annoying... imagine a loop where you need to call an<br />API, you suddenly have two registers you need to preserve if you<br />want to use them in the loop.<br /><br />So, fastcall is best used for stuff where a couple of cycles actually matter.<br />For instance, small functions in kernel-space. Functions that are<br />called often.</div>
+    <div class="meta">Posted on 2001-09-06 17:31:26 by f0dder</div>
+   </div>
+   <div class="post" id="post-6398">
+    <div class="subject"><a href="#post-6398">fastcall... bitrake, help :)</a></div>
+    <div class="body">oh... didn't think of that...<br /><br />hmmm</div>
+    <div class="meta">Posted on 2001-09-06 18:42:54 by Kenny</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>int 25 in win32 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3773" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3773">int 25 in win32</a></p>
+   <div class="post" id="post-25388">
+    <div class="subject"><a href="#post-25388">int 25 in win32</a></div>
+    <div class="body">ok, so i did some poking around, and i think i found a way to use int 25 for raw disk reads in win32, but it seems to not be working.. i have the following code:<br /><pre><code><br />xor ecx,ecx ;clear ecx for the counter<br />mov Regs.reg_EAX,0 ;drive number&#58; a = 0<br />mov Regs.reg_ECX,1 ;number of sectors to read<br />.repeat<br />  mov Regs.reg_EDX,ecx ;sector number to read, 0 to 2879<br />  mov Regs.reg_EBX,offset dBuff ;pointer to buffer for value read<br />  invoke DeviceIoControl,hMem,VWIN32_DIOC_DOS_INT25,addr Regs,sizeof Regs,addr Regs,sizeof Regs,addr dBytesRead,NULL ;call int 25 with the pseudo registers to fill the buffer<br />  mov eax,Regs.reg_Flags ;move the returned flags to eax<br />  cmp eax,247h ;check for carry flag<br />  jnz error ;if there's a carry, send an error<br />  invoke WriteFile,hImage,addr dBuff,512,addr dBytesWrite,NULL ;write the 512 bytes read by int 25 to the file<br />  inc ecx ;increment ecx, the counter<br />.until ecx == 2880 ;loop until the end of the floppy<br /></code></pre><br />dBuff is defined as dd 512 dup(?)<br />Regs is a DIOCREGS type<br />dBytesRead and dBytesWrite are both defined as dd 0<br />hImage is the handle to a file that was opened previously with CreateFile<br />hMem is a handle to VWIN32, also opened previously by CreateFile<br /><br />when this code is run, it appears to access the floppy (ie: the light turns on) but does not seem to read the data from it. instead the hImage file is continuously filled until i forcefully break the loop (ctrl-c in dos prompt). i ran it once and got a 1.7 gb output before i caught on. does anyone have any idea what's happening?? thanks in advance for any help.</div>
+    <div class="meta">Posted on 2002-02-21 20:31:35 by mc`</div>
+   </div>
+   <div class="post" id="post-25389">
+    <div class="subject"><a href="#post-25389">int 25 in win32</a></div>
+    <div class="body">Assuming everything else is correct, my only thought is ECX may be getting clobbered by DeviceIoControl or WriteFile. Try PUSHing ECX before the first INVOKE, and POP it after the second. Or check it out in a debugger. :)</div>
+    <div class="meta">Posted on 2002-02-21 20:45:18 by S/390</div>
+   </div>
+   <div class="post" id="post-25421">
+    <div class="subject"><a href="#post-25421">int 25 in win32</a></div>
+    <div class="body">mc can I ask u question, what OS r u using...? cause I know win95 have lots of problems accessing interrupt, some of them was fixed in win95sr2, but some of them still even in ME. You can read about them in MSDN...<br /><br />I found same problem when i was trying read disk sectors accesing windows interrupts through the DeviceIOControl calling VWIN32.vxd ... :(<br /><br />What MS gives as solution for they announced bug, is to write 32bit dll which will call 16bit dll from which you will call your interrupts... Another words fucking mission.<br /><br />Luckely winNT/2000 is much safe and with less problems system for those type of operations.<br /><br />Anyways, all the luck... u will need :)</div>
+    <div class="meta">Posted on 2002-02-22 04:45:49 by notee1</div>
+   </div>
+   <div class="post" id="post-25430">
+    <div class="subject"><a href="#post-25430">int 25 in win32</a></div>
+    <div class="body">For Windows 95/98/ME I have done that at:<br /><a target="_blank" href="http://www.geocities.com/freehafer/pj.html">http://www.geocities.com/freehafer/pj.html</a><br />and click<br />Read floppy disk A sectors with interrupt 25h. <br /><br />For Windows 2000 this is close to what you would use at:<br /><a target="_blank" href="http://freehafer.tripod.com/pf.html">http://freehafer.tripod.com/pf.html</a><br />click<br />Assembly program reads master boot sector in XP/2000/95/98/ME. <br /><br />I know my code is not pretty.</div>
+    <div class="meta">Posted on 2002-02-22 06:38:17 by roaknog</div>
+   </div>
+   <div class="post" id="post-25435">
+    <div class="subject"><a href="#post-25435">int 25 in win32</a></div>
+    <div class="body">S/390: yeah, i just now realized that, i'll be sure to check it, thanks.<br /><br />notee1: the code has been tested on 95sr2, 98, and 98se and produces the same problem on each. i saw the thing about the 16 bit dll, but i would really prefer to avoid it. and i already have a second procedure for doing the process in nt based systems.<br /><br />roaknog: thanks for the examples, i read them over, but i see no real differences between my code and yours.. perhaps S/390 was right. i'll investigate later today and post my findings.<br /><br />thanks to all of you</div>
+    <div class="meta">Posted on 2002-02-22 08:22:09 by mc`</div>
+   </div>
+   <div class="post" id="post-25613">
+    <div class="subject"><a href="#post-25613">int 25 in win32</a></div>
+    <div class="body">ok, well, i haven't been able to test anything due to giving my win9x computer to a friend, so i have decided to post the source and compiled executable here. anyone with win9x, please test it for me and let me know of your results. simply run the exe in a command prompt with no argument to see how it's used. RadASM project file included. source is sloppy, but it's going to be rearranged and semi-optimized once it actually works.</div>
+    <div class="meta">Posted on 2002-02-23 14:30:15 by mc`</div>
+   </div>
+   <div class="post" id="post-25616">
+    <div class="subject"><a href="#post-25616">int 25 in win32</a></div>
+    <div class="body">It doesn't work Win98se, the error is : &quot;Error code 6, description : invalid handle&quot;. I tried with &quot;dimage3 -f out.txt -d d&quot; and &quot;dimage3 -f out.txt -d d:&quot;.</div>
+    <div class="meta">Posted on 2002-02-23 15:18:47 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-25653">
+    <div class="subject"><a href="#post-25653">int 25 in win32</a></div>
+    <div class="body">; changes I would make<br />; put windows.inc first<br />; add some equ's<br />VWIN32_DIOC_DOS_INT25	EQU 2<br />VWIN32_DIOC_DOS_INT26	EQU 3<br />METHOD_BUFFERED		EQU 0<br />FILE_ANY_ACCESS		EQU 0<br />IOCTL_DISK_BASE		EQU 7	;same as FILE_DEVICE_DISK<br />      <br />; add more .data<br />county 				DD 0; instead of ECX<br />big_buf				DD 18432 dup(?); instead of 512 byte buffer for the int 26h or both if you like<br /><br />;change begin 9x specific code to<br />	invoke CreateFile,addr sMem,GENERIC_READ+GENERIC_WRITE,FILE_SHARE_READ+FILE_SHARE_WRITE,NULL,OPEN_EXISTING,NULL,NULL ;open handle to VWIN32<br />	mov hDisk, EAX<br />	mov dBuffSize,sizeof dBuff<br />	.if bRev == 1<br />	call read_file_write_disk<br />	.else<br />	call read_disk_write_file<br />	.endif<br />	.endif<br /><br /><br />; add two procs<br />read_file_write_disk proc<br />	invoke CreateFile,addr pszImg,GENERIC_READ,0,NULL,OPEN_EXISTING,0,NULL ;or open it	<br />	mov hImage,eax<br />	mov Regs.reg_EAX,0 ;pseudo registers used in DeviceIoControl, eax = drive, a: is 0, b: is 1 etc. hard coded to a: for now<br />	mov Regs.reg_ECX,36 ;ecx = number of sectors to write<br />	.repeat<br />	invoke ReadFile,hImage,addr big_buf,18432,addr dBytesRead,NULL ;read first 512 bytes of image file<br />	mov ECX, county<br />	mov Regs.reg_EDX,ecx ;sector number being operated on<br />	mov Regs.reg_EBX,offset big_buf ;data to use<br />	invoke DeviceIoControl,hDisk,VWIN32_DIOC_DOS_INT26,addr Regs,sizeof Regs,addr Regs,sizeof Regs,addr dBytesWrite,NULL ;write data to sector number<br />	add county, 36<br />	.until county == 2880 ;sectors on a standard 1.44 meg 3.5&quot; floppy<br />	ret<br />read_file_write_disk endp<br /><br />	<br />read_disk_write_file proc<br />	invoke CreateFile,addr pszImg,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,0,NULL ;create file<br />	mov hImage,eax<br />	mov Regs.reg_EAX,0<br />	mov Regs.reg_ECX,1<br />	.repeat<br />	mov ECX, county<br />	mov Regs.reg_EDX,ecx<br />	mov Regs.reg_EBX,offset dBuff ;pointer to buffer to hold data<br />	invoke DeviceIoControl,hDisk,VWIN32_DIOC_DOS_INT25,addr Regs,sizeof Regs,addr Regs,sizeof Regs,addr dBytesRead,NULL ;read from disk, store in dBuff<br />	mov eax,Regs.reg_Flags<br />	invoke WriteFile,hImage,addr dBuff,512,addr dBytesWrite,NULL ;write dBuff to the file<br />	inc county<br />	.until county == 2880<br />	ret<br />read_disk_write_file endp</div>
+    <div class="meta">Posted on 2002-02-23 21:38:00 by roaknog</div>
+   </div>
+   <div class="post" id="post-25716">
+    <div class="subject"><a href="#post-25716">int 25 in win32</a></div>
+    <div class="body">Dr. Manhattan: currently it's hard coded to use the a drive in 9x machines.. i'll investigate the error, but it should have been ok.. thanks for the feedback. try again as dimage3 -d a: -f test.img  make sure there is a floppy in the drive too.<br /><br />roaknog: yeah, i planned on moving things into procs and tidying the code up more later. right now i'm just trying to make it work. were you able to test any?</div>
+    <div class="meta">Posted on 2002-02-24 14:06:23 by mc`</div>
+   </div>
+   <div class="post" id="post-26145">
+    <div class="subject"><a href="#post-26145">Donr 4get about me</a></div>
+    <div class="body">Listen mc, if you ever get your code to work on all OS :)<br /><br />Please try to test physical drives read/write procedures, and mail to me <a href="mailto:notee1@ravemail.co.za">notee1@ravemail.co.za</a><br /><br />Cause im still using that 16-bit code, and i would like to avoid for my partition manager.<br /><br />Tx, Cya.</div>
+    <div class="meta">Posted on 2002-02-27 07:07:58 by notee1</div>
+   </div>
+  </div>
+ </body>
+</html>

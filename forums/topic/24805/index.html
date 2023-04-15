@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fraction of a float - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24805" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24805">Fraction of a float</a></p>
+   <div class="post" id="post-181250">
+    <div class="subject"><a href="#post-181250">Fraction of a float</a></div>
+    <div class="body">Hi all,<br /><br />To compute the fraction of a float with SSE, I&#39;m trying to use the following:<br /><br /><pre><code><br />// HALF = 0.5<br />// MAGIC = 12582912.0 (2^23 + 2^22, forcing fraction bits out of the mantissa)<br /><br />movss xmm0, x<br />subss xmm0, HALF<br />addss xmm0, MAGIC<br />subss xmm0, MAGIC<br />movss xmm1, x<br />subss xmm1, xmm0<br />movss y, xmm1<br /></code></pre><br /><br />This corresponds almost completely to y = x - floor(x). Unfortunately, it doesn&#39;t work correctly for x = 1.0. The output should be 0.0 but it&#39;s 1.0.<br /><br />So I was wondering whether anyone knew a way to make it behave exactly like y = x - floor(x).<br /><br />Thanks!</div>
+    <div class="meta">Posted on 2006-06-01 04:12:18 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-181251">
+    <div class="subject"><a href="#post-181251">Re: Fraction of a float</a></div>
+    <div class="body">SSE <br /><pre><code><br />	movss xmm0,x<br />	movss xmm1,xmm0<br />	subss xmm0,HALF<br />	cvtss2si eax,xmm0<br />	cvtsi2ss xmm0,eax<br />	subss xmm1,xmm0<br />	movss y,xmm1<br /></code></pre><br /><br />A bit optimized, I guess:<br /><pre><code><br />	movss xmm0,x<br />	subss xmm0,HALF<br />	cvtss2si eax,xmm0<br />	movss xmm1,x<br />	cvtsi2ss xmm0,eax<br />	subss xmm1,xmm0<br />	movss y,xmm1<br /></code></pre><br /><br />FPU<br /><pre><code><br />	fld x<br />	fld ST<br />	fsub HALF<br />	frndint<br />	fsub<br />	fstp y<br /></code></pre></div>
+    <div class="meta">Posted on 2006-06-01 05:23:11 by Ultrano</div>
+   </div>
+   <div class="post" id="post-181264">
+    <div class="subject"><a href="#post-181264">Re: Fraction of a float</a></div>
+    <div class="body">I know the float-&gt;int and int-&gt;float conversion instructions, but unfortunately they are quite slow. For vectors it also requires extra movhlps instructions. The approach with the &#39;MAGIC&#39; number keeps everything in the floating-point pipeline and is very compact. So I was hoping that maybe someone knew how to correct it for x = 1.0, preferably without extra overhead. Maybe I&#39;m asking for the impossible but it would be really nice for the applications I&#39;m working on to have a really fast way to compute a float&#39;s fraction.</div>
+    <div class="meta">Posted on 2006-06-01 10:22:31 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-181327">
+    <div class="subject"><a href="#post-181327">Re: Fraction of a float</a></div>
+    <div class="body">You were almost there you just had to do two extra checks<br />1- Make sure the result is 1 it gets changed to 0<br />2- Mask out those pesky negative values<br /><br />Here&#39;s a packed single FP vector version<br /><pre><code><br />.data<br />align 16<br />MAGIC dd 12582912.0, 12582912.0, 12582912.0, 12582912.0<br />HALF&nbsp; dd 0.5, 0.5, 0.5, 0.5<br />ONES dd 1.0, 1.0, 1.0, 1.0<br />MASKSIGN dd 7FFFFFFFh, 7FFFFFFFh, 7FFFFFFFh, 7FFFFFFFh&nbsp; <br />.code<br />;;in XMM0 out XMM0<br />Fraction:<br />&nbsp; ANDPS XMM0, DQWORD<br />&nbsp; MOVAPS XMM2, DQWORD<br />&nbsp; MOVAPS XMM5, DQWORD<br />&nbsp; MOVAPS XMM3, XMM0<br />&nbsp; MOVAPS XMM1, DQWORD<br />&nbsp; SUBPS XMM3, XMM2<br />&nbsp; ADDPS XMM3, XMM1<br />&nbsp; SUBPS XMM3, XMM1<br />&nbsp; SUBPS XMM0, XMM3<br />&nbsp; MOVAPS XMM4, XMM0<br />&nbsp; CMPPS XMM4, XMM5, 100b ;!= 1<br />&nbsp; PAND XMM0, XMM4<br /></code></pre><br /><br />It should work for all positive and negative numbers.<br />x-Floor(x)</div>
+    <div class="meta">Posted on 2006-06-02 20:36:20 by r22</div>
+   </div>
+   <div class="post" id="post-181359">
+    <div class="subject"><a href="#post-181359">Re: Fraction of a float</a></div>
+    <div class="body">That&#39;s awesome, thanks!<br /><br />I had to remove the sign masking to make it work with negative arguments though. I&#39;m trying to get the behaviour of the C floor function. I also don&#39;t fully understand why you load HALF and ONES into registers. They&#39;re only used once so you can use them directly as source operands and save a few instructions (and registers). When executing it in a loop it&#39;s obviously best to load them from memory into registers first...</div>
+    <div class="meta">Posted on 2006-06-03 14:08:27 by C0D1F1ED</div>
+   </div>
+  </div>
+ </body>
+</html>

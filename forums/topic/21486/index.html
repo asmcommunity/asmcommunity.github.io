@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Aligned 24-bit Fill - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21486" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21486">Aligned 24-bit Fill</a></p>
+   <div class="post" id="post-162276">
+    <div class="subject"><a href="#post-162276">Aligned 24-bit Fill</a></div>
+    <div class="body">Hi.<br /><br />I am trying to make a RGB24 fill routine. I implemented an aligned 32-bit version, which fills it in 12-byte steps (96-bits is divisible by both 24 and 32).<br /><br />It works by filling up registers like so:<br /><pre><code><br />&nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;  edx,edx<br />&nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;  ecx,ecx<br />&nbsp; &nbsp; &nbsp; &nbsp; xor&nbsp; &nbsp;  eax,eax<br /><br />&nbsp; &nbsp; repeat 4<br />&nbsp; &nbsp; &nbsp; &nbsp; shld&nbsp; &nbsp; edx,ecx,24<br />&nbsp; &nbsp; &nbsp; &nbsp; shld&nbsp; &nbsp; ecx,eax,24<br />&nbsp; &nbsp; &nbsp; &nbsp; shl&nbsp; &nbsp;  eax,24<br />&nbsp; &nbsp; &nbsp; &nbsp; or&nbsp; &nbsp; &nbsp; eax,&nbsp;  ; RGB triplet value (0x00RRGGBB)<br />&nbsp; &nbsp; end repeat<br /></code></pre><br /><br />The result of that above procedure becomes:<br /><br /><pre><code><br />&nbsp;  edx&nbsp; &nbsp; ecx&nbsp; &nbsp; eax<br />&nbsp; RGBR&nbsp;  GBRG&nbsp;  BRGB<br /></code></pre><br /><br />After which I can simply set eax -&gt; , ecx -&gt; , and edx-&gt;. The left-over bytes (those not less than 12-bytes=96-bits in length) can be filled manually with a single-byte loop (kinda like a traditional memcpy with both rep movsd and rep movsb).<br /><br />Now, I want to implement the same using MMX and SSE.<br />For MMX, we will have to use three 64-bit registers: MM2 as edx, MM1 as ecx, and MM0 as eax. This time the loop will fill the bitmap in 192-bit steps (lowest multiple of 64 that is also divisible by 24).<br />The registers shoud look like this:<br /><br /><pre><code><br />&nbsp;  MM2&nbsp; &nbsp; &nbsp; &nbsp; MM1&nbsp; &nbsp; &nbsp; &nbsp; MM0<br /> RGBRGBRG&nbsp;  BRGBRGBR&nbsp;  GBRGBRGB<br /></code></pre><br /><br />I am having trouble filling up these registers. In the above 32-bit version, I used a double-precision shift to continously feed in a new RGB triplet through the set of registers. However, no double-precision shift exists for MMX. I could go for a very ugly move/shift sequence of instructions, where I set each register individually. However, I would like to see someone come up with something straightforward and as algorithmic as the double-precision shift feeder of the 32-bit version.<br /><br />Leave the SSE version for later, as it is just another extension of the same idea but with quadruple the magnitude.</div>
+    <div class="meta">Posted on 2005-07-21 07:54:11 by comrade</div>
+   </div>
+   <div class="post" id="post-162459">
+    <div class="subject"><a href="#post-162459">Re: Aligned 24-bit Fill</a></div>
+    <div class="body">Interesting,<br />I&#39;m not really familiar with RGB filling but yoru snippets show you are distributing the same 24bits(3bytes) over 3 32bit registers?<br /><br />Doing this with mmx or xmmx would take a lot of messy code.<br />Well with good use of the PINSRW (packed insert word) opcode it would be possible.<br />Ok  holds the 24bits [17h] 00rrggbb [14h]<br /><pre><code><br />mov al, byte <br />mov ah, byte ;AX = RG<br />mov cl, byte <br />mov ch, byte ;CX = BR<br />mov dl, byte<br />mov dh, byte ;DX = GB<br />;spam xmm0<br />PINSRW xmm0,cx,0<br />PINSRW xmm0,ax,1<br />PINSRW xmm0,dx,2<br />PINSRW xmm0,cx,3<br />PINSRW xmm0,ax,4<br />PINSRW xmm0,dx,5<br />PINSRW xmm0,cx,6<br />PINSRW xmm0,ax,7<br />;spam xmm1<br />...<br />;spam xmm2<br />...<br /></code></pre><br />You could use the same method with <br />MOVD and then PSHUFD, but that would be even more opcodes than the above garbage<br /><br />xmm0<br />bytes: 01 23 45 67 01 23 45 67<br />rgb24: RG BR GB RG BR GB RG BR<br />xmm1<br />bytes: 01 23 45 67 01 23 45 67<br />rgb24: GB RG BR GB RG BR GB RG<br />xmm2<br />bytes: 01 23 45 67 01 23 45 67<br />rgb24: BR GB RG BR GB RG BR GB<br /><br />My guess is the non SSE version might be a little faster.<br /> </div>
+    <div class="meta">Posted on 2005-07-25 00:19:09 by r22</div>
+   </div>
+   <div class="post" id="post-162470">
+    <div class="subject"><a href="#post-162470">Re: Aligned 24-bit Fill</a></div>
+    <div class="body">Why not have 3 qwords on stack, fill in the apropriate R/G/B <strong>byte</strong> values to the memory locations, and then just load the 3 mm registers from that memory ?<br /><pre><code><br />rgbMMXfiller struct<br /> x0 QWORD ?<br /> x1 QWORD ?<br /> x2 QWORD ?<br /> reserved dd ? ; against garbage on stack<br />rgbMMXfiller ends<br /><br />local rf:rgbMMXfiller<br />Clear rf ; zeroes-out the structure<br />mov eax,RGBcolor<br />lea edx,rf<br />or ,eax<br />or ,eax<br />...<br />or ,eax ; aww, I just got up, so I messed up this value 3 times, on last edit it is correct ;)<br />movq mm0,rf.x0<br />movq mm1,rf.x1<br />movq mm2,rf.x2<br /><br />; and now fill with these registers<br /></code></pre><br />You can also expand the code to use&nbsp; 6 mm registers, for 16-pixel fills</div>
+    <div class="meta">Posted on 2005-07-25 08:48:30 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

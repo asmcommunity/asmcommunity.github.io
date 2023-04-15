@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fix for MASM Lib "InString Bug" ? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26579" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26579">Fix for MASM Lib "InString Bug" ?</a></p>
+   <div class="post" id="post-192204">
+    <div class="subject"><a href="#post-192204">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">When I use the MASM Lib InString function in a loop, my app
+randomly crashes. I know it's the InString function by
+deduction. Im trying to test for a period on a single line
+coming from a NNTP (Usenet) server. Is there a fix for the
+bug?
+
+szText szStr2,13,10,".",13,10
+.WHILE TRUE
+ ...
+ invoke InString, 1, addr szStr1, addr szStr2
+ ...
+.ENDW</div>
+    <div class="meta">Posted on 2001-01-12 23:18:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-192205">
+    <div class="subject"><a href="#post-192205">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">A common reason for a crash in any function that uses a NULL terminated string is if the string is not NULL terminated.
+
+I dont know anything about network's etc, but generaly if you are reading information from a source, then the information is e copied into a buffer by a function, and also specified is the size of the buffer.
+
+invoke ReadX ,ADDR Buffer,SIZEOF Buffer
+
+ If a string that you were trying to search wasn't aligned on the buffer properly, (a simple cause of this is that the string is bigger than the size of the buffer) then it would not have the NULL termination byte on the buffer, which would ultimatly cause a random crash if the above case is correct.</div>
+    <div class="meta">Posted on 2001-01-13 01:01:00 by manimal </div>
+   </div>
+   <div class="post" id="post-192206">
+    <div class="subject"><a href="#post-192206">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">I've been bit by the InString bug too. It's trashing a register windows needs.
+
+To be safe and sure, surround it with a pushad and popad (push and pop all)</div>
+    <div class="meta">Posted on 2001-01-13 02:06:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192207">
+    <div class="subject"><a href="#post-192207">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">Let me know if you find what the bug is, I wrote InString with,
+
+    push esi
+    push edi
+    push ebx
+
+    : code
+
+    pop ebx
+    pop edi
+    pop esi
+
+Which is the windows convention for the correct registers to preserve, EAX, ECX & EDX can be freely modified as normal.
+
+It may be another problem like a stack blowout so if you find it, please document it and let me know.
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-13 05:06:00 by hutch-- </div>
+   </div>
+   <div class="post" id="post-192208">
+    <div class="subject"><a href="#post-192208">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">hutch--
+
+  I ran into the INSTR problem when I was writing the colib. A GPF was traced to the use of this function, and my workaround was this:
+
+pushad              ; push and pop all to work-around
+invoke InString, 1, pszToken, ADDR szBuffer  ; === has bug preserving regs
+mov cLeft,eax       ; (save the retval)
+popad               ; pop all for InString bug
+
+
+At the time I looked at the INSTRING code and it seemed fine. I just tried it again in a small test app, I could not reproduce the problem.
+
+If it is a stack overflow that *might* make sense, as where it is used in colib there is lots of string manipulations going on, some wrapped many levels deep in subroutines with local buffers. However, it doesn't make sense that pushad and popad would fix that.
+
+I was wondering if the 'CLD' in INSTRING may be a problem, but again, pushad and popad does not effect this either.
+
+It's a mystery. I hate those.   :-)</div>
+    <div class="meta">Posted on 2001-01-13 16:37:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192209">
+    <div class="subject"><a href="#post-192209">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">Maybe the problem is in Lnstr.asm. Look at the labels.
+
+; #########################################################################
+
+    .386
+    .model flat, stdcall  ; 32 bit memory model
+    option casemap :none  ; case sensitive
+
+    .code
+
+; ########################################################################
+
+lnstr proc lpszString:DWORD
+
+  ; ---------------------------
+  ; put length of string in eax
+  ; EXCLUDING terminating zero
+  ; ---------------------------
+      mov eax, lpszString
+
+    @@:
+      mov dl,          ;  1
+      inc eax               ;  1
+      cmp dl, 0             ;  1
+      jne @B                ;  3 when jmp taken
+
+      sub eax, lpszString
+      dec eax               ;  correct count
+ 
+      ret
+
+lnstr endp
+
+; ########################################################################
+
+end</div>
+    <div class="meta">Posted on 2001-01-17 18:27:00 by brown25 </div>
+   </div>
+   <div class="post" id="post-192210">
+    <div class="subject"><a href="#post-192210">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">No, those lables are quite correct, if a bit obscure.
+
+"@@" is an anomonoius lable, meaning it may be reused over and over.
+
+"jne @B" means jump BACK to the last anomonoius lable. (@F is jump FORWARD to then next anomonoius lable).
+
+Instring doesn't call Lnstr anyway. But it DOES call Strlen. Strlen is curious because:
+
+  ; -------------------------------------------------------------
+  ; This procedure has been adapted from an algorithm written by
+  ; Agner Fog. It has the unusual characteristic of reading up to
+  ; three bytes past the end of the buffer as it uses DWORD size
+  ; reads. It is measurably faster than a classic byte scanner on
+  ; large linear reads and has its place where linear read speeds
+  ; are important.
+  ; -------------------------------------------------------------
+
+Now then, if the buffer is ADJACENT to unallocated memory, it could be raising an access exception.
+
+I wonder if this is worse under NT. (My lib is appauling under NT).</div>
+    <div class="meta">Posted on 2001-01-17 19:50:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192211">
+    <div class="subject"><a href="#post-192211">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">Hello Ernie, Take a look for this line in Instring.asm:
+push lpszString ; save string address for later comparison
+
+Just a quick look on my part doesn't find a matching pop. Want that mess up the stack or will it get cleaned up anyway?
+
+brown</div>
+    <div class="meta">Posted on 2001-01-17 20:33:00 by brown25 </div>
+   </div>
+   <div class="post" id="post-192212">
+    <div class="subject"><a href="#post-192212">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">The read overrun in Agner Fog's string length algo is no problem in win32 as there are no segments to run over, reading up to 3 bytes past the end of a byte specified buffer is never a problem as memory allocation granularity is at least in DWORD size. I have not seen an algo as fast as this one and it seems to be very reliable.
+
+Now Brown's comment is an interesting one, it has been a while since I wrote InString and it suffered multiple optimisations to get its speed up so its possible that I left the PUSH in there by mistake. It tested OK and runs reliably so unless the problem is specifically a stack blowout, that is not the problem. It should not be there though so when I get a bit more time, I will have a re-write of the algo.
+
+I suspect the problems that some have had with it is not observing the correct register preservation for Win 32 compatible procedures, InString preserves ESI, EDI & EBX as normal but if the proc that calls it messes this convention up, you will get crashes from overwriting registers in use.
+
+If anyone can reproduce the error, I will have a look at it and see what the problem is but at the moment I cannot find it.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-18 03:40:00 by Steve Hutchesson </div>
+   </div>
+   <div class="post" id="post-192213">
+    <div class="subject"><a href="#post-192213">Fix for MASM Lib "InString Bug" ?</a></div>
+    <div class="body">I think I have solved what Brown found, a cursory count of the pushes and pops in the InString procedure match, 5 each so if there is a problem, it is not a stack mismatch. Its reasonably normal coding to push one value or register and pop it somewhere else, examples are,
+
+push memvar
+; code
+pop eax
+
+or
+
+push edx
+; code
+pop ecx
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-01-20 05:37:00 by Steve Hutchesson </div>
+   </div>
+  </div>
+ </body>
+</html>

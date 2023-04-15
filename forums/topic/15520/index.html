@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>how to stop a service without using net.exe? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15520" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15520">how to stop a service without using net.exe?</a></p>
+   <div class="post" id="post-120565">
+    <div class="subject"><a href="#post-120565">how to stop a service without using net.exe?</a></div>
+    <div class="body">Hi,<br /><br />I searched the FAQ and this excellent board, and I did find one example of how to stop a service.  The relevant fragment was like this:<br /><br /><pre><code><br />            ;===========================<br />            ;Look for task scheduler<br />            ; - start it if it's stop<br />            ; - vice versa<br />            ; - Service Name = Schedule<br />            ;===========================<br /><br />            invoke  lstrcmp, OFFSET buffer, OFFSET serviceSS<br />            test    eax, eax<br />            jnz     __next<br /><br />            invoke  OpenService, g_hSCMngr, OFFSET serviceSS, SERVICE_ALL_ACCESS<br />            mov     g_hOpenSrv, eax<br />            invoke  StartService, eax, 0, NULL<br /><br />            test    eax, eax<br />            jnz     __clean<br /><br />            invoke  GetLastError<br />            cmp     eax, ERROR_SERVICE_ALREADY_RUNNING<br />            jne     __clean<br /><br />            invoke  ControlService, g_hOpenSrv, SERVICE_CONTROL_STOP, OFFSET srvStat<br /><br />            __clean&#58;<br /><br />            invoke  CloseServiceHandle, g_hOpenSrv<br /><br />            __next&#58;<br /></code></pre> <br /><br />The part I am interested in is SERVICE_CONTROL_STOP I guess... but I have been unable to get this code to work probably because g_hOpenSrv is doing something up higher in the code and I didn't use that correctly.<br /><br />Could someone please post a complete asm that stops &quot;service a&quot; and &quot;service b&quot; without making exec calls to net.exe?</div>
+    <div class="meta">Posted on 2003-10-05 16:16:15 by clean</div>
+   </div>
+   <div class="post" id="post-120568">
+    <div class="subject"><a href="#post-120568">how to stop a service without using net.exe?</a></div>
+    <div class="body"><a target="_blank" href="http://undocumented.ntinternals.net">http://undocumented.ntinternals.net</a><br /><br />NtLoadDriver<br /><br /><br />NTSYSAPI <br />NTSTATUS<br />NTAPI<br />NtLoadDriver(<br /><br />  IN PUNICODE_STRING DriverServiceName );<br /><br /><br /><br /><br /><br />DriverServiceName<br />Registry path in system format. Path must begin with &quot;\\registry\\machine\\SYSTEM\\CurrentControlSet\\Services\\...&quot; where &quot;...&quot; is driver symbolic name. <br />Key must have at least 2 values: <br /><br />&quot;ImagePath&quot; System path to file, in UNICODE format <br />&quot;Type&quot; Set to 1. <br /><br /><br /><br /><br />Requirements:<br />Library: ntdll.lib <br />Privilege: SeLoadDriverPrivilege <br /><br /><br />NtUnloadDriver<br /><br /><br />NTSYSAPI <br />NTSTATUS<br />NTAPI<br />NtUnloadDriver(<br /><br />  IN PUNICODE_STRING DriverServiceName );<br /><br /><br /><br /><br /><br />DriverServiceName<br />Registry path in system format. <br /><br /><br /><br /><br />Requirements:<br />Library: ntdll.lib <br />Privilege: SeLoadDriverPrivilege</div>
+    <div class="meta">Posted on 2003-10-05 16:50:29 by devilsclaw</div>
+   </div>
+   <div class="post" id="post-120569">
+    <div class="subject"><a href="#post-120569">Re: how to stop a service without using net.exe?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by clean </em><br /><pre><code><br />            ;===========================<br />            ;Look for task scheduler<br />            ; - start it if it's stop<br />            ; - vice versa<br />            ; - Service Name = Schedule<br />            ;===========================<br /><br />            invoke  lstrcmp, OFFSET buffer, OFFSET serviceSS<br />            test    eax, eax<br />            jnz     __next<br />            &#91;b&#93;<br />            invoke  OpenSCManager, NULL, NULL, SC_MANAGER_CONNECT<br />            mov     g_hSCMngr,eax<br />            &#91;/b&#93;<br />            invoke  OpenService, g_hSCMngr, OFFSET serviceSS, SERVICE_ALL_ACCESS<br />            mov     g_hOpenSrv, eax<br />            invoke  StartService, eax, 0, NULL<br /><br />            test    eax, eax<br />            jnz     __clean<br /><br />            invoke  GetLastError<br />            cmp     eax, ERROR_SERVICE_ALREADY_RUNNING<br />            jne     __clean<br /><br />            invoke  ControlService, g_hOpenSrv, SERVICE_CONTROL_STOP, OFFSET srvStat<br /><br />            __clean&#58;<br /><br />            invoke  CloseServiceHandle, g_hOpenSrv<br />            &#91;b&#93;<br />            invoke  CloseServiceHandle, g_hSCMngr<br />            &#91;/b&#93;<br />            __next&#58;<br /></code></pre> <br /></div><br /><br />I'm at Win98 right now, so I cannot check it (I don't know if SC_MANAGER_CONNECT will suffice), but I'm quite positive this will work.</div>
+    <div class="meta">Posted on 2003-10-05 18:39:59 by Morris</div>
+   </div>
+   <div class="post" id="post-120572">
+    <div class="subject"><a href="#post-120572">how to stop a service without using net.exe?</a></div>
+    <div class="body">Hi<br /><br />I wrote an OpenSCManager Controller tool kind of thing which enumerates all Win32 and Driver Services currently registered on a system and allows you to stop and start either type of service.  The app returns each field with descriptive text of the two Service Control Manager structures, ENUM_SERVICE_STATUS_PROCESS and SERVICE_STATUS_PROCESS.  These structures are used with EnumServicesStatusEx and QueryServiceStatusEx to get the name and information about a service, it was my purpose to clarify what each of the fields in the structures represented for further work and create a basic SCM controller.<br /><br />The info is returned in 2 tabbed listviews, if you right click on any service (types SERVICE_DRIVER or SERVICE_WIN32) you can Stop/Start a service with the method you described.  For some drivers the listview will update to show a SERVICE_START_PENDING or SERVICE_STOP_PENDING flag in the 'CurrentState' field after doing this, but can be refreshed to show the current running status.<br /><br />The code includes the winsvc.h header file for the Service Control Manager and may serve as as a mild introduction to the SCM, hope it helps.<br /><br />Kayaker</div>
+    <div class="meta">Posted on 2003-10-05 20:43:16 by Kayaker</div>
+   </div>
+   <div class="post" id="post-120576">
+    <div class="subject"><a href="#post-120576">how to stop a service without using net.exe?</a></div>
+    <div class="body">Thanks.  Though I'm still at the same place I started, all service killing code I see anywhere crashes when I compile it myself - the exe you provide works, and I can compile the code without errors, , but the resulting exe from *my* compile crashes and never works. :/<br /><br />Anyway the first person who posts a full, working, compilable in masm32, piece of code that kills &quot;process a&quot; and &quot;process b&quot;, will get a beer on me.  I don't want to list services or start them or anything else, just kill them. Though since I can't actually buy you a beer, I will instead buy you a book or your choice from amazon or whereever, or just donate some money to you via paypal.<br /><br />The real thing I'm trying to do is kill a list of common trojans that install themselves as services (such as hacker defender) - I can already kill the processes, but I want to kill the services as well.  Every attempt I've made to integrate the posted code into my own code compiles fine but then the EXE crashes when I actually try to run it.<br /><br />So can anyone help me?  I know my humble offering of reward isn't much, but hey for some of you coding gods it's an easy free book/donation/whatever you want in exchange :)<br /><br />thanks!</div>
+    <div class="meta">Posted on 2003-10-05 23:28:39 by clean</div>
+   </div>
+   <div class="post" id="post-120581">
+    <div class="subject"><a href="#post-120581">how to stop a service without using net.exe?</a></div>
+    <div class="body">minor correction, but i meant hypothetical &quot;service a&quot; and &quot;service b&quot; - processes weren't a problem, i'm just having trouble with services.  thanks!</div>
+    <div class="meta">Posted on 2003-10-06 00:23:56 by clean</div>
+   </div>
+   <div class="post" id="post-120582">
+    <div class="subject"><a href="#post-120582">how to stop a service without using net.exe?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by clean </em><br />The real thing I'm trying to do is kill a list of common trojans that install themselves as services (such as hacker defender) - I can already kill the processes, but I want to kill the services as well.  Every attempt I've made to integrate the posted code into my own code compiles fine but then the EXE crashes when I actually try to run it.</div><br /><br />What does it say when it crashes?<br />Have you tried to debug your application? WHERE exactly does it crash (on OpenService call, on ControlService call, somewhere else)?</div>
+    <div class="meta">Posted on 2003-10-06 01:17:59 by Morris</div>
+   </div>
+   <div class="post" id="post-120584">
+    <div class="subject"><a href="#post-120584">how to stop a service without using net.exe?</a></div>
+    <div class="body">---------------------------<br />z.exe - Application Error<br />---------------------------<br />The instruction at &quot;0x77e7650d&quot; referenced memory at &quot;0x631af1ab&quot;. The memory could not be &quot;read&quot;.<br /><br /><br />Click on OK to terminate the program<br />Click on CANCEL to debug the program<br />---------------------------<br />OK   Cancel   <br />---------------------------<br /><br />ollydebug says &quot;access violation in kernel32 ignored on request&quot; and keeps flashing that and is stuck (when i did shift+f7, animate into).... though see the thing is I'm not a pro, or i would have had this working hours ago.</div>
+    <div class="meta">Posted on 2003-10-06 02:04:22 by clean</div>
+   </div>
+   <div class="post" id="post-120585">
+    <div class="subject"><a href="#post-120585">how to stop a service without using net.exe?</a></div>
+    <div class="body">sorry, to clarify, my program is this:<br /><br /><pre><code><br />; my test, should kill task scheduler ... just crashes &#58;&#40;<br />.386                               <br />.model flat, stdcall<br />option casemap&#58;none<br /><br />include C&#58;\masm32\include\kernel32.inc<br />include C&#58;\masm32\include\user32.inc<br />include C&#58;\masm32\include\windows.inc<br />include C&#58;\masm32\include\shell32.inc<br />include C&#58;\masm32\include\advapi32.inc<br />includelib C&#58;\masm32\lib\kernel32.lib<br />includelib C&#58;\masm32\lib\user32.lib<br />includelib C&#58;\masm32\lib\shell32.lib<br />includelib C&#58;\masm32\lib\advapi32.lib<br />includelib C&#58;\masm32\lib\urlmon.lib<br /><br />.CODE<br />serviceSS       db &quot;Schedule&quot;, 0<br />buffer          db 256 dup&#40;?&#41;<br />g_hOpenSrv      dd ?<br />g_hSCMngr       dd ?<br />srvStat         SERVICE_STATUS&lt;&gt;<br /><br />start&#58;<br /><br />invoke  lstrcmp, OFFSET buffer, OFFSET serviceSS<br />test    eax, eax<br />jnz     __next<br /><br />invoke  OpenSCManager, NULL, NULL, SC_MANAGER_CONNECT<br />mov     g_hSCMngr,eax<br /><br />invoke  OpenService, g_hSCMngr, OFFSET serviceSS, SERVICE_ALL_ACCESS<br />mov     g_hOpenSrv, eax<br />;invoke  StartService, eax, 0, NULL<br />;<br />;test    eax, eax<br />;jnz     __clean<br />;<br />;invoke  GetLastError<br />;cmp     eax, ERROR_SERVICE_ALREADY_RUNNING<br />;jne     __clean<br /><br />invoke  ControlService, g_hOpenSrv, SERVICE_CONTROL_STOP, OFFSET srvStat<br /><br />__clean&#58;<br /><br />invoke  CloseServiceHandle, g_hOpenSrv<br /><br />invoke  CloseServiceHandle, g_hSCMngr<br /><br />__next&#58;<br /><br />END start<br /></code></pre><br /><br />it compiles great, but crashes with the error i gave above..</div>
+    <div class="meta">Posted on 2003-10-06 02:09:25 by clean</div>
+   </div>
+   <div class="post" id="post-120586">
+    <div class="subject"><a href="#post-120586">how to stop a service without using net.exe?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by clean </em><br />ollydebug says &quot;access violation in kernel32 ignored on request&quot; and keeps flashing that and is stuck (when i did shift+f7, animate into)...</div><br /><br />OK, but where does it cause the AV? On OpenService?</div>
+    <div class="meta">Posted on 2003-10-06 02:09:28 by Morris</div>
+   </div>
+   <div class="post" id="post-120587">
+    <div class="subject"><a href="#post-120587">how to stop a service without using net.exe?</a></div>
+    <div class="body">fyi, from the debugger, it looks like it's hanging up on this:<br />invoke  lstrcmp, OFFSET buffer, OFFSET serviceSS<br />test    eax, eax<br />jnz     __next<br /><br />it runs that once, then on the jnz, it jumps into the compare again...?  maybe __next is pointing to the wrong thing or doesn't work in masm32... hm i'll try changing it to &quot;foo:&quot;</div>
+    <div class="meta">Posted on 2003-10-06 02:13:04 by clean</div>
+   </div>
+   <div class="post" id="post-120588">
+    <div class="subject"><a href="#post-120588">how to stop a service without using net.exe?</a></div>
+    <div class="body">ok that wasn't it.<br /><br />though i found the crash problem i think... i just added an exitprocess at the end and now it doesn't crash.  however, it still doesn't kill the service :(<br /><br /><pre><code><br />; kills the task scheduler service &#40;except it doesnt work yet&#41;<br />.386                               <br />.model flat, stdcall<br />option casemap&#58;none<br /><br />include C&#58;\masm32\include\kernel32.inc<br />include C&#58;\masm32\include\user32.inc<br />include C&#58;\masm32\include\windows.inc<br />include C&#58;\masm32\include\shell32.inc<br />include C&#58;\masm32\include\advapi32.inc<br />includelib C&#58;\masm32\lib\kernel32.lib<br />includelib C&#58;\masm32\lib\user32.lib<br />includelib C&#58;\masm32\lib\shell32.lib<br />includelib C&#58;\masm32\lib\advapi32.lib<br />includelib C&#58;\masm32\lib\urlmon.lib<br /><br />.CODE<br />serviceSS       db &quot;Schedule&quot;, 0<br />buffer          db 256 dup&#40;?&#41;<br />g_hOpenSrv      dd ?<br />g_hSCMngr       dd ?<br />srvStat         SERVICE_STATUS&lt;&gt;<br /><br />start&#58;<br /><br />invoke  lstrcmp, OFFSET buffer, OFFSET serviceSS<br />test    eax, eax<br />jnz     __next<br /><br />invoke  OpenSCManager, NULL, NULL, SC_MANAGER_CONNECT<br />mov     g_hSCMngr,eax<br /><br />invoke  OpenService, g_hSCMngr, OFFSET serviceSS, SERVICE_ALL_ACCESS<br />mov     g_hOpenSrv, eax<br /><br />invoke  ControlService, g_hOpenSrv, SERVICE_CONTROL_STOP, OFFSET srvStat<br /><br />__clean&#58;<br /><br />invoke  CloseServiceHandle, g_hOpenSrv<br /><br />invoke  CloseServiceHandle, g_hSCMngr<br /><br />__next&#58;<br /><br />quit&#58;<br />	invoke	ExitProcess,NULL<br /><br />END start<br /></code></pre></div>
+    <div class="meta">Posted on 2003-10-06 02:19:45 by clean</div>
+   </div>
+   <div class="post" id="post-120589">
+    <div class="subject"><a href="#post-120589">how to stop a service without using net.exe?</a></div>
+    <div class="body">Make the following change and try again:<br /><pre><code><br />  &#91;b&#93;.DATA?<br />  buffer          db 256 dup&#40;?&#41;<br />  g_hOpenSrv      dd ?<br />  g_hSCMngr       dd ?<br />  srvStat         SERVICE_STATUS&lt;&gt;&#91;/b&#93;<br />  .CODE<br />  serviceSS       db &quot;Schedule&quot;, 0<br /><br />  start&#58;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-10-06 02:20:24 by Morris</div>
+   </div>
+   <div class="post" id="post-120590">
+    <div class="subject"><a href="#post-120590">how to stop a service without using net.exe?</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by clean </em><br />though i found the crash problem i think... i just added an exitprocess at the end and now it doesn't crash.  however, it still doesn't kill the service :(<br /></div><br /><br />Hmm, try to open SCManager with SC_MANAGER_ALL_ACCESS. Then, check every return value for error (call GetLastError when a service function returns NULL).</div>
+    <div class="meta">Posted on 2003-10-06 02:24:15 by Morris</div>
+   </div>
+   <div class="post" id="post-120591">
+    <div class="subject"><a href="#post-120591">how to stop a service without using net.exe?</a></div>
+    <div class="body">not sure i know what you mean, i tried<br />s/SC_MANAGER_CONNECT/SC_MANAGER_ALL_ACCESS/<br /><br />and also tried<br />s/SERVICE_ALL_ACCESS/SC_MANAGER_ALL_ACCESS/<br /><br />but neither change made a difference.  hm.  i don't get it.</div>
+    <div class="meta">Posted on 2003-10-06 02:42:20 by clean</div>
+   </div>
+   <div class="post" id="post-120592">
+    <div class="subject"><a href="#post-120592">how to stop a service without using net.exe?</a></div>
+    <div class="body">Try to remove the <strong>lstrcmp/test/jnz</strong> block from the beginning of your program and try again.</div>
+    <div class="meta">Posted on 2003-10-06 02:47:50 by Morris</div>
+   </div>
+   <div class="post" id="post-120593">
+    <div class="subject"><a href="#post-120593">how to stop a service without using net.exe?</a></div>
+    <div class="body">YES! THAT WAS IT!!!  Thanks Morris!!<br /><br />I love this place.  So many good coders here.<br /><br />Yeah I even saw the debugger choking on that but didn't realize it wasn't needed.  I'm not even sure why that was in there, I just copied it from one of the examples.<br /><br />Awesome!  So hey pm or email me or post here if you want, something you might want, a book from amazon, a gadtet from thinkgeek.com, or whatever.. or your email address if you prefer a &quot;gift certificate&quot;.. something under $50 would totally fit what I can afford to offer :)  I am very grateful for your help - thanks :)</div>
+    <div class="meta">Posted on 2003-10-06 02:52:58 by clean</div>
+   </div>
+  </div>
+ </body>
+</html>

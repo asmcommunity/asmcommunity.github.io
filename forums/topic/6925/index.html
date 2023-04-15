@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>byte search - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6925" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6925">byte search</a></p>
+   <div class="post" id="post-50008">
+    <div class="subject"><a href="#post-50008">byte search</a></div>
+    <div class="body">Hi,<br /><br />What is the best algo to find the first position, in a big array of bytes, of a following number of 0 ? each byte is 1 or 0.<br /><br />exemple:<br />array = [1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,1,11,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0]<br /><br />i want to find the first position of : 0,0,0,0,0,0,0,0,0<br /><br />Thanks for your help.</div>
+    <div class="meta">Posted on 2002-07-25 06:46:42 by DarkEmpire</div>
+   </div>
+   <div class="post" id="post-50020">
+    <div class="subject"><a href="#post-50020">byte search</a></div>
+    <div class="body">Boyer Moore?<br /><br /><a target="_blank" href="http://www.movsd.com">http://www.movsd.com</a><br /><br />but as the block to search is relatively small and all the bytes at are zero, some better solutions may exist...</div>
+    <div class="meta">Posted on 2002-07-25 07:09:46 by JCP</div>
+   </div>
+   <div class="post" id="post-50024">
+    <div class="subject"><a href="#post-50024">byte search</a></div>
+    <div class="body"><pre><code><br />  lea edx, array<br /><br />@@&#58;<br />  inc edx<br />  cmp DWORD PTR &#91;edx - 1&#93;, 0<br />  jnz @B<br /><br />  add edx, 4<br />  cmp DWORD PTR &#91;edx - 1&#93;, 0<br />  jnz @B<br /><br />  add edx, 3<br />  cmp BYTE PTR &#91;edx&#93;, 0<br />  jne @B<br /></code></pre><br /><br />This is my current thinking... It's not too flexible though, say if you wanted to search for say 12 consecutive zeros you need to re-write it (and it gets silly the amount of code needed for more that 16 consecutive zeros).<br /><br />This algo will go faster the more quads of zeros are present in the list, I felt that the effort involved in calculating where the first non-zero was would out-weigh a simple method (that and I am a lazy b*stard).<br /><br />It makes no attempt to error check for the end of the array.<br /><br />Mirno<br /><br /><br />------- fixed code - left in ecx from my notepad scratchings -------</div>
+    <div class="meta">Posted on 2002-07-25 07:12:28 by Mirno</div>
+   </div>
+   <div class="post" id="post-50048">
+    <div class="subject"><a href="#post-50048">byte search</a></div>
+    <div class="body">If you are going to regularly search for a long block of zeros in a pattern of this type, I would be inclined to try one of the variant boyer moore algos in MASM32, in particular the one that does not use the bad character shift, it is called a &quot;simplified&quot; boyer moore and may work ok in this situation.<br /><br />With mixed patterns of 0s and 1s, any boyer moore will be too slow and you may have to look at the type of search algos that are used in dna searches. A good byte scanner will do OK but I am sure there is a faster way to do it but the code may be complex.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-07-25 08:30:07 by hutch--</div>
+   </div>
+   <div class="post" id="post-50130">
+    <div class="subject"><a href="#post-50130">byte search</a></div>
+    <div class="body">I think this is a reasonable solution:<br /><br /><pre><code><br />                    lea edi,Array<br />@@Top&#58;              cmp BYTE PTR &#91;edi&#93;,0<br />                    jne @@Bottom<br />                    mov eax,edi<br />@@&#58;                 inc edi<br />                    cmp BYTE PTR &#91;edi&#93;,0<br />                    je @B<br />@@&#58;                 dec eax<br />                    cmp BYTE PTR &#91;eax&#93;,0<br />                    je @B<br />                    sub eax,edi<br />                    neg eax<br />                    dec eax<br />                    cmp eax,NUM_ZEROES<br />                    je @@FoundIt<br />@@Bottom&#58;           add edi,NUM_ZEROES<br />                    jmp @@Top<br />@@FoundIt&#58;          ...<br /></code></pre><br /><br />Basic idea:<br />--jump by NUM_ZEROES at a time<br />--when you find a zero, you might be in the middle of a sequence: so run edi up to the first non-zero byte and run eax down to the first preceding non-zero byte<br />--the value edi-eax-1 is the length of the run of bytes<br />--if it isn't the same amount, then we've already moved edi up to the first non-zero byte and we don't need to test it so we just add NUM_ZEROES and go back to the top<br /><br />Couple of notes:<br />--you might wanna check that you haven't run off the end of the array (ie., replace the jmp @@Top on the last line with something else<br />--If you wanna check for *at least* NUM_ZEROES just change the cmp eax,NUM_ZEROES/je @@FoundIt to a jge @@FoundIt<br /><br />--Chorus<br /><br />-edit-<br />Oh yeah, I forgot. The first byte of the sequence of course is edi-eax</div>
+    <div class="meta">Posted on 2002-07-25 17:36:12 by chorus</div>
+   </div>
+   <div class="post" id="post-50158">
+    <div class="subject"><a href="#post-50158">&quot;Idiot Proof&quot; Byte Scanner</a></div>
+    <div class="body"><pre><code>&#91;size=9&#93;.686<br />.MODEL FLAT, STDCALL<br />OPTION CASEMAP&#58;NONE<br />INCLUDE \masm32\INCLUDE\windows.inc<br />INCLUDE \masm32\INCLUDE\kernel32.inc<br />INCLUDE \masm32\INCLUDE\user32.inc<br />INCLUDELIB \masm32\lib\user32.lib<br />INCLUDELIB \masm32\lib\kernel32.lib<br />INCLUDE \masm32\INCLUDE\masm32.inc<br />INCLUDELIB \masm32\lib\masm32.lib<br /><br />.DATA<br /><br />    TextData        DB 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1<br />    TextPattern     DB 0, 0, 1<br /><br />.DATA?<br /><br />    buffer          DB 16 DUP&#40;?&#41;<br /><br />.CODE<br /><br />bssearch PROC USES ebx esi edi lpSource&#58;DWORD, uSourceLen&#58;DWORD, lpPattern&#58;DWORD, uPatternLen&#58;DWORD<br /><br />    mov     eax, uPatternLen<br />    cmp     eax, uSourceLen<br />    ja      __not_found<br /><br />    xor     eax, eax<br />    mov     esi, lpSource<br />    dec     eax<br />    xor     ebx, ebx<br />    mov     edi, lpPattern<br />    xor     ecx, ecx<br /><br />    push    0<br /><br />    __start&#58;<br /><br />        cmp     ecx, uPatternLen<br />        je      __stop<br />        mov     dl, BYTE PTR &#91;edi+ecx&#93;<br />        cmp     ebx, uSourceLen<br />        je      __stop<br />        cmp     dl, BYTE PTR &#91;esi+ebx&#93;<br />        jne     __byte_not_equal<br /><br />        test    eax, eax<br />        jns     __chain_started<br /><br />        mov     eax, ebx<br /><br />    __chain_started&#58;<br /><br />        test    ecx, ecx<br />        jz      __move_forward<br /><br />        cmp     DWORD PTR &#91;esp&#93;, 0<br />        jne     __move_forward<br /><br />        mov     dl, BYTE PTR &#91;edi&#93;<br />        cmp     dl, BYTE PTR &#91;esi+ebx&#93;<br />        jne     __move_forward<br /><br />        mov     DWORD PTR &#91;esp&#93;, ebx<br /><br />    __move_forward&#58;<br /><br />        inc     ecx<br />        inc     ebx<br />        jmp     __start<br /><br />    __byte_not_equal&#58;<br /><br />        xor     eax, eax<br />        cmp     DWORD PTR &#91;esp&#93;, 0<br />        je      __one_step_forward<br /><br />            mov     ebx, DWORD PTR &#91;esp&#93;<br />            mov     DWORD PTR &#91;esp&#93;, eax<br />            jmp     __reset<br /><br />    __one_step_forward&#58;<br /><br />            inc     ebx<br /><br />    __reset&#58;<br /><br />        xor     ecx, ecx<br />        dec     eax<br />        jmp     __start<br /><br />    __stop&#58;<br /><br />        pop     edx<br /><br />        cmp     ecx, uPatternLen<br />        jne     __not_found<br />        ret<br /><br />    __not_found&#58;<br /><br />        xor     eax, eax<br />        dec     eax<br /><br />        ret<br /><br />bssearch ENDP<br /><br />START&#58;<br /><br />    invoke  bssearch, OFFSET TextData, SIZEOF TextData, OFFSET TextPattern, SIZEOF TextPattern<br />    invoke  dwtoa, eax, OFFSET buffer<br />    invoke  MessageBox, 0, OFFSET buffer, 0, 0<br />    invoke  ExitProcess,NULL<br /><br />END START&#91;/size&#93;</code></pre>Parameters:<br /><br />lpSource = pointer to the byte array source<br />uSourceLen = size of byte array source<br />lpPattern = pointer to the byte array pattern<br />uPatternLen = size of byte array pattern<br /><br />Return Values:<br /><br />-1 = pattern not found<br />n = nth position of the pattern<br /><br />Notes:<br /><br />This is an idiot proof (I hope) generalized byte scanner search algorithm. This algorithm is for byte sizes only but you can modify it for other array size.<br /><br />Have Fun!!! :grin:</div>
+    <div class="meta">Posted on 2002-07-25 20:40:39 by stryker</div>
+   </div>
+   <div class="post" id="post-50159">
+    <div class="subject"><a href="#post-50159">byte search</a></div>
+    <div class="body">Since your looking for 9 zero bytes, then there is going to be one dword that is all zero. ;)  Look for a zero dword and then for your nine zero bytes.  It will be four times faster than anything posted thus far.</div>
+    <div class="meta">Posted on 2002-07-25 20:46:36 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-50160">
+    <div class="subject"><a href="#post-50160">byte search</a></div>
+    <div class="body"><strong>DarkEmpire</strong>, Just use the BM Algo and modify it to handle byte size arrays since you said<div class="quote">...in a big array of bytes...</div>Also I don't assume you only want to search the 0 values don't you? ;)</div>
+    <div class="meta">Posted on 2002-07-25 20:52:27 by stryker</div>
+   </div>
+   <div class="post" id="post-50164">
+    <div class="subject"><a href="#post-50164">byte search</a></div>
+    <div class="body">Actually BitRake, I don't think that'd be as fast as the algo I posted, let alone four times faster. I check every 9 bytes or so, your method would check all bytes, but 4 at a time.<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-07-25 21:20:00 by chorus</div>
+   </div>
+   <div class="post" id="post-50165">
+    <div class="subject"><a href="#post-50165">byte search</a></div>
+    <div class="body"><strong>chorus</strong>, sorry - I didn't look close enough at your code. :o<br /><span style="font-size:9px>( Let me blame this one on the drugs. )</span><br />That is a good method! :tongue:</div>
+    <div class="meta">Posted on 2002-07-25 21:37:33 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-50169">
+    <div class="subject"><a href="#post-50169">byte search</a></div>
+    <div class="body">Thank you very much :)</div>
+    <div class="meta">Posted on 2002-07-25 22:32:39 by chorus</div>
+   </div>
+   <div class="post" id="post-50186">
+    <div class="subject"><a href="#post-50186">byte search</a></div>
+    <div class="body"><div class="quote"> Also I don't assume you only want to search the 0 values don't you? </div> <br /><br />yes, i want to search the 0 values, in fact, all others bytes can be different (not only 1), but i only search 0.<br /><br />Is there a special tip if the array is a size like 100 000 bytes or 1 000 000 bytes ?<br /><br />Thanks for your help</div>
+    <div class="meta">Posted on 2002-07-26 01:46:08 by DarkEmpire</div>
+   </div>
+   <div class="post" id="post-50192">
+    <div class="subject"><a href="#post-50192">byte search</a></div>
+    <div class="body">Bitrake, I checked DWORDs!<br />I use the DWORD check to check for zeros en-mass!<br /><br />I also thought of this code:<br /><br /><pre><code><br />  lea edx, array<br /><br />first&#58;<br />  mov ecx, 9<br />@@&#58;<br />  inc edx<br />  cmp BYTE PTR &#91;edx - 1&#93;, 1<br />  jne first<br />  sbb ecx, 0<br />  jnz @B<br /><br />  ; Found<br /></code></pre><br /><br />I guess the algo you want depends of the average case you'll be dealing with.<br />I suppose someone will have to benchmark them, but that isn't going to be me because I am at work!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-07-26 04:01:06 by Mirno</div>
+   </div>
+  </div>
+ </body>
+</html>

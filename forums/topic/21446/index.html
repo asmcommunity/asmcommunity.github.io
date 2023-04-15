@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to get mod and result using FPU - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21446" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21446">How to get mod and result using FPU</a></p>
+   <div class="post" id="post-161939">
+    <div class="subject"><a href="#post-161939">How to get mod and result using FPU</a></div>
+    <div class="body">Here is the code:<br /><pre><code><br />	xor edx,edx<br />	mov eax,estore<br />	mov ecx, Width<br />	div ecx&nbsp; &nbsp; ;&lt;==== this is bugger - 40 clock cycles with 32-bit numbers<br /><br />	mov MX,edx&nbsp;  ;MOD is stored here<br />	mov MY,eax&nbsp;  ;RESULT is stored here<br />	ret<br /></code></pre><br /><br />here is the FPU version, do I have it coded right?<br /><br /><pre><code><br />	xor edx,edx<br />	mov eax,estore<br /><br />	fild estore<br />	fidiv Width&nbsp;  ; = estore/Width<br />	fistp MY&nbsp; &nbsp; &nbsp; ; store value<br /><br />	mul MY&nbsp;  ;eax should still contain estore value<br />	sub estore,eax&nbsp;  ;subtract to get modulus<br />	mov MX,eax&nbsp; &nbsp; &nbsp; ;move <br />	ret<br /></code></pre></div>
+    <div class="meta">Posted on 2005-07-11 05:55:40 by drarem</div>
+   </div>
+   <div class="post" id="post-161943">
+    <div class="subject"><a href="#post-161943">Re: How to get mod and result using FPU</a></div>
+    <div class="body">It would seem to be correct, I&#39;d be curious why you wish to do things this way?</div>
+    <div class="meta">Posted on 2005-07-11 08:32:22 by Eóin</div>
+   </div>
+   <div class="post" id="post-161944">
+    <div class="subject"><a href="#post-161944">Re: How to get mod and result using FPU</a></div>
+    <div class="body">Is there a better way to get modulus without another division - can the FPU return the mod of a number too?&nbsp; I browsed through some of the FPU documentation on the website and didn&#39;t find a fimod, or find where the remainder is stored in an integer division.</div>
+    <div class="meta">Posted on 2005-07-11 09:16:01 by drarem</div>
+   </div>
+   <div class="post" id="post-161946">
+    <div class="subject"><a href="#post-161946">Re: How to get mod and result using FPU</a></div>
+    <div class="body">If you are using FPU, you would not be interested in mod because it just does not make sense.</div>
+    <div class="meta">Posted on 2005-07-11 09:24:57 by roticv</div>
+   </div>
+   <div class="post" id="post-161948">
+    <div class="subject"><a href="#post-161948">Re: How to get mod and result using FPU</a></div>
+    <div class="body">The FPU does NOT do &quot;integer&quot; division. It does floating point division. Therefore, there is no &quot;remainder&quot; per se. The integer portion would be the result and the fractional portion multiplied by the original number would be the remainder.<br /><br />A division with the FPU takes as much time as the integer division with the CPU. However, truncating the FPU result, subtracting that truncated result from the actual result to get the fractional portion and then multiplying that by the original number to get the &quot;remainder&quot; as an integer would take a lot longer.<br /><br />BTW, your posted FPU version was faulty. Just try it with small numbers.<br /><br />If, estore/Width = MY + remainder<br />Then, estore*MY = ????<br /><br />Furthermore, the <strong>fistp</strong> instruction would give you a &quot;rounded&quot; result unless you change the rounding bits of the Control Word of the FPU to give you a truncated integer. (The default is for rounding.)<br /><br />Raymond<br /></div>
+    <div class="meta">Posted on 2005-07-11 09:50:42 by Raymond</div>
+   </div>
+   <div class="post" id="post-161950">
+    <div class="subject"><a href="#post-161950">Re: How to get mod and result using FPU</a></div>
+    <div class="body">Use the FPREM instruction. That calculates the remainder. </div>
+    <div class="meta">Posted on 2005-07-11 10:56:14 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-161956">
+    <div class="subject"><a href="#post-161956">Re: How to get mod and result using FPU</a></div>
+    <div class="body">Integer divide with result and mod works fastest with the DIV opcode.<br />Trying to make an SSE solution for INT divide uses too many CVTxx2xx opcodes which makes it slower.<br />BUT<br />Using SSE instead of the FPU opcodes might improve speed.<br />To get the remainder and result with FPU you need to use the div and the prem opcodes.<br />The fprem opcode does it&#39;s own divide and does the calculation for remainder by truncating and multiplying and then subtracting (aka slow). <br /></div>
+    <div class="meta">Posted on 2005-07-11 12:37:57 by r22</div>
+   </div>
+   <div class="post" id="post-161973">
+    <div class="subject"><a href="#post-161973">Re: How to get mod and result using FPU</a></div>
+    <div class="body">The original post seemed to be only concerned with getting the modulus of a 32-bit number by a 32-bit modulus because of the <strong>xor edx,edx</strong> as the preliminary instruction before the division. Under such conditions, using the CPU integer operations is the fastest way.<br /><br />However, getting the modulo of a 64-bit number in the EDX:EAX pair would cause the program to crash due to an overflow if the modulus is smaller than or equal to the content of the EDX register. Under those conditions, using the FPU would be the only choice to obtain the modulo with the <strong>fprem</strong> instruction. The quotient could then be obtained by subtracting the modulo from the original 64-bit number before using the <strong>fdiv</strong> instruction (to avoid changing the Control Word for truncating before storing the result).<br /><br />Raymond<br /></div>
+    <div class="meta">Posted on 2005-07-11 21:59:44 by Raymond</div>
+   </div>
+   <div class="post" id="post-161988">
+    <div class="subject"><a href="#post-161988">Re: How to get mod and result using FPU</a></div>
+    <div class="body">Thanks for the replies, yes it should be MY * Width - my ooops.<br /><br />I&#39;m just looking for the fastest way possible - it is for bitmaps - some of the GDI api&#39;s require x/y and not a pointer to a video address - and on initialization I scan a bitmap to create an irregular region - 800x600 takes about 50 seconds. I was wondering if I could use WORDS instead, it would save 20 cycles.<br /><br />What if I were doing a full-screen blur or other video processing - it would take as long or longer.<br /><br />I thought about tabulating the addresses into an indexed array, the size would be in the Mb to hold the table, 800*600*SIZEOF DWORD*2<br /><br />I could throw a splash screen up and use a progress bar, or load the region data in as a resource - which I know little about at this point.</div>
+    <div class="meta">Posted on 2005-07-12 05:25:46 by drarem</div>
+   </div>
+   <div class="post" id="post-161989">
+    <div class="subject"><a href="#post-161989">Re: How to get mod and result using FPU</a></div>
+    <div class="body">Hmmmm... sounds like you&#39;re using a bad region creating algorithm. I posted a very fast one a while back.<br /></div>
+    <div class="meta">Posted on 2005-07-12 05:29:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-161990">
+    <div class="subject"><a href="#post-161990">Re: How to get mod and result using FPU</a></div>
+    <div class="body">I have to agree with f0dder. It is pointless to optimise for, say a O(n^2) algorithm, when there exist a O(n lg n) algorithm (Disclaimer: I&#39;m not sure about the bounds for region creating).&nbsp; </div>
+    <div class="meta">Posted on 2005-07-12 07:07:48 by roticv</div>
+   </div>
+   <div class="post" id="post-161993">
+    <div class="subject"><a href="#post-161993">Re: How to get mod and result using FPU</a></div>
+    <div class="body">Nice region creating algorithm, with discussion and all: http://www.asmcommunity.net/board/index.php?topic=17519.15</div>
+    <div class="meta">Posted on 2005-07-12 07:13:13 by f0dder</div>
+   </div>
+   <div class="post" id="post-162004">
+    <div class="subject"><a href="#post-162004">Re: How to get mod and result using FPU</a></div>
+    <div class="body">thanks for the examples, it does run fast - when I plugged my 800x600 bitmap in there and did some source updates, it worked perfectly (the c++ version).<br /><br />It looks like the masm source is a disassembly of your binary? I shall study both sources, thank you.</div>
+    <div class="meta">Posted on 2005-07-12 19:02:37 by drarem</div>
+   </div>
+   <div class="post" id="post-162005">
+    <div class="subject"><a href="#post-162005">Re: How to get mod and result using FPU</a></div>
+    <div class="body"><div class="quote"><br />It looks like the masm source is a disassembly of your binary? I shall study both sources, thank you.<br /></div><br />Yeah, it is - I couldn&#39;t be bothered writing it in assembly when the C++ works so well, even on slow machines like a PII-350. Added the disassembly because some people don&#39;t like dealing with .obj&#39;s and don&#39;t have a C compiler :)<br /></div>
+    <div class="meta">Posted on 2005-07-12 19:07:21 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Region format - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8420" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8420">Region format</a></p>
+   <div class="post" id="post-61513">
+    <div class="subject"><a href="#post-61513">Region format</a></div>
+    <div class="body">What's the format of region (RGN) to be used with such functions as SetWindowRgn?</div>
+    <div class="meta">Posted on 2002-10-13 06:33:54 by longer</div>
+   </div>
+   <div class="post" id="post-61519">
+    <div class="subject"><a href="#post-61519">Region format</a></div>
+    <div class="body">You can create a RGN with CreateRectRgn<br /><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/gdi/regions_2h0u.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/gdi/regions_2h0u.asp</a></div>
+    <div class="meta">Posted on 2002-10-13 08:05:05 by bazik</div>
+   </div>
+   <div class="post" id="post-61528">
+    <div class="subject"><a href="#post-61528">Region format</a></div>
+    <div class="body">Hi, bazik<br /><br />I have already looked through MSDN, but haven't found what I exactly want.<br />My idea is to make the region out of a bitmap. It is complex enough for making it with rectangles and ellipses. To my mind it is better to get the format of RGN and write it manually (or write a proc that does it automatically).<br /><br />Can anyone help me with it?</div>
+    <div class="meta">Posted on 2002-10-13 09:30:32 by longer</div>
+   </div>
+   <div class="post" id="post-61661">
+    <div class="subject"><a href="#post-61661">Region format</a></div>
+    <div class="body"><pre><code><br />_MAKE_REGION            PROTO           &#58;DWORD<br /><br />.CODE<br />; +------------------------------------------------------------------------------------------------+<br />; | _MAKE_REGION&#40; bmp_handle &#41;                                                                     |<br />; +------------------------------------------------------+-----------------------------------------+<br />_MAKE_REGION            PROC USES ESI EDI EBX hwnd &#58; DWORD, bhnd &#58; DWORD       <br />                        LOCAL flag, frun, d_dc, f_dc, tcol, _hdc &#58; DWORD               <br />                                                         <br />        INVOKE          CreateCompatibleDC, NULL         ; CREATE A DUMMY DC &#40;-&gt;_hdc&#41;<br />        MOV             _hdc, EAX                                               <br />        INVOKE          SelectObject, _hdc, bhnd         ; SELECT THE BACKGROUND INTO THIS DC<br />        MOV             flag, FALSE                      <br />        MOV             frun, TRUE                       <br />        XOR             EDI, EDI                         <br />        XOR             ESI, ESI                         <br />        INVOKE          GetPixel, _hdc, 0, 0             ; GET PIXELCOLOR AT X&#58;0 Y&#58;0 &#40;-&gt;tcol&#41;<br />        MOV             tcol, EAX                        ; NOW tcol HOLDS THE *TRANSPARENT* COLOR<br />_XLOOP&#58; INVOKE          GetPixel, _hdc, EDI, ESI         ; GET PIXELCOLOR AT X&#58;EDI Y&#58;ESI...<br />        CMP             EAX, tcol                        ; CURRENT COLOR = TRANSPARENT???<br />        JZ              _LETSGO                          <br />        CMP             EDI, PICTURE_W                   ; END OF ROW???<br />        JNZ             _FNDONE                          <br />_LETSGO&#58;CMP             flag, TRUE                       ; ENTIRE TRANSPARENT ROW PASSED???<br />        JNZ             _NXTONE                          <br />        MOV             flag, FALSE                      ; ...SUCCESS<br />        LEA             EAX, &#91; ESI + 1 &#93;                 ; EAX = CURRENT Y + 1<br />        INVOKE          CreateRectRgn, EBX, ESI, EDI, EAX ; REGION &#40;FIRST X, FIRST Y, LAST X, Y+1&#41;<br />        MOV             d_dc, EAX                        ; SAVE CREATED DC &#40;-&gt;d_dc&#41;<br />        CMP             frun, TRUE                       ; FIRST RUN???<br />        JNZ             _NOFRUN                          <br />        MOV             frun, FALSE                      <br />        PUSH            d_dc                             ; f_dc -&gt; d_dc<br />        POP             f_dc                             <br />        JMP             _NXTONE                          <br />_NOFRUN&#58;INVOKE          CombineRgn, f_dc, f_dc, d_dc, RGN_OR ; COMBINE REGION DATA &#40;-&gt;d_dc&#41;<br />        INVOKE          DeleteObject, d_dc               ; DELETE UNUSED DUMMY DC<br />        JMP             _NXTONE                          <br />_FNDONE&#58;CMP             flag, FALSE                      ; ARE THERE TRANRARENT PIXELS LEFT???<br />        JNZ             _NXTONE                          <br />        MOV             flag, TRUE                       ; MARK END OF ROW<br />        MOV             EBX, EDI                         ; SAVE START OF TRANSPARENT ROW &#40;-&gt;EBX&#41;<br />_NXTONE&#58;INC             EDI                              ; NEXT COL<br />        CMP             EDI, PICTURE_W                   ; X &gt; PICTURE-WIDTH???<br />        JBE             _XLOOP                          <br />        XOR             EDI, EDI                         ; X = 0<br />        INC             ESI                              ; Y = Y + 1 &#40;NEXT ROW&#41;<br />        CMP             ESI, PICTURE_H                   ; WE REACHED THE END?<br />        JB              _XLOOP                           <br />_EXIT&#58;  INVOKE          DeleteDC, _hdc                   ; REGION DATA TO OUR WINDOW AND<br /><br />        ;________________________________________________; f_dc -&gt; FINAL REGION<br />        MOV             EAX, f_dc                        ; RETURN REGION-HANDLE        <br />        RET                                              ; CLOSE THE BITMAP-DC...<br />                                                         <br />_MAKE_REGION            ENDP  <br /></code></pre><br />example:<br /><pre><code><br />&#91;RC&#93;<br />1000 BITMAP &quot;test.bmp&quot;<br /><br />&#91;ASM&#93;<br />_MAKE_REGION            PROTO           &#58;DWORD<br /><br />.CONST<br />        PICTURE_W       EQU             350 ;width and height of the pic<br />        PICTURE_H       EQU             130 ;GetObjectInfo can retrieve this      <br />                                            ;automaticaly...<br />.DATA?              <br />        hBitmap01       DD              ?    <br />        hRegion         DD              ?<br />        <br /><br />.CODE<br />.IF     uMSG ==         WM_CREATE         <br />        INVOKE          LoadBitmap, hInstance, 1000       ; LOAD BACKGROUND-PIC<br />        MOV             hBitmap01, EAX       <br /><br />        INVOKE          _MAKE_REGION, hBitmap01    ; CREATE THE REGION  <br />        MOV             hRegion, EAX<br />        INVOKE          SetWindowRgn, hwnd, EAX, TRUE    <br /><br />.ELSEIF uMSG ==         WM_DESTROY        <br />        INVOKE          DeleteObject, hRegion            <br />        INVOKE          DeleteObject, hBitmap01<br /></code></pre><br />sorry PICTURE_W and PICTURE_H are hardcoded constants... you can retrieve this <br />dynamicaly with GetObjectInfo. oh and you have to use SetWindowsRegion on eax<br />after calling this routine. this routine uses only rect-regions... i thought about writing<br />a real one but i was to lazy.<br /><br />and look at the GetRegionData API in the api-reference... the raw region format is<br />declared there...</div>
+    <div class="meta">Posted on 2002-10-14 04:09:51 by mob</div>
+   </div>
+   <div class="post" id="post-61737">
+    <div class="subject"><a href="#post-61737">Region format</a></div>
+    <div class="body">Thanks, mob!<br />That's exactly what I was looking for :alright: .</div>
+    <div class="meta">Posted on 2002-10-14 12:29:04 by longer</div>
+   </div>
+  </div>
+ </body>
+</html>

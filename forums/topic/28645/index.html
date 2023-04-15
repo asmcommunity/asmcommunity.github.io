@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Read or Write aligment, what is best? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28645" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28645">Read or Write aligment, what is best?</a></p>
+   <div class="post" id="post-202403">
+    <div class="subject"><a href="#post-202403">Read or Write aligment, what is best?</a></div>
+    <div class="body">When its not possible to always have both read and write DWORD aligned data (like in the case of the strcat function). Whats is better to have READ or WRITE aligment or  is there no difference?
+
+READ aligment example:
+
+<pre><code>
+;ESI -> Source
+;EDI -> Destination
+;ECX -> Number of bytes > 0 for this example
+  mov eax, esi  ; Used for
+  and eax, 3    ; Aligning source to DWORD boundaries
+  jz @@L0
+@@:
+  movsb
+  dec ecx
+  jz @@Quit
+  dec eax
+  jnz @B
+@@L0:
+  mov eax, ecx
+  shr ecx, 2
+  and ecx, ecx
+  jz @F
+  rep movsd
+@@:
+  and eax, 3
+  jz @@Quit
+  mov ecx, eax
+  rep movsb
+@@Quit:
+</code></pre>
+
+Write Aligment example:
+
+<pre><code>
+;ESI -> Source
+;EDI -> Destination
+;ECX -> Number of bytes > 0 for this example
+  mov eax, edi  ; Used for
+  and eax, 3    ; Aligning DESTINATION to DWORD boundaries
+  jz @@L0
+@@:
+  movsb
+  dec ecx
+  jz @@Quit
+  dec eax
+  jnz @B
+@@L0:
+  mov eax, ecx
+  shr ecx, 2
+  and ecx, ecx
+  jz @F
+  rep movsd
+@@:
+  and eax, 3
+  jz @@Quit
+  mov ecx, eax
+  rep movsb
+@@Quit:
+</code></pre>
+
+Also, whats is the best way to test the speed of code?</div>
+    <div class="meta">Posted on 2001-07-05 00:57:00 by dxantos</div>
+   </div>
+   <div class="post" id="post-202404">
+    <div class="subject"><a href="#post-202404">Read or Write aligment, what is best?</a></div>
+    <div class="body">Use the rdtsc instruction to count the number of clock cycles. Here is a macro that will display the number clock cycles in a message box :
+<pre><code>
+PERF_ON   MACRO
+IFNDEF __PERF
+  .DATA
+  __perfBuffer    BYTE 21 DUP (0)
+  __perfFmt       BYTE "%ld%ld", 0
+  __perfTitle     BYTE "Performance counter", 0
+  __PERF = 1
+  sprintf PROTO C :DWORD, :DWORD, :DWORD, :VARARG
+  memset  PROTO :DWORD, :DWORD, :DWORD
+  .CODE
+ENDIF
+  rdtsc
+  push    eax
+  push    edx
+ENDM
+
+PERF_OFF   MACRO
+  rdtsc
+  pop     esi
+  pop     edi
+  sub     eax, edi
+  sbb     edx, esi
+  
+  mov     DWORD PTR __perfBuffer[0], 0
+  mov     DWORD PTR __perfBuffer[4], 0
+  mov     DWORD PTR __perfBuffer[8], 0
+  mov     DWORD PTR __perfBuffer[12], 0
+  mov     DWORD PTR __perfBuffer[16], 0
+  mov     __perfBuffer[20], 0
+
+  pushad
+  INVOKE  sprintf, ADDR __perfBuffer, ADDR __perfFmt, edx, eax 
+  INVOKE  MessageBox, NULL, ADDR __perfBuffer, ADDR __perfTitle, MB_OK
+  popad
+ENDM
+</code></pre>
+To use it, link your prog with msvcrt.lib. To test your code, use :
+<pre><code>
+PERF_ON
+; code to test
+PERF_OFF
+</code></pre>
+To test memory alignement, use this code :
+<pre><code>
+.DATA
+ALIGN 4
+   dummy BYTE 0            
+   a     DWORD  0         ; a is not aligned
+ALIGN 4
+   b    DWORD 0           ; b is aligned
+.CODE
+start :
+
+   PERF_ON
+   mov  a, eax         ; read
+   PERF_OFF
+   
+   PERF_ON
+   mov  eax, a         ; write 
+   PERF_OFF
+   
+   PERF_ON
+   mov  a, eax         ; read
+   PERF_OFF
+   
+   PERF_ON
+   mov  eax, a         ; write
+   PERF_OFF
+
+   PERF_ON
+   mov  b, eax         ; read
+   PERF_OFF
+   
+   PERF_ON
+   mov  eax, b         ; write
+   PERF_OFF
+
+   PERF_ON
+   mov  b, eax         ; read
+   PERF_OFF
+   
+   PERF_ON
+   mov  eax, b         ; write
+   PERF_OFF
+   INVOKE   ExitProcess, 0
+END start
+</code></pre>
+The results shows that writing is faster than reading, but there is not a big difference between aligned and misaligned access. It's strange. The Intel optimization manuals says :
+<div class="quote">
+A misaligned data access that causes an access request for data already in the L1 cache can cost six to nine cycles. A misaligned access that causes an access request from L2 cache or from memory, however, incurs a penalty that is processor-dependent. Align the data as follows:
+• Align 8-bit data at any address.
+• Align 16-bit data to be contained within an aligned four byte word.
+• Align 32-bit data so that its base address is a multiple of four.
+• Align 64-bit data so that its base address is a multiple of eight.
+• Align 80-bit data so that its base address is a multiple of sixteen.
+A 32-byte or greater data structure or array should be aligned so that the
+beginning of each structure or array element is aligned in a way that its base
+address is a multiple of thirty-two.
+</div></div>
+    <div class="meta">Posted on 2001-07-05 03:21:00 by karim</div>
+   </div>
+   <div class="post" id="post-202405">
+    <div class="subject"><a href="#post-202405">Read or Write aligment, what is best?</a></div>
+    <div class="body">thanks for the prompt reply.
+
+BTW: If you use wsprintfA instead of sprintf yo can avoid to include msvcrt.lib.</div>
+    <div class="meta">Posted on 2001-07-05 09:24:00 by dxantos</div>
+   </div>
+  </div>
+ </body>
+</html>

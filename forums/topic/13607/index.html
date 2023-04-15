@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to recognize _cdecl convention? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13607" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=13607">How to recognize _cdecl convention?</a></p>
+   <div class="post" id="post-105432">
+    <div class="subject"><a href="#post-105432">How to recognize _cdecl convention?</a></div>
+    <div class="body">Hi,<br />I am coding an disassemble engine in MASM. On the ground of a stack watching I have to recognize _cdecl calls because they don't clean stack on exit in contrast to _stdcall, _fastcall, or _pascal.<br /><br />Platform: All of Windows, all of executable forms.<br /><br />Please, do you have some good idea how to recognize this?<br /><br />Thanks to all.<br /><br />:confused:</div>
+    <div class="meta">Posted on 2003-05-30 14:01:03 by MazeGen</div>
+   </div>
+   <div class="post" id="post-105445">
+    <div class="subject"><a href="#post-105445">How to recognize _cdecl convention?</a></div>
+    <div class="body">tiny suggestion<br /><br />C standard calling convention will default to something like<br /><br />call          ; call the function<br />mov   ,  eax      ; save the return value<br />add   esp, &lt;a number&gt;       ; restore the stack pointer, so it's C CALL<br /><br />STDCALL to something<br /><br />call          ; call the function<br />mov   ,  eax      ; save the return value<br /><br /><br />do multiple (passive) passes, look for this and then you know which routine uses what?<br />It probably will choke on SMC though.</div>
+    <div class="meta">Posted on 2003-05-30 16:14:28 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-105632">
+    <div class="subject"><a href="#post-105632">How to recognize _cdecl convention?</a></div>
+    <div class="body"><strong>wsprintf</strong> is the only Windows API that uses the C calling convention, that should make it easier to identify them ;)</div>
+    <div class="meta">Posted on 2003-06-01 04:54:54 by donkey</div>
+   </div>
+   <div class="post" id="post-105649">
+    <div class="subject"><a href="#post-105649">How to recognize _cdecl convention?</a></div>
+    <div class="body">that's not true<br /><br />the COM APIs have other routines that use C calling (and I'm sure there are others, not to mention handcrafted routines), *every* API with a variabele number of parameters uses it.</div>
+    <div class="meta">Posted on 2003-06-01 11:19:47 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-105664">
+    <div class="subject"><a href="#post-105664">problem with disassembling protection</a></div>
+    <div class="body">Thanks for your suggestions.<br /><br />SMC will be recognized in previous pass, it's no problem.<br /><br />A problem arises when code uses anti-disassembling algorithm. One example:<br /><br />push something1<br />push parameter<br />call 		; call the function<br />mov , eax	; save the return value<br />pop something2		; _cdecl: POP parameter, something2 is no longer needful<br />			; non _cdecl: POP something1<br /><br />Anti-disassembling algorithm can simulate _cdecl using POP reg (or ADD esp,&lt;a number&gt;) but it removes only &quot;something1&quot; from the stack, not the parameters.<br /><br />I've found one solution today but it don't recognize this anti-disassembling trick so it's worthless.<br />I'm still researching...<br />:confused:</div>
+    <div class="meta">Posted on 2003-06-01 15:46:39 by MazeGen</div>
+   </div>
+   <div class="post" id="post-106396">
+    <div class="subject"><a href="#post-106396">R?sum</a></div>
+    <div class="body">So, the following is my resume:<br /><br />In case of the code doesn't use an anti-disassembling algorith mentioned above, I've found an algorithm how to recognize _cdecl:<br /><br />1) In this event is clear that stack items are no longer needful:<br />call  ; call the function<br />mov , eax ; save the return value<br />add esp, &lt;a number&gt; ; restore the stack pointer, so it's C CALL<br /><br />2) But if stack is restored using POP reg, is it not so clear:<br /><br />push something1 ; don't know what is PUSHed - may be whatever<br />... ...<br />call far  ; call the function<br />mov , eax ; save the return value<br />pop ecx ; restore the stack pointer<br />... ... ; the disassembler have to watch for the ECX now.<br />mov ecx,something3 ; If the value is no longer needful is it C CALL<br />; else it was POP something1 -&gt; no C CALL!<br /><br />When the disassemler doesn't know, whether the code uses an anti-disassembling algorithm, the only way is (as I think): To go inside a procedure CALL, to trap every instruction and to watch for the stack while instruction RETF :eek:</div>
+    <div class="meta">Posted on 2003-06-08 14:51:15 by MazeGen</div>
+   </div>
+   <div class="post" id="post-106491">
+    <div class="subject"><a href="#post-106491">How to recognize _cdecl convention?</a></div>
+    <div class="body">Hi,<br /><br />The problem with using pop to clear the stack, you have no idea whether the code is peserving registers or not. It is common fact that some codes have push and pops to preserve some registers before calling and after calling that function.<br /><br />I have another suggestion. You can look into the retn opcode. The C calling function would just pop the return address of the stack and set the eip to the return address and leave the stack clearing to the caller. Thus mostly the return near opcode would be without an immediate for C calling convention. However this could be confused with functions that do not take any parameters and some weird codes. For example<br /><br /><pre><code><br />strlenW&#58; <br />pop eax <br />pop edx <br />push eax <br />xor ecx,ecx <br />_repeat&#58; <br />mov eax,&#91;edx+ecx*2&#93; <br />add ecx,1 <br />test eax,0ffffh <br />jz _out <br />add ecx,1 <br />test eax,0ffff0000h <br />jnz _repeat <br />_out&#58; <br />mov eax,ecx ;xchg eax,ecx to save one byte <br />retn <br /></code></pre></div>
+    <div class="meta">Posted on 2003-06-09 07:13:25 by roticv</div>
+   </div>
+   <div class="post" id="post-106544">
+    <div class="subject"><a href="#post-106544">How to recognize _cdecl convention?</a></div>
+    <div class="body">Sorry, I don't understand which RETN opcode you mean. So I don't know why you think RETN would be without an immediate for C calling convention.<br />And what do this code does?<br />:confused: <br /><br />Please, give me more details. Maybe I'm dumb :)</div>
+    <div class="meta">Posted on 2003-06-09 16:40:17 by MazeGen</div>
+   </div>
+   <div class="post" id="post-106549">
+    <div class="subject"><a href="#post-106549">Re: R?sum</a></div>
+    <div class="body"><div class="quote"><br />1) In this event is clear that stack items are no longer needful:<br />call  ; call the function<br />mov , eax ; save the return value<br />add esp, &lt;a number&gt; ; restore the stack pointer, so it's C CALL<br /></div>Not quite right.  If the function is in an expression (example: <strong>total = toint(chr) + temp;</strong>), EAX will be used after the stack is restored.<pre><code>    push  chr        ; stack arg<br />    call  toint      ; call function<br />    add   esp,4      ; restore stack<br />    add   eax,temp   ; finish calculation<br />    mov   total,eax  ; store<br /></code></pre>I have also seen this optimization in some compilers:<pre><code>    push  arg3<br />    push  arg2<br />    push  arg1<br />    call  func1<br />    push  arg4<br />    push  arg3<br />    push  arg2<br />    push  arg1<br />    call  func2<br />    add   esp,7*4  ; clear arguments of both function calls<br /></code></pre></div>
+    <div class="meta">Posted on 2003-06-09 17:00:42 by tenkey</div>
+   </div>
+   <div class="post" id="post-106610">
+    <div class="subject"><a href="#post-106610">How to recognize _cdecl convention?</a></div>
+    <div class="body">Well the code is just a strlen for unicode. Just an example code using<br /><pre><code><br />function&#58;<br />pop eax<br />pop reg;first parameter<br />pop reg;second parameter<br />push eax<br />...<br />retn<br /></code></pre><br />retn = return near (C3h)<br />A retn without an immediate means that the function does not clear the stack, just pop the return address of the stack.</div>
+    <div class="meta">Posted on 2003-06-10 04:16:30 by roticv</div>
+   </div>
+   <div class="post" id="post-106673">
+    <div class="subject"><a href="#post-106673">How to recognize _cdecl convention?</a></div>
+    <div class="body">Hi,<br />for roticv:<br />Yes, I understand now. I've forgotten to emphasize that the problem is about FAR calls where I can't go inside a procedure CALL. In case of CALL NEAR is it simple: the disassembler goes inside and watches for the stack including RETN instruction. In case of CALL FAR disassembler don't because it is performing on CPL 3 and not all FAR calls (as I think for example WinAPIs - I don't have direct experience) are performed on CPL 3 (apart from a time expenditure).<br /><br />For tenkey:<br />Thanks for new suggestions.<br />First code example is OK, from disassembler's point of view it doesn't matter whether instruction MOV , EAX is before clearing argument or not.<br />Second example is exactly that what I need. If you have more examples, please send it. I have to take into consideration.<br /><br />;)</div>
+    <div class="meta">Posted on 2003-06-10 15:24:40 by MazeGen</div>
+   </div>
+  </div>
+ </body>
+</html>

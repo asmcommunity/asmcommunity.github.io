@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Handles on the fly - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2575" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=2575">Handles on the fly</a></p>
+   <div class="post" id="post-16341">
+    <div class="subject"><a href="#post-16341">Handles on the fly</a></div>
+    <div class="body">Hi there,<br /><br />it's me again :eek: <br /><br />Currently I am playing around with arrays and in the array read loop I inserter some window creation. Now I want to know if there exists any macro or smth which I call in order to have it create my handles on the fly. This would add much more flixibility to my proggy as I would not have to work with constants and not to change a lot of things in the source.<br /><br />Hope you know what I mean :grin:<br /><br />YaWNS<br /><br />EDIT:<br /><pre><code><br />--inside code---<br />..<br />|--my array loop--<br />| after getting array entries for one array<br />| invoke CreateWindow,......,value1_of_array,value2_of_array,...<br />| mov hWindowhWnd,eax                          &lt;- this is my problem!!!!!<br />| ...<br />|--array loop end--<br />..<br />--inside code<br /></code></pre> <br /><br />So, here using it this way I would have to use a counter which increases by one every loopcycle and then check, which number the counter is, and use the handle which is for this.<br />e.g. it is the forth time I run through the loop so I have to do<br /><pre><code>mov hWindowhWnd4,eax</code></pre> <br /><br />See now, what I mean?</div>
+    <div class="meta">Posted on 2001-12-27 09:00:46 by YaWNS</div>
+   </div>
+   <div class="post" id="post-16343">
+    <div class="subject"><a href="#post-16343">Handles on the fly</a></div>
+    <div class="body">Do you mean GetModuleHandle or CreateFileMapping or something like that?</div>
+    <div class="meta">Posted on 2001-12-27 09:30:29 by CodeLover</div>
+   </div>
+   <div class="post" id="post-16358">
+    <div class="subject"><a href="#post-16358">Handles on the fly</a></div>
+    <div class="body">You could create an array of handles like this:<br /><br /><pre><code><br />hWinArray dd MAX_WINDOWS dup &#40;?&#41;<br /><br /></code></pre><br /><br />Then use a non-volatile register that points to the right handle:<br /><br /><pre><code>; before loop&#58;<br />mov ebx, offset hWinArray<br /><br />;in loop&#58;<br /><br />mov &#91;ebx&#93;, eax ;save handle<br />add ebx, 4 ;move to next handle<br /></code></pre><br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-12-27 11:18:49 by Thomas</div>
+   </div>
+   <div class="post" id="post-17225">
+    <div class="subject"><a href="#post-17225">Handles on the fly</a></div>
+    <div class="body">you might go with this...<br /><br /><pre><code><br />.DATA?<br /><br />CW_STRUC        STRUCT      <br />dwExStyle       DD ?<br />lpClassName     DD ?<br />lpWindowName    DD ?<br />dwStyle         DD ?<br />x               DD ?<br />y               DD ?<br />nWidth          DD ?<br />nHeight         DD ?<br />hWndParent      DD ?<br />hMenu           DD ?<br />hInstance       DD ?<br />lpParam         DD ?<br />WndHandle       DD ?  <br />CW_STRUC        ENDS<br /><br />_CW_SIZE        EQU sizeof &#40; CW_STRUC &#41;<br /><br /><br />.DATA<br /><br />ClassName       db &quot;SOME-CLASS&quot;,0<br />CaptionName     db &quot;BBLABLABLA&quot;,0<br /><br />_Windows        CW_STRUC &lt; 0,0,offset ClassName,offset CaptionName,0,100,100,100,500,0,0,0,0 &gt;<br />                CW_STRUC &lt; 0,0,offset ClassName,offset CaptionName,0,200,200,200,500,0,0,0,0 &gt;<br />                CW_STRUC &lt; 0,0,offset ClassName,offset CaptionName,0,300,300,300,500,0,0,0,0 &gt;<br />                CW_STRUC &lt; 0,0,offset ClassName,offset CaptionName,0,400,400,400,500,0,0,0,0 &gt;<br />                CW_STRUC &lt; 0,0,offset ClassName,offset CaptionName,0,500,500,500,500,0,0,0,0 &gt;<br />_Windows_Nbr    EQU &#40; $ - Offset _Windows &#41; / _CW_SIZE<br /><br /><br />.CODE                                 <br /><br />start&#58;  ;...<br /><br />        assume  edi&#58; PTR CW_STRUC<br />                <br />        mov     ebx, _Windows_Nbr<br />        mov     edi, offset _Windows<br />        <br />_CW_L&#58;  invoke  CreateWindowEx,&#91;edi&#93;.dwExStyle,&#91;edi&#93;.lpClassName,&#91;edi&#93;.lpWindowName,&#91;edi&#93;.dwStyle,<br />                               &#91;edi&#93;.x,&#91;edi&#93;.y,&#91;edi&#93;.nWidth,&#91;edi&#93;.nHeight,&#91;edi&#93;.hWndParent,<br />                               &#91;edi&#93;.hMenu,&#91;edi&#93;.hInstance,&#91;edi&#93;.lpParam<br /><br />        mov     &#91;edi&#93;.WndHandle, eax<br /><br />        add     edi, _CW_SIZE<br />        dec     ebx<br />        jnz     _CW_L<br /><br />        ;...<br /></code></pre><br /><br />say you want to destroy the third window...<br /><br /><pre><code><br />        mov     edi, offset _Windows + &#40; 3 * _CW_SIZE &#41;<br />        invoke  DestroyWindow,&#91;edi&#93;.WndHandle<br /></code></pre><br /><br />you can also define arrays...<br /><br /><pre><code><br />.DATA<br />_Windows        CW_STRUC 256 dup &#40;&lt;&gt;&#41;<br /></code></pre></div>
+    <div class="meta">Posted on 2002-01-02 07:34:59 by mob</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Typo in Collection.inc code? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25070" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25070">Typo in Collection.inc code?</a></p>
+   <div class="post" id="post-183618">
+    <div class="subject"><a href="#post-183618">Typo in Collection.inc code?</a></div>
+    <div class="body">In ObjAsm32&#39;s Collection.inc at the end of the Collection.SetLimit method the following code can be found:<br /><br /><pre><code>@@Err:<br />&nbsp; &nbsp; OCall esi.ErrorReport, NULL, COL_OUTOFMEMORY<br /><br />align @WordSize<br />@@Exit:<br />&nbsp; &nbsp; pop esi</code></pre><br /><br />Does this mean that OCall never returns?<br />Because if it returns, you could have a problem due to the aligned @@Exit.<br />In between OCall and @@Exit there could be code, isn&#39;t it?<br />Shouldn&#39;t you jump over that code to the @@Exit label instead?<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-16 17:21:25 by mdevries</div>
+   </div>
+   <div class="post" id="post-183638">
+    <div class="subject"><a href="#post-183638">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">Hops... that&#39;s wrong... the &quot;align&quot; should be removed!&nbsp; :O<br /><br />Regards,<br /><br />Biterider<br /><br /></div>
+    <div class="meta">Posted on 2006-07-17 01:13:53 by Biterider</div>
+   </div>
+   <div class="post" id="post-183640">
+    <div class="subject"><a href="#post-183640">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">Revising the generated code, the align directive fills the gap with meaningless instructions like lea ecx, , mov edi, edi, etc. that doesn&#39;t affect the main code and you profit from the loop alignment.<br />Conclusion, the align should not be removed. <br /><br />Regards,<br /><br />Biterider</div>
+    <div class="meta">Posted on 2006-07-17 01:43:32 by Biterider</div>
+   </div>
+   <div class="post" id="post-183657">
+    <div class="subject"><a href="#post-183657">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">If you align on a 16 bit boundary I expect there will a maximu gap of 1 byte.<br />If you align on a 32 bit boundary the gap would be a maximum of 3 bytes.<br /><br />The bigger the gap, the more room for meaningfull code.<br /><br /><div class="quote">Revising the generated code, the align directive fills the gap with meaningless instructions like lea ecx, , mov edi, edi, etc. that doesn&#39;t affect the main code</div><br /><br />You expect the code always to be meaningless.<br />But how can you be sure the code will always be meaningless?<br />From the tests you did? Or have you found anything in the documentation? I would be interested.<br /><br />I wonder: does the assembler know that we are dealing with a gap?<br />If so, why would the assembler produce different code then?<br />If the gap remains the same, I would expect the assembler to produce always the same code in the gap. But you mention different kinds of filling of the gap.<br /><br />Friendly regards,<br />mdevries.</div>
+    <div class="meta">Posted on 2006-07-17 15:15:09 by mdevries</div>
+   </div>
+   <div class="post" id="post-183659">
+    <div class="subject"><a href="#post-183659">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">Hi mdevries<br />MASM (ML.exe) uses always the following instructions to fill code gaps, depending on the gap size<br /><br /><pre><code>8D 49 00&nbsp; &nbsp; &nbsp; &nbsp;  lea&nbsp; &nbsp; &nbsp; &nbsp;  ecx,<br />8B FF&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp; &nbsp; &nbsp;  edi,edi<br />90&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  nop</code></pre><br /><br />As you can see, all these instructions don’t change the content of the registers or the CPU flags. The compiler detects such a situation (when align was used), it tries automatically to fill the gap with those instructions. AFAIK the linker (Link.exe) uses int 3 to fill the gap between procedures, but this code should never be executed unless something goes wrong.<br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-07-17 16:05:22 by Biterider</div>
+   </div>
+   <div class="post" id="post-183668">
+    <div class="subject"><a href="#post-183668">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">Here&#39;s the list of instructions that MASM uses to align:<br /><pre><code><br />lea&nbsp; &nbsp;  esp, ; 8DA42400000000 ; 7 bytes<br />lea&nbsp; &nbsp;  ebx, ; 8D9B00000000 ; 6 bytes<br />add&nbsp; &nbsp;  eax,0 ; 0500000000 ; 5 bytes<br />lea&nbsp; &nbsp;  esp, ; 8D642400 ; 4 bytes<br />lea&nbsp; &nbsp;  ecx, ;&nbsp; 8D4900 ; 3 bytes<br />mov&nbsp; &nbsp;  edi,edi ;&nbsp; 8BFF ; 2 bytes<br />nop ; 90 ; 1 byte<br /></code></pre><br />As you see, no registers are modified. MASM uses a combination of these instructions to fill-in the 1-15 bytes gap. Just be aware of the &quot;add eax,0&quot; case. (modifies flags). But in MASM, this was a good idea to do - since it&#39;d be hilarious/stupid to bluntly align just before using the flags. <br /><br />Sections in .obj are 16-byte aligned, thus it&#39;s easy for MASM to know whether a symbol is aligned to 2,4,8,16 bytes or not. <br /><br />Biterider, I&#39;d recommend using &quot;align 16&quot;, since it improves branching speed with at least 1 cycle :) . <br /><br />P.S.: And why using different instructions to fill different gaps? Compare the speed of 1,2 or 3 instructions of these against the number of NOPs that otherwise&#39;d have to be generated :)</div>
+    <div class="meta">Posted on 2006-07-17 20:34:43 by Ultrano</div>
+   </div>
+   <div class="post" id="post-183768">
+    <div class="subject"><a href="#post-183768">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">Hi Ultrano<br />About the alignment note, AFAIK the benefit you get is related to the memory reading for the cache. in 486 machines, the cache is 16 bytes width, so it is logical to align the code to a 16 bytes boundary to avoid double readings to fill the cache. On 586 machines the cache is 32 bytes width. Should we align now to 32 bytes? Too bad that masm doesn&#39;t support it...<br />Correct me if I&#39;m wrong!<br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-07-20 03:32:56 by Biterider</div>
+   </div>
+   <div class="post" id="post-183771">
+    <div class="subject"><a href="#post-183771">Re: Typo in Collection.inc code?</a></div>
+    <div class="body">I&#39;m not 100% sure, it&#39;s just that the AMD optimization guide had it, iirc, and it was mentioned in a lecture in my uni, while the lecture was about AMD&#39;s code-optimization block (instruction resequencing). <br /><br />Really, one could try to align some of his code to 32 byte sections, but in MASM it requires a runtime check, always or just while he&#39;s developing an .obj/.lib with optimized code/snippets. </div>
+    <div class="meta">Posted on 2006-07-20 04:37:44 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

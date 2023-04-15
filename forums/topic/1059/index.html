@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Writing in conventional memory by VxD - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1059" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=1059">Writing in conventional memory by VxD</a></p>
+   <div class="post" id="post-6921">
+    <div class="subject"><a href="#post-6921">Writing in conventional memory by VxD</a></div>
+    <div class="body">Hello, I have got a problem with segment loading, segment rights; my goal is to write code that, under <br />Win98, can do anything, so I have studied VxD ( many many thanks to Iczelion).<br />I realized a dynamically loadable VxD that offers some functions by the DeviceIoControl interface. All works well, all is ok.<br />I have been stopped by the fact that I am not able to address in protected mode the byte located at 0000:0417 in real mode to change the state of Bloc Num, Bloc Scorr ,Caps Lock.<br />I want to implement in protected mode the same thing that I can do in real mode but, when I load ds with 0 or with another value, an exception 0xD occurs. Can I build my own data segment with an extension 0h-FFFFFFFFh to access memory or all is a lot more complicated than I expect ?<br />Is really my VxD running at privilege level 0 ?<br /><br />This is the code :<br /><br />		    ;Write in Conv.memory		<br />		    cli;NO INTERRUPTS<br />		    push esi<br />		    push ds<br />                                    mov ax, 0<br />-----&gt; Gen.Prot.Fault    mov ds, ax ;<br />  		    mov esi, 00000417h<br />		    mov al, 70h<br />-----&gt; Gen.Prot.Fault    mov , al<br />	 	    pop ds<br />		    pop esi<br />		    sti;OK INTERRUPTS<br />		    xor eax,eax<br /><br /><br />I hope someone can help me, so many thanks to all of you.<br /><br />fooCoder</div>
+    <div class="meta">Posted on 2001-09-12 03:34:04 by fooCoder</div>
+   </div>
+   <div class="post" id="post-6925">
+    <div class="subject"><a href="#post-6925">Writing in conventional memory by VxD</a></div>
+    <div class="body">Hi Foo ! Well , there are 1001 ways to do what you want to , and in fact you don't even need the powers of a VxD !<br /><br />As concerns your principal question : accessing the BIOS area at absolute ( physical as well as virtual , as far as Win32 processes are concerned ) addresses 400-500h , the simplest and cleanest way is this : use segment ( selector ) 0040h ! This is a ('bi-modal') selector that Windows has graciously created for just this purpose .<br /><br />So you would just code , e.g :<br /><br />        mov  ax, 40h<br />        mov  gs, ax   ; let's put gs to work !<br /> ...<br />       mov   , whatever ; no GPF even in &quot;ring&quot; 3 !<br /><br />HTH ! Note the similarity of this code with good old real mode BIOS/DOS programs ! <br />----------------------------<br /><br />For your second question : accessing the whole of memory without bothering about the protections , I shall refrain from explaining it because I feel only one who is able to devise the means by himself should even think of doing such things. <br />From ring zero ( such as from a vxd ; but you really do NOT need to embark in vxd's and the DDK to access ring zero ;) you might just want to use the predefined selectors 0028h / 0030 h !<br /><br />--<br />Ninho</div>
+    <div class="meta">Posted on 2001-09-12 05:19:27 by Ninho</div>
+   </div>
+   <div class="post" id="post-7001">
+    <div class="subject"><a href="#post-7001">Writing in conventional memory by VxD</a></div>
+    <div class="body">Thank you Ninho, but it seems not to work !<br />The instruction mov , al generates an assembly<br />error.<br />I am using SysAccess to study the GDT and I have noticed that <br />I can only load ds with segments at DPL 3.<br />Those segments, obviusly, don't allow me to see the whole memory, while there are a lot of other segments at DPL 0 that<br />allow that [00000000-FFFFFFFF] read/write data.<br />If I load ds with a segment of DPL I get a GPF.<br />The same happens sometimes if I try to write by esi at some location after I have loaded ds with a DPL 3 segment.<br /><br /><br />Es:<br /><br />Using SysAccess ( thanks to RODY Thierry ) I see that segment 8 should be good; infact it is data read/write access, DPL 3, Limit <br />00000400-000006FF.<br />I load ds with this segment, it is ok.<br />Then <br />		mov al, 70h<br />		mov esi, 00000417h<br />		mov , al<br /><br />and I get a GPF.<br /><br />If I read<br />                                mov al, <br />All is ok.<br /><br />I don't understand how I have to use esi; If segment is Read/Write, why do an error occur when I try to write ?<br />And why cannot I load a segment at DPL 0 ( I am using a VxD ) ?<br /><br />Thanks to all, it is hard, but it is worth the hassle.</div>
+    <div class="meta">Posted on 2001-09-13 02:37:51 by fooCoder</div>
+   </div>
+   <div class="post" id="post-7003">
+    <div class="subject"><a href="#post-7003">Writing in conventional memory by VxD</a></div>
+    <div class="body">1.<br />&gt;The instruction mov , al generates an assembly error. <br /><br />Well , did you ASSUME gs: ? For instance ,<br />.386<br />....<br />BIOS_Seg segment AT 0400h<br />org 17h<br />KB_flag  db ?<br />...<br />BIOS_Seg ends<br />...<br />.code<br />....<br />ASSUME gs:BIOS_Seg<br /><br />    or KB_flag , 1  ; should work<br /><br />...<br /><br />OK ?<br /><br />2.<br />You don't understand the protections very well ! You have to consider protection at the SEGMENT level ( which you did , lookin at the GDT :) AND also protection at the PAGE level - which you did not ;)<br />HTH. <br /><br />...<br /><br />BTW : although I told you how to do what you asked to , I should have added a word of caution : Windows tries to prevent you from doing such things for GOOD reasons , the keyboard hardware is normally virtualized and you just should not have to access it at the BIOS and/or hardware level ! <br /><br />I am realizing from your new post that you are really a beginner with all this : you should try to learn protected mode by other means than brute force , and if possible - outside wind*ws ( which does not make correct use of the -marvellous- capabilities of the 80386+ architecture ). I would suggest you take the time to study AND THINK with some good doc , and PENCIL and PAPER.<br /><br />Then try to make your own mode swithing system , and learn about gates , protection rings , and TASKS - which you cannot do under wind*ws crap... Tools such those you are mentionning in your post , or SoftICE etc are very useful , but they are not good for learning the very mechanisms IMO )<br /><br />Good luck , <br /><br />--<br />Cz.<br /><br />Of course this is all for educationnal purposes I understand ;)</div>
+    <div class="meta">Posted on 2001-09-13 03:33:48 by Ninho</div>
+   </div>
+  </div>
+ </body>
+</html>

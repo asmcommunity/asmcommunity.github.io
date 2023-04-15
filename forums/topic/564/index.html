@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Arrays in windows - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=564" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=564">Arrays in windows</a></p>
+   <div class="post" id="post-3426">
+    <div class="subject"><a href="#post-3426">Arrays in windows</a></div>
+    <div class="body">Im trying to load an array of 16 dwords with colors for use with the choose color dialog. Im loading them from an ini file. Heres the small snippet i use.<br /><br /><pre><code>	xor	ebx, ebx<br />	xor	ecx, ecx<br />loadcolors&#58;<br />	invoke	wsprintfA, addr Buffer, addr szForStr3, ecx<br />	invoke	GetPrivateProfileIntA, addr szAppTitle, addr Buffer, 0, addr szIniFile<br />	mov	CustomColors&#91;ebx&#93;, eax<br />	inc	ecx<br />	add	ebx, 4<br />	cmp	ecx, 15<br />	jne	loadcolors</code></pre><br /><br />And custom colors is defined as...<br /><br /><pre><code>CustomColors	dword		16 dup&#40;?&#41;</code></pre><br /><br />Could somone tell me why the line<br /><pre><code>mov	CustomColors&#91;ebx&#93;, eax</code></pre><br />creates an invalid page fault?<br /><br />If i need to explain more, plese let me know.</div>
+    <div class="meta">Posted on 2001-08-10 21:02:18 by ChimpFace9000</div>
+   </div>
+   <div class="post" id="post-3435">
+    <div class="subject"><a href="#post-3435">Arrays in windows</a></div>
+    <div class="body">Hi.<br />My guess is register preservation.<br />EBX is probably being used by Windows in one or both of the prior function calls, therefore its value is not 0 or 4 or 8, etc, when you get to the mov instruction. Either create a variable to hold that value or push/pop it to/from the stack.</div>
+    <div class="meta">Posted on 2001-08-10 22:17:30 by vReal</div>
+   </div>
+   <div class="post" id="post-3453">
+    <div class="subject"><a href="#post-3453">I don't think so.</a></div>
+    <div class="body">hi,<br />i think vReal mentioned the problem, but didn't solve it. i think ChimpFace9000 just forgot to put values like 0, 4, 8, 12, ... into EBX. I think he thought he could use arrays like in VB or something. But this is only possible if you have an array of bytes.<br />Correct me if i'm wrong.<br /><br />NOP-erator</div>
+    <div class="meta">Posted on 2001-08-11 03:18:53 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-3454">
+    <div class="subject"><a href="#post-3454">forgot something</a></div>
+    <div class="body">i forgot something to say:<br />you should always push ebx at the beginning of a proc and pop it at the end. or just use:<br /><br /><pre><code><br />balbla proc uses ebx dbdf&#58;DWORD<br />           ...<br />           ...<br />           ret<br />balbla endp<br /></code></pre><br /><br />if you use this, masm pushes and pops ebx for YOU.<br /><br />NOP-erator</div>
+    <div class="meta">Posted on 2001-08-11 03:21:36 by NOP-erator</div>
+   </div>
+   <div class="post" id="post-3456">
+    <div class="subject"><a href="#post-3456">Arrays in windows</a></div>
+    <div class="body">ChimpFace9000:<br />You are using ecx as counter:<br /><br />                  xor     ecx, ecx<br /><br />          loadcolors:<br /><br />invokes...<br /><br />                  inc     ecx<br />                  cmp     ecx, 15<br />                  jne     loadcolors<br /><br />The calls to Windows api functions ever change<br />ecx, eax and edx. So you can write so:<br /><br />                  xor     ecx, ecx<br /><br />          loadcolors:<br />                  push ecx<br />invokes...<br />                  pop     ecx<br />                  inc     ecx<br />                  cmp     ecx, 15<br />                  jne     loadcolors</div>
+    <div class="meta">Posted on 2001-08-11 05:09:00 by n u M I T_o r</div>
+   </div>
+   <div class="post" id="post-3457">
+    <div class="subject"><a href="#post-3457">Arrays in windows</a></div>
+    <div class="body">Windows APIs never touch ebx esi edi so you can uses them as counters rather than the likes of ecx. <br /><br />Just remember to do as NOP-erator says and push and pop them.</div>
+    <div class="meta">Posted on 2001-08-11 06:25:16 by Eóin</div>
+   </div>
+   <div class="post" id="post-3459">
+    <div class="subject"><a href="#post-3459">Arrays in windows</a></div>
+    <div class="body">Your put your array in the .code section - which is READ-ONLY!!!</div>
+    <div class="meta">Posted on 2001-08-11 07:04:04 by gfalen</div>
+   </div>
+   <div class="post" id="post-3461">
+    <div class="subject"><a href="#post-3461">Arrays in windows</a></div>
+    <div class="body">I would use ebx as counter AND index into the color table.  Do<br /><br /><pre><code><br />mov &#91;CustomColors + ebx*4&#93;, eax<br /></code></pre><br /><br />to get the proper indexing. As zadkiel and n u M I T_o r say, windows<br />api has some &quot;register rules&quot;. ebx+esi+edi are always preserved,<br />while eax+ecx+edx are usually trashed. If you only use eax+ecx+edx<br />you will not need register preservation (unless the rest of your code<br />depends on those regs not being trashed, of course ;). So the best<br />is (probably) to use eax/ecx/edx for general use, and ebx/esi/edi<br />when you need register preservation across api calls (but DO remember<br />to save the ebx/esi/edi then, at least inside callbacks (wndproc etc))</div>
+    <div class="meta">Posted on 2001-08-11 07:12:05 by f0dder</div>
+   </div>
+   <div class="post" id="post-3464">
+    <div class="subject"><a href="#post-3464">Arrays in windows</a></div>
+    <div class="body">There is a piece of folklore here that needs to be buried, 32 bit windows only has ONE register preservation convention, if a procedure is going to use any of EBX, ESI or EDI, it must preserve them. It does not matter if its a window callback or not, it only matters IF the procedure uses any of those 3 registers.<br /><br />The purpose of the convention is so that all procedures, API calls included, have a predictable way of relating to each other. You can assume that all API calls preserve EBX, ESI &amp; EDI so when you call an API function, the only thing you must be aware about is that it can freely modify EAX, ECX and EDX so if you have values in these 3 registers, you will often need to preserve them before calling an API function. If you don't, you can end up with unexpected crashes that come from a register being changed in an external function call.<br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-08-11 07:24:08 by hutch--</div>
+   </div>
+   <div class="post" id="post-3468">
+    <div class="subject"><a href="#post-3468">Arrays in windows</a></div>
+    <div class="body">&quot;... 32 bit windows only has ONE register preservation convention, if a procedure is going to use any of EBX, ESI or EDI, it must preserve them&quot; - good point Hutch.  Which is why I have redefined the word CALLBACK on my system to the following:<br /><br />CALLBACK equ &lt;proc uses esi edi ebx&gt;<br /><br />Now I can say,<br /><br />someproc CALLBACK, varlist...<br /><br />instead of<br /><br />someproc proc uses esi edi ebx, varlist...<br /><br />you might also want to do this...<br /><br />WINDPROC equ &lt;CALLBACK, hWin, uMsg, wParam, lParam&gt;<br /><br />WndProc WINDPROC<br />         ...<br />WndProc endp<br /><br /><br />G. Falen</div>
+    <div class="meta">Posted on 2001-08-11 07:51:17 by gfalen</div>
+   </div>
+   <div class="post" id="post-3481">
+    <div class="subject"><a href="#post-3481">Arrays in windows</a></div>
+    <div class="body">Thanks everyone.<br /><br />1. The custom colors are defined in the .data? section.<br /><br />2. I eventualy used the mov cutsomcolors, eax way.<br /><br />3. I never knew you had to presrve esi, edi and ebx, thanks.<br /><br />4. If i use &quot;uses esi edi ebx&quot;, masm will push and pop them for me right. But how does it know when to do it. The proc exits at so many places. Does it just put the pops after every ret?</div>
+    <div class="meta">Posted on 2001-08-11 11:41:18 by ChimpFace9000</div>
+   </div>
+   <div class="post" id="post-3493">
+    <div class="subject"><a href="#post-3493">...</a></div>
+    <div class="body">no, if you use &quot;uses esi edi ebx&quot; masm automatically puts all the pushes at the beginning at the proc and all the pops at the end (before ret). you can see that if you use a debugger.<br /><br />cya,<br />  NOP-erator</div>
+    <div class="meta">Posted on 2001-08-11 14:05:18 by NOP-erator</div>
+   </div>
+  </div>
+ </body>
+</html>

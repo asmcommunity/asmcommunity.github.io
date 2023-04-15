@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Making ur own mutex - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8796" />
+    <link rel="next" href="../?id=8796&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8796">Making ur own mutex</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=8796&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=8796&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="8796" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=8796&amp;page=2">&gt;</a><a href="../?id=8796&amp;page=2">&raquo;</a></form>   <div class="post" id="post-64645">
+    <div class="subject"><a href="#post-64645">Making ur own mutex</a></div>
+    <div class="body">Hi<br /><br />Situation:<br /><br />i am making a table that containg multiple entries. there are two or more thread that are accessing the entries in the table. When the entry is accessed by one thread that entry MUST not be accessed be any other thread. Logical solution is to have a mutex for each entry.<br /><br />Problem:<br /><br />The problem is that it costs too much on memory and the size of each entry is increased TOO much :( and having a single mutex for the whole table is also not acceptable as it will block too often.<br /><br />Proposed solution:<br /><br />So instead of have a mutex, i have a 32-bit value for each entry .If the entry is in use, i set a sigle bit in the flag register. When any thread comes to use the entry, it first checks that bit. If it is not set (the entry is not in use), it is set and when it is no longer in use, it is reset. if the bit is already set, it means that the entry is in use and that thread does not access the entry. Its like having a boolean (IN-USE) flag for each entry in the table.<br /><br />Problem with solution:<br /><br />The only problem that i can think of is that, the time between the code checks the bit in flag, and when it set the bit is critical and MUST be done in a single execution, i.e no thread-switching between these two instructions. because if the thread switch between the two points, the other thread may also see that flag is not set and it will also access the entry. this situation is not good.<br /><br />Question:<br /><br />1) Is there any way to ensure that the checking of flag and setting it is done without swithching thread.<br />2) Is there any other way to go about the problem<br />3) The OS do the same thing somehow. Does anyone know how does the OS do it. Although it can as it control both the mutex and thread-switching<br />4) Can there be some ASM instruction that can check a condition and if that condition is true, set a flag, all in one instruction.<br /><br />hoping for some answers :)<br /><br />goto</div>
+    <div class="meta">Posted on 2002-11-05 00:05:04 by goto</div>
+   </div>
+   <div class="post" id="post-64654">
+    <div class="subject"><a href="#post-64654">Making ur own mutex</a></div>
+    <div class="body">What's wrong with using EnterCriticalSection ?<br /><br />There's a whole set of SETXX instructions that set or clear AL based on the values of eflags, if that's what you are looking for. But it won't set a flag in memory.</div>
+    <div class="meta">Posted on 2002-11-05 02:12:21 by micmic</div>
+   </div>
+   <div class="post" id="post-64661">
+    <div class="subject"><a href="#post-64661">Making ur own mutex</a></div>
+    <div class="body"><div class="quote"><br />What's wrong with using EnterCriticalSection ?<br /><br />There's a whole set of SETXX instructions that set or clear AL based on the values of eflags, if that's what you are looking for. But it won't set a flag in memory. </div><br />SETXX can set a flag in either memory or register...<br />but I don't think SETXX will do the job...<br /><br /><br />To goto,<br />1. Yes, you can code it like this,<br />invoke Sleep, 0<br />mov eax, address_of_mutex<br />cmp , NOT_OCCUPIED<br />jne wait<br />......<br /><br />Passing 0 for dwMilliseconds means to discard the remainder of its time slice. Next time windows switches to this thread, the following code will run continuously (just a few clock cycles :) ).<br /><br />2 &amp; 3. Yes. If it's to be time critlcal and the table has many entries, better use critical sections, they're faster than kernel objects and you can even specify the spin count before EnterCriticalSection comes into sleep<br />(sdk says EnterCriticalSectionSpinCount doesn't exist in 95).</div>
+    <div class="meta">Posted on 2002-11-05 03:15:27 by C.Z.</div>
+   </div>
+   <div class="post" id="post-64672">
+    <div class="subject"><a href="#post-64672">Making ur own mutex</a></div>
+    <div class="body">if you were to put<br />mov eax, flag	;.......(a)<br />mov flag, 1	;.......(b)<br />cmp eax, 1<br />je tryagainlater<br /><br />would another thread have time to intrude<br />between (a) and (b) ?<br /><br />or, using ffffffffh (instead of 1 )<br /> sar flag<br />jc tryagainlater<br />mov flag, -1    ; now in use<br />   code<br />mov flag, 0   ; finished</div>
+    <div class="meta">Posted on 2002-11-05 04:07:25 by argus</div>
+   </div>
+   <div class="post" id="post-64673">
+    <div class="subject"><a href="#post-64673">Making ur own mutex</a></div>
+    <div class="body">To Argus:<br />Another thread can intrude between any 2 instructions in any thread, if currrent thread is not of a realtime priority.</div>
+    <div class="meta">Posted on 2002-11-05 04:13:32 by Vaxon</div>
+   </div>
+   <div class="post" id="post-64677">
+    <div class="subject"><a href="#post-64677">Making ur own mutex</a></div>
+    <div class="body">i see, vaxxon<br /><br />multithreading is not something i'm familiar with <br />..(among a whole host of other things!) ...:) <br /><br /><br />thank you</div>
+    <div class="meta">Posted on 2002-11-05 04:31:04 by argus</div>
+   </div>
+   <div class="post" id="post-64702">
+    <div class="subject"><a href="#post-64702">Making ur own mutex</a></div>
+    <div class="body">Probably not the most efficient, but in the main thread you could set up a<br />custom queue which could handle this.<br /><br />So main thread (or a dedicated queue thread) has a queue.  during idle<br />time it can check the queue for new entries.  If the queue is not empty it<br />will pop the first one off and it will check the status.  In other words, only<br />one thread is able to make the determination if access is grantable or not.<br />The whole thing can be coded using custom user messages like<br /><br />invoke SendMessage, hQueue, QUEUE_CHECKSTATUS, ThisThreadID, Location<br />(add a queue entry)<br /><br />Upon getting this the queue thread will check  and send a message<br />back to  giving access or not...<br /><br />Just an idea to bat around if the others dont pan out...</div>
+    <div class="meta">Posted on 2002-11-05 08:51:51 by Graebel</div>
+   </div>
+   <div class="post" id="post-64708">
+    <div class="subject"><a href="#post-64708">Making ur own mutex</a></div>
+    <div class="body">Just read your post briefly, but here's what I have done for similar situations in the past: bts.<br /><br />BTS will simultaneously set a bit in a memory value *and* copy that bit to the carry flag. By setting the bit you are indicating that you want to use the corresponding value in a particular thread. You just have to check the carry flag to see if the other thread was using it before you.<br /><br />BTS can also be used with the LOCK prefix if you have multiple processors. If you only have one, though, you won't need to use LOCK<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-11-05 09:39:51 by chorus</div>
+   </div>
+   <div class="post" id="post-64779">
+    <div class="subject"><a href="#post-64779">Making ur own mutex</a></div>
+    <div class="body">thanks for all the help ppl :)<br /><br />i have an anothere idea.<br /><br />Can we stop the switching of thread by masking all the interrupts between checking of flag and setting of flag. No interrupts means no break in the execution of code and no thread switching, or am i wrong to assume that ?<br /><br />goto</div>
+    <div class="meta">Posted on 2002-11-06 00:33:07 by goto</div>
+   </div>
+   <div class="post" id="post-64780">
+    <div class="subject"><a href="#post-64780">any comments</a></div>
+    <div class="body">i asked the same questions on some other messageboard, and i will like to share this answer with u all and ask about ur comments on this<br /><br /><br />&gt; 4) Can there be some ASM instruction that can check a condition and if<br />&gt; that condition is true, set a flag, all in one instruction.<br /><br />	Yes, but believe it or not that's not enough. For example, suppose you<br />do a single instruction increment of a memory register on two processors<br />at the same time. The increment could be internally implemented as<br />read/modify/write. If the two processors work concurrently, they will<br />both read, both modify, and then both write. Oops, two increments just<br />became one.</div>
+    <div class="meta">Posted on 2002-11-06 00:57:34 by goto</div>
+   </div>
+   <div class="post" id="post-64781">
+    <div class="subject"><a href="#post-64781">Making ur own mutex</a></div>
+    <div class="body">How about:<br /><br />mov eax,1<br />xchg Flag,eax<br />cmp eax,1<br />je Abort<br /><br />The critical part is just one instruction (xchg) :grin:</div>
+    <div class="meta">Posted on 2002-11-06 01:07:41 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-64857">
+    <div class="subject"><a href="#post-64857">Making ur own mutex</a></div>
+    <div class="body">goto, that's what the LOCK prefix is for, to prevent multiple processors from having the problem you describe...<br /><br />It slows things down however...<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-11-06 18:09:57 by chorus</div>
+   </div>
+   <div class="post" id="post-64871">
+    <div class="subject"><a href="#post-64871">Making ur own mutex</a></div>
+    <div class="body"><div class="quote"><br />goto, that's what the LOCK prefix is for, to prevent multiple processors from having the problem you describe...<br /><br />It slows things down however...<br /><br />--Chorus </div>...and as <strong>Qweerdy</strong> points out, XCHG with memory has an <u>implied</u> LOCK and is the easiest solution to the problem.  The CMPXCHG instruction was also created to make mutexes easier to code, but still requires the LOCK prefix.<br /><br />A flag is not even needed to solve this problem: while the object is in use just NULL the pointer to indicate that it is being used and restore the pointer when done:<pre><code>	mov esi, Table ; array of pointers<br />	xor ebx, ebx<br />_1&#58;	xchg ebx, &#91;esi&#93;<br />	add esi, 4<br />; do not need to test for end of Table if dummy object for each thread is at end of table!<br />	test ebx, ebx<br />	je _1<br /><br />...do something...<br /><br />	mov &#91;esi-4&#93;, ebx<br />; or during debug...<br />;	xchg ebx, &#91;esi-4&#93;<br />; if ebx &lt;&gt; 0 ERROR!<br />; &#40;should never happen&#41;</code></pre>Very little overhead in terms of execution speed and no overhead in terms of size. :)</div>
+    <div class="meta">Posted on 2002-11-06 20:50:31 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-64896">
+    <div class="subject"><a href="#post-64896">Making ur own mutex</a></div>
+    <div class="body"><div class="quote">1) Is there any way to ensure that the checking of flag and setting it is done without swithching thread.</div><em>The functions <strong>InterlockedCompareExchange</strong>, <strong>InterlockedExchangeAdd</strong>, <strong>InterlockedDecrement</strong>, <strong>InterlockedExchange</strong>, and <strong>InterlockedIncrement</strong> provide a simple mechanism for synchronizing access to a variable that is shared by multiple threads. The threads of different processes can use this mechanism if the variable is in shared memory.</em><br /><br />Internally these functions are very simple and use xchg, xadd, cmpxchg to do the job.</div>
+    <div class="meta">Posted on 2002-11-07 04:02:13 by Four-F</div>
+   </div>
+   <div class="post" id="post-64926">
+    <div class="subject"><a href="#post-64926">Making ur own mutex</a></div>
+    <div class="body">bitRAKE,<br />  not sure how <strong>mov eax,1/xchg Table[4*index],eax/cmp eax,1/je @@Somewhere</strong> is simpler than <strong>bts Table,index/jc @@Somewhere</strong> ??<br />  Furthermore, using xchg you're using up to 4 bytes per flag instead of 1 bit.<br /><br />  Regardless, considering all solutions, I think yours is the best.</div>
+    <div class="meta">Posted on 2002-11-07 09:39:02 by chorus</div>
+   </div>
+   <div class="post" id="post-64946">
+    <div class="subject"><a href="#post-64946">Making ur own mutex</a></div>
+    <div class="body"><strong>chorus</strong>, there is no flag. ;)  The object pointer in the array is set to zero to indicate it is in use.  <strong>goto</strong> was concerned with the memory cost of having many entries in the table each with their own mutex data.  I show a way to have no additional data and be thread safe.  Imagine this senerio:<br /><br />Thread 1: Test flag A<br />Thread 2: Test flag A<br />Thread 1: Flag okay, use object A!<br />Thread 2: Flag okay, use object A!<br /><br />How does the method you suggest prevent this?  Just imagine how bad this gets with mulitple processors.  Now the method I propose (it is not mine - it has been used for decades) results in the following:<br /><br />Thread 1: Swap in null for object pointer A<br />Thread 2: Swap in null for object pointer A<br />Thread 1: Not zero pointer, use object A.<br />Thread 2: Zero pointer, try next object.<br /><br />It is important to look at the granularity of the code, taking into account where instructions can be interrupted, or (in a multi-processor system) where concurrent execution can occur.  LOCK prevents concurrent execution on multi-processor systems.  I have a dual system here to test on, too.</div>
+    <div class="meta">Posted on 2002-11-07 12:49:31 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-64952">
+    <div class="subject"><a href="#post-64952">Making ur own mutex</a></div>
+    <div class="body">bitRAKE, it was Qweerdy's method that mentioned a Flag, ditto for mine. Both would require auxiliary storage. The method you proposed doesn't (and hence, that's why I like that one the best :))<br /><br />As for preventing multiple threads accessing the same object, it's very simple:<br /><br />Suppose you define<br /><br /><pre><code><br />  Array dd 32 dup &#40;?&#41;<br />  FlagTable dd 0<br /></code></pre><br /><br />the FlagTable is just a bit array representing whether or not a particular entry in Array is in use. 0 indicating no. 1 indicating yes.<br /><br />Suppose your thread wants to access element at index eax. You have to set the corresponding bit, but also you want to know if someone was already using the entry.<br /><br />BTS tells you this, because it copies the bit into the carry flag. If the carry flag was set than another thread was using it. If not, then it's free to use.<br /><br />I use this in a server I've programmed to allocate send and recv buffers for overlapped I/O. It works quite well, and really only uses 2 lines of code. The only thing to be concerned about is the LOCK prefix. As you mentioned, XCHG implies the LOCK whereas BTS does not. For my application, that's fine because I'm only using a single processor computer, and if I can do without it, I will. Once you start getting into multiple processors though you really have no choice.</div>
+    <div class="meta">Posted on 2002-11-07 14:42:06 by chorus</div>
+   </div>
+   <div class="post" id="post-64956">
+    <div class="subject"><a href="#post-64956">Making ur own mutex</a></div>
+    <div class="body"><div class="quote"><br />bitRAKE,<br />  not sure how <strong>mov eax,1/xchg Table[4*index],eax/cmp eax,1/je @@Somewhere</strong> is simpler than <strong>bts Table,index/jc @@Somewhere</strong> ??<br />  Furthermore, using xchg you're using up to 4 bytes per flag instead of 1 bit.<br /><br />  Regardless, considering all solutions, I think yours is the best. </div><br />I don't see why it is the best.<br />bitRake method takes 32 times more memory and ~ the same amont of clocks against bit operations.</div>
+    <div class="meta">Posted on 2002-11-07 15:25:29 by The Svin</div>
+   </div>
+   <div class="post" id="post-64957">
+    <div class="subject"><a href="#post-64957">Re: Making ur own mutex</a></div>
+    <div class="body"><div class="quote"><br />Hi<br /><br />Situation:<br /><br />i am making a table that containg multiple entries. there are two or more thread that are accessing the entries in the table. When the entry is accessed by one thread that entry MUST not be accessed be any other thread. Logical solution is to have a mutex for each entry.<br /><br />Problem:<br /><br />The problem is that it costs too much on memory and the size of each entry is increased TOO much :( and having a single mutex for the whole table is also not acceptable as it will block too often.<br /><br />Proposed solution:<br /><br />So instead of have a mutex, i have a 32-bit value for each entry .If the entry is in use, i set a sigle bit in the flag register. When any thread comes to use the entry, it first checks that bit. If it is not set (the entry is not in use), it is set and when it is no longer in use, it is reset. if the bit is already set, it means that the entry is in use and that thread does not access the entry. Its like having a boolean (IN-USE) flag for each entry in the table.<br /><br />Problem with solution:<br /><br />The only problem that i can think of is that, the time between the code checks the bit in flag, and when it set the bit is critical and MUST be done in a single execution, i.e no thread-switching between these two instructions. because if the thread switch between the two points, the other thread may also see that flag is not set and it will also access the entry. this situation is not good.<br /><br />Question:<br /><br />1) Is there any way to ensure that the checking of flag and setting it is done without swithching thread.<br />2) Is there any other way to go about the problem<br />3) The OS do the same thing somehow. Does anyone know how does the OS do it. Although it can as it control both the mutex and thread-switching<br />4) Can there be some ASM instruction that can check a condition and if that condition is true, set a flag, all in one instruction.<br /><br />hoping for some answers :)<br /><br />goto </div><br /><br />1.If you care of memory use bits not dwords as flags<br />2.If you set bit that you expect to be zero and flags<br />not set after operation as they should be when when zero bit is set - it indicates that bit was changed and give you additional chance to exit.<br />bt - test bit<br />bts - set bit checking if it was set before.</div>
+    <div class="meta">Posted on 2002-11-07 15:42:55 by The Svin</div>
+   </div>
+   <div class="post" id="post-64958">
+    <div class="subject"><a href="#post-64958">Making ur own mutex</a></div>
+    <div class="body"><div class="quote"><br /><br />I don't see why it is the best.<br />bitRake method takes 32 times more memory and ~ the same amont of clocks against bit operations. </div>Please, re-read - there is no flag = zero more memory used.<br /><br /><strong>chorus</strong>, good to see you understand the limitations of the method.  It would be a nasty bug to find on a multi-processor system. :)<br /><br />p.s. Wonder how hyper-threading effects these methods?</div>
+    <div class="meta">Posted on 2002-11-07 16:34:38 by bitRAKE</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=8796&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=8796&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="8796" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=8796&amp;page=2">&gt;</a><a href="../?id=8796&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bilinear Filter - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4748" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=4748">Bilinear Filter</a></p>
+   <div class="post" id="post-33285">
+    <div class="subject"><a href="#post-33285">Bilinear Filter</a></div>
+    <div class="body">Hey everybody!<br /><br />Currently, in a graphics program I'm doing I am using a bilinear filter. I did a quick search of the board and couldn't find anything significant related to the topic. I'd like to see other people's approaches to the matter.<br /><br />Here it goes:<br /><br />Bilinear interpolation of X' from points X_00,X_01,X_10,X_11 equally spaced on a grid.<br />Formula:<br />   X'=X_00(1-u)(1-v) + X_01(1-u)v + X_10u(1-v) + X_11(uv)<br /><br />if we let:<br />   a=X_00+u(X_10-X_00)<br />   b=X_01+u(X_11-X_01)<br />then:<br />   X'=a+v(b-a)<br /><br />;uses fixed point math<br />;0&lt;=u,v&lt;1 but are stored as a byte so are multiplied by 256<br />;X_ij are byte values (RGB values in this case)<br />;PROC returns byte value in eax<br /><pre><code><br /><br />Bilinear PROC uses edx ebx X_00,X_01,X_10,X_11,u,v&#58;DWORD<br />  mov eax, X_10            ;eax=X_10<br />  mov ebx, X_00            ;ebx=X_00<br />  mov edx, u               ;edx=u &lt;&lt;8<br />  sub eax,ebx              ;eax=X_10-X_00<br />  shl ebx,8                ;ebx=X_00 &lt;&lt; 8<br />  imul eax,edx             ;eax=u&#40;X_10-X_00&#41;<br />  add eax,ebx              ;eax=a&lt;&lt;8<br />  push eax                 ;save eax for a moment<br />  <br />  mov eax, X_11            ;eax=X_11<br />  mov ebx, X_01            ;ebx=X_01<br />  sub eax,ebx              ;eax=X_11-X_01<br />  shl ebx,8                ;ebx=X_01 &lt;&lt; 8<br />  imul eax,edx             ;eax=u&#40;X_11-X_01&#41;<br />  add eax,ebx              ;eax=b&lt;&lt;8<br />  pop edx                  ;edx=a&lt;&lt;8<br />  <br />  sub eax,edx              ;eax=b-a &lt;&lt;8<br />  shl edx,8                ;edx=a &lt;&lt; 16<br />  imul eax,v               ;eax=v&#40;b-a&#41; &lt;&lt;16<br />  add eax,edx              ;eax=a+v&#40;b-a&#41; &lt;&lt; 16<br />  shr eax,16               ;eax=a+v&#40;b-a&#41;<br />  adc eax,0                ;round up if necessary<br />Bilinear ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2002-04-12 23:00:52 by chorus</div>
+   </div>
+   <div class="post" id="post-33407">
+    <div class="subject"><a href="#post-33407">Bilinear Filter</a></div>
+    <div class="body"><pre><code><br />; X_ij - mmx_word&#91;0&#58;R&#58;G&#58;B&#93;<br /><br />; MMX version<br />; u,v=0..32767<br />	movd mm5,&#91;u&#93;<br />	punpcklwd mm5,mm5<br />	punpckldq mm5,mm5<br /><br />	movq mm0,&#91;qword X_00&#93;<br />	movq mm2,&#91;qword X_10&#93;<br />	psubw mm2,mm0<br />	paddw mm2,mm2<br />	pmulhw mm2,mm5<br />	paddw mm0,mm2		; mm0=a<br /><br />	movq mm3,&#91;qword X_01&#93;<br />	movq mm4,&#91;qword X_11&#93;<br />	psubw mm4,mm3<br />	paddw mm4,mm4<br />	pmulhw mm4,mm5<br />	paddw mm3,mm4		; mm3=b<br /><br />	movd mm6,&#91;v&#93;<br />	punpcklwd mm6,mm6<br />	punpckldq mm6,mm6<br /><br />	psubw mm3,mm0<br />	paddw mm3,mm3<br />	pmulhw mm3,mm6<br />	paddw mm0,mm3<br />; mm0=color<br /><br /><br />; PIII,Athlon version<br />; u,v=0..65535<br />	pshufw mm5,&#91;u&#93;,0<br />	movq mm0,&#91;qword X_00&#93;<br />	movq mm2,&#91;qword X_10&#93;<br />	psubw mm2,mm0<br />	pmulhuw mm2,mm5<br />	paddw mm0,mm2		; mm0=a<br />	movq mm3,&#91;qword X_01&#93;<br />	movq mm4,&#91;qword X_11&#93;<br />	psubw mm4,mm3<br />	pmulhuw mm4,mm5<br />	paddw mm3,mm4		; mm3=b<br />	pshufw mm6,&#91;v&#93;,0<br />	psubw mm3,mm0<br />	pmulhuw mm3,mm6<br />	paddw mm0,mm3<br />; mm0=color<br /></code></pre><br />You may reorder instruction for speedup.</div>
+    <div class="meta">Posted on 2002-04-14 02:49:11 by Nexo</div>
+   </div>
+   <div class="post" id="post-33464">
+    <div class="subject"><a href="#post-33464">Bilinear Filter</a></div>
+    <div class="body">Thats kind of funny that you have to create different code optimizatoins for the different processors. lol . When will the word unify down to one code set</div>
+    <div class="meta">Posted on 2002-04-14 14:55:45 by Volcano_88101</div>
+   </div>
+   <div class="post" id="post-33566">
+    <div class="subject"><a href="#post-33566">Bilinear Filter</a></div>
+    <div class="body">There is no optimization under different processors. Various processors - various <strong>sets of instructions</strong> - various <strong>implementation</strong>. So was always from 8086 up to today's processors. Nothing I find here funny.</div>
+    <div class="meta">Posted on 2002-04-15 09:44:07 by Nexo</div>
+   </div>
+   <div class="post" id="post-33773">
+    <div class="subject"><a href="#post-33773">optimization?</a></div>
+    <div class="body">Personally, it's not even a matter of different processors. It's just a matter of making the best code with what tools you have available. If that means you have different processors and different instructions sets, then it's more fun to see what I can do and what other people can do :)<br /><br />Furthermore, a lot of the actual implementation has nothing to do with processors. Consider the different implementations of Bubble Sort and Heap Sort or Quick Sort. They all accomplish the same thing and you can code each for any given instruction set. But the *concept* is different for each. They are not simply different implementations of the same thing, they are each different in concept. The variation between my code or another persons code stems from a far deeper reason then instruction sets: it stems from being able to do the same thing using entirely different concepts.<br /><br />To be honest, that's  more than half the reason I post here, or code at all for that matter. Optimizations are all fine and dandy, but it's the concepts that are worth my time. I think other people would agree: just check out the StrLen thread. 10 pages of people looking for a byte! Are they just trying to squeeze out 1 more millisecond? I think it's just because we want to find all the ways we can find that zero byte. And that's all.</div>
+    <div class="meta">Posted on 2002-04-16 21:31:50 by chorus</div>
+   </div>
+  </div>
+ </body>
+</html>

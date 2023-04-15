@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fastest way to compare strings - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1414" />
+    <link rel="next" href="../?id=1414&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=1414">Fastest way to compare strings</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=1414&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=1414&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="1414" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=1414&amp;page=2">&gt;</a><a href="../?id=1414&amp;page=2">&raquo;</a></form>   <div class="post" id="post-9084">
+    <div class="subject"><a href="#post-9084">Fastest way to compare strings</a></div>
+    <div class="body">Hi<br />Does anyone know the fastest way to compare a string? Im not after anythin fancy like reversing strings or anything..</div>
+    <div class="meta">Posted on 2001-10-10 05:37:25 by Kezza</div>
+   </div>
+   <div class="post" id="post-9085">
+    <div class="subject"><a href="#post-9085">Fastest way to compare strings</a></div>
+    <div class="body">Kezza,<br /><br />Its pretty simple stuff, load the addresses of both strings into 2 registers, scan and compare them one char at a time and exit under the condition you require, set length, mismatch or zero terminator.<br /><br />In pseudo code,<br /><br />mov esi, data1<br />mov edi, data2<br /><br />label:<br />mov al, <br />mov ah, <br />inc esi<br />inc edi<br />cmp al, ah<br />jne outlabel    ; mismatch<br />cmp al, 0       ; zero terminator<br />jne label<br /><br />; if here, match occurred<br /><br />outlabel:<br /><br />The pseudo code tests for mismatch and zero terminator. You can also write it for a set length as well.<br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-10-10 06:16:47 by hutch--</div>
+   </div>
+   <div class="post" id="post-9099">
+    <div class="subject"><a href="#post-9099">Fastest way to compare strings</a></div>
+    <div class="body">Hutch,<br />The pseudo-code brings up a question for me.  Using ah right after al will it cause a stall?  I've been wanting more registers in the worst sort of way &amp; well this gives me some hope at the byte level at least..<br /><br />thanks<br /><br />PS: Yes, I know  I need to finish reading Agner's doc...</div>
+    <div class="meta">Posted on 2001-10-10 10:07:17 by rafe</div>
+   </div>
+   <div class="post" id="post-9102">
+    <div class="subject"><a href="#post-9102">Fastest way to compare strings</a></div>
+    <div class="body">rafe, it will not stall on a P6 arch processor as it uses dynamic processor renaming (in fact a different register is used after every modification to the named one! So eax is not in the same location physically on the chip after inc eax).<br />The only possibility of a stall comes from the fact that <strong>al</strong> is not actually a subset of <strong>eax</strong>, and so<br /><pre><code><br />  mov eax, 44332211h<br />  mov BYTE PTR &#91;ebx&#93;, ah ; This will stall<br /><br />  mov eax, 44332200h<br />  mov al, 11h<br />  cmp eax, 44332211h ; This will stall<br /></code></pre><br /><br />Hutch's code only uses results from in sub registers, and doesn't mix them (which is where the danger lies).<br />According to the Intel docs, it can take up to 7 cycles for a write to &quot;retire&quot; (ie. finally merge with the rest of the register), which means a theoritical 21 instructions can get through the processor in this time!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-10-10 10:27:51 by Mirno</div>
+   </div>
+   <div class="post" id="post-9108">
+    <div class="subject"><a href="#post-9108">Fastest way to compare strings</a></div>
+    <div class="body">Thanks Mirno! &amp; this makes my day :) because it will relax some of the constraints I've been struggling with.</div>
+    <div class="meta">Posted on 2001-10-10 10:48:44 by rafe</div>
+   </div>
+   <div class="post" id="post-9110">
+    <div class="subject"><a href="#post-9110">Fastest way to compare strings</a></div>
+    <div class="body">Oops... not so fast... this is bad news for the following:<br /><pre><code><br />mov cl, &#91;edi&#93;<br />mov bl, &#91;ecx + CaseTab&#93; ;Stall?<br />mov cl, &#91;esi&#93; <br />cmp bl, &#91;ecx + CaseTab&#93; ;Stall?<br />jne strNE<br />inc esi<br />inc edi<br /></code></pre><br />As I read your post I must recode to space out the cl/ecx usage.</div>
+    <div class="meta">Posted on 2001-10-10 11:00:48 by rafe</div>
+   </div>
+   <div class="post" id="post-9114">
+    <div class="subject"><a href="#post-9114">Fastest way to compare strings</a></div>
+    <div class="body">In theory yes, but it depends on what the value of ecx is to start with. The Intel engineers realising the problem provides a special case for zeroing registers. If xor ecx, ecx (or sub ecx, ecx) a special (internal) flag is set so the processor knows that the rest of the value of ecx is irrelevant.<br /><br />So if you add an xor ecx, ecx before the movs (if it is feasable) it will not stall, and as it is only a 1u-op instruction it should blend in with other code fairly easily (even if it doesn't it'll save time because it isn't stalled! The only thing you loose is the instruction size).<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-10-10 11:28:44 by Mirno</div>
+   </div>
+   <div class="post" id="post-9116">
+    <div class="subject"><a href="#post-9116">Fastest way to compare strings</a></div>
+    <div class="body">ahhh thanks again. shrink code i will do.</div>
+    <div class="meta">Posted on 2001-10-10 11:39:02 by rafe</div>
+   </div>
+   <div class="post" id="post-9154">
+    <div class="subject"><a href="#post-9154">Fastest way to compare strings</a></div>
+    <div class="body">Rafe,<br /><br />I have not digested the algo but you are in trouble with the partial register write in CL and the following read from ECX. As Mirno suggested the Intel optimisation where you can use it is either XOR or SUB and this will prevent the stall.<br /><br />I would be inclined to lay the algo out again with a different register usage to avoid the problem if possible. As far as using the low and high byte of a register, I have never had a problem with doing so over most processors of the last few years and I have tested the process using different registers to make sure. It certainly solves the problem of BYTE size register usage.<br /><br />Regards,<br /><br /><a href="mailto:hutch@pbq.com.au">hutch@pbq.com.au</a></div>
+    <div class="meta">Posted on 2001-10-10 20:21:43 by hutch--</div>
+   </div>
+   <div class="post" id="post-9196">
+    <div class="subject"><a href="#post-9196">Fastest way to compare strings</a></div>
+    <div class="body">Your advice will be taken as the alpha definitely has &quot;code&quot; problems. This is much needed info.  Efficient algos I can design efficient code (why I use asm) I'm still learning.<br /><br />I only posted a partial code segment &amp; the xor was done before the top of the loop. That doesn't excuse the sloppy code because I was lucky &amp; not good in this little bit of engineering &amp; I'm trying to remove luck from the equation.  Lesson  learned now to learn many more.<br /><br />Thanks again to both of you:alright:</div>
+    <div class="meta">Posted on 2001-10-11 10:02:56 by rafe</div>
+   </div>
+   <div class="post" id="post-9245">
+    <div class="subject"><a href="#post-9245">Fastest way to compare strings</a></div>
+    <div class="body">hi i have the following code but for some reason if the text in the two edit boxes are different.. my message pops up which is good but it pops up twice??? can anyone tell me why and how to fix it? thanx<br /><br />             .elseif ax==IDB_CA<br />                invoke PostQuitMessage,NULL<br />             .elseif ax==IDB_CHANGE                <br />                invoke GetWindowText, hwndEdit2, OFFSET PassBuffer, 20<br />                invoke GetWindowText, hwndEdit3, OFFSET PassBuffer2, 20<br />                mov esi, OFFSET PassBuffer <br />                mov edi, OFFSET PassBuffer2<br />                                <br />                compareLoop:<br />                    mov al, <br />                    mov ah, <br />                    inc esi             ;Goto the next character<br />                    inc edi             ;Goto the next character<br />                    cmp al, ah          ;Compare the 2 characters<br />                    jne Different       ;Jump if the characters being compared are not equal<br />                    cmp al, 0           ;Compare to see if the character is 0, because all strings end with 0<br />                    jne compareLoop     ;If the character is not 0, then goto the start of the loop<br />                    invoke SetWindowText,hwndEdit,ADDR TxtEqual<br />                    jmp Continue<br /><br />                Different:<br />                    invoke MessageBox, hWnd, ADDR MessageBoxError, ADDR AppName, MB_OK + MB_ICONWARNING<br />                    jmp Continue<br /><br />                   Continue:</div>
+    <div class="meta">Posted on 2001-10-12 01:57:34 by Kezza</div>
+   </div>
+   <div class="post" id="post-9246">
+    <div class="subject"><a href="#post-9246">Fastest way to compare strings</a></div>
+    <div class="body">It must be ran twice. Do you have any code after 'Continue' which modifies the text in any editboxes?</div>
+    <div class="meta">Posted on 2001-10-12 02:02:04 by gliptic</div>
+   </div>
+   <div class="post" id="post-9247">
+    <div class="subject"><a href="#post-9247">Fastest way to compare strings</a></div>
+    <div class="body">Why does it have to be run twice? i only want it run once because getting two msgboxes is annoying!!<br />and no there is no code after continue:</div>
+    <div class="meta">Posted on 2001-10-12 02:04:43 by Kezza</div>
+   </div>
+   <div class="post" id="post-9249">
+    <div class="subject"><a href="#post-9249">Fastest way to compare strings</a></div>
+    <div class="body">I didn't mean it had to be run twice, I meant I think it does run twice.</div>
+    <div class="meta">Posted on 2001-10-12 02:08:19 by gliptic</div>
+   </div>
+   <div class="post" id="post-9250">
+    <div class="subject"><a href="#post-9250">Fastest way to compare strings</a></div>
+    <div class="body">hey ok so do u know how to make it only run once?</div>
+    <div class="meta">Posted on 2001-10-12 02:13:05 by Kezza</div>
+   </div>
+   <div class="post" id="post-9252">
+    <div class="subject"><a href="#post-9252">Fastest way to compare strings</a></div>
+    <div class="body">No. But you should do a check to see which editbox is edited before you run the code.</div>
+    <div class="meta">Posted on 2001-10-12 02:14:57 by gliptic</div>
+   </div>
+   <div class="post" id="post-10314">
+    <div class="subject"><a href="#post-10314">Fastest way to compare strings</a></div>
+    <div class="body">Hi there,<br /><br />if AMD or Intel CPU's has really a RISC Core than<br />this two varaints are propably fast.<br /><br /><br />Using 16bit at once.<br />Each string must be terminated by 0, which is,<br />aligned to WORD, and padded with 0.<br /><br /><pre><code><br /><br />	lea	esi, str1<br />	lea	edi, str2<br /><br />loop&#58;	mov	ax, &#91;esi&#93;<br />	lea	esi, &#91;esi + 2&#93;<br />	mov	bx, &#91;edi&#93;<br />	lea	edi, &#91;edi + 2&#93;<br /><br />	and	ax, 0DFDF		; delete these two lines if  <br />	and	bx, 0DFDF		; case-sensitve compare nedded<br />	<br />	test	ah, ah<br />	je	endMarker<br /><br />	cmp	ax, bx<br />	je	loop<br />	<br />	rte			; not equal<br /><br />endMarker&#58;<br />	cmp	ax, bx<br />	je	equal<br />	rte			; not equal<br /><br /><br /><br />equal&#58;<br />	rte<br /><br /><br /><br /></code></pre><br /><br /><br />Another one would be 32bit at once, but<br />each string must has to be termnated by 4 Zero's<br />or say better aligned to DWORD, and padded by Zeros.<br /><br /><pre><code><br />	lea	esi, str1<br />	lea	edi, str2<br /><br />loop&#58;	mov	eax, &#91;esi&#93;<br />	lea	esi, &#91;esi + 4&#93;<br />	mov	ebx, &#91;edi&#93;<br />	lea	edi, &#91;edi + 4&#93;<br /><br /><br />	and	eax, 0DFDFDFDF		; delete these two lines if  <br />	and	ebx, 0DFDFDFDF		; case-sensitve compare nedded<br />	<br />		<br />	test	eax, 0ff000000h<br />	je	endMarker<br /><br />	cmp	eax, ebx<br />	je	loop<br />	<br />	rte			; not equal<br /><br /><br />endMarker&#58;<br />	cmp	eax, ebx<br />	je	equal<br />	rte			; not equal<br /><br /><br /><br />equal&#58;<br />	rte<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2001-10-26 05:35:08 by marsface</div>
+   </div>
+   <div class="post" id="post-10588">
+    <div class="subject"><a href="#post-10588">Fastest way to compare strings</a></div>
+    <div class="body">:)<br />Looking through all your code I keep wondering:<br />ARE<br />'pass',0<br />'pssword',0<br />THE SAME?<br /><br />;)</div>
+    <div class="meta">Posted on 2001-10-29 06:52:13 by The Svin</div>
+   </div>
+   <div class="post" id="post-10595">
+    <div class="subject"><a href="#post-10595">Fastest way to compare strings</a></div>
+    <div class="body">Hi The Svin,<br /><br />i suppose you mean 'pass' and 'password' ?<br /><br />Ok let's make some debug with 16 bit at once<br />Strings has to be terminated by at least 2 zeros.<br /><br /><pre><code><br />str1&#58; 70-61-73-73-00-00<br />str2&#58; 70-61-73-73-77-6F-72-64-00-00<br /><br /><br />1st pass&#58;<br /><br />	ax=6170<br />	bx=6170<br /><br />	equal-&gt; get next 16bit<br /><br />2nd pass&#58;<br />	ax=7373<br />	bx=7373<br /><br />	equal-&gt; get next 16bit<br /><br />3rd pass&#58;<br />	ax=0000<br />	bx=6F77<br /><br />	ah=0 -&gt;	endMarker reached -&gt; cmp ax,bx -&gt; not equal<br /><br />	the loop termnates.<br /><br /></code></pre><br /><br />If you mean 'pass' and 'pssword' then the<br />1st compare says that its not equal.<br /><br /><pre><code><br /><br />1st pass&#58;<br /><br />	ax=6170<br />	bx=7370<br /><br />	not equal-&gt; leave<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2001-10-29 09:23:28 by marsface</div>
+   </div>
+   <div class="post" id="post-10698">
+    <div class="subject"><a href="#post-10698">Fastest way to compare strings</a></div>
+    <div class="body">I see the problem.<br /><br />There should be some flags set when leaving,<br />such as<br /><br />xor eax,eax;  if not equal<br />ret<br /><br /><br />mov eax,1   ; if equal<br />ret</div>
+    <div class="meta">Posted on 2001-10-30 07:45:01 by marsface</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=1414&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=1414&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="1414" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=1414&amp;page=2">&gt;</a><a href="../?id=1414&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

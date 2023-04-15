@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>resampling 1/2x: another MMX challenge - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2670" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=2670">resampling 1/2x: another MMX challenge</a></p>
+   <div class="post" id="post-16979">
+    <div class="subject"><a href="#post-16979">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">In the attachment is a simple project that lets you draw on a window. However it has an anti-aliased look because it is drawn on an hidden DC twice as big as the window. Then a piece of code resamples it to window size, giving smooth lines. <br />The project itself is really messy, I don't cleanup bitmaps and other gdi stuff, it's just for testing. <br />When you draw on the window, after the drawing procedure has been called 30 times, it will count ticks for one call and show the results. On my athlon 1.4Ghz I managed to get 45 cycles per *output* pixel (400x300 output pixels). Any optimizations are welcome.<br /><pre><code><br />Resample proc uses edi esi ebx lpSrc&#58;DWORD, lpDest&#58;DWORD, dwWidth&#58;DWORD, dwHeight&#58;DWORD<br />    mov     esi, lpSrc<br />    mov     edi, lpDest<br />    mov     edx, dwWidth<br />    shr     edx, 1<br />    <br />    mov     ecx, dwWidth<br />    <br />    pxor    MM4, MM4        <br />    <br />    mov     ebx, dwHeight<br />    shr     ebx, 1<br />    ALIGN 16<br />    @nextline&#58;<br />        <br />        mov     edx, ecx<br />        shr     edx, 2<br />        ALIGN 16<br />        @nextpixel&#58;<br />            movq        MM0, &#91;esi&#93;          ; MM0&#58; X2 R2 G2 B2-X1 R1 G1 B1<br />            movq        MM1, &#91;esi+8&#93;        ; MM1&#58; X4 R4 G4 B4-X3 R3 G3 B3<br />            movq        MM2, &#91;esi+4*ecx&#93;        ; MM2&#58; X6 R6 G6 B6-X5 R5 G5 B5<br />            movq        MM3, &#91;esi+4*ecx+8&#93;  ; MM3&#58; X8 R8 G8 B8-X7 R7 G7 B7<br />            <br />            movq        MM5, MM0<br />            movq        MM6, MM2<br />            <br />            punpckhbw   MM0, MM4            ; MM0&#58; 00 X2 00 R2-00 G2 00 B2<br />            punpckhbw   MM2, MM4            ; MM2&#58; 00 X6 00 R6-00 B6 00 B6<br />            punpcklbw   MM5, MM4            ; MM5&#58; 00 X1 00 R1-00 G1 00 B1<br />            punpcklbw   MM6, MM4            ; MM6&#58; 00 X5 00 R5-00 G5 00 B5<br />            <br />            paddw       MM0, MM2<br />            paddw       MM0, MM5<br />            paddw       MM0, MM6<br />            psrlw       MM0, 2              <br />            <br />            ; second pixel&#58;<br />            <br />            movq        MM5, MM1<br />            movq        MM6, MM3<br />            <br />            punpckhbw   MM1, MM4            ; MM1&#58; 00 X4 00 R4-00 G4 00 B4<br />            punpckhbw   MM3, MM4            ; MM3&#58; 00 X8 00 R8-00 B8 00 B8<br />            punpcklbw   MM5, MM4            ; MM5&#58; 00 X3 00 R3-00 G3 00 B3<br />            punpcklbw   MM6, MM4            ; MM6&#58; 00 X7 00 R7-00 G7 00 B7<br />            <br />            paddw       MM1, MM3<br />            paddw       MM1, MM5<br />            paddw       MM1, MM6<br />            psrlw       MM1, 2          <br />                <br />            ; now&#58;  MM0&#58; 00 XQ 00 RQ-00 GQ 00 BQ ;where Q is the first mixed pixel<br />            ; now&#58;  MM1&#58; 00 XP 00 RP-00 GP 00 BP ;where P is the second mixed pixel<br />            ; output should be&#58; BQ GQ RQ XQ-BP GP RP XP &#40;in mem&#41;<br />            ;                   XP RP GP BP XQ RQ GQ BQ &#40;in reg&#41;<br />            <br />            packuswb    MM0, MM1<br />            movq        &#91;edi&#93;, MM0<br />            <br />            <br />            add     esi, 16<br />            add     edi, 8<br />            dec     edx<br />            jnz     @nextpixel  <br />        <br />        lea     esi, &#91;esi+4*ecx&#93;<br />        dec     ebx<br />        jnz     @nextline<br />    emms<br />ret<br />Resample endp<br /></code></pre><br /><br />The procedure takes each 4 input pixels, caculates the avarage and puts it back. It does 8 input pixels (2 output) in every loop.<br /><br />About the numbering: if you have two input lines of pixels, the numbering looks like this:<br /><pre><code><br />line1&#58; X X X X 1 2 3 4 X X X<br />line2&#58; X X X X 5 6 7 8 X X X <br /></code></pre><br />Each char is a pixel, the first output pixel (Q) is the avarage of 1,2,5 and 6. The second output pixel (P) is the avarage of 3,4,7 and 8.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-12-31 09:20:11 by Thomas</div>
+   </div>
+   <div class="post" id="post-17101">
+    <div class="subject"><a href="#post-17101">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body"><strong>Thomas</strong>, what is the reasoning behind 8 pixels in 4x2 rectangle verses 4 pixels in 2x2 square?  I did look at the code and couldn't think of how to improve it at this time beyond prefetching the data, hardcoding the width (not good for a window).</div>
+    <div class="meta">Posted on 2002-01-01 11:59:03 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-17105">
+    <div class="subject"><a href="#post-17105">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">I use 8 input pixels at a time because it will produce 2 ouptut pixels on every loop that way. It's like unrolling a loop twice. <br />btw the routine is fast enough for me, but I wondered how it could be further optimized.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-01-01 12:24:35 by Thomas</div>
+   </div>
+   <div class="post" id="post-17113">
+    <div class="subject"><a href="#post-17113">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">That was a brain fart.  Of course, your doing two 2x2 blocks, duh! :alright:<br />Really need to use prefetch when your working with a data bound routine.  Chapter 5, Athlon x86 Optimization Manual - I'm still trying to figure the stuff out myself.</div>
+    <div class="meta">Posted on 2002-01-01 12:48:03 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-17118">
+    <div class="subject"><a href="#post-17118">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">I have played with those docs too but couldn't get masm to use the new instructions.<br />I use this:<br /><pre><code><br />.686<br />.MMX<br />.XMM<br />.K3D<br /></code></pre><br /><br />but it says &quot;instruction or register not accepted in current CPU mode&quot; for even a simple instruction without operands like <em>sfence</em>.<br /><br />How did you setup masm?<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-01-01 13:06:22 by Thomas</div>
+   </div>
+   <div class="post" id="post-17120">
+    <div class="subject"><a href="#post-17120">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">I found it out, they are order-dependant. This is the right order:<br /><pre><code><br />.686<br />.MMX<br />.K3D<br />.XMM<br /></code></pre><br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-01-01 13:20:37 by Thomas</div>
+   </div>
+   <div class="post" id="post-17125">
+    <div class="subject"><a href="#post-17125">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">Haven't tried sfence - might not support it, but these seem to work:<pre><code>.XMM<br />	prefetchnta &#91;ecx+060h&#93;<br />	prefetchnta &#91;edx+060h&#93;</code></pre></div>
+    <div class="meta">Posted on 2002-01-01 13:39:49 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-17127">
+    <div class="subject"><a href="#post-17127">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">All instructions work fine now.. I modified the code like this:<br /><pre><code><br />&#91;....&#93;<br />        ALIGN 16<br />        @nextpixel&#58;<br />           &#91;b&#93; prefetchnta &#91;esi+8*eax+512&#93;&#91;/b&#93;<br />&#91;....&#93;            <br />            packuswb    MM0, MM1<br />            <br />            add     esi, 16<br />            add     eax, 2<br />            <br />            &#91;b&#93;movntq      qword ptr &#91;edi&#93;, MM0&#91;/b&#93;<br />            <br />            add     edi, 8<br />            dec     edx<br />            jnz     @nextpixel  <br />&#91;....&#93;<br /><br />        lea     esi, &#91;esi+4*ecx&#93;<br />        dec     ebx<br />        jnz     @nextline<br />    &#91;b&#93;sfence&#91;/b&#93;<br />    emms<br /></code></pre><br /><br />This resulted in an improvement of 5 clocks per output pixel (now 40 cycles/output pixel). Not bad.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-01-01 13:45:54 by Thomas</div>
+   </div>
+   <div class="post" id="post-17177">
+    <div class="subject"><a href="#post-17177">resampling 1/2x: another MMX challenge</a></div>
+    <div class="body">SSE specific versions for AMD/Intel could be half the size (12 instructions total) because of the byte averaging instruction - <strong>PARGB</strong> - maybe smaller?  You could use word averaging, but all you'd save is the shift instructions.</div>
+    <div class="meta">Posted on 2002-01-01 19:39:18 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>better solution for memset ? (2 algos) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6398" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6398">better solution for memset ? (2 algos)</a></p>
+   <div class="post" id="post-46022">
+    <div class="subject"><a href="#post-46022">better solution for memset ? (2 algos)</a></div>
+    <div class="body">Hi,<br /><br />Which is the best algo for memset ?<br /><pre><code><br />mov edi, dest<br />mov ecx, count<br />mov al, c<br />rep stosb<br /></code></pre><br />or<br /><pre><code><br />mov ecx, count<br />mov al, c<br />mov ebx, dest<br />@@&#58;<br />                mov byte ptr &#91;ebx+ecx-1&#93;, al<br />	dec ecx<br />	jnz AA<br /></code></pre><br />Which is the fastest ? is there a better algo than these 2 algo ?<br /><br />Thanks</div>
+    <div class="meta">Posted on 2002-07-01 18:10:01 by DarkEmpire</div>
+   </div>
+   <div class="post" id="post-46026">
+    <div class="subject"><a href="#post-46026">Algorithms::How to set/clear memory</a></div>
+    <div class="body">better algo is to align your data to DWORD and use:<pre><code>mov edi, offset _data<br />mov ecx, sizeof _data / 4<br />mov eax,0c0c0c0ch<br />rep stosd</code></pre>Or, use MMX fill and align data by QWORD.</div>
+    <div class="meta">Posted on 2002-07-01 18:30:35 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46046">
+    <div class="subject"><a href="#post-46046">Algorithms::How to set/clear memory</a></div>
+    <div class="body">But, how can i align  my data to dword or qword?<br /><br />ex: a string a 3 bytes<br /><br />Thanks</div>
+    <div class="meta">Posted on 2002-07-02 00:33:04 by DarkEmpire</div>
+   </div>
+   <div class="post" id="post-46060">
+    <div class="subject"><a href="#post-46060">Algorithms::How to set/clear memory</a></div>
+    <div class="body">If the size is known at assemble time then:<pre><code>and DWORD PTR &#91;string&#93;, 0FF000000h<br />; put another instruction here<br />or DWORD PTR &#91;string&#93;, 0xyxyxyh ; xy is the fill byte</code></pre>If the size is only known at runtime then use either &quot;rep stosb&quot; or a combination of &quot;stosb/stosd&quot;.  Here are other threads regaurding this subject:<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4902&amp;highlight=rep+stosd">http://www.asmcommunity.net/board/index.php?topic=4902&amp;highlight=rep+stosd</a><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=5326&amp;highlight=rep+stosd">http://www.asmcommunity.net/board/index.php?topic=5326&amp;highlight=rep+stosd</a></div>
+    <div class="meta">Posted on 2002-07-02 07:09:54 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46681">
+    <div class="subject"><a href="#post-46681">Algorithms::How to set/clear memory</a></div>
+    <div class="body">I tried the suggested solutions, here are my conclusion:<br /><br />I tested performance using cpuid / rdtsc... The solutions with (stosb or combination of stosd and stosb) is at least 4 times slower than the memset of libc.lib...<br /><br />Have i done something wrong ?? i thought that memset was not so optimized than an own memset, but it is...<br /><br />Is there a trick ?</div>
+    <div class="meta">Posted on 2002-07-08 05:17:30 by DarkEmpire</div>
+   </div>
+   <div class="post" id="post-46683">
+    <div class="subject"><a href="#post-46683">Algorithms::How to set/clear memory</a></div>
+    <div class="body">Assuming that your using libc.lib from VC - it is probably optimized.  What size memory are you trying to set?  IIRC, STOSD works best with sizes greaterthan L2 cache.  I get best performance with MOVNTQ loop - with the side benefit of not poluting the cache.</div>
+    <div class="meta">Posted on 2002-07-08 07:14:17 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46703">
+    <div class="subject"><a href="#post-46703">Algorithms::How to set/clear memory</a></div>
+    <div class="body">If you are looking for a fast memory copy algorithm, using libraries like libc would be contradictory to your objective. Calling another routine puts overheard, so you no longer have the maximum speed. I really think a simple <strong><u>rep stosd</u></strong> should be sufficient for most needs.</div>
+    <div class="meta">Posted on 2002-07-08 12:08:53 by comrade</div>
+   </div>
+   <div class="post" id="post-46717">
+    <div class="subject"><a href="#post-46717">Algorithms::How to set/clear memory</a></div>
+    <div class="body">i tried with a 1000000 byte array,<br /><br />I was surprised that on a celeron, rep stosd is faster than libc memset, but on my PIII 800, it is 4 times slower ...<br /><br />Here is my code:<br />it is inline asm in VC++:<br /><pre><code><br />void * __cdecl memsetASM&#40;void *dest, int c, size_t count&#41;<br />&#123;<br />	__asm<br />	&#123;<br />                                // Get the parameters for stos<br />		mov eax, c<br />		mov edi, dest<br />		mov ecx, count<br /><br />                                // Fill eax with the byte c<br />		shl eax, 8<br />		or eax, c<br />		mov edx, eax<br />		bswap eax<br />		or eax, edx<br /><br /><br />		shr ecx, 2<br />		rep stosd<br />		mov ecx, count<br />		and ecx, 3<br />		rep stosb<br /><br />	&#125;<br /><br />	return dest;<br />&#125;<br /></code></pre><br />What 's the problem ?</div>
+    <div class="meta">Posted on 2002-07-08 13:23:21 by DarkEmpire</div>
+   </div>
+  </div>
+ </body>
+</html>

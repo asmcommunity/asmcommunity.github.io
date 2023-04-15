@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>pe checksum calculation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1883" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=1883">pe checksum calculation</a></p>
+   <div class="post" id="post-12028">
+    <div class="subject"><a href="#post-12028">pe checksum calculation</a></div>
+    <div class="body">Hi all!<br /><br />Does anyone know how to calculate the checksum stored in all PE's????? I know I can use imagehlp.dll, but I would like to do it &quot;manually&quot;. <br /><br />I believe I saw a thread that showed how to do it on the old messageboard, but the site is gone now :(<br /><br /><br />/Delight</div>
+    <div class="meta">Posted on 2001-11-14 15:31:47 by Delight</div>
+   </div>
+   <div class="post" id="post-12100">
+    <div class="subject"><a href="#post-12100">pe checksum calculation</a></div>
+    <div class="body">Its something like this:<br /><br /><pre><code><br />; Zero out the current checksum<br />mov ecx, file_len<br />mov edx, file_pos_in_mem<br />shr ecx, 1          ; We deal with 16 bit chunks<br />xor eax, eax<br /><br />@@&#58;<br />  adc ax, &#91;ecx + edx - 2&#93;<br />  dec ecx<br />jnz @B<br /><br />  adc eax, file_len<br /></code></pre><br /><br />I can't remember my code exactly, if you can find the MS version (which is completely different because they used a compiler, and its too dumb to notice the carry flag :P ), you should see that its similar.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-11-15 04:22:24 by Mirno</div>
+   </div>
+   <div class="post" id="post-12122">
+    <div class="subject"><a href="#post-12122">pe checksum calculation</a></div>
+    <div class="body">Mirno, the reason the code in imagehlp is so b0rked is, as far as I <br />can see, not because of a stupid compiler, but because m$ is trying<br />to obfuscate their code and make it hard to see what is going on.<br />The code in ntoskrnl (I believe) that does PE verification is a lot simpler.<br /><br />This code, I believe, should work just fine:<br /><pre><code><br />MicrosoftCheckSum2		PROC C uses esi, buf&#58;dword, len&#58;dword<br />	mov		ecx, &#91;len&#93;		; buffer length<br />	mov		edx, &#91;buf&#93;		; edx is pointer to our buffer base<br />	shr		ecx, 1			; we're summing WORDs, not bytes<br />	xor		eax, eax		; EAX holds the checksum<br /><br />	clc						; Clear the carry flag ready for later...<br />@@theLoop&#58;<br />	adc		ax, &#91;edx + &#40;ecx * 2&#41; - 2&#93;<br />	dec		ecx<br />	jnz		@@theLoop<br /><br />	adc		eax, &#91;len&#93;<br />	ret<br />MicrosoftCheckSum2 ENDP<br /></code></pre><br /><br />It is an optimized version of m$ code that I, ahem, tripped over.<br />I can't remember if this is my original code or one of the optimized<br />versions from the thread on the old messageboard.</div>
+    <div class="meta">Posted on 2001-11-15 07:44:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-12134">
+    <div class="subject"><a href="#post-12134">pe checksum calculation</a></div>
+    <div class="body">Thanks, it works perfectly!!! :alright: <br /><br /><br /><br />/Delight</div>
+    <div class="meta">Posted on 2001-11-15 09:37:25 by Delight</div>
+   </div>
+   <div class="post" id="post-12137">
+    <div class="subject"><a href="#post-12137">f0dder</a></div>
+    <div class="body">It looks like the code I wrote on the old message board!<br /><br />As someone pointed out to me, the CLC isn't needed as the XOR clears the carry flag too.<br /><br />The final revision of my code was about twice as fast as the MS version! Just goes to show that hand optimising can be REALLY fast (its all down to treating the carry flag like a 17th bit, which the compiler cannot do)!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-11-15 09:56:13 by Mirno</div>
+   </div>
+   <div class="post" id="post-12144">
+    <div class="subject"><a href="#post-12144">pe checksum calculation</a></div>
+    <div class="body">:confused: What would you use Checksum for? Does it allow you to check if the file has been modified or been corrupted?<br /><br />Thanks,</div>
+    <div class="meta">Posted on 2001-11-15 11:08:01 by JamesE</div>
+   </div>
+   <div class="post" id="post-12145">
+    <div class="subject"><a href="#post-12145">pe checksum calculation</a></div>
+    <div class="body">Yes, James. The M$ checksum is not a very good one, though. But<br />it is required on NT kernel drivers, so it's good to be able to compute it.<br />(Link /release also computes this checksum, I believe... at least<br />there's a way to make link compute it). There are also other places<br />where this checksum is used, though not many. And anyway, it's<br />always nice to be able to, ahem, trip over some code and use it<br />yourself.</div>
+    <div class="meta">Posted on 2001-11-15 11:14:14 by f0dder</div>
+   </div>
+   <div class="post" id="post-95846">
+    <div class="subject"><a href="#post-95846">pe checksum calculation</a></div>
+    <div class="body">Today,I tried this code:<br /><br /><pre><code><br /><br />.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\masm32.inc<br /><br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\masm32.lib<br />includelib \masm32\lib\user32.lib<br /><br />MicrosoftCheckSum2 PROTO C &#58;dword,&#58;dword<br />.data<br />filename db '\windows\system32\kernel32.dll',0<br />.data?<br />buffer dd ?<br />hFile dd ?<br />filelen dd ?<br />numb db 20 dup&#40;?&#41;<br />.code<br />start&#58;<br />invoke _lopen,addr filename,OF_READ<br />mov hFile,eax<br />invoke GetFileSize,eax,0<br />mov filelen,eax<br />invoke Alloc,eax<br />mov buffer,eax<br />invoke _lread,hFile,buffer,filelen<br />invoke _lclose,hFile<br /><br />invoke MicrosoftCheckSum2,buffer,filelen<br />invoke dw2hex,eax,addr numb<br />invoke StdOut,addr numb<br />invoke Free,buffer<br />invoke ExitProcess,0<br /><br />MicrosoftCheckSum2              PROC C uses esi, buf&#58;dword, len&#58;dword<br />        mov             ecx, &#91;len&#93;           <br />        mov             edx, &#91;buf&#93;           <br />        shr             ecx, 1               <br />        xor             eax, eax             <br /><br />        clc                                  <br />@@theLoop&#58;<br />        adc ax, &#91;edx + &#40;ecx * 2&#41; - 2&#93;<br />        dec ecx<br />        jnz @@theLoop<br />        adc  eax, &#91;len&#93;<br />        ret<br />MicrosoftCheckSum2 ENDP<br />end start<br /><br /></code></pre><br /><br />My O.S. is Win XP Pro.The real checksum value for kernel32.dll<br />is E4460 on my system;but instead of this,I get<br />E88CE. Why I get this incorrect value?:confused:<br /><br />I get incorrect values for other files also.</div>
+    <div class="meta">Posted on 2003-04-12 06:50:22 by Vortex</div>
+   </div>
+   <div class="post" id="post-95857">
+    <div class="subject"><a href="#post-95857">pe checksum calculation</a></div>
+    <div class="body">Do you zero the checksum of the file first?<br /><br />The checksum is always computed against a file with a zero checksum....<br />If you've not blanked the 32bit value, you'll get a different (and wrong) value.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-04-12 07:55:43 by Mirno</div>
+   </div>
+   <div class="post" id="post-95916">
+    <div class="subject"><a href="#post-95916">pe checksum calculation</a></div>
+    <div class="body">Mirno,<br /><br />O.K. I will try it later.<br /><br />Thanks for your interest,<br /><br />Regards,<br /><br />Vortex</div>
+    <div class="meta">Posted on 2003-04-12 12:48:04 by Vortex</div>
+   </div>
+   <div class="post" id="post-96117">
+    <div class="subject"><a href="#post-96117">pe checksum calculation</a></div>
+    <div class="body"><pre><code><br /><br />mov edi,buffer<br />assume edi&#58;ptr IMAGE_DOS_HEADER<br />add edi,&#91;edi&#93;.e_lfanew<br />assume edi&#58;ptr IMAGE_NT_HEADERS<br />lea ebx,&#91;edi&#93;.OptionalHeader.CheckSum<br />mov dword ptr &#91;ebx&#93;,0<br /><br /></code></pre><br /><br />Thanks Mirno,now the algo works fine:alright:<br /><br />Regards,<br /><br />Vortex</div>
+    <div class="meta">Posted on 2003-04-13 07:14:33 by Vortex</div>
+   </div>
+   <div class="post" id="post-96179">
+    <div class="subject"><a href="#post-96179">pe checksum calculation</a></div>
+    <div class="body">Vortex,<br />You have garbage in your ASSEMBLY MicrosoftCheckSum2 code:<strong><br />push  ebp;  mov   ebp,esp;  push esi; pop esi; leave; clc</strong><pre><code> <br /><br />OPTION PROLOGUE&#58;NONE				; turn it off<br />OPTION EPILOGUE&#58;NONE				;<br />Align 16					; I include Align 16 <br />MSCheckSum2   PROC  buf&#58;dword, len&#58;dword	; before speed optimized code!!!<br />            db 3Eh <br />	mov	ecx, &#91;esp+8&#93;			; ecx-&gt;len<br />            db 3Eh<br />        mov	edx, &#91;esp+4&#93;			; edx-&gt;lpbuf<br />            db 3Eh <br />	shr	ecx, 1				;<br />            db 3Eh<br />	xor	eax, eax			; xor eax, eax clear carry flag!<br />@Loop&#58;						;<br />	adc	ax, &#91;edx + &#40;ecx * 2&#41; - 2&#93;	;<br />	dec	ecx				;<br />	jnz	@Loop				;	<br />	adc	eax, &#91;esp+8&#93;			; len<br />	ret	2*4				;<br />MSCheckSum2   ENDP				;<br />OPTION PROLOGUE&#58;PROLOGUEDEF			; turn back on the defaults<br />OPTION EPILOGUE&#58;EPILOGUEDEF			;</code></pre><br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-04-13 09:52:50 by lingo12</div>
+   </div>
+   <div class="post" id="post-96220">
+    <div class="subject"><a href="#post-96220">pe checksum calculation</a></div>
+    <div class="body">lingo,you fool,why should I need speed optimisation for such a short code?<br />Secondly,the original algo is presented by f0dder,sol lingo,please pay attention to your statements!<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=12122.msg12122">http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=12122.msg12122</a><br /><br />Vortex</div>
+    <div class="meta">Posted on 2003-04-13 11:21:05 by Vortex</div>
+   </div>
+   <div class="post" id="post-96295">
+    <div class="subject"><a href="#post-96295">pe checksum calculation</a></div>
+    <div class="body">Thanks arkadash,<br />Yes, I'm a fool to waste advice on your professional x286 code<br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-04-13 14:42:44 by lingo12</div>
+   </div>
+   <div class="post" id="post-96315">
+    <div class="subject"><a href="#post-96315">pe checksum calculation</a></div>
+    <div class="body"><strong>lingo12</strong>, notice how in your optimized version the loop code crosses a 16 byte boundary?  This could have an adverse effect on some processors.  Add four bytes before the PROC to align the loop.  IIRC, a dword can be added at each loop and combined prior to the sum of the size.</div>
+    <div class="meta">Posted on 2003-04-13 15:52:55 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-96354">
+    <div class="subject"><a href="#post-96354">pe checksum calculation</a></div>
+    <div class="body">Thanks bitRAKE,<br />Of course you are right but I posted the code without four additional<br />bytes to manipulate the start instructions lengths because<br />I'm not the author, I think about Mirno but not sure..<br />It is easy and I will edit my post immediately<br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-04-13 18:14:06 by lingo12</div>
+   </div>
+   <div class="post" id="post-96357">
+    <div class="subject"><a href="#post-96357">pe checksum calculation</a></div>
+    <div class="body"><div class="quote"><br />It is easy and I will edit my post immediately</div>:grin:</div>
+    <div class="meta">Posted on 2003-04-13 18:39:56 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-96455">
+    <div class="subject"><a href="#post-96455">pe checksum calculation</a></div>
+    <div class="body">Lingo12,<br /><br />Read carefully the post of bitRAKE (comments on your optimisation)<br />this will teach you to think twice before you<br />pretend to be the master of asm!<br /><br />Vortex</div>
+    <div class="meta">Posted on 2003-04-14 02:30:40 by Vortex</div>
+   </div>
+   <div class="post" id="post-96468">
+    <div class="subject"><a href="#post-96468">pe checksum calculation</a></div>
+    <div class="body"><strong></strong><br />Bad habits are the hardest to lose. :grin:</div>
+    <div class="meta">Posted on 2003-04-14 04:03:35 by Maverick</div>
+   </div>
+   <div class="post" id="post-96475">
+    <div class="subject"><a href="#post-96475">pe checksum calculation</a></div>
+    <div class="body">hrm, what's with the DS: overrides in lingos code?</div>
+    <div class="meta">Posted on 2003-04-14 04:41:23 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

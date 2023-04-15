@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Including w.hhf and calling problems - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20112" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=20112">Including w.hhf and calling problems</a></p>
+   <div class="post" id="post-154071">
+    <div class="subject"><a href="#post-154071">Including w.hhf and calling problems</a></div>
+    <div class="body">Hi all,<br /><br />Im trying to work on some networking stuff.  I've added some procedure declarations that BinarySoup made to w.hhf.  I'm having problems declaring a variable as WSADATA.  Im still new to ASM in general.  What am I doing wrong?<br /><br />Thanks.<br /><br /><pre><code><br /><br />program fileOutput;<br />#include &#40;&quot;stdlib.hhf&quot;&#41;<br />#include &#40;&quot;w.hhf&quot;&#41;<br /><br />static<br />	oWsadata&#58;WSADATA;<br />	<br />begin fileOutput;<br /><br />	call &#40;WSAStartup, $0002h, &amp;oWsadata&#41;;<br /><br />end fileOutput;<br /></code></pre></div>
+    <div class="meta">Posted on 2004-12-13 07:23:23 by polyfractal</div>
+   </div>
+   <div class="post" id="post-154100">
+    <div class="subject"><a href="#post-154100">Including w.hhf and calling problems</a></div>
+    <div class="body">Hi,<br /><br /><pre><code><br />   oWsadata&#58;WSADATA;<br /></code></pre><br />WSADATA is into the namespace w so you must write w.WSADATA and no WSADATA (see w.hhf).<br /><br /><pre><code><br />   call &#40;WSAStartup, $0002h, &amp;oWsadata&#41;; <br /></code></pre><br />function call is like C language. The call statment is only when you push args on the stack before calling your function. You can't mix them. <br />no need to add 'h' suffix to hex literal<br /><br />Ok, WSADATA is declared in w.hhf but not the WSAStartup function, you have to put its signature at the beginning.<br /><br />Here is the code<br /><br /><pre><code><br />program fileOutput; <br />#include &#40;&quot;stdlib.hhf&quot;&#41; <br />#include &#40;&quot;w.hhf&quot;&#41; <br />	<br />static<br />	WSAStartup&#58; procedure<br />	&#40; <br />		wVersionRequested&#58; word; <br />		var lpWSAData&#58; w.WSADATA<br />	&#41;;<br />		@stdcall;<br />		@returns&#40; &quot;eax&quot; &#41;;<br />		@external&#40; &quot;__imp__WSAStartup@8&quot; &#41;;<br />			<br />	WSACleanup&#58; procedure;<br />		@stdcall;<br />		@returns&#40; &quot;eax&quot; &#41;;<br />		@external&#40; &quot;__imp__WSACleanup@0&quot; &#41;;<br /><br />static <br />   oWsadata&#58; w.WSADATA; <br /><br />begin fileOutput; <br /><br />   WSAStartup&#40; $0002, &amp;oWsadata &#41;; <br />   ...<br />   WSACleanup&#40;&#41;;<br />	<br />end fileOutput;<br /></code></pre><br /><br />to compile and link, type<br /><strong>hla wsatest.hla ws2_32.lib</strong><br /><br />ws2_32.lib is coming from the masm32 package that you can download at <a target="_blank" href="www.masm32.com">www.masm32.com</a>. Once installed, you'll found ws2_32.lib into the lib directory.<br /><br />that's all and sorry for my bad english</div>
+    <div class="meta">Posted on 2004-12-13 18:48:32 by arlequin</div>
+   </div>
+   <div class="post" id="post-154137">
+    <div class="subject"><a href="#post-154137">Including w.hhf and calling problems</a></div>
+    <div class="body">Hi.  Thanks for the help, it is working great now.<br /><br />Another question though.  How do I print out the szDescription field?  I know it is a null terminated string that can be up to 256 characters, but how do i convert that to a printable form?<br /><br />Here is my code, which explodes with a memory access violation.<br /><br />Thanks again for the help!<br /><br /><pre><code><br />stdout.put&#40;&#40; type word oWsadata.wVersion &#41;, nl&#41;;<br />stdout.put&#40;&#40; type word oWsadata.wHighVersion &#41;, nl&#41;;<br />stdout.put&#40;&#40; type string oWsadata.szDescription &#41;, nl&#41;;  &lt;--This line<br /></code></pre></div>
+    <div class="meta">Posted on 2004-12-14 06:54:27 by polyfractal</div>
+   </div>
+   <div class="post" id="post-154168">
+    <div class="subject"><a href="#post-154168">Including w.hhf and calling problems</a></div>
+    <div class="body">Hi,<br /><br /><pre><code><br />stdout.put&#40;&#40; type string oWsadata.szDescription &#41;, nl&#41;;  <br /></code></pre><br />The problem is that stout.put() expect a pointer to a HLA String and not a pointer to a null terminated string. There is a description of HLA String at <a target="_blank" href="http://webster.cs.ucr.edu/AoA/Windows/HTML/CharacterStrings.html#999809">http://webster.cs.ucr.edu/AoA/Windows/HTML/CharacterStrings.html#999809</a>. Read it carefully because almost all string handling routines in the HLA Standard Library use HLA String.<br /><br />Some routines of the HLA Standard Library allow to interact with null terminated string.<br /><br /><pre><code><br />static<br />   description&#58; str.strvar&#40;256&#41;;  // the storage is statically allocated<br /><br />begin ...<br />   ...<br />   str.cpyz&#40; oWsadata.szDescription, description &#41;;<br />   stdout.put&#40; &quot;Description&#58; &quot;, description, nl &#41;;<br />   ...<br /></code></pre><br /><br />if you don't want to allocate statically 256 bytes of storage<br /><br /><pre><code><br />static<br />   description&#58; string;<br /><br />begin ...<br />   ...<br />   // returns a pointer to the new HLA string in eax<br />   str.a_cpyz&#40; oWsadata.szDescription &#41;; // heap allocation<br />   mov&#40; eax, description &#41;; <br />   stdout.put&#40; &quot;Description&#58; &quot;, description, nl &#41;;<br />   ...<br />   strfree&#40; description &#41;; // free heap alloc<br />   ...<br /></code></pre><br /><br />Yeah, HLA is really cool !   8)</div>
+    <div class="meta">Posted on 2004-12-14 17:31:42 by arlequin</div>
+   </div>
+  </div>
+ </body>
+</html>

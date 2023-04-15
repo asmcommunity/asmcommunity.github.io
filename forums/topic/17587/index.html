@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to get process identifier by its handle - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17587" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17587">How to get process identifier by its handle</a></p>
+   <div class="post" id="post-136042">
+    <div class="subject"><a href="#post-136042">How to get process identifier by its handle</a></div>
+    <div class="body">Hello everybody!<br /><br />I'm spying one process and want to know when it tries to kill my process. But, TerminateProcess gets the handle to the previously opened process with OpenProcess... How can I using this handle get the process ID?<br /><br />Thanx in advance. :rolleyes:</div>
+    <div class="meta">Posted on 2004-03-15 20:07:18 by The CHEMI$T</div>
+   </div>
+   <div class="post" id="post-136043">
+    <div class="subject"><a href="#post-136043">How to get process identifier by its handle</a></div>
+    <div class="body"><pre><code>invoke GetProcessId,&#91;hProcess&#93;</code></pre></div>
+    <div class="meta">Posted on 2004-03-15 20:09:52 by donkey</div>
+   </div>
+   <div class="post" id="post-136045">
+    <div class="subject"><a href="#post-136045">How to get process identifier by its handle</a></div>
+    <div class="body">Hi donkey !<br />The GetProcessId, GetThreadId, GetProcessIdOfThread functions  not existed in Win2000, WinNT, Win9x...It only in WinXP SP1 and Win2003 Server. I afraid we can not use them.<br />Best regards !</div>
+    <div class="meta">Posted on 2004-03-15 21:17:46 by TQN</div>
+   </div>
+   <div class="post" id="post-136049">
+    <div class="subject"><a href="#post-136049">How to get process identifier by its handle</a></div>
+    <div class="body"><div class="quote"><br /><pre><code>invoke GetProcessId,&#91;hProcess&#93;</code></pre> </div><br /><br />Some text from MSDN:<br /><strong>Client: Requires Windows XP SP1.<br />Server: Requires Windows Server 2003.</strong><br /><br />Excuse me, I didna tell, that I need it for Windows NT 4 and Windows 2000<br /><br />Thanx</div>
+    <div class="meta">Posted on 2004-03-15 21:44:00 by The CHEMI$T</div>
+   </div>
+   <div class="post" id="post-136059">
+    <div class="subject"><a href="#post-136059">How to get process identifier by its handle</a></div>
+    <div class="body">Assuming that the handle you have is valid in the context of your program and not a pseudohandle from another process, you might be able to use this :<br /><br /><pre><code>GetProcessID FRAME hProcess<br />	LOCAL ProcessName&#91;MAX_PATH&#93;		&#58;B<br />	LOCAL ModBaseName&#91;MAX_PATH&#93;		&#58;B<br />	LOCAL hModHandles&#91;256&#93;			&#58;D<br />	LOCAL hProcessIDs&#91;256&#93;			&#58;D<br />	LOCAL cbNeeded				&#58;D<br />	LOCAL hCheckProcess			&#58;D<br />	<br />	invoke EnumProcessModules,&#91;hProcess&#93;,offset hModHandles,1024,offset cbNeeded<br />	<br />	invoke GetModuleBaseName,&#91;hProcess&#93;,&#91;hModHandles&#93;,offset ProcessName,MAX_PATH<br /><br />	; scan all processes<br />	invoke EnumProcesses,offset hProcessIDs,1024,offset cbNeeded<br />	xor edi,edi<br />	L1&#58;<br />	lea ecx,&#91;hProcessIDs+edi&#93;<br />	mov eax,&#91;ecx&#93;<br />	invoke OpenProcess,PROCESS_QUERY_INFORMATION + PROCESS_VM_READ,FALSE,eax<br />	mov &#91;hCheckProcess&#93;,eax<br />	or eax,eax<br />	jz &gt;L2<br />	invoke GetModuleBaseName,&#91;hCheckProcess&#93;,0,offset ModBaseName,MAX_PATH<br />	invoke CloseHandle,&#91;hCheckProcess&#93;<br />	invoke lstrcmpi,offset ModBaseName,offset ProcessName<br />	or eax,eax<br />	jz &gt;L3<br />	L2&#58;<br />	add edi,4<br />	cmp edi,&#91;cbNeeded&#93;<br />	jl &lt;&lt;L1<br /><br />	L3&#58;<br />	mov eax,&#91;hProcessIDs+edi&#93;<br />	RET<br />ENDF</code></pre></div>
+    <div class="meta">Posted on 2004-03-15 23:25:47 by donkey</div>
+   </div>
+   <div class="post" id="post-136061">
+    <div class="subject"><a href="#post-136061">How to get process identifier by its handle</a></div>
+    <div class="body">Hi The CHEMI$T,<br /><br />I verified the routine above and it seems to work OK. I made a small app with a window that was easy to find and did this:<br /><br /><pre><code>invoke FindWindow,&quot;FindPIDClass&quot;,0<br />invoke GetWindowThreadProcessId,eax,offset pid<br />invoke OpenProcess,PROCESS_ALL_ACCESS,NULL,&#91;pid&#93;<br />mov &#91;hPrc&#93;,eax<br />invoke GetProcessID,eax<br />PrintDec&#40;eax&#41;<br />PrintDec&#40;&#91;pid&#93;&#41;<br />invoke CloseHandle,&#91;hPrc&#93;</code></pre><br /><br />In all tests the PID returned from GetProcessID matched  and also matched the PID in Task Manager.</div>
+    <div class="meta">Posted on 2004-03-15 23:51:34 by donkey</div>
+   </div>
+   <div class="post" id="post-136163">
+    <div class="subject"><a href="#post-136163">How to get process identifier by its handle</a></div>
+    <div class="body">Hi!<br /><br />Sorry, but that procedure didna help... :( Maybe my english makes its bad work, but... I'll try to explain once more... Your procedure needs the process module handle in the system, but, as I said I need to get id by the handle to the opened process like that:<br /><br /><pre><code><br />&#91;B&#93; ... main code ... &#91;/B&#93;<br /><br />invoke OpenProcess, PROCESS_ALL_ACCESS, FALSE, &#91;B&#93;SomeId&#91;/B&#93;<br />mov   hProcess, eax<br /><br />&#91;B&#93; ... Some time later ... &#91;/B&#93;<br /><br />invoke GetModuleId, hProcess<br />.if eax == ProtectedId &#91;B&#93;...&#91;/B&#93;<br /></code></pre><br /><br />Can it be realized in any way? :confused: <br />Thanx in advance...</div>
+    <div class="meta">Posted on 2004-03-17 00:02:58 by The CHEMI$T</div>
+   </div>
+   <div class="post" id="post-136165">
+    <div class="subject"><a href="#post-136165">How to get process identifier by its handle</a></div>
+    <div class="body">Did you close the process handle after the call to OpenProcess ? In that case the handle is no longer valid, it must be an open handle to a process or what you want is impossible. If the process has a window you can use FindWindow/GetWindowThreadProcessId to get a process ID. I suspect that if the above routine did not work then the handle you have is either not valid (ie it has been closed) or it is a pseudo-handle passed to a process other than your own and it cannot be used in the context of your process. If that is the case you have no choice but to use the FindWindow/GetWindowThreadProcessId method.</div>
+    <div class="meta">Posted on 2004-03-17 00:12:25 by donkey</div>
+   </div>
+   <div class="post" id="post-136170">
+    <div class="subject"><a href="#post-136170">How to get process identifier by its handle</a></div>
+    <div class="body">Hi!<br /><br />I've tried it again, and it didna work, but I found out, why... The process, which handle I receive opened with PROCESS_TERMINATE rights flag set only... So... How can I modify that right flag? Maybe I can modify the rights under which the process is opened?<br /><br />P.S. Of cause I can handle the OpenProcess function and correct the rights flag from there, but... Can I do it any other way?<br /><br />Thanx.</div>
+    <div class="meta">Posted on 2004-03-17 01:57:56 by The CHEMI$T</div>
+   </div>
+   <div class="post" id="post-136171">
+    <div class="subject"><a href="#post-136171">How to get process identifier by its handle</a></div>
+    <div class="body">You cannot modify the security descriptor of another process once it has been created, at least I don't know of any way to do that and I truly hope that there is no way ;)<br /><br />The target process must allow both PROCESS_QUERY_INFORMATION and PROCESS_VM_READ access or the function will fail.</div>
+    <div class="meta">Posted on 2004-03-17 02:04:09 by donkey</div>
+   </div>
+   <div class="post" id="post-136173">
+    <div class="subject"><a href="#post-136173">How to get process identifier by its handle</a></div>
+    <div class="body">Hi!<br /><br />I've made it!!! Since I've hooked all the API that program used I've corrected the call of a program to OpenProcess.<br /><br />Thanx very much for your help!</div>
+    <div class="meta">Posted on 2004-03-17 03:04:30 by The CHEMI$T</div>
+   </div>
+   <div class="post" id="post-136175">
+    <div class="subject"><a href="#post-136175">How to get process identifier by its handle</a></div>
+    <div class="body"><div class="quote"><br />Hi!<br /><br />I've made it!!! Since I've hooked all the API that program used I've corrected the call of a program to OpenProcess.<br /><br />Thanx very much for your help! </div><br /><br />You're welcome but I suspect you were much more help to yourself than I was :)</div>
+    <div class="meta">Posted on 2004-03-17 03:08:25 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

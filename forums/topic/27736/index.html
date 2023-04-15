@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>saving dc as bitmap - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27736" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27736">saving dc as bitmap</a></p>
+   <div class="post" id="post-197749">
+    <div class="subject"><a href="#post-197749">saving dc as bitmap</a></div>
+    <div class="body">let's say i have painted something on a dc created with CreateCompatibleDC (later CreateCompatibleBitmap and SelectObject). how can i save the content as a bitmap?
+and why does rc.exe say that the bitmap painted with "Paint" isn't a windows 3.0 bitmap or whatever?
+
+bye</div>
+    <div class="meta">Posted on 2001-04-21 14:01:00 by [SaFc0n]</div>
+   </div>
+   <div class="post" id="post-197750">
+    <div class="subject"><a href="#post-197750">saving dc as bitmap</a></div>
+    <div class="body">A bitmap file consists of a few structures and the image data. At the start of the file, there's an BITMAPFILEHEADER structure, followed by a BITMAPINFO structure. The BITMAPINFO is a BITMAPINFOHEADER structure (with size, color, etc) information, followed by the raw image data. 
+So all you have to do is fill in a BITMAPFILEHEADER and a BITMAPINFOHEADER structure, write both to a file and then write all the image data. <strong>GetDIBits</strong> can be a usefull function.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-04-21 15:20:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-197751">
+    <div class="subject"><a href="#post-197751">saving dc as bitmap</a></div>
+    <div class="body">ok, so i've to open a new file, write the BITMAPFILEHEADER structure and then the BITMAPINFOHEADER to it, and then the raw bitmap data. but how to write the raw bitmap data exactly? e.g.
+
+<pre><code>
+invoke CreateCompatibleDC,NULL
+mov hBackBuffer,eax
+invoke GetDC,hWin
+push eax
+invoke CreateCompatibleBitmap,eax,157,150
+mov hBackBitmap,eax
+pop eax
+invoke ReleaseDC,hWin,eax
+invoke SelectObject,hBackBuffer,hBackBitmap
+invoke Ellipse,hBackBuffer,5,5,50,50
+</code></pre>
+
+how can i write the DC (hBackBuffer) to the file now? i don't understand that. 
+
+tnx</div>
+    <div class="meta">Posted on 2001-04-22 04:35:00 by [SaFc0n]</div>
+   </div>
+   <div class="post" id="post-197752">
+    <div class="subject"><a href="#post-197752">saving dc as bitmap</a></div>
+    <div class="body">I'll write some code for you today.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-04-23 03:48:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-197753">
+    <div class="subject"><a href="#post-197753">saving dc as bitmap</a></div>
+    <div class="body">Here's some code:
+<pre><code>
+SaveDCToBitmap  PROTO STDCALL :DWORD, :DWORD, :DWORD
+SaveDCToBitmap  proc uses ebx   hDC:DWORD, hBitmap:DWORD, lpFileName:DWORD
+LOCAL   hFile:DWORD
+LOCAL   BytesWritten:DWORD
+LOCAL   hTempMem:DWORD, pTempMem:DWORD
+LOCAL   hImageMem:DWORD, pImageMem:DWORD
+LOCAL   HeaderAndPaletteSize:DWORD
+LOCAL   retval:DWORD
+LOCAL   bfh:BITMAPFILEHEADER
+
+    ;--- Create new file (NOTE: CREATE_ALWAYS overwrites old file!!!!!) ---
+    invoke  CreateFile, lpFileName, GENERIC_WRITE, 0, \
+                NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL
+    .IF     eax==INVALID_HANDLE_VALUE
+        xor     eax, eax
+        ret
+    .ENDIF
+    mov     hFile, eax
+    
+    ;--- The bitmap file header will be written at the end, so skip it now ---
+    invoke  SetFilePointer, hFile, SIZEOF BITMAPFILEHEADER, 0, FILE_BEGIN
+
+    
+    ;--- allocate memory for bitmapinfoheader and palette if available ---
+    
+    ; get number of bytes to allocate for the palette in eax
+    ; eax=0 if no palette (full color image or 16-bit color)
+    invoke  GetDeviceCaps, hDC, BITSPIXEL   
+    mov     ecx, eax
+    .IF     ecx<16
+        xor     eax, eax
+        inc     eax
+        shl     eax, cl
+        shl     eax, 2
+    .ELSE
+        xor     eax, eax
+    .ENDIF
+    ; add size of BITMAPINFOHEADER
+    add         eax, SIZEOF BITMAPINFOHEADER
+    mov         HeaderAndPaletteSize, eax
+    
+    ; allocate memory
+    invoke      GlobalAlloc, GMEM_MOVEABLE or GMEM_ZEROINIT, eax
+    mov         hTempMem, eax
+    invoke      GlobalLock, eax
+    mov         pTempMem, eax
+    mov         ebx, pTempMem
+    
+    ;Get bitmapinfoheader:  
+    assume      ebx:PTR BITMAPINFOHEADER
+    mov         .biSize, SIZEOF BITMAPINFOHEADER
+    invoke      GetDIBits, hDC, hBitmap, 0, 0, NULL, ebx, DIB_RGB_COLORS
+    
+    ; Get size of image data:
+    mov         eax, .biSizeImage
+    
+    ; allocate memory for image data:
+    invoke      GlobalAlloc, GMEM_MOVEABLE, eax
+    mov         hImageMem, eax
+    invoke      GlobalLock, eax
+    mov         pImageMem, eax
+    
+    ; get image data and full bitmap info header + palette if available:
+    mov         ecx, .biHeight
+    invoke      GetDIBits, hDC, hBitmap, 0, ecx, pImageMem, pTempMem, DIB_RGB_COLORS
+    
+    ; write header and palette to file
+    invoke      WriteFile, hFile, pTempMem, HeaderAndPaletteSize, ADDR BytesWritten, 0
+    .IF         eax==0
+        mov     retval, eax
+        jmp     @return1
+    .ENDIF
+    
+    ; write image data to file:
+    invoke      WriteFile, hFile, pImageMem,  .biSizeImage, ADDR BytesWritten, 0
+    .IF         eax==0
+        mov     retval, eax
+        jmp     @return1
+    .ENDIF
+    
+    ;fill bitmapfileheader:
+    mov     bfh.bfType, "MB"        ;"BM", reversed
+    mov     eax, HeaderAndPaletteSize
+    add     eax, SIZEOF BITMAPFILEHEADER
+    mov     bfh.bfOffBits, eax
+
+    add     eax,  .biSizeImage 
+    mov     bfh.bfSize, eax
+    and     bfh.bfReserved1, 0
+    and     bfh.bfReserved2, 0
+    
+    ;write bitmapfileheader:
+    invoke  SetFilePointer, hFile, 0, 0, FILE_BEGIN
+    invoke  WriteFile, hFile, ADDR bfh, SIZEOF BITMAPFILEHEADER, ADDR BytesWritten, 0
+    .IF     eax==0
+        mov     retval, eax
+        jmp     @return1
+    .ENDIF
+    
+    mov         retval, 1
+    assume      ebx:nothing
+@return1:
+    ;--- clear memory handles ---
+    invoke      GlobalUnlock, hTempMem
+    invoke      GlobalFree, hTempMem
+    invoke      GlobalUnlock, hImageMem
+    invoke      GlobalFree, hImageMem
+    ;--- Close file handle ---
+    invoke  CloseHandle, hFile   
+    
+    mov     eax, retval
+ret
+SaveDCToBitmap  endp
+</code></pre>
+I don't know if it works perfectly for all color formats, paint had some troubles with reading the bitmap when it's a 16-bit or 32-bit color image. 8-bit and 24-bit worked fine.
+But paint shop pro read all the bitmaps the program wrote.
+Hope this helps,
+Thomas</div>
+    <div class="meta">Posted on 2001-04-23 10:16:00 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

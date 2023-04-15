@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Interfaces in TASM? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4367" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=4367">Interfaces in TASM?</a></p>
+   <div class="post" id="post-30281">
+    <div class="subject"><a href="#post-30281">Interfaces in TASM?</a></div>
+    <div class="body">I want to use interfaces in my project. Therefore I need some full examples coded in TASM (not MASM) - declaring interfaces, calling  methods, using them...<br /><br />I'll be very happy to see the exmaples include IShellFolder interface.<br /><br /><br /><br />    ...thanks Spako</div>
+    <div class="meta">Posted on 2002-03-22 04:37:54 by spako</div>
+   </div>
+   <div class="post" id="post-30290">
+    <div class="subject"><a href="#post-30290">Interfaces in TASM?</a></div>
+    <div class="body">just using them shouldn't prove to be too hard.<br /><br /><br />you have to call CreateInstance on the component, call queryinterface on that pointer for the interface you want and then call the various functions.<br /><br />The vtable is just a large memory array so it's just call  for any function.<br /><br />Making COM objects might prove hard since it requires a specific memory layout. (does TASM produce that layout? :/ )</div>
+    <div class="meta">Posted on 2002-03-22 05:25:56 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-30369">
+    <div class="subject"><a href="#post-30369">Interfaces in TASM?</a></div>
+    <div class="body">This short sample written for tasm just gets the ppv for an interface through IUnknown. The same method can be used with other interfaces.<br /><br /><br /><pre><code><br />	call	CLSIDFromProgID, offset ServerName, offset ServerCLSID<br />	call	CoCreateInstance, offset ServerCLSID, 0, CLSCTX_SERVER, offset guidIUnknown, offset ppvServer<br />	test	eax, eax<br />	jnz	CodesoftPreviewError<br />; Call IUnknown&#58;&#58;Addref<br />	mov	ebx, &#91;ppvServer&#93;<br />	mov	ebp, &#91;ebx&#93;<br />	push	ebx<br />	call	&#91;ebp+4&#93;<br />; Call IUnknown&#58;&#58;QueryInterface &#40;Get IApplication ppv&#41;<br />	push	offset ppvApplication<br />	push	offset guidIApplication<br />	push	ebx<br />	call	&#91;ebp&#93;<br />; Call IUnknown&#58;&#58;Release<br />	push	ebx<br />	call	&#91;ebp+8&#93;<br /></code></pre><br /><br />Hope this help</div>
+    <div class="meta">Posted on 2002-03-22 15:28:16 by acab</div>
+   </div>
+   <div class="post" id="post-179098">
+    <div class="subject"><a href="#post-179098">Re: Interfaces in TASM?</a></div>
+    <div class="body">If you look at this code...<br /><br /><pre><code><br />STDMETHOD&nbsp; QueryInterface :REFGUID, :PPV<br />STDMETHOD&nbsp; AddRef<br />STDMETHOD&nbsp; Release<br /><br />_vtIUnknown&nbsp; MACRO Cast:REQ<br />IUnknown STRUC METHOD \<br />{<br />&nbsp; VIRTUAL Cast&amp;_QueryInterface :PTR @Type_QueryInterface<br />&nbsp; VIRTUAL Cast&amp;_AddRef&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; :PTR @Type_AddRef<br />&nbsp; VIRTUAL Cast&amp;_Release&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  :PTR @Type_Release<br />}<br />IUnknown&nbsp; ENDS<br />pIUnknown&nbsp;  TYPEDEF PTR IUnknown<br />LPUNKNOWN TYPEDEF PTR IUnknown<br />ENDM<br /></code></pre><br /><br />you see a macro named STDMETHOD which is a C++ naming convention but what the macro does is:<br /><br />@Type_MethodName PROCTYPE this_:PTR, args is any<br /><br />It utilizes Tasms built in Naming Convention, fx. the PROCDESC directive produces this code.<br /><br />MethodName PROCDESC this_:PTR, args is any<br /><br />@Type_MethodName PROCTYPE this_:PTR, args is any , this is for parameter checking<br />GLOBAL MethodName:PROC, this makes visibility PUBLIC<br /><br />So I use this macro to avoid the GLOBAL&#39;isation of evrything, if you use PROCDESC, all methods are realy accessible PUBLIC, I think it&#39;s wery anti OOP. The onely methods that need to be declared with the PROCDESC directive, are thous hwo are meant to be static methods fx. the constructor must be static, and frend methods must be declared with the PROCDEC directive, or they can&#39;t be accessed. They act as both virtual and static. So now if we derive IUnknown.<br /><br /><pre><code><br /><br />_vtISomInterface ¦nbsp; MACRO Cast:REQ<br /> _vtIUnknown Cast<br /><br />STDMETHOD&nbsp; GetSomVal :PTR DWORD<br />STDMETHOD&nbsp; SetSomVal :DWORD<br /><br />ISomInterface STRUC IUnknown METHOD \<br />{<br /> VIRTUAL Cast&amp;_GetSomVal :PTR @Type_GetSomVal<br /> VIRTUAL Cast&amp;_SetSomVal :PTR @Type_SetSomVal<br />}<br />ISomInterface ENDS<br />ENDM<br /><br /> _vtISomInterface ISomInterface<br /><br /></code></pre><br /><br />This translates into:<br /><br /><pre><code><br /><br />@Type_GetSomVal PROCTYPE this_:PTR, :PTR DWORD<br />@Type_SetSomVal PROCTYPE this_:PTR, :DWORD<br /><br />@Table_ISomInterface STRUC<br /> VIRTUAL ISomInterface_QueryInterface :PTR @Type_QueryInterface<br /> VIRTUAL ISomInterface_AddRef :PTR @Type_AddRef<br /> VIRTUAL ISomInterface_Release :PTR @Type_Release<br /> VIRTUAL ISomInterface_GetSomVal :PTR @Type_GetSomVal<br /> VIRTUAL ISomInterface_SetSomVal :PTR @Type_SetSomVal<br />@Table_ISomInterface ENDS<br /><br />ISomInterface ¦nbsp; STRUC<br /> @Mptr_IUnknown DD ?<br /> @Mptr_ISomInterface EQU &lt;@Mptr_IUnknown&gt;<br />ISomInterface ¦nbsp; ENDS<br /><br /></code></pre><br /><br />Now if you look at a listing you see that the TABLE datatype is eventualy translated into STRUC datatype, but with the @Table_ prefix, but what I mean is that the virtual method table, is not a part of data directly, but is meant to get accessed through the @Mptr_ data field. But Interfaces are never Instansiated, unless you Implement youre own Interfaces, onely Virtual methods become members of the Virtual Method Table, static Methods must be declared with PROCDESC, if that vas not the case, thera were no Private static methods. So let&#39;s make a class.<br /><br /><pre><code><br /><br />$CSomClass PROCDESC InitVal:DWORD<br />@CSomClass PROCDESC this_:PTR<br />Afrend PROCDESC this_:PTR, ppv:PPV<br />STDMETHOD GetSomMore :PTR LPSTR<br />STDMETHOD SetSomMore :LPSTR<br /><br />_vtCSomClass MACRO Cast:REQ<br /> _vtISomInterface Cast<br />CSomClass STRUC ISomInterface METHODS \<br />{<br />&nbsp; Cast&amp;_$&amp;Cast :PTR @Type_$CSomClass = $CSomClass&nbsp; ; Constructor<br /> Cast&amp;_@&amp;Cast :PTR @Type_@CSomClass = @CSomClass ; Destructor<br /> VIRTUAL Cast&amp;_QueryInterface :PTR @Type_QueryInterface= QueryInterface<br /> VIRTUAL Cast&amp;_AddRef :PTR @Type_AddRef&nbsp; = AddRef<br /> VIRTUAL Cast&amp;_Release :PTR @Type_Release = Release<br /> VIRTUAL Cast&amp;_GetSomVal :PTR @Type_GetSomVal = GetSomVal<br /> VIRTUAL Cast&amp;_SetSomVal :PTR @Type_SetSomVal = SetSomVal<br /> VIRTUAL Cast&amp;_Afrend :PTR @Type_Afrend = Afrend&nbsp; ; Frend Method<br /> VIRTUAL Cast&amp;_GetSomMore :PTR @Type_GetSomMore = GetSomMore ; Private Virtual Method<br /> VIRTUAL Cast&amp;_SetSomMore :PTR @Type_SetSomMore&nbsp; = SetSomMore ; - do -<br />}<br /> LPSTR TYPEDEF PTR BYTE<br /> m_SomVal DWORD ?<br /> m_SomMore LPSTR ?<br /> m_RefCount DWORD ?<br />CSomClass ENDS<br />pCSomClass TYPEDEF PTR CSomClass<br />LPSOMCLASS TYPEDEF PTR CSomClass<br />ENDM<br /><br /> _vtCSomClass CSomClass<br /><br /> .data<br /> TBLINST<br />Me CSomClass {@Mptr_IUnknown=@TableAddr_CSomClass, \<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; m_SomVal=0, m_SomMore=0, m_RefCount=1}<br /> .code<br /><br /><br /></code></pre><br /><br />This is ofcource just a general idé, but many C++ classes are not much more advanced than this, in the prinsiple. But we are not alowed to put instructions that produce code into structures. Hopefully somthing vas of use.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1521" target="_blank">MakeLink.zip</a></li>
+      <li><a href="../../attachments/?id=1522" target="_blank">MakeLink.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-04-04 05:10:27 by polli</div>
+   </div>
+  </div>
+ </body>
+</html>

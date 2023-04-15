@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>macro to let masm generate faster calls - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28614" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=28614">macro to let masm generate faster calls</a></p>
+   <div class="post" id="post-202268">
+    <div class="subject"><a href="#post-202268">macro to let masm generate faster calls</a></div>
+    <div class="body">hello,
+
+i didn't like the code masm generates with invoke, if the routine is in an external dll (kernel32, user32,...). The source code, say
+
+<pre><code>
+      invoke ExitProcess,eax
+
+is translated to:
+
+      push   eax
+      call   ExitProcess
+
+so far, so good. But the linker adds to this code:
+
+ExitProcess:
+      jmp   dword ptr [_imp__ExitProcess@4]
+</code></pre>
+
+So every call to a win32 function goes trough 2 levels of indirection, which is one too much in my eyes. Therefore I have created a macro @invoke:
+
+<pre><code>
+@invoke macro name:req,parms:vararg
+        i = 0
+fparms  catstr <>
+        for parname,<parms>
+        i = i + 4
+fparms  catstr fparms,<,:dword>
+        endm
+ii      textequ %i
+iatname catstr <_imp__>,<name>,<@>,ii
+t&name& typedef proto stdcall fparms
+externdef iatname:ptr t&name&
+        invoke iatname,parms
+        endm
+</code></pre>
+
+
+Now the example looks like:
+
+<pre><code>
+      @invoke ExitProcess,eax
+
+and the generated code is:
+  
+      push   eax
+      call   dword ptr [_imp__ExitProcess@4]
+
+</code></pre>
+
+and the linker will add nothing to this code. The macro should work with all Win32 functions
+
+
+
+
+
+This message was edited by japheth, on 7/3/2001 4:32:18 AM</div>
+    <div class="meta">Posted on 2001-07-03 04:28:00 by japheth</div>
+   </div>
+   <div class="post" id="post-202269">
+    <div class="subject"><a href="#post-202269">macro to let masm generate faster calls</a></div>
+    <div class="body">Wayne Radburn shows another way to do it, by using a different style of API declaration (not PROTO):
+www.magma.ca/~wjr/Skeleton.zip</div>
+    <div class="meta">Posted on 2001-07-03 05:06:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-202270">
+    <div class="subject"><a href="#post-202270">macro to let masm generate faster calls</a></div>
+    <div class="body">I have forgotten about common redefinitions in MASM32-include files to get rid of the suffix like:
+
+GetProfileString equ <GetProfileStringA>
+
+so in the macro there should be a evaluation of the procedure name first. The corrected macro looks like:
+
+<pre><code>
+@invoke macro name:req,parms:vararg
+local i,fparms,ii,iatname,tname
+        i = 0
+fparms  catstr <>
+        for parname,<parms>
+        i = i + 4
+fparms  catstr fparms,<,:dword>
+        endm
+ii      textequ %i
+tname   textequ <&name&>
+iatname catstr <_imp__>,tname,<@>,ii
+t&name& typedef proto stdcall fparms
+externdef iatname:ptr t&name&
+        invoke iatname,parms
+        endm
+</code></pre></div>
+    <div class="meta">Posted on 2001-07-03 07:15:00 by japheth</div>
+   </div>
+   <div class="post" id="post-202271">
+    <div class="subject"><a href="#post-202271">macro to let masm generate faster calls</a></div>
+    <div class="body">Japeth,
+
+I tested the macro and as long as you don't try and use ADDR and
+use line continuations with "\" it works fine. Compliments on a
+clever macro.
+
+I played with the EXTERDEF directive for a while and found there
+is a way to get standard INVOKE syntax to work with DLL functions.
+<pre><code>
+    API equ <typedef PROTO>
+
+    pr2 API :DWORD,:DWORD
+
+    externdef _imp__LoadIconA@8:PTR pr2
+    LoadIcon equ <_imp__LoadIconA@8>
+</code></pre>
+Then use the normal "invoke"
+<pre><code>
+      invoke LoadIcon,hInstance,500    ; icon ID
+      mov hIcon, eax
+</code></pre>
+
+This approach requires creating a set of include files in this
+format but I think it can be done. 
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-07-03 08:56:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-202272">
+    <div class="subject"><a href="#post-202272">macro to let masm generate faster calls</a></div>
+    <div class="body">Where am i supposed to put this macro so that masm uses this one instead of its default 'invoke' code?
+
+Why dont u submit this code on icz's site so that it can be the 'standard' invoke macro instead of the default one?</div>
+    <div class="meta">Posted on 2001-07-03 09:09:00 by MovingFulcrum</div>
+   </div>
+   <div class="post" id="post-202273">
+    <div class="subject"><a href="#post-202273">macro to let masm generate faster calls</a></div>
+    <div class="body">Of course,
+there is always one more bug in your code. The macro works fine until you invoke a procedure without any parameters (like GetCommandLine). So there is a modification needed:
+
+<pre><code>
+@invoke macro name:req,parms:vararg
+local i,fparms,ii,iatname,tname
+        i = 0
+fparms  catstr <>
+        for parname,<parms>
+        i = i + 4
+fparms  catstr fparms,<,:dword>
+        endm
+ii      textequ %i
+tname   textequ <&name&>
+iatname catstr <_imp__>,tname,<@>,ii
+t&name& typedef proto stdcall fparms
+externdef iatname:ptr t&name&
+ifnb <parms>
+        invoke iatname,parms
+else
+        invoke iatname
+endif
+        endm
+</code></pre>
+
+to MovingFulcrum: put the macro at the start of your code and change all related invoke's to @invoke.
+japheth
+
+
+This message was edited by japheth, on 7/3/2001 9:23:07 AM</div>
+    <div class="meta">Posted on 2001-07-03 09:16:00 by japheth</div>
+   </div>
+   <div class="post" id="post-202274">
+    <div class="subject"><a href="#post-202274">macro to let masm generate faster calls</a></div>
+    <div class="body">Guys,
+
+Elicz did a wonderful job wit well written macros.
+I'm using them everyday and they just work fine: EliAsm</div>
+    <div class="meta">Posted on 2001-07-03 17:43:00 by Amokila</div>
+   </div>
+   <div class="post" id="post-202275">
+    <div class="subject"><a href="#post-202275">macro to let masm generate faster calls</a></div>
+    <div class="body">If no one has heard me before (:D), I'd like to second <strong>Amokila</strong>'s comment.</div>
+    <div class="meta">Posted on 2001-07-04 00:26:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-202276">
+    <div class="subject"><a href="#post-202276">macro to let masm generate faster calls</a></div>
+    <div class="body">The only problem I can see with the method Japheth is using is that
+it has no type checking. His macro works and the code that is built
+does what he set out to do but where the PROTO in the macro has its
+parameters determined by the number of parameters in the function
+call, an error in the parameter count will be assembled with no easy
+way to check it when it crashes.
+
+It is no big deal to get a complete list of decorated names from
+the Microsoft Libraries and build a new set of include files based
+on the method the Japheth has used to directly call the functions.
+While the performance gains are dubious, the format is flexible in
+that it can be adapted to handle DLLs that do not have a library
+attached to them.
+
+This method uses "invoke" with the normal type checking and
+conveniences like ADDR so the end result is a lot more reliable
+and easier to use.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-07-04 03:04:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-202277">
+    <div class="subject"><a href="#post-202277">macro to let masm generate faster calls</a></div>
+    <div class="body"><strong>Hutch</strong>, I keep forgetting that ADDR is lacking in Elicz's implementation.  Also, I'll certainly agree that it's a few steps away from the standard 'invoke' - it takes a little practice to get used to all the macro names.</div>
+    <div class="meta">Posted on 2001-07-04 03:34:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-202278">
+    <div class="subject"><a href="#post-202278">macro to let masm generate faster calls</a></div>
+    <div class="body">hutch,
+
+I would also prefer to extend the tool (L2INC?) which generates the masm32 include files . The "macro solution" has some disadvantages, as you have already stated. 
+
+japheth</div>
+    <div class="meta">Posted on 2001-07-04 03:55:00 by japheth</div>
+   </div>
+  </div>
+ </body>
+</html>

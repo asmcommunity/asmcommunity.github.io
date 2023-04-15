@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Multiple window instances and data preservation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12638" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12638">Multiple window instances and data preservation</a></p>
+   <div class="post" id="post-97783">
+    <div class="subject"><a href="#post-97783">Multiple window instances and data preservation</a></div>
+    <div class="body">I'm trying to code my first assembler (MASM32) program, and I need help...<br />-- by the way: excuse me for silly questions (I'm a beginner) &amp; excuse me for my bad english (I'm Italian).<br /><br />What the program should do:<br />  take an array of longs from another program and represent them as a graph in a window<br /><br />I've chosen to make a DLL (so it's simple to pass data, for the caller) which declares it's own Window Class, creates a window and has it's own Window Procedure.<br /><br />Since there can be more than one instance of the graph-window, the array of points cannot be global, it has to be local to the window procedure, otherwise every window'd display the same graph.<br /><br />Some_EXE<br /> |<br /> | array_of_Y_points (data to be passed from the exe to the dll)<br /> |<br />Chart_DLL (my program)<br />  DrawChart (function called by Some_EXE)<br />  |<br />  ? array_of_Y_points<br />  |<br />  WndProc   (window procedure)<br /><br /><br /><br />Problem:<br />How do I pass the array_of_Y_points from DrawChart to WndProc?<br /><br /><br />My solution:<br />I stored a pointer (pY) to the array in the window extra bytes (cbWndExtra) using:<br /><br /> invoke SetWindowLong, hWnd,0,pY   ; write pY in cbWndExtra<br /> invoke GetWindowLong, hWnd,0      ; read pY from cbWndExtra<br /><br />What I get is an Access Violation ERROR!<br />everything's ok as long as I OPEN or RESIZE graph-windows, but if I close one... mayhem<br />actually, if I've opened windows 1,2 and 3, and now close window 3, nothing happens but if I close window 1 or 2 and try to resize another: error.<br /><br />Should I use HeapCreate &amp; HeapAlloc and make a copy of the entire array?<br />Isn't there a simple solution where I have NOT to copy the array?<br />And anyway, why does my solution not work?<br /><br />Thank you very much!</div>
+    <div class="meta">Posted on 2003-04-18 16:06:44 by MayBe</div>
+   </div>
+   <div class="post" id="post-97786">
+    <div class="subject"><a href="#post-97786">Multiple window instances and data preservation</a></div>
+    <div class="body">Is the window created with cbWndExtra memory allocated ? You can also pass the pointer to the array in the GWL_USERDATA nIndex:<br /><br /> invoke SetWindowLong, hWnd,GWL_USERDATA,pY<br />invoke GetWindowLong, hWnd,GWL_USERDATA</div>
+    <div class="meta">Posted on 2003-04-18 16:15:49 by donkey</div>
+   </div>
+   <div class="post" id="post-97881">
+    <div class="subject"><a href="#post-97881">Multiple window instances and data preservation</a></div>
+    <div class="body">A standard template i like to do in practice with window procedures is:<br /><pre><code>; ####### WINDOW INSTNACE PRIVATE MEMORY ###############<br /><br />PMem STRUC<br />   hParent           dd ?<br />   hChild            dd ?<br />   Moving_x          dd ?<br />   Moving_y          dd ?<br />   KillTimerFlag     dd ?<br />   IsOpen            dd ?<br />   CloseBox          RECT  &lt;&gt;<br />PMem ENDS<br /><br />; #######   WINDOW INSTANCE PROCEEDURE   ###############<br /><br />WindowProc	PROC	USES EDI ESI EBX hWnd&#58;HWND, uMsg&#58;DWORD, wParam&#58;DWORD, lParam&#58;DWORD<br /><br />   ; Get the Private Memory pointer back in EBX &#40;reserved register for this&#41;<br />   &#91;b&#93;invoke GetWindowLong, hWnd, GWL_USERDATA <br />   mov EBX, EAX&#91;/b&#93;<br />   <br />   .if uMsg == WM_CREATE<br />      <br />      ; Allocate Private Memory as defined in the structure<br />      &#91;b&#93;invoke GetProcessHeap<br />      invoke HeapAlloc, eax, NULL, SIZEOF PMem<br />      mov EBX, EAX<br />      invoke SetWindowLong, hWnd, GWL_USERDATA, EAX&#91;/b&#93;<br /><br />      ; any other inits<br />   <br />   .elseif uMsg == WM_DESTROY<br />   <br />      &#91;b&#93;invoke GetProcessHeap<br />      invoke HeapFree, EAX, NULL, EBX&#91;/b&#93;<br /><br />   .elseif uMsg == ...<br />   <br />      ; Get instance specific memory back &#40;example use&#41;<br />      mov edx, &#91;ebx&#93;.PMem.hParent<br />   <br />   .elseif uMsg == ...<br />   <br />      ; Set instance specific memory &#40;example use&#41;<br />      mov &#91;ebx&#93;.PMem.hChild, NULL<br />   <br />   .elseif uMsg == ...<br />   <br />   .endif<br /><br />   ret<br />WindowProc  ENDP</code></pre><br /><br />Its an excellent and easy way of not using Global memory.  Its well suited for Custom controls, since each control will operate with the same Window Proceedure, but must have memory private, and unique to the window (and its handle).<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2003-04-18 23:28:54 by NaN</div>
+   </div>
+   <div class="post" id="post-97985">
+    <div class="subject"><a href="#post-97985">Multiple window instances and data preservation</a></div>
+    <div class="body">Isnt ebx get trashed at WM_DESTROY ?.I guess we should store allocated memory handle at global variable</div>
+    <div class="meta">Posted on 2003-04-19 10:22:47 by LaptoniC</div>
+   </div>
+   <div class="post" id="post-97992">
+    <div class="subject"><a href="#post-97992">Multiple window instances and data preservation</a></div>
+    <div class="body">I think you are missing one of essential facts about DLLs here:<br /><br />In each DLL attached to a process the code section is the same (well mapped) but the .data  section is LOCAL to the process  :)<br /><br />the only problem will be IF you want to have multple charts from the same exe...<br /><br />But then just allocate some memory for the points each time and increment a &quot;global&quot; counter and keep a link array between each data set and window handles</div>
+    <div class="meta">Posted on 2003-04-19 10:44:46 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-97995">
+    <div class="subject"><a href="#post-97995">Multiple window instances and data preservation</a></div>
+    <div class="body">LaptoniC, No not at all.<br /><br />Every time the proc is entered the &quot;USES&quot; statement pushes EBX ESI and EDI.  This preserves system values for these registers, and opens the playing field for use to use them freely.<br /><br />The only time EBX has false information from the GetWindowLong is when the window is being created (WM_CREATE).  There is not heap memory allocated as of yet.  But Ironically, the WM_CREATE does just this and saves the pointer to SetWindowLong, as well as corrects the EBX register for any remaining work in the startup.<br /><br />On WM_DESTROY messages, the EBX is fist set from the stored heap memory pointer, and the WM_DESTROY message is handled.  EBX still has the proper pointer to memory.   This is why i reserve ebx for this.  Its now becomes a pointer to private memory on a per instance basis.  The segragation is done by GetWindowLong's hWindow parameter.  You put a different window handle, and you get a different window's heap memory.  Since windows gives the proc the proper handle each time an event happens, this is always in sinc, and will always retrieve the proper heap memory from the instance that the event occurs to.<br /><br />Hope this clears things up a bit!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2003-04-19 10:46:57 by NaN</div>
+   </div>
+   <div class="post" id="post-98029">
+    <div class="subject"><a href="#post-98029">Multiple window instances and data preservation</a></div>
+    <div class="body">Thanks for explaining :alright:</div>
+    <div class="meta">Posted on 2003-04-19 14:23:13 by LaptoniC</div>
+   </div>
+   <div class="post" id="post-98664">
+    <div class="subject"><a href="#post-98664">Multiple window instances and data preservation</a></div>
+    <div class="body">Thank you very much, everybody!<br /><br />I will try to do as you wrote, NaN.</div>
+    <div class="meta">Posted on 2003-04-22 15:46:18 by MayBe</div>
+   </div>
+   <div class="post" id="post-98666">
+    <div class="subject"><a href="#post-98666">Multiple window instances and data preservation</a></div>
+    <div class="body">Be a bit careful with this approach, though - at least with dialog routines. As far as I've been able to see (only by quick tests, no deep research at all), you get a couple of messages before WM_INITDIALOG - at least a WM_POWER (I think). So you can't, for instance, just check for WM_INITDIALOG and otherwise jump blindly to a dispatch table gotten from GetWindowLong :^)</div>
+    <div class="meta">Posted on 2003-04-22 16:05:21 by f0dder</div>
+   </div>
+   <div class="post" id="post-98680">
+    <div class="subject"><a href="#post-98680">Multiple window instances and data preservation</a></div>
+    <div class="body">I was digging into the internals of WTL/ATL recently and discovered that it has a very nice and clean way to associate a C++ class with a specific window.<br />What it does is to register the class with a 'startup wndproc', which gets called as soon a window instance is created. This startup proc reads from a global, shared data structure to get the class pointer which was temporarily stored there (one pointer per thread), then writes a piece of assembly code to a part of the class (mov dword ptr , pThis / jmp actual_wndproc), and moves the wndproc pointer of that window to that piece of code.<br />This way each window has its unique wndproc pointer that points to a piece of code that modifies the hWnd parameter to the right 'this' pointer. Then it just calls the original wndproc, but now *with* a this pointer.<br />Here's a nice article explaining it in detail:<br /><a target="_blank" href="http://staff.develop.com/onion/Articles/cpprep0399.htm">http://staff.develop.com/onion/Articles/cpprep0399.htm</a><br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-04-22 16:56:51 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

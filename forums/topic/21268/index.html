@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>defining arrays of structs in structs - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21268" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21268">defining arrays of structs in structs</a></p>
+   <div class="post" id="post-160910">
+    <div class="subject"><a href="#post-160910">defining arrays of structs in structs</a></div>
+    <div class="body">I&#39;m having a hard time figuring out how to instantiate a fixed array of structs inside a struct.<br />If I could do this, I&#39;d be able to make a single call to AdjustTokenPrivileges, and could again sleep at night.<br /><br />Here are the two structs I&#39;m working with:<br /><br />TOKEN_PRIVILEGES STRUCT<br />? PrivilegeCount? ? DWORD? ? ? ?<br />? Privileges? ? ? ? LUID_AND_ATTRIBUTES ANYSIZE_ARRAY dup(&lt;&gt;)<br />TOKEN_PRIVILEGES ENDS<br /><br />LUID_AND_ATTRIBUTES STRUCT<br />? ? Luid LUID &lt;&gt;<br />? ? Attributes dd ?<br />LUID_AND_ATTRIBUTES ENDS<br /><br />I&#39;d like to instantiate a single TOKEN_PRIVILEGES struct with the Privileges member as an array of two LUID_AND_ATTRIBUTES structs. Is this possible?<br /><br /><br />My code is as follows:<br />==========================================================<br /><br />main proc<br />LOCAL tokenHandle:HANDLE<br />LOCAL TP:TOKEN_PRIVILEGES<br />LOCAL RequiredPrivileges:PRIVILEGE_SET<br />LOCAL pid:DWORD<br /><br />;;; open the process security token and add two privileges to enable RegLoadKey()<br />invoke GetCurrentProcess<br />mov pid, eax<br />invoke OpenProcessToken, pid, TOKEN_ADJUST_PRIVILEGES + TOKEN_QUERY, addr tokenHandle<br /><br />mov TP.PrivilegeCount, 1<br />lea edi, TP.Privileges[0].Luid<br />invoke LookupPrivilegeValue, NULL, $CTA0(&quot;SeRestorePrivilege&quot;), edi<br />mov TP.Privileges[0].Attributes, SE_PRIVILEGE_ENABLED<br />invoke AdjustTokenPrivileges, tokenHandle, FALSE, addr TP, NULL, NULL, NULL<br />.IF eax == 0<br />	invoke CloseHandle, tokenHandle<br />	invoke StdOut, $CTA0(&quot;Adding SeRestorePrivilege failed.\n&quot;)<br />	invoke ExitProcess, 1<br />.ENDIF<br /><br />mov TP.PrivilegeCount, 1<br />lea edi, TP.Privileges[0].Luid<br />invoke LookupPrivilegeValue, NULL, $CTA0(&quot;SeBackupPrivilege&quot;), edi<br />mov TP.Privileges[0].Attributes, SE_PRIVILEGE_ENABLED<br />invoke AdjustTokenPrivileges, tokenHandle, FALSE, addr TP, NULL, NULL, NULL<br />.IF eax == 0<br />	invoke CloseHandle, tokenHandle<br />	invoke StdOut, $CTA0(&quot;Adding SeBackupPrivilege failed.\n&quot;)<br />	invoke ExitProcess, 1<br />.ENDIF<br /><br />invoke CloseHandle, tokenHandle<br />==========================================================<br /><br /><br />I&#39;ve tried variations between using global and local instantiations, but to no avail. <br />Some attempts to accomplish this included:<br />.data<br />TP TOKEN_PRIVILEGES {2, &lt;,&gt;}<br />and<br />TP TOKEN_PRIVILEGES {2, &lt;&lt;&gt;,&lt;&gt;&gt;}<br />and<br />TP TOKEN_PRIVILEGES {2, &lt;&gt;&lt;&gt;}<br />and<br />TP TOKEN_PRIVILEGES {2, &lt;,&gt;:LUID_AND_ATTRIBUTES}<br /><br />I would be very relieved if someone could help clarify the proper LOCAL and/or .data definition semantics :)<br /><br />Many thanks in advance!<br /><br />-Jerome</div>
+    <div class="meta">Posted on 2005-06-08 12:17:07 by jackal651</div>
+   </div>
+   <div class="post" id="post-160914">
+    <div class="subject"><a href="#post-160914">Re: defining arrays of structs in structs</a></div>
+    <div class="body">The following code should work, if it doesn&#39;t you can always just copy all the junk into a regular buff then after looking at how many bytes each struct is, use masms MemCopy to copy to a temp struct and go from there.<br /><br /><pre><code><br />TOKEN_PRIVILEGES STRUCT<br />&nbsp; PrivilegeCount&nbsp; &nbsp; DWORD&nbsp; &nbsp; &nbsp; ?<br />&nbsp; Privileges&nbsp; &nbsp; &nbsp;  TEMPSTRUCT &lt;?&gt;<br />TOKEN_PRIVILEGES ENDS<br /><br />TEMPSTRUCT STRUCT<br />struct1&nbsp; &nbsp; &nbsp; &nbsp; LUID_AND_ATTRIBUTES ANYSIZE_ARRAY dup(&lt;&gt;)<br />struct2&nbsp; &nbsp; &nbsp; &nbsp; LUID_AND_ATTRIBUTES ANYSIZE_ARRAY dup(&lt;&gt;)<br />TEMPSTRUCT ENDS<br /><br />LUID_AND_ATTRIBUTES STRUCT<br />&nbsp; &nbsp; Luid LUID &lt;&gt;<br />&nbsp; &nbsp; Attributes dd ?<br />LUID_AND_ATTRIBUTES ENDS<br /></code></pre></div>
+    <div class="meta">Posted on 2005-06-08 14:21:39 by Webring</div>
+   </div>
+   <div class="post" id="post-160916">
+    <div class="subject"><a href="#post-160916">Re: defining arrays of structs in structs</a></div>
+    <div class="body">in TASM you can simply do:<br /><br />struc LUID_AND_ATTRIBUTES<br />&nbsp; &nbsp; Luid dd ?<br />&nbsp; &nbsp; Attributes dd ?<br />ends LUID_AND_ATTRIBUTES<br /><br />struc TOKEN_PRIVILEGES<br />&nbsp; PrivilegeCount&nbsp;  dd ?<br />&nbsp; Privileges&nbsp; &nbsp; &nbsp;  LUID_AND_ATTRIBUTES 2 DUP (?)<br />ends TOKEN_PRIVILEGES<br /><br /><br />data:<br /><br />my_privs&nbsp; &nbsp; TOKEN_PRIVILEGES&nbsp; ?<br /><br />code:<br /><br />mov eax, .Attributes]<br />mov ecx, .Attributes]</div>
+    <div class="meta">Posted on 2005-06-08 15:22:22 by ti_mo_n</div>
+   </div>
+  </div>
+ </body>
+</html>

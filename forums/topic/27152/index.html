@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Winsock: Testing for end of NNTP response? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27152" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27152">Winsock: Testing for end of NNTP response?</a></p>
+   <div class="post" id="post-194815">
+    <div class="subject"><a href="#post-194815">Winsock: Testing for end of NNTP response?</a></div>
+    <div class="body">Hello All,
+
+I'm trying to resolve a long, long standing problem with a
+news reader I wrote for Windows. The problem is that
+sometimes it doesn't detect the NNTP end-of-response
+chars (\r\n.\r\n) and hangs in a recv call. I believe that
+its because the "\r\n.\r\n" gets divided between two
+recv calls (two incoming data chucks).  I'm using a
+synchronous socket in a second thread.
+
+<pre><code>
+LOCAL bArticleBuffer[500]:BYTE
+szText szEnd,13,10,".",13,10,0
+
+.WHILE TRUE
+
+    invoke RtlZeroMemory, addr bArticleBuffer, 500
+    invoke recv, dwSocket, ADDR bArticleBuffer, 496, 0
+
+    .if eax == SOCKET_ERROR
+
+        jmp @@ErrorExit
+
+    .else
+
+        mov dwBufferLen, eax
+        invoke WriteFile, hFile, addr bArticleBuffer, dwBufferLen, ADDR dwBytesWritten, NULL
+
+        ; xStrStr is my name for InString
+        invoke xStrStr, ADDR bArticleBuffer, ADDR szEnd
+
+        ; if eax isn't -1 the we found the "\r\n.\r\n"
+        .BREAK .IF (eax != -1)
+
+    .endif    
+
+.ENDW
+</code></pre>
+
+
+Can someone please help me??
+
+
+Thank You!
+Xtreme
+
+
+This message was edited by xtreme, on 3/9/2001 5:20:58 AM</div>
+    <div class="meta">Posted on 2001-03-09 05:17:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-194816">
+    <div class="subject"><a href="#post-194816">Winsock: Testing for end of NNTP response?</a></div>
+    <div class="body">xtreme,
+
+An easy solution is to prepend the last 5 chars of the previous message to the new message received, then even if it is spilt you will still find it.
+
+when you are doing your normal processing you know not to use the first 5 chars.
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-03-09 10:45:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-194817">
+    <div class="subject"><a href="#post-194817">Winsock: Testing for end of NNTP response?</a></div>
+    <div class="body">I added a 5 sec timeout to the loop. It seems to work...
+
+<pre><code>
+        ; RECIEVE THE SERVER'S RESPONSE
+            .WHILE TRUE
+            
+                    invoke RtlZeroMemory, addr bArticleBuffer, 512
+                    invoke recv, dwSocket, ADDR bArticleBuffer, 512, 0
+
+
+                    .if eax == SOCKET_ERROR
+                    
+                                jmp @@ErrorExit
+                                
+                    .else
+                    
+                                mov dwBufferLen, eax
+                                invoke WriteFile, hFile, addr bArticleBuffer, dwBufferLen, ADDR dwBytesWritten, NULL
+
+                                ; JUMP OUT IF \r\n.\r\n IS FOUND
+                                    invoke xStrStr, addr bArticleBuffer, addr szEnd
+                                    .break .if eax != -1
+
+                                ; FAILSAFE
+                                    m2m readfds.fd_count, 1
+					      m2m readfds.fd_array[0], dwSocket
+                                    invoke select, 0, addr readfds, 0, 0, addr tv
+					      .break .if eax == 0
+                                    .if eax == SOCKET_ERROR
+                                        return 0
+                                    .endif
+
+                    .endif
+                        
+            .ENDW
+</code></pre>
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-03-10 07:41:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-194818">
+    <div class="subject"><a href="#post-194818">Winsock: Testing for end of NNTP response?</a></div>
+    <div class="body">In addition to my last reply, I started looking at Icz's HTTP
+Downloader 1.5.
+
+It seems that I've been holding my self back by not looking to
+see how much data is available on a socket before I do a read.
+This can be done by using the ioctlsocket function. Instead I
+was using a non-resizable local byte array of about 500 bytes.
+This is a big no-no. I was looping way too much!
+
+You see, when downloading a file if the download window says
+you're getting, say, 5.1 kb/sec, thats <em>about</em> how much you can
+recv from Winsock in a single recv.
+
+To go beyond (or at least try) this method of looking at the
+sockets properties before doing a recv, I now call getsockopt
+after making a socket and ask it how big the recv buffer is and
+make my buffer the same size with GlobalAlloc. That way, I
+just use my buffer and I'm guarenteed to have enough room
+to hold to largest message I'll get from the server....And
+its much easier to detect the "\r\n.\r\n".
+
+Xtreme
+
+
+This message was edited by xtreme, on 3/11/2001 6:23:53 PM</div>
+    <div class="meta">Posted on 2001-03-11 17:17:00 by xtreme</div>
+   </div>
+  </div>
+ </body>
+</html>

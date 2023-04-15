@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>List Processes probleme - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9596" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9596">List Processes probleme</a></p>
+   <div class="post" id="post-71133">
+    <div class="subject"><a href="#post-71133">List Processes probleme</a></div>
+    <div class="body">Hi All,<br /><br />I have found a VB code listing running processes. Now I am trying to write that code in asm, but it won't work. What is wrong in my code? The function EnumProcess doesn't succed (eax==0). I have copied the psapi.lib from 98 SDK lib map to masm32 lib map. I have also run l2extia to create a psapi.inc file. Here is my code. Can someone tell me what's wrong?<br /><br /><pre><code><br />DlgProc proc hWin&#58;HWND,uMsg&#58;UINT,wParam&#58;WPARAM,lParam&#58;LPARAM<br />    LOCAL processes&#91;100&#93;&#58;dword<br />	<br />    mov eax,uMsg<br />    .if eax==WM_INITDIALOG<br /><br />    .elseif eax==WM_COMMAND<br />        mov	eax,wParam<br />        and	eax,0FFFFh<br />        ; PushButton action =============================<br />        .if lParam != 0<br />            mov edx,wParam<br />            shr edx,16<br />            .if dx == BN_CLICKED<br />                .if ax == IDC_BTN1<br />                    mov osinfo.dwOSVersionInfoSize,148<br />                    mov osinfo.szCSDVersion,128<br />                    invoke GetVersionEx,addr osinfo<br />                    .if eax==TRUE <br />                        .if osinfo.dwPlatformId==1 ;win95/98<br />                            nop<br />                        .elseif osinfo.dwPlatformId==2 ;winNT<br />                            invoke EnumProcesses,addr processes,sizeof processes,100<br />                            .if eax!=0 <br />                                invoke SetDlgItemText,hWin,IDC_EDT1,SADD&#40;'EnumProcesses. OK!'&#41;<br />                            .elseif<br />                                invoke SetDlgItemText,hWin,IDC_EDT1,SADD&#40;'EnumProcesses. Did not Work'&#41;<br />                            .endif<br />                        .endif<br />                    .endif<br />                .endif<br />            .endif<br />        .endif<br /><br />    .elseif eax==WM_CLOSE<br />        invoke EndDialog,hWin,0<br />    .else<br />        mov	eax,FALSE<br />        ret<br />    .endif<br />    mov eax,TRUE<br />    ret<br /><br />DlgProc endp<br /></code></pre></div>
+    <div class="meta">Posted on 2002-12-15 16:20:18 by minor28</div>
+   </div>
+   <div class="post" id="post-71246">
+    <div class="subject"><a href="#post-71246">List Processes probleme</a></div>
+    <div class="body">This line is your problem...<br /><br />invoke EnumProcesses,addr processes,sizeof processes,100<br /><br />The function expects the third varible to be a pointer to a dword so that it can return the number bytes copied into your processes array.<br /><br />To fix the problem add another local variable to your procedure called dwNeeded<br /><br />local dwNeeded:dword<br /><br />and call the function like this...<br /><br />invoke EnumProcesses,addr processes,sizeof processes,addr dwNeeded</div>
+    <div class="meta">Posted on 2002-12-16 10:32:52 by BubbaFate</div>
+   </div>
+   <div class="post" id="post-71333">
+    <div class="subject"><a href="#post-71333">List Processes probleme</a></div>
+    <div class="body">Thanks BubbaFate<br /><br />Now I can list running processes. The project is attached. Two questions:<br /><br />1) why is the value given to nModules at line 75 changed after the invoke at line 82. It is a completly different value at the compare at line 92?<br /><br />2) How do I make a line feed after each process name?<br /><br />Well I have another request too.<br /><br />3) I suppose my code is not the most effective so I would appreciate comments on my code.<br /><br />BTW. I haven't written code for Win 9xx. It only works on NT.<br /><br />Regard</div>
+    <div class="meta">Posted on 2002-12-17 02:27:26 by minor28</div>
+   </div>
+   <div class="post" id="post-71441">
+    <div class="subject"><a href="#post-71441">List Processes probleme</a></div>
+    <div class="body">I think your first question about nModules being changed is caused by not popping arguments off the stack in the proper order... The first thing you push is nModules, and then you push your counter.  But when you pop those back off you do it backwards by popping nModules first.  Also each time your loop executes you push one argument yet pop two, that?s not a very good thing.<br /><br />As far as a line feed goes, just send this<br /><br />crlf db 0Dh, 0Ah, 0<br /><br />to the edit control after you send the module name.<br /><br />One of the biggest problems I have with your code is readability, just one example is how you are trying to use eax as nModules, and ecx as a counter across function calls. In order to accomplish this you have to push and pop these arguments, it would be much easier just to declare some local variables to handle this.<br /><br />To accomplish this task on win 9x then you can use the toolhelp functions. CreateToolhelp32Snapshot, Process32First, Process32Next are the functions you should look into. Now if you want this program to work on all versions of Windows you are going to have to load the psapi functions and the toolhelp functions dynamically so the loader is happy on all platforms.<br /><br />There is an alternative however; the toolhelp functions are supported on all win 9x platforms, and on win 2000 and up. So if you are willing to leave NT 4.0 and below in the dark then, you can just use toolhelp exclusively.</div>
+    <div class="meta">Posted on 2002-12-17 13:11:09 by BubbaFate</div>
+   </div>
+   <div class="post" id="post-71466">
+    <div class="subject"><a href="#post-71466">List Processes probleme</a></div>
+    <div class="body">Thanks for your reply. It was to a great help for me.<br /><br />SendMessage CR and LF did the job.<br /><br />One push and two pops is no good. I should have seen that myself. You are right the code is not easy to read. In the first place I did declare a local variable nModules. After division by 4 nModules got the value 37 and hold it until line of &quot;invoke GetModuleFileNameEx&quot;. After the call nModules changed to 58xxxxxx (looks like an address). I don't understand why. I do nothing to nModules. That's why I pushed and poped.<br /><br />I will try tollhelp functions later.</div>
+    <div class="meta">Posted on 2002-12-17 15:37:03 by minor28</div>
+   </div>
+   <div class="post" id="post-71550">
+    <div class="subject"><a href="#post-71550">List Processes probleme</a></div>
+    <div class="body">I think this is better readable.</div>
+    <div class="meta">Posted on 2002-12-18 02:04:33 by minor28</div>
+   </div>
+   <div class="post" id="post-71675">
+    <div class="subject"><a href="#post-71675">List Processes probleme</a></div>
+    <div class="body">Hi all<br /><br />Now I think this program works on all versions of Windows. The psapi functions are loaded only on NT and win 2000 platforms. I have tested on win 98 and win 2000. I would appreciate comments on my code.<br /><br />Regards</div>
+    <div class="meta">Posted on 2002-12-18 16:20:03 by minor28</div>
+   </div>
+  </div>
+ </body>
+</html>

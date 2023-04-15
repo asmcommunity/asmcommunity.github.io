@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fence instructions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28835" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28835">Fence instructions</a></p>
+   <div class="post" id="post-203752">
+    <div class="subject"><a href="#post-203752">Fence instructions</a></div>
+    <div class="body">Hi all,<br /><br />I was wondering what the sfence, lfence and mfence instructions are really used for. According to the documentation it ensures that non-temporary memory operations (i.e. movntq and movntps) have finished before continuing.<br /><br />So am I correct that sfence should be used for a memory store function (e.g. filling with zeros), and mfence for a memory copying function? Do I have to add them to the top as well as the bottom of the function? I have used non-temporary memory operations for quite some time without fence instructions. Was I just lucky this never resulted into disaster?<br /><br />I also wonder whether these instructions have any extra purpose with multi-core CPUs. For example, say thread A has written data to a buffer, and it sets a bit to indicate that it has finished. Thread B spin loops waiting for the bit so it can start further processing the data once the bit is turned on. Does the CPU guarantee that all writes to the buffer have finished before the bit is turned on and thread B starts, or do I have to insert a fence instruction anywhere?<br /><br />Any other memory synchronisation gotcha&#039;s I should be aware of?<br /><br />Thanks a lot,<br /><br />c0d1f1ed</div>
+    <div class="meta">Posted on 2007-11-29 06:27:00 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-203753">
+    <div class="subject"><a href="#post-203753">Re: Fence instructions</a></div>
+    <div class="body">Re: &quot;non-temporary&quot;<br /><br />You mean non-temporal. The idea being that some data may be written to memory but not needed any time soon, so it can be beneficial to avoid interacting with the normal memory cache heirarchy.<br /><br />Re: mfence, lfence and sfence<br /><br />The main purpose of these is synchronization of shared memory accesses within multiprocessor systems due to the fact that modern CPU&#039;s can execute instructions out of order. It can become important in shared memory situations that certain reads or writes happen in a well defined order.<br /><br />For a detailed example where these instruction would be needed, google for Peterson&#039;s Algorithm.<br /></div>
+    <div class="meta">Posted on 2007-11-29 07:22:10 by Rockoon</div>
+   </div>
+   <div class="post" id="post-203754">
+    <div class="subject"><a href="#post-203754">Re: Fence instructions</a></div>
+    <div class="body">Every read (lfence) or write (sfence) operation is guaranteed to be (physically) finished before executing next instruction after the s/l/fence instruction.<br /><br />In other words:<br /><br /><pre><code>mov eax,  ; load from some address<br />lfence<br />... &nbsp; &nbsp; &nbsp; &nbsp; ; here, the load is guaranteed to be already, physically performed before any further loads. (in other words, the RAM/cache (in this case) is supposed to have already processed the load request)</code></pre><br /><br />Modern CPUs don&#039;t read/write immediately when the corresponding read/write instructions are being fetched (and sometimes they don&#039;t load/store even after they&#039;re executed). This may cause problems with some devices. For example: imagine that you want to communicate with a device. This device requires that you write &quot;0&quot; to address &quot;4&quot; and then you can write a dword to this device, mapped to address 8.<br /><br />Let&#039;s analyze the following code:<br /><pre><code>mov eax, 4 ; load the ponter. not really necessary but it&#039;s somewhat more clear this way<br />mov ebx, 8 ; load the second pointer. as above: not necessary<br /><br />mov , 0 ; write &quot;0&quot; at address &#039;4&#039;<br />mov , 7 ; write &quot;7&quot; at address &#039;8&#039;</code></pre><br /><br />In this code, the the second write operation could be issued to the device BEFORE the first write operation. And that&#039;s what the fences are for:<br /><br /><pre><code>mov eax, 4 ; load the ponter. not really necessary but it&#039;s somewhat more clear this way<br />mov ebx, 8 ; load the second pointer. as above: not necessary<br /><br />mov , 0 ; write &quot;0&quot; at address &#039;4&#039;<br />sfence ; fence all stored<br />mov , 7 ; here, the previous store is guaranteed to have already been executed (more precisely: it&#039;s guaranteed that this write will FOLLOW the previous one)</code></pre><br /><br /><br />(PS: to be precise, communication with devices is usually performed via memories with so-called &#039;strong ordering&#039; and then fences are not really required ^^&#039; But in multi-CPU systems, fences help make synchronizations easier, shorter and faster)</div>
+    <div class="meta">Posted on 2007-11-29 07:32:04 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-203757">
+    <div class="subject"><a href="#post-203757">Re: Fence instructions</a></div>
+    <div class="body"><div class="quote">You mean non-temporal. The idea being that some data may be written to memory but not needed any time soon, so it can be beneficial to avoid interacting with the normal memory cache heirarchy.</div><br />Thanks for noticing the typo. I know what these instructions are supposed to do, but is it necessary to use the fence operations before and/or after them? How does not storing the data in cache create a need for a fence instruction? Other memory operations can be out-of-order as well.<br /><div class="quote">The main purpose of these is synchronization of shared memory accesses within multiprocessor systems due to the fact that modern CPU&#039;s can execute instructions out of order. It can become important in shared memory situations that certain reads or writes happen in a well defined order.</div><br />Then do Win32 synchronication methods (e.g. WaitForSingleObject) already use these? I can&#039;t image we should be forced to write assembly in C++ when going multi-threaded on a multi-core CPU.<br /><div class="quote">For a detailed example where these instruction would be needed, google for Peterson&#039;s Algorithm.</div><br />I&#039;ve used Peterson&#039;s algorithm before without using fence instructions...<br /><br />Thanks for the information, but I&#039;m still confused exactly when these instructions are needed.</div>
+    <div class="meta">Posted on 2007-11-29 13:48:28 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-203758">
+    <div class="subject"><a href="#post-203758">Re: Fence instructions</a></div>
+    <div class="body"><div class="quote">Every read (lfence) or write (sfence) operation is guaranteed to be (physically) finished before executing next instruction after the s/l/fence instruction.</div><br />I assume it doesn&#039;t flush the entire pipeline, just doesn&#039;t start any new memory operation before the queued memory operations have finished?<br /><br />I&#039;m not working with other (synchronous) devices. I&#039;m just worried about memory operation order within one thread when using non-temporal operations, and across threads with a multi-core CPU.<br /><br />Thanks a lot!</div>
+    <div class="meta">Posted on 2007-11-29 14:01:33 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-203759">
+    <div class="subject"><a href="#post-203759">Re: Fence instructions</a></div>
+    <div class="body"><div class="quote"><br />Thanks for noticing the typo. I know what these instructions are supposed to do, but is it necessary to use the fence operations before and/or after them? <br /></div><br /><br />No.<br /><br /><div class="quote"><br />How does not storing the data in cache create a need for a fence instruction?<br /></div><br /><br />It doesnt.<br /><br /><div class="quote"><br />I&#039;ve used Peterson&#039;s algorithm before without using fence instructions...<br /></div><br /><br />Issues like this even caught Microsoft with their pants down when true multi-core systems were introduced. There wasnt an issue with single-core multi-threading because thread switches made the issue irrelevant: The pipeline of thread A was fully retired long before thread B got its chance. <br /><br /><br />In a single core environment (as well as multi-core environments without out-of-order execution) only 3 cases can exist after a switch from thread A to thread B..<br /><br />Thread B can witness:<br /><br />o Operations A1 and A2 were both executed.<br />o Only operation A1 was executed.<br />o Neither A1 nor A2 were executed.<br /><br />In some multi-core out-of-order execution environments, a new case may be observed by thread B:<br /><br />o Only operation A2 was executed.<br /><br />It is this case where the fence instructions can play a role, by preventing it from happening.<br /><br /></div>
+    <div class="meta">Posted on 2007-11-30 02:01:41 by Rockoon</div>
+   </div>
+  </div>
+ </body>
+</html>

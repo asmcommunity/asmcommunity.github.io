@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Comparing strings - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27306" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27306">Comparing strings</a></p>
+   <div class="post" id="post-195574">
+    <div class="subject"><a href="#post-195574">Comparing strings</a></div>
+    <div class="body">Hi!
+
+I'm afraid my question is very stupid, but I can't find a solution:
+
+How can I find out if two strings are the same? Concrete example: I let the user choose a file by an open dialog. Now I want to find out if the extension of the chosen file is, let's say, ".exe".
+
+Thanx a lot in advance :)
+
+stem</div>
+    <div class="meta">Posted on 2001-03-20 08:40:00 by stem</div>
+   </div>
+   <div class="post" id="post-195575">
+    <div class="subject"><a href="#post-195575">Comparing strings</a></div>
+    <div class="body">First you need a template to test against:
+<pre><code>tstExtension: db ".exe",0</code></pre>
+Since it's only four bytes, some programmers would just test a DWORD, but this allows for easy changes.  Second, you need to find the length of the string that you are testing against, because we need to start at the end.  This will prevent us from finding 'Exe.exe.bat' as a program :)  Next look at each character for a '.', or the first character of our template above.  Then move forward testing the rest of the characters for equality.  You have to make sure that you don't overrun either of the strings during the comparison.
+
+I would just use the API routines that already exist though :)
+<strong>lstrlen
+lstrcmp</strong>
+<pre><code>
+    invoke lstrlen, addr tstExtension
+    push   eax
+    invoke lstrlen, addr TestString
+    pop    ecx
+    sub    eax, ecx
+    jle    @F ;Couldn't be a match (string smaller or equal extension length)
+    mov    ecx, addr TestString
+    add    ecx, eax
+    invoke lstrcmp, addr tstExtension, ecx
+    test   eax,eax
+    jne    @F
+</code></pre>
+...the extension is .exe here (do something)
+<pre><code>
+@@: ;Wrong extension
+</code></pre>
+This routine doesn't allow the test string to be just an extension.
+Hope that helps,
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-20 10:31:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195576">
+    <div class="subject"><a href="#post-195576">Comparing strings</a></div>
+    <div class="body">if you ONLY WANT to check a 4 byte
+extension you can do this like this:
+
+<pre><code>
+invoke lstrlen,addr ChoosenFile ;get string length
+add eax,offset ChoosenFile ;add offset to result
+sub eax,5 ;sustract 4 byte & the last 0
+cmp dword ptr ,"e.xe" ;compare extension with ".exe"
+jnz @noexe ;".exe" not found
+;...
+@noexe:
+</code></pre>
+
+mh, please note that there could be some errors... (i've got no api-ref and no compiler here)
+1. i don't know yet if lstrlen returns the size without the last terminating zero = sub eax,5 could be wrong
+2. i hate this intel convention, maybe "e.xe" is wrong
+
+This message was edited by drcmda, on 3/20/2001 12:03:29 PM</div>
+    <div class="meta">Posted on 2001-03-20 11:01:00 by drcmda</div>
+   </div>
+   <div class="post" id="post-195577">
+    <div class="subject"><a href="#post-195577">Comparing strings</a></div>
+    <div class="body">I just reciently wrote some code for that very same purpose.
+
+I modified the 'db' string to:
+
+<pre><code>
+szExtenions db "Exe Files",0,"*"
+    szIT    db ".exe",0,0
+</code></pre>
+
+Basically szExtensions will still operate as normally, but i added an extra lable at the '.exe' for alternate references:
+
+then in the code i used a M32LIB command, InStr ( pretty sure this is it ~ in at school right now, so cant check ) like so:
+
+<pre><code>
+
+
+  invoke InStr, addr szFileName, addr szIT
+  .if(eax)
+     ;The .exe is in the file name
+     
+     ...
+  .else
+     ;The .exe is not in the file name
+
+     ...
+  .endif
+
+</code></pre>
+
+Anywho, i hope this helps, Im pretty sure i got the label name wrong at the top (szExtensions), but im sure you get the point.
+
+NaN</div>
+    <div class="meta">Posted on 2001-03-20 13:33:00 by NaN</div>
+   </div>
+   <div class="post" id="post-195578">
+    <div class="subject"><a href="#post-195578">Comparing strings</a></div>
+    <div class="body">Personally, I hate three letter extension.  I've been using computers all through the three letter extension thing.  I hate 'em, I hate 'em, I hate 'em.  Why do we have to continue this horrible convention?  I'm going to code away from it every chance I get :)  I like:
+
+<strong>InString.PROC.assembly.html</strong>
+
+Look how it tells you what it is?  Then again I have 92gigs of hard drive space and 100,000+ files.  So I need a better way to name stuff (like <strong>InString.PROC.assembly.html.zip</strong>)
+
+Okay, I'm going to an extreme here, but you get my rant right :P
+My doctor says to take deep breathes :)
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-20 13:50:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195579">
+    <div class="subject"><a href="#post-195579">Comparing strings</a></div>
+    <div class="body">There is a much simpler way of doing this comparison using a
+couple of the procedures from the MASM32 library.
+
+Use the szRight proc to get the last 4 bytes of the path/filename,
+convert it to lowercase and then do the compare against a preset
+test string,
+<pre><code>
+ExeTst db "exe",0
+</code></pre>
+Should work fine and save a lot of messing around.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-20 15:24:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-195580">
+    <div class="subject"><a href="#post-195580">Comparing strings</a></div>
+    <div class="body">Hutch's method is probably better than the InString version, as it is a more direct comparison. But I dont see the need to redeclair another 3 bytes of data when you have done it once already..  Add a second label to the right location of the string and your fine for both the open/save dialogs as well as for any other string comparisions on the extension.
+
+<pre><code>
+        .if wParam == 1001
+            jmp @F
+              szTitleO   db "Open A File",0
+              szFilterO  db "Exe Files",0,"*"
+              szEXE      db ".exe",0,0
+            @@:
+          ; --------------------------------------
+          ; szFileName is defined in Filedlgs.asm
+          ; --------------------------------------
+</code></pre>
+
+Just pointing this out :P
+
+NaN</div>
+    <div class="meta">Posted on 2001-03-20 21:35:00 by NaN</div>
+   </div>
+   <div class="post" id="post-195581">
+    <div class="subject"><a href="#post-195581">Comparing strings</a></div>
+    <div class="body">I didn't use InString :) either :)
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-20 21:37:00 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

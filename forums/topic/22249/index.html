@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Preserving Registers - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22249" />
+    <link rel="next" href="../?id=22249&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22249">Preserving Registers</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=22249&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=22249&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="22249" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=22249&amp;page=2">&gt;</a><a href="../?id=22249&amp;page=2">&raquo;</a></form>   <div class="post" id="post-167212">
+    <div class="subject"><a href="#post-167212">Preserving Registers</a></div>
+    <div class="body">Hi, i am making a program that has numerous procs, each of this procs receives the parameters through registers, but i want to know if it&#39;s secure to push ESI,EDI,EBP and EBX at the beginning of the program to use them all along the program (with the benefit of not having to preserve them entering any function ), and before calling ExitProcess restoring them (cuz as far as i know, Windows uses them) ...<br /><br />Actually my program&#39;s doing this and running perfectly, it uses various API&#39;s, but i want to know if there&#39;s an API that requires that registers to be like windows left them before entering the program..., that brings mi another question:<br /><br />Wich is the state of the registers and/or flags when a new process is executed ?, i think windows manages itself of preserving the registers...</div>
+    <div class="meta">Posted on 2005-10-25 22:17:30 by Punky</div>
+   </div>
+   <div class="post" id="post-167215">
+    <div class="subject"><a href="#post-167215">Re: Preserving Registers</a></div>
+    <div class="body">Most API will work this way, but the enumeration API (that need a specified callback)&nbsp; use ESI or EDI. EBX is also noted by Microsoft to take such a role in next OSes. <br />&quot;EnumWindows&quot;, &quot;FindFirstFile&quot; and &quot;FindNextFile&quot; are examples of API that use ESI between calls. <br />If you modify ESI&#39;s value after FindFirsttFile and the next call to FindNextFile, you could have problems. Experiment with this on Win2k and WinXP to understand further. <br /><br />Also, search the board for this issue - &quot;register preservation&quot; or &quot;ebx esi edi&quot;, f0dder (a respected member here) gives full info about the current and future state of this problem. <br /><br /><br />Before calling ExitProcess, you can have EAX, EBX, ECX, EDX, ESI and EDI garbled. The OS won&#39;t need these registers&#39; values anymore - the OS won&#39;t care about them anymore after process deletion. </div>
+    <div class="meta">Posted on 2005-10-25 23:17:40 by Ultrano</div>
+   </div>
+   <div class="post" id="post-167234">
+    <div class="subject"><a href="#post-167234">Re: Preserving Registers</a></div>
+    <div class="body"><div class="quote"><br />EnumWindows&quot;, &quot;FindFirstFile&quot; and &quot;FindNextFile&quot; are examples of API that use ESI between calls.<br />If you modify ESI&#39;s value after FindFirsttFile and the next call to FindNextFile, you could have problems. Experiment with this on Win2k and WinXP to understand further.<br /></div><br />Hmmmm?!<br /><br />That sounds very weird!<br /></div>
+    <div class="meta">Posted on 2005-10-26 06:03:01 by f0dder</div>
+   </div>
+   <div class="post" id="post-167236">
+    <div class="subject"><a href="#post-167236">Re: Preserving Registers</a></div>
+    <div class="body">Hmm I guess I&#39;m wrong. Anyway, since I myself doubted my statement - had blurry memory about this case, I tested such funcs again, they <strong>don&#39;t</strong> garble EBX, ESI and EDI. <br />Then I tried to remember where I had seen garbled EBX, ESI and EDI. <br /><br />I found those registers <strong>garbled inside CALLBACK procs</strong>.&nbsp; The interesting stuff is that if you modify the three registers there, your app either crashes, or behaves strangely. A modified ESI has the highest chance of crashing your app, while EBX-the lowest. <br />But outside the WndProc (a CALLBACK proc), EBX, ESI and EDI always have the same values:<br />ebx = 7FFDF000<br />esi = 00000004<br />edi = 00300036<br /><br />So far, I haven&#39;t managed to make my testapp crash when I change these values _outside_&nbsp; WndProc and the like. <br /><br />In my style, I searched for a way to remove the necessity to preserve these registers in WndProc&#39;s. Can&#39;t be done in the messagepump, thus my conclusion is: <strong>preserve the 3 registers in every &quot;CALLBACK&quot; proc</strong>. Nothing new ^^&#39; . But being able to modify the registers (without preserving them) outside WndProc, and not crashing/misbehaving, is also something nice. <br /></div>
+    <div class="meta">Posted on 2005-10-26 08:05:15 by Ultrano</div>
+   </div>
+   <div class="post" id="post-167239">
+    <div class="subject"><a href="#post-167239">Re: Preserving Registers</a></div>
+    <div class="body">Ah and I saw I was right about EBX, ESI and EDI being used internally in such callbacks to hold data on the enumeration process. Test this code:<br /><pre><code><br />exa proc hwnd,extra1<br />print ebx<br />print esi<br />print edi<br />	mov eax,1<br />	ret<br />exa endp<br /><br />main proc<br />invoke EnumWindows,exa,0<br />ret<br />main endp<br /></code></pre><br />See the obvious pattern ;) ? Change any of the two registers, and watch the fireworks.<br />Btw, I&#39;m testing all this on Win2k, I don&#39;t have XP to test the code on. </div>
+    <div class="meta">Posted on 2005-10-26 08:22:40 by Ultrano</div>
+   </div>
+   <div class="post" id="post-167240">
+    <div class="subject"><a href="#post-167240">Re: Preserving Registers</a></div>
+    <div class="body">Ah phew, this is expected behaviour because of the intel ABI - as I&#39;ve always said, register preservation is necessary in callbacks (and only there, really). For a second, I was afraid unexpected weirdness had been introduced :)<br /><br /></div>
+    <div class="meta">Posted on 2005-10-26 08:35:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-167241">
+    <div class="subject"><a href="#post-167241">Re: Preserving Registers</a></div>
+    <div class="body">Punky,<br /><br />You can usually only use EBP if you write a procedure without a stack frame as in a normal stack frame procedure, EBP holds the address of your procedure arguments and LOCAL variables. Without a stack frame you access ESP directly but you must know what you are doing writing procedure without a stack frame.<br /><br />Over time I have never seen code written according to the windows convention fail where I have seen enough code that works on one OS version crash on another reasonably regularly yet this is fully avoidable by observing the convention properly.<br /><br />In a stack frame procedure, if you modify any of EBX ESI and EDI, you push them at the start and pop them at the end of the procedure. In a procedure without a stack frame, you also push EBP if you use it and POP it back on exit from the procedure.<br /><br />There is a reciprocal in that when you preserve EBX ESI and EDI, you can assume that any procedure you call does the same thing but can also modify EAX ECX and EDX so you cannot expect a called procedure to preserve any of these 3.</div>
+    <div class="meta">Posted on 2005-10-26 09:31:59 by hutch--</div>
+   </div>
+   <div class="post" id="post-167245">
+    <div class="subject"><a href="#post-167245">Re: Preserving Registers</a></div>
+    <div class="body"><strong>Ultrano</strong>, i dont understand why are you suprised that callbacks expect windows convention<br />to be used and consider this a problem.<br /><br />32 bit Windows:<br />SCRATCH REGISTERS&nbsp; &nbsp; &nbsp; : EAX, ECX, EDX, ST(0)-ST(7), XMM0-XMM7 <br />CALLEE-SAVE REGISTERS&nbsp; : EBX, ESI, EDI, EBP<br />STACK CLEANUP BY <br />	CDECL&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : CALLER<br />	STDCALL&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : FUNCTION<br />REGISTERS FOR RETURN&nbsp;  : EAX, EDX, ST(0) <br /><br />++ ESP must be aligned at 4 at all times<br /><br /><div class="quote">register preservation is necessary in callbacks (and only there, really).</div><br />try modifying esp to non dword alignment then, before calling some api. ;)<br /></div>
+    <div class="meta">Posted on 2005-10-26 12:57:05 by drizz</div>
+   </div>
+   <div class="post" id="post-167246">
+    <div class="subject"><a href="#post-167246">Re: Preserving Registers</a></div>
+    <div class="body"><div class="quote"><br />try modifying esp to non dword alignment then, before calling some api.<br /></div><br />Heh, true :) - I only really considered the general-purpose registers...<br /><br />btw, is everything a dword on 64bit machines? ;)<br /></div>
+    <div class="meta">Posted on 2005-10-26 13:23:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-167248">
+    <div class="subject"><a href="#post-167248">Re: Preserving Registers</a></div>
+    <div class="body"><strong>drizz</strong>, I started studying asm on win98se, made a 100,000+ line professional project where I didn&#39;t preserve these 3 regs, and that project worked _perfectly_ on win98se. But Win2k/XP customers started complaining about misbehaviour/crashes. No win32asm tute mentioned this problem/standard/requirement, and I didn&#39;t encounter it myself, so I kind of grew up without it. After I got a copy of win2k (my job required it...), I could see this newly-introduced problem ^^&quot;. Fortunately, it&#39;s an easily fixed problem - by just adding &quot;uses ebx esi edi&quot; on callback procs, which are usually very few in projects. <br /><br />Lol modifying esp to non-dword is interesting. Reminds me of unaligned memory access from ARM cpus (the whole device crashes)</div>
+    <div class="meta">Posted on 2005-10-26 13:49:13 by Ultrano</div>
+   </div>
+   <div class="post" id="post-167253">
+    <div class="subject"><a href="#post-167253">Re: Preserving Registers</a></div>
+    <div class="body"><div class="quote"><br />btw, is everything a dword on 64bit machines? ;)<br /></div><br />:) you don&#39;t have to rubb it on my nose&nbsp; :)&nbsp; Mister AMD64x2 4400+&nbsp; :P<br /><br /><strong>Ultrano</strong>, yes generally your procs can have any convention you like, but since you usually end up<br />calling some api....i prefer that all my procs also stick to the win convention... ;)<br /></div>
+    <div class="meta">Posted on 2005-10-26 14:44:58 by drizz</div>
+   </div>
+   <div class="post" id="post-167254">
+    <div class="subject"><a href="#post-167254">Re: Preserving Registers</a></div>
+    <div class="body">I think the windows (or rather, intel) convention is pretty decent... the split of scratch/persistant registers works out well in most cases.</div>
+    <div class="meta">Posted on 2005-10-26 14:55:15 by f0dder</div>
+   </div>
+   <div class="post" id="post-167282">
+    <div class="subject"><a href="#post-167282">Re: Preserving Registers</a></div>
+    <div class="body"><div class="quote">btw, is everything a dword on 64bit machines?</div><br /><br />On AMD64 machines using XP64:-<br /><ul><br /><li>Windows handles and some other data types are now qwords</li><br /><li>Pointers that use RIP-relative addressing are fitted into a dword</li><br /><li>Absolute pointers are qwords</li><br /><li>Pointers sent by Windows are qwords</li><br /><li>All parameters sent to APIs and received in callbacks are qwords</li><br /><li>The stack pointer moves 8 bytes at a time on PUSH and POP instructions</li><br /></ul><br /><br />For details see <a target="_blank" href="http://www.jorgon.freeserve.co.uk/GoasmHelp/64bits.htm">writing 64-bit programs</a>.<br /><br /></div>
+    <div class="meta">Posted on 2005-10-27 12:32:13 by jorgon</div>
+   </div>
+   <div class="post" id="post-167286">
+    <div class="subject"><a href="#post-167286">Re: Preserving Registers</a></div>
+    <div class="body">thanks everybody, but i&#39;m a little confused...<br /><br />if<br /><div class="quote"> <strong>Ultrano:</strong> Before calling ExitProcess, you can have EAX, EBX, ECX, EDX, ESI and EDI garbled. The OS won&#39;t need these registers&#39; values anymore - the OS won&#39;t care about them anymore after process deletion. </div><br /><br />then that means that i don&#39;t have to preserve registers at the program start ?.<br /><br />well, i know i can&#39;t use ebp with a stack frame, but i dont understand this:<br /><br /><div class="quote"><strong>Hutch:</strong> In a procedure without a stack frame, you also push EBP if you use it and POP it back on exit from the procedure.</div><br /><br />why do i have to preserve EBP even if i don&#39;t use it ??? maybe of the parameters passed to WinMain and/or WndProc ??<br /><br />i forgot to tell i don&#39;t have WinMain PROC in the program, and for local variables i prefer to use:<br /><br /><pre><code><br />  local_var db SIZEOF WNDCLASSEX (?)<br /><br />  mov ,CS_HREDRAW<br />  <br />&nbsp; &nbsp;  OR for multiple operations.<br /><br />&nbsp; mov eax,OFFSET local_var<br />&nbsp; mov ,CS_HREDRAW<br />&nbsp; mov ,SIZEOF WNDCLASSEX<br /><br /><br /><br /></code></pre></div>
+    <div class="meta">Posted on 2005-10-27 21:09:29 by Punky</div>
+   </div>
+   <div class="post" id="post-167292">
+    <div class="subject"><a href="#post-167292">Re: Preserving Registers</a></div>
+    <div class="body">hmmmm,<br /><br />&gt; why do i have to preserve EBP even if i don&#39;t use it ???<br /><br />You don&#39;t. usual rule is IF you need to CHANGE it PRESERVE it, if you DON&#39;T, don&#39;t.<br /><br />The Windows convention is very clear unless it is confused by many people. When interacting with the OS, ensure that EBX ESI EDI ESP and EBP have the SAME value when you return back to the OS.<br /><br />In practice this means in a stack frame IF YOU USE EBX, preserve it and restore it, same with ESI and EDI.<br /><br />With a proc that does NOT use a stack frame, ensure that EBP and ESP are the same value on return as theye were at start.<br /><br />There are no short cuts, write your code according to the convention and it will be reliable, don&#39;t and it won&#39;t be.</div>
+    <div class="meta">Posted on 2005-10-27 23:30:37 by hutch--</div>
+   </div>
+   <div class="post" id="post-167293">
+    <div class="subject"><a href="#post-167293">Re: Preserving Registers</a></div>
+    <div class="body">The rule of thumb is that if you call a function (usually it&#39;s the w32api), do expect the value in eax, ecx, edx to be destroyed, while the values in edi, esi and ebx to be preserved. Similiarly, if windows call your function (callback functions), they expect the values in edi, esi and ebx to be preserved because they might storing data in it.<br /><br />So, who said anything about needing to perserve edi, esi and ebx at the start of your program?<br /><br />If you don&#39;t need to use ebp, and do not touch ebp, then there is no need to preserve it. I mean it is the same for the rest of the registers right? If you don&#39;t touch the values in them, there is no need to preserve them.<br /><br />Btw, no one said you can&#39;t use ebp in function with stack frame. You can use it if you want you are doing, but beware since local variable and parameters are accessed relative to ebp.</div>
+    <div class="meta">Posted on 2005-10-27 23:33:47 by roticv</div>
+   </div>
+   <div class="post" id="post-167317">
+    <div class="subject"><a href="#post-167317">Re: Preserving Registers</a></div>
+    <div class="body">The rule is simply to keep the values of EBP, EBX, ESI and EDI plus the direction flag intact on function return. There is a common confusion with the expression &quot;preserve a register&quot;, which to many means &quot;to push and pop a register&#39;s value in the stack&quot; and to others it means &quot;to preserve a register&#39;s value&quot;.</div>
+    <div class="meta">Posted on 2005-10-28 14:03:02 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-167327">
+    <div class="subject"><a href="#post-167327">Re: Preserving Registers</a></div>
+    <div class="body"><div class="quote"><br /><pre><code><br />local_var db SIZEOF WNDCLASSEX (?)<br /><br />&nbsp; mov ,CS_HREDRAW<br />&nbsp; <br />&nbsp; &nbsp;  OR for multiple operations.<br /><br />&nbsp; mov eax,OFFSET local_var<br />&nbsp; mov ,CS_HREDRAW<br />&nbsp; mov ,SIZEOF WNDCLASSEX<br /></code></pre><br /></div><br /><br />...it is misleading to call that a &quot;local variable&quot; - those go on the stack.<br /></div>
+    <div class="meta">Posted on 2005-10-29 02:22:38 by f0dder</div>
+   </div>
+   <div class="post" id="post-167340">
+    <div class="subject"><a href="#post-167340">Re: Preserving Registers</a></div>
+    <div class="body">Ok, to give a conclusion to this post i preserve esi,edi,ebp and ebx at the program start so i can use them all along the program (so do not have to worry about how using all gpr&#39;s) and restoring them at program end (but then Ultrano said Windows won&#39;t need the value in these registers anymore) but i don&#39;t know if that&#39;s true (like with the FindFirtstFile() thing).<br /><br />One thing i noticed is if i mess with EBP on a PROC that has LOCAL vars my program exits or crashes. with that said i can assume that if i change EBP inside WndProc (it has LOCAL vars) (or a proc inside WndProc that doesn&#39;t have frame stack ) then the program will crash or exit.<br /><br />Well, with ESI, EDI and EBX i don&#39;t have any problems, maybe i should forget about EBP or make my program doesn&#39;t use LOCAL vars, anyway, thanks everybody  :)</div>
+    <div class="meta">Posted on 2005-10-29 16:53:25 by Punky</div>
+   </div>
+   <div class="post" id="post-167341">
+    <div class="subject"><a href="#post-167341">Re: Preserving Registers</a></div>
+    <div class="body"><div class="quote"><br />Ok, to give a conclusion to this post i preserve esi,edi,ebp and ebx at the program start so i can use them all along the program (so do not have to worry about how using all gpr&#39;s) and restoring them at program end<br /></div><br />There&#39;s no need to do this.<br /><br />Your preserve EBX, ESI, EDI, EBP in callbacks - things like wndproc, dlgproc, enumeration callbacks etc. &quot;preserve&quot; doesn&#39;t mean &quot;blindly push/pop&quot;, it means &quot;make sure the registers contents haven&#39;t changed in the callback&quot;. Thus if you don&#39;t modify a register, you don&#39;t have to do anything.<br /><br />Rather than doing push/pop yourself, you can add a USES list to your callback procs - like<br /><br /><pre><code><br />wndProc	proc uses ebx, hwnd:dword, msg:dword, wp:dword, lp:dword<br /></code></pre><br /><br />The &quot;flip side&quot; of register preservation is that you can modify EAX, ECX, EDX all you want. This is ALSO true for windows and other code external to your app. Thus every time you call an API, you should assume that EAX, ECX, EDX are destroyed - even if they aren&#39;t on your particular windows version.<br /><br />Stack has to be 4-aligned.<br /><br />Anyway, <strong>drizz</strong> already summed it up: http://www.asmcommunity.net/board/index.php?topic=22249.msg167245#msg167245<br /></div>
+    <div class="meta">Posted on 2005-10-29 17:41:12 by f0dder</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=22249&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=22249&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="22249" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=22249&amp;page=2">&gt;</a><a href="../?id=22249&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

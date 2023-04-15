@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Macro in a proc declaration? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17161" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17161">Macro in a proc declaration?</a></p>
+   <div class="post" id="post-133058">
+    <div class="subject"><a href="#post-133058">Macro in a proc declaration?</a></div>
+    <div class="body">Hi All,<br /><br />I've created a WinDbg extension dll and I'm wondering if there's a way to simplify the construct in MASM syntax. <br /><br />From the WinDbg help file: Each extension command in a WdbgExts extension DLL is declared using the DECLARE_API macro. This macro is defined in wdbgexts.h.<br /><br /><pre><code><br />DECLARE_API&#40; myextension &#41;<br />&#123;<br />    code for myextension<br />&#125;<br /><br />The DECLARE_API macro is defined as follows&#58;<br /><br />#define DECLARE_API&#40;s&#41;                             \<br />    CPPMOD VOID                                    \<br />    s&#40;                                             \<br />        HANDLE                 hCurrentProcess,    \<br />        HANDLE                 hCurrentThread,     \<br />        ULONG                  dwCurrentPc,        \<br />        ULONG                  dwProcessor,        \<br />        PCSTR                  args                \<br />     &#41;<br /></code></pre><br /><br />I've been able to recreate the C syntax with something like this, which I *think* is correct:<br /><br />myextension   PROTO C :DWORD,:DWORD,:DWORD,:DWORD, :VARARG<br /><br />myextension PROC C hCurrentProcess:HANDLE, hCurrentThread:HANDLE, dwCurrentPc:DWORD, dwProcessor:DWORD, argVal:VARARG<br /><br />;blah<br />ret<br />myextension ENDP<br /><br />In WinDbg you would load your extension dll then call your proc with something like:<br /><br />!myextension arg1,arg2,...<br /><br /><br />My question is whether there's a way to simplify the MASM proc declaration, rather than listing each parameter for every extension function, is there a way to declare them using a similar C syntax as the DECLARE_API(s) macro. <br /><br />i.e. can you wrap the PROTO declaration in a macro and use it in your PROC declaration? <br /><br />Something like?:<br />myextension PROC DECLARE_API<br /><br />I believe PROC itself is a macro, so something like this may be possible.  So far various attempts/searches have not proved fruitful.<br /><br />TIA,<br />Kayaker</div>
+    <div class="meta">Posted on 2004-02-10 02:34:37 by Kayaker</div>
+   </div>
+   <div class="post" id="post-133071">
+    <div class="subject"><a href="#post-133071">Macro in a proc declaration?</a></div>
+    <div class="body">May be something like this if it simplifies something for you :-)<br /><br /><pre><code><br />DECLARE_API MACRO s&#58;REQ<br />	s PROTO C &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;VARARG<br />ENDM<br /><br />DEFINE_API MACRO s&#58;REQ<br />	s proc C hCurrentProcess&#58;HANDLE, hCurrentThread&#58;HANDLE, dwCurrentPc&#58;DWORD, dwProcessor&#58;DWORD, args&#58;VARARG<br />ENDM<br /><br />DECLARE_API Extension2<br /><br />.code<br /><br />Extension PROC C hCurrentProcess&#58;HANDLE, hCurrentThread&#58;HANDLE, dwCurrentPc&#58;DWORD, dwProcessor&#58;DWORD, args&#58;VARARG<br />	invoke Extension2, 0, 0, 0, 0, 0, 0, 0<br />	ret<br />Extension ENDP<br /><br />DEFINE_API Extension2<br />	ret<br />Extension2 ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2004-02-10 05:05:40 by Four-F</div>
+   </div>
+   <div class="post" id="post-133140">
+    <div class="subject"><a href="#post-133140">Macro in a proc declaration?</a></div>
+    <div class="body"><div class="quote"><br />May be something like this if it simplifies something for you :-)<br /></div><br /><br />Yeah, it does actually ;-)  Sweet.  It seems I was missing the trick of using the :REQ macro reference.  I kind of like that syntax for certain instances.  Just as another example that I tested, multiple DlgProc's could be declared this way if one wanted:<br /><br /><pre><code>&#91;size=12&#93;<br />DECLARE_API MACRO s&#58;REQ<br />s PROTO &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD<br />ENDM<br /><br />DEFINE_API MACRO s&#58;REQ<br />s PROC uses ebx edi esi hWnd&#58;HWND,uMsg&#58;UINT,wParam&#58;WPARAM,lParam&#58;LPARAM<br />ENDM<br /><br />DECLARE_API DlgProc1<br />DECLARE_API DlgProc2<br />DECLARE_API DlgProc3<br /><br />.code<br />DEFINE_API DlgProc1<br />...<br />ret<br />DlgProc1 endp<br /><br />DEFINE_API DlgProc2<br />...<br />ret<br />DlgProc2 endp<br /><br />DEFINE_API DlgProc3<br />...<br />ret<br />DlgProc3 endp<br />&#91;/size&#93;</code></pre><br /><br />Thanks Four-F, it's always a good day when you learn something new :)<br /><br />Kayaker</div>
+    <div class="meta">Posted on 2004-02-10 17:47:25 by Kayaker</div>
+   </div>
+  </div>
+ </body>
+</html>

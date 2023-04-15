@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Windows' memory model - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=1670" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=1670">Windows' memory model</a></p>
+   <div class="post" id="post-10655">
+    <div class="subject"><a href="#post-10655">Windows' memory model</a></div>
+    <div class="body">Hi!<br /><br />I've read all the documentation related to Windows' memory management on MSDN, but it's really not clear.<br />I would like to know the name of the memory model as they are named in Intel architechture software developper manual volume 3.<br /><br />I wonder if Windows is  using a basic flat model a protected flat model or a multisegment model. According to Microsoft, it should be one of the flat models, but the description looks much more like the multisegment model because each process seems to have it's own adress space.<br />Moreover the use of a debugger allowed me to se that the segment selectors DS and SS are equal but differents from CS. How comes that there are two different segment selectors if ther is only one linear 4 GB large adress space for each process ?<br /><br />The use of pages is rather clear to me, but I'm totally lost with the segments under windows. How many segments are used for each process, why does Microsoft say there is ONE 4 GB larg space of virtual memory for each process if they are TWO segments ?<br /><br /><br />I'm really confused, any help would be greatly appreciated</div>
+    <div class="meta">Posted on 2001-10-29 22:34:03 by ringzero</div>
+   </div>
+   <div class="post" id="post-10656">
+    <div class="subject"><a href="#post-10656">Windows' memory model</a></div>
+    <div class="body">Windows runs in a protected-flat mode. Windows uses segmenting and paging together (i.e. virtual memory). Linear address space has nothing to do directly with the logical addressing mechinism. Logical addresses consist of  a 16-bit segment selector and a 32-bit offset. The segment selector is used to retrieve the location of the segment in the linear address space and then the offset is added to that point to find the exact address location in the linear address space. As for the segment selectors, they are 6 of them, of those only the CS DS and SS are the most important. The CS (Code Segment) register points to code related segments in memory, as do DS (Data Segment) and SS (Segment Selector) respectively. The segments are used in conjunction for varoius things.... also, it could be used much differently than what it is commonly used for, as I am soon about to prove with my kernel design ;). If you want to truely understand how Windows uses these registers and other things, you should refer to the Intel System Programming manual for the basis of where Windows gets its ideas for these useages.</div>
+    <div class="meta">Posted on 2001-10-29 23:19:27 by SpooK</div>
+   </div>
+   <div class="post" id="post-10663">
+    <div class="subject"><a href="#post-10663">Windows' memory model</a></div>
+    <div class="body">ringzero,<br /><br />Windows in 32 bit uses a flat memory model in protected mode. Each running process has its own seperate memory space and they normally cannot address memory in another process.<br /><br />Any attempt to directly address memory outside the memory allocated to the running process generates a read or write page fault and this is the action of protected mode memory management. Segments do not have a place in 32 bit programming at the application level. If you attempt to address memory with a segment/offset addressing method, it will come down with a thud.<br /><br />Segments are normally set to the same address in flat memory model protected mode. The format for EXE files in win32 is the PE format and this uses both code and data within the same memory space. This makes windows PE files similar to the old DOS COM files where you could mix data and code in the same segment, the effective difference is that a PE file in 32 bit can address a nominal 4 gig address space.<br /><br />Probably what would be useful to you is to get some data on the PE format as this will help you in what you are after.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2001-10-30 02:11:18 by hutch--</div>
+   </div>
+   <div class="post" id="post-10712">
+    <div class="subject"><a href="#post-10712">Windows' memory model</a></div>
+    <div class="body">As a related question, are segment registers &quot;OK&quot; or &quot;bad&quot; to use in a Windows application, and why/why not? I'm a little confused too.</div>
+    <div class="meta">Posted on 2001-10-30 10:22:59 by Irving W.</div>
+   </div>
+   <div class="post" id="post-10739">
+    <div class="subject"><a href="#post-10739">Windows' memory model</a></div>
+    <div class="body">It's not possible to run in &quot;native&quot; 32-bit mode unless the x86 is in protected mode. &quot;Native&quot; mode means there are no opcode prefixes for 32-bit adds, subtracts, moves, etc.<br /><br />In protected mode, segment registers are loaded with <strong>selectors</strong>, not paragraph values.<br /><br />Two selectors are needed because executable code must use a <strong>code selector</strong>, and you can't write to memory via a code selector. So you need a <strong>data selector</strong> for writable memory. Because of the way these two selectors are mapped in the flat model, they are really aliases to each other.<br /><br />There is actually a third selector (loaded in FS) for identifying threads. It is <strong>not</strong> mapped as an alias to the other two selectors.<br /><br />=====<br /><br />The loader sets up the segment registers for the flat memory model. It's not Windows that uses flat model, but your application. You have direct access only to the memory space set up by the segment register settings.<br /><br />Part of a selector is an index into a table of <strong>descriptors</strong>. If you cannot modify this table, then you cannot create a new valid selector. There is no API to access this table. This is the main reason why you don't want to <strong>change</strong> the segment registers.<br /><br />When you work with SEH (Structured Exception Handling), you will use FS to <strong>override</strong> the default segment. There is no other (easy) way to access the thread-specific information.<br /><br />In general, there is no real need to use any other segment overrides. There are two special cases I can think of: 1) writing to &quot;code&quot; space, and 2) accessing a fixed data location.<br /><br />Writing to code space is discouraged because it prevents sharing of executable code. It also means that when a code block is paged out, it must be stored on disk (in a swap file) rather than discarded. Reloading the paged out code comes from the swap file instead of the original executable file. Writing to disk takes time.<br /><br />Accessing a fixed location is also discouraged because what is located at location xyz in Win98 may be located elsewhere in Win XP. It might not even be accessible (from ring3) in XP.</div>
+    <div class="meta">Posted on 2001-10-30 14:28:37 by tank</div>
+   </div>
+  </div>
+ </body>
+</html>

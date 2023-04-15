@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>PROTO &amp; PROC can they be different? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=557" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=557">PROTO &amp; PROC can they be different?</a></p>
+   <div class="post" id="post-3386">
+    <div class="subject"><a href="#post-3386">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">An old post that was recently revived got me thinking...<br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=322">http://www.asmcommunity.net/board/showthread.php?threadid=322</a><br /><br />In this case, could we not handle the stack ourselves while retaining the ability to use invoke.<br /><br />The code hutch posted was:<br /><pre><code><br />Test_If proc var&#58;DWORD<br /><br />    .if var == 0<br />      mov edx, 10<br />      shr edx, 3<br />    .elseif var == 1<br />      mov edx, 20<br />      shl edx, 2<br />    .elseif var == 2<br />      mov edx, 30<br />      ror edx, 1<br />    .endif<br /><br />    add edx, 100<br />    shr edx, 3<br /><br />    mov eax, edx<br /><br />    ret<br /><br />Test_If endp<br /></code></pre><br /><br />But this means it messes around with the stack far too much for such a simple problem. &quot;var&quot; is only used the once in the equation (well several comparisions... but nothing else), so why not do the following:<br /><pre><code><br />Test_If proc<br />    pop eax<br />    .if eax == 0<br />      mov edx, 10<br />      shr edx, 3<br />    .elseif eax == 1<br />      mov edx, 20<br />      shl edx, 2<br />    .elseif eax == 2<br />      mov edx, 30<br />      ror edx, 1<br />    .endif<br /><br />    add edx, 100<br />    shr edx, 3<br /><br />    mov eax, edx<br /><br />    ret<br /><br />Test_If endp<br /></code></pre><br /><br />Then forge a PROTO for it so invoke will work as per normal....<br />But it doesn't work :(<br />Is there a way to get it to work?<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-10 09:31:35 by Mirno</div>
+   </div>
+   <div class="post" id="post-3389">
+    <div class="subject"><a href="#post-3389">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">mirno, just move the stack variable into EAX instead of popping it<br />(which will give you EBP anyway). If you want to turn off the stack<br />frame setup, look in the masm32 reference... keywords will be<br />prologue and epilogue.<br /><br />I guess you could also &quot;just&quot; set up a &quot;blank label&quot; (no proc), and<br />use the TYPE keyword...<br />Quoting X-Calibre (quoting comrade), INVOKE (TYPE MessageBox) PTR eax, NULL, ADDR text, ADDR caption, MB_OK<br /><br />... that's for using invoke for messagebox, if you have the address<br />of messagebox in EAX. Of course you will have to set up a MessageBox<br />protoype, but that's no pain to do :).</div>
+    <div class="meta">Posted on 2001-08-10 10:20:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-3395">
+    <div class="subject"><a href="#post-3395">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">The Prologue &amp; Epilogue stuff got exactly what I needed thanks!<br /><br />I ended up with these two macros<br /><pre><code><br />NO_PRO MACRO<br />OPTION PROLOGUE&#58;NONE<br />OPTION EPILOGUE&#58;NONE<br />ENDM<br /><br />DEF_PRO MACRO<br />OPTION PROLOGUE&#58;PrologueDef<br />OPTION EPILOGUE&#58;EpilogueDef<br />ENDM<br /></code></pre><br /><br />They'll disable the standard prologue &amp; epilogue, and re-enable them. So if you place them before the PROC statement, and after ENDP, you can't use the local variables but you can pop the args off the stack!<br /><br />So in the example I gave at the top you get:<br /><pre><code><br />        OPTION PROLOGUE&#58;NONE<br />        OPTION EPILOGUE&#58;NONE<br />        Test_If proc<br />1   58                  pop eax<br />                                .if eax == 0<br />1   0B C0           *   or  eax, eax<br />1   75 0A           *   jne @C0001<br />1   BA 0000000A         mov edx, 10<br />1   C1 EA 03            shr edx, 3<br />                                .elseif eax == 1<br />1   EB 1B           *   jmp @C0003<br />                    *   @C0001&#58;<br />1   83 F8 01        *   cmp eax, 001h<br />1   75 0A           *   jne @C0004<br />1   BA 00000014         mov edx, 20<br />1   C1 E2 02            shl edx, 2<br />                                .elseif eax == 2<br />1   EB 0C           *   jmp @C0006<br />                    *   @C0004&#58;<br />1   83 F8 02        *   cmp eax, 002h<br />1   75 07           *   jne @C0007<br />1   BA 0000001E         mov edx, 30<br />1   D1 CA               ror edx, 1<br />                                .endif<br />                    *   @C0007&#58;<br />                    *   @C0006&#58;<br />                    *   @C0003&#58;<br /><br />1   83 C2 64            add edx, 100<br />1   C1 EA 03            shr edx, 3<br /><br />1   8B C2               mov eax, edx<br /><br />2   C3                  ret<br />        Test_If endp<br />        OPTION PROLOGUE&#58;PrologueDef<br />        OPTION EPILOGUE&#58;EpilogueDef<br /></code></pre><br /><br />(no &quot;push ebp | mov ebp, esp&quot;, and no &quot;leave&quot; at the end).<br /><br />Mirno<br /><br />**** Oops :o you still need the epilogue.....<br />**** I haven't checked this properly, I'm at work<br />**** but I will tonight, and post the results on monday!<br />**** It seems to be OK with only PROLOGUE disabled.</div>
+    <div class="meta">Posted on 2001-08-10 11:01:29 by Mirno</div>
+   </div>
+   <div class="post" id="post-3396">
+    <div class="subject"><a href="#post-3396">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body"><div class="quote"><br />So if you place them before the PROC statement, and after ENDP, you can't use the local variables but you can pop the args off the stack! <br /></div><br /><br />Which is why (in many cases) &quot;just&quot; moving the stack variable into<br />EAX will be a better approach than popping it off the stack :).<br />But ok, disabling pro/epilogue can be very useful at times.</div>
+    <div class="meta">Posted on 2001-08-10 11:08:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-3397">
+    <div class="subject"><a href="#post-3397">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">Do you mean:<br /><br />mov eax, (what ever the var would be)<br />invoke Test_If<br /><br />Because that cannot be called from another language!<br />But other than that, it would be easer to make a &quot;Test_If&quot; macro yes!<br /><br />It was really more of a learning/exploring exercise for me :)<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-10 11:13:37 by Mirno</div>
+   </div>
+   <div class="post" id="post-3399">
+    <div class="subject"><a href="#post-3399">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">I mean.. inside the test_if function, your first instruction would be<br /><pre><code><br />mov eax, &#91;var&#93;<br /></code></pre><br /><br />and then you'd have the same code as hutch's original post, except<br />you test EAX instead of </div>
+    <div class="meta">Posted on 2001-08-10 11:18:29 by f0dder</div>
+   </div>
+   <div class="post" id="post-3455">
+    <div class="subject"><a href="#post-3455">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">Mirno,<br /><br />If you passing parameters only in registers,<br />then forget INVOKE and simply CALL your sub like this:<br /><br /><pre><code><br />   Mov eax,variable<br /><br />   CALL Test_If <br />   <br />   jmp overTest_If <br /><br />Test_If&#58;<br /><br />      mov edx, 10<br />      shr edx, 3<br />    .elseif eax == 1<br />      mov edx, 20<br />      shl edx, 2<br />    .elseif eax == 2<br />      mov edx, 30<br />      ror edx, 1<br />    .endif<br /><br />    add edx, 100<br />    shr edx, 3<br /><br />    mov eax, edx<br /><br />   retn   ; MASM will generate C3h for RET and no Prolog and Epilog<br /><br />overTest_If&#58; <br /><br /></code></pre> <br /><br />Hope I did understand the question.</div>
+    <div class="meta">Posted on 2001-08-11 04:40:17 by forge</div>
+   </div>
+   <div class="post" id="post-3465">
+    <div class="subject"><a href="#post-3465">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">You can just say<br />test_if proc FORCENOFRAME, Var<br /><br />this will disable the stack frame.  But still Var is not at  it's at . Your code is actually popping the return address to eax!</div>
+    <div class="meta">Posted on 2001-08-11 07:34:05 by gfalen</div>
+   </div>
+   <div class="post" id="post-3618">
+    <div class="subject"><a href="#post-3618">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">Mirno,<br />gfalen is right about pop eax -<br />after call esp is always pointing to return address (addr of<br />the instruction next to call)<br />gfalen,<br />Long time ago I tried FORCENOFRAME option but<br />wasn't able to make it work right with proto and invoke,<br />so I just use OPTION PROLOG and OPTION EPILOG when<br />I need to create procs without frame but with possibility<br />to write proto with any number of parameters I need to<br />check with invoke. But, of course, I need manually apply<br />parameter to retrn to correct the stack.<br />And wasn't that smart as Mirno :)<br />I couldn't think of simple macro, I just wrote it manually :)<br /><br />it looks like this (now with Mirno macros):<br /><pre><code><br />NO_PRO MACRO<br />OPTION PROLOGUE:NONE<br />OPTION EPILOGUE:NONE<br />ENDM<br /><br />DEF_PRO MACRO<br />OPTION PROLOGUE:PrologueDef<br />OPTION EPILOGUE:EpilogueDef<br />ENDM<br /><br />SomeProc proto :DWORD<br />.code<br /><br />....<br />   invoke SomeProc,eax<br />....<br />NO_PRO<br />SomeProc proc Par1<br />	mov ecx,Par1<br />	ret 4<br />SomeProc endp<br />DEF_PRO<br /><br />the all code of SomeProc will result just on 2 machine <br />instructions:<br /><br />mov ecx,<br />ret 4<br /><br />But I think you know all about this, I just don't get it how<br />to use FORCENOFRAME to achive the same effect.<br /><br />The Svin.</div>
+    <div class="meta">Posted on 2001-08-13 01:27:59 by The Svin</div>
+   </div>
+   <div class="post" id="post-3637">
+    <div class="subject"><a href="#post-3637">PROTO &amp; PROC can they be different?</a></div>
+    <div class="body">Thanks for your input guys!<br /><br />Over the weekend, I tested all my code (I've got a debugger at home :D ). I realised what was going on with the stack, I'd never thought of how call/ret worked until now!<br /><br />I also benchmarked the code. It'll save 2-3 clocks. Not a lot really, but on such trivial cases it is actually a fair portion of the execution time!<br />Its also a hassle keeping a track of where on the stack things are...<br />I guess I'll stick with the standard Prologue &amp; Epilogue unless I'm trying to strangle every last cycle out of a function!<br /><br />Still it was a usefull learning experience.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2001-08-13 05:37:36 by Mirno</div>
+   </div>
+  </div>
+ </body>
+</html>

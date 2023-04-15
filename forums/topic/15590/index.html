@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Direct3D depth buffer question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15590" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=15590">Direct3D depth buffer question</a></p>
+   <div class="post" id="post-121053">
+    <div class="subject"><a href="#post-121053">Direct3D depth buffer question</a></div>
+    <div class="body">Is there any video card available that can use a lockable depth buffer format in the HAL?  Or are lockable depth buffers exclusively reserved for reference devices?</div>
+    <div class="meta">Posted on 2003-10-11 01:14:43 by Tatterdemalian</div>
+   </div>
+   <div class="post" id="post-121059">
+    <div class="subject"><a href="#post-121059">Direct3D depth buffer question</a></div>
+    <div class="body">I was under the impression that HAL's main job was to automagically use software methods wherever a hardware equivalent isn't available, and that the Reference rasterizer ALWAYS uses software methods and NEVER queries the hardware internally.<br /><br />I was also under the impression that HAL used the software depth buffer and then copied it to the hardware at the last moment.<br /><br />(By the way, I sorted out my issues with the TexQuad - cheers)</div>
+    <div class="meta">Posted on 2003-10-11 04:46:34 by Homer</div>
+   </div>
+   <div class="post" id="post-121063">
+    <div class="subject"><a href="#post-121063">Direct3D depth buffer question</a></div>
+    <div class="body">Cool.  What did the problem turn out to be?<br /><br />Unfortunately, as of DirectX 9, there is no drop to software available when using HAL devices.  If you can't do it in hardware, you have to use the reference device to use that feature.  This makes HAL devices as fast as it's possible to get without writing your own graphics card drivers, though.<br /><br />Anyhow, I guess there was no real point to the question, since the code I'm trying to bang out needs to work on a variety of platforms, and apparently lockable depth buffers are rare enough that it wouldn't be worth coding the features I had in mind if only 1% of the gamers happen to have hardware that can take advantage of it.  Besides, lockable depth buffers are slow, even when you're modifying them in ASM.<br /><br />Now I'm trying to figure out if I could use stencil buffers.  Know anything about those?  I don't think you can lock stencil buffer data, since it's too intertwined with the depth buffer data, but maybe I won't have to, if I can just figure out a good way to manipulate it by rendering certain primitives and making extra depth/stencil buffers.</div>
+    <div class="meta">Posted on 2003-10-11 06:25:52 by Tatterdemalian</div>
+   </div>
+   <div class="post" id="post-121068">
+    <div class="subject"><a href="#post-121068">Direct3D depth buffer question</a></div>
+    <div class="body">I'm not a DX guru, and I haven't devoted attention to the StencilBuffer yet, but as I understand it, its ALMOST a zbuffer except it uses W values, and I am led to believe that the pixel compare can be controlled to achieve alphablend effects.<br />W values as I understand them are the inverse reciprocal of the Z value to the  view distance of the current far viewplane, ie, W=1/Z * FarZ (I think thats right) :tongue:<br /><br />The problem with my TexQuads turned out to be that I was leaving AlphaBlending settings active and then trying to render stuff that supplied its own vertex colors, and didn't support alphablending.<br /><br />The problem with my SkinMesh loader turned out to be that my AppendSibling function was not compiling as I expected and so I (re)coded a FindYoungestSibling support function containing the exact same code which totally solved the problem.<br />It has to be a minor bug in the compiler, or else it's a minor bug in the way I lay out my code, either way, it's sorted, and I can move on to bigger and better things, where I am sure to damage the stuff I already had working, so at this point, I choose to archive my entire project :)</div>
+    <div class="meta">Posted on 2003-10-11 07:37:53 by Homer</div>
+   </div>
+   <div class="post" id="post-121105">
+    <div class="subject"><a href="#post-121105">Direct3D depth buffer question</a></div>
+    <div class="body">Uh... that's not quite right, but thanks for the response.  That's actually a W-buffer you're talking about, which you can replace your Z-buffer with (if your hardware supports it) by setting the D3DRS_ZENABLE render state to D3DZB_USEW instead of D3DZB_TRUE.<br /><br />Stencil buffers are an extra part of the depth buffer, and require special depth buffer formats to use.  All the D3DFORMAT depth buffer values with an S in the names are combined depth and stencil buffer formats, and the number following the S indicates the number of bits in the stencil buffer.  Stencil buffers can also be used to accept or reject pixels like a Z-buffer, but use a different method to do so, based on comparing the value currently in the stencil buffer to a reference value, and rejecting the pixel if they don't match.  Unfortunately, there isn't much information about how to read/write/modify the values in the stencil buffer, but here's what I've been able to piece together.<br /><br />- You can't lock a stencil buffer, even if you copy it to a plain surface.  Nor can you modify it with IDirect3DDevice9::UpdateSurface.  So reading values from (or writing values directly to) a stencil buffer is right out.<br />- Stencil buffers can be cleared (or set to a particular value) using IDirect3DDevice9::Clear, with the D3DCLEAR_STENCIL flag and the DWORD value to clear it to in the sixth argument.<br />- Stencil buffers can be written to when they are enabled (only when enabled?) by setting the D3DRS_STENCILENABLE render state to TRUE.<br />- To write values to a stencil buffer, you first set the stencil reference value with the D3DRS_STENCILREF render state.  Then you set the D3DRS_STENCILFAIL with the D3DSTENCILCAPS operation you want to perform on the stencil value for that pixel in the stencil buffer if the stencil test fails, D3DRS_STENCILZFAIL with the D3DSTENCILCAPS operation you want to perform if the stencil test passes but the Z-buffer test fails, and D3DRS_STENCILPASS with the D3DSTENCILCAPS operation you want to perform if both the stencil test and the Z-buffer test pass.  Then, simply render your primitive, and the pixels rendered will modify the stencil buffer values according to the operations you have set.  These writes can be masked by setting the D3DRS_STENCILWRITEMASK render state.<br /><br />The question was, how do I write values to the stencil buffer without actually rendering any geometry?  I think I figured that out, though.<br /><br />- Set D3DRS_STENCILENABLE to TRUE.<br />- Set D3DRS_STENCILREF to the value you want to write to the stencil buffer for all the pixels you are about to render.  (If you are using a multi-bit stencil buffer, and want to avoid overwriting other bits, for instance if you're using the stencil buffer for multiple special effects, use the D3DRS_STENCILWRITEMASK render state and enable only the bits that you want to modify.)<br />- Set D3DRS_STENCILFAIL to D3DSTENCILCAPS_REPLACE.  This replaces the entry in the stencil buffer with the reference value, if the stencil test fails for that pixel.<br />- Set D3DRS_STENCILFUNC to D3DCMP_NEVER.  The stencil test will always fail.<br />- Render the geometry you want to use to build your stencil mask.  Since the stencil test always fails, no pixels will be rendered, but the values in the stencil buffer will be replaced with your reference value (masked by D3DRS_STENCILWRITEMASK).<br /><br />Now I just need to figure out the math behind translating the scene geometry the way I want, in order to create the stencil buffer I want, in order to create the effect I want.</div>
+    <div class="meta">Posted on 2003-10-11 18:19:33 by Tatterdemalian</div>
+   </div>
+  </div>
+ </body>
+</html>

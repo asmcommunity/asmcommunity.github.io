@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Texture madness (OpenGL) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20747" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=10">Graphics &amp; Game Development</a> &raquo; <a href="../?id=20747">Texture madness (OpenGL)</a></p>
+   <div class="post" id="post-157933">
+    <div class="subject"><a href="#post-157933">Texture madness (OpenGL)</a></div>
+    <div class="body">im trying to write my own texture support but it just doesnt seem to work i&#39;ve been debugging for quite some time now and im off soon so i posted my code here so someone else might see my problem :) (i get the model but its white, no textures on)<br /><br />i use the following function to load a texture:<br /><pre><code>AddGLTexture proc xSpace:DWORD, xFileName:DWORD<br />local xFile:dword<br />local xSize:dword<br />local mMem:dword<br />local BytesRead:dword<br /><br />&nbsp;  invoke CreateFile, xFileName, GENERIC_READ, FILE_SHARE_READ, NULL,OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL<br />&nbsp;  mov xFile, eax<br />&nbsp;  invoke GetFileSize, eax, NULL<br />&nbsp;  mov xSize, eax<br />&nbsp;  mov mMem, malloc(xSize)<br />&nbsp;  invoke ReadFile, xFile, mMem, xSize, addr BytesRead, NULL<br />&nbsp;  invoke CloseHandle, xFile<br /><br />&nbsp;  invoke glGenTextures,1, xSpace<br />&nbsp;  mov eax, xSpace<br />&nbsp;  invoke glBindTexture, GL_TEXTURE_2D, dword ptr ds:<br />&nbsp;  mov ebx, mMem<br />&nbsp;  mov eax, .BitMap.dataoffset<br />&nbsp;  add eax, ebx<br />&nbsp;  invoke glTexImage2D,GL_TEXTURE_2D, 0, 3, .BitMap.imgwidth, .BitMap.imgheight, 0, GL_RGB, GL_UNSIGNED_BYTE, eax<br />&nbsp;  invoke glTexParameteri,GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_NEAREST<br />&nbsp;  invoke glTexParameteri,GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR_MIPMAP_LINEAR<br />&nbsp;  free mMem<br />&nbsp; &nbsp; &nbsp; <br />&nbsp;  ret<br />AddGLTexture endp</code></pre><br /><br />to display the model i use the following concept:<br /><pre><code>&nbsp;  invoke glPushMatrix<br />&nbsp;  invoke glTranslatef, X, Y, Z<br />&nbsp;  invoke glRotatef,angle, rX, rY, rZ<br /><br />GroupLoop:<br /><br />&nbsp;  invoke glBindTexture, GL_TEXTURE_2D, TextureID<br />&nbsp;  invoke glEnable, GL_TEXTURE_2D&nbsp;  <br />&nbsp; &nbsp; &nbsp; <br />&nbsp;  invoke glBegin, GL_TRIANGLES<br />&nbsp;  <br />TriangleLoop:<br />&nbsp;  invoke glNormal3f<br />&nbsp;  invoke glTexCoord2f<br />&nbsp;  invoke glVertex3f<br /><br />&nbsp;  invoke glNormal3f<br />&nbsp;  invoke glTexCoord2f<br />&nbsp;  invoke glVertex3f<br /><br />&nbsp;  invoke glNormal3f<br />&nbsp;  invoke glTexCoord2f<br />&nbsp;  invoke glVertex3f<br />&nbsp;  <br />Check if all triangles of this group are done, else loop<br /><br />&nbsp;  invoke glEnd<br /><br />Check if all groups are done else loop<br /><br />&nbsp;  invoke glPopMatrix<br /></code></pre><br /><br />i striped my code out in the drawing part to give a more clear vieuw of my function calls and the drawing part an sich works ok since the model gets shown, only the texture doesnt (ill release the code later on anyways when i got all working)<br />ps. parameters of glTexCoord2f are also working properly<br /><br />Thanks, Scorpie</div>
+    <div class="meta">Posted on 2005-03-14 17:28:46 by Scorpie</div>
+   </div>
+   <div class="post" id="post-157934">
+    <div class="subject"><a href="#post-157934">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">What file format is the texture source image? RAW?<br />Rewrite your texture loader procedure for a known format like BMP, get it working, then work on supporting other file formats later.<br />You can find C (and possibly asm source) for this at NeHe, or I could post something.<br /></div>
+    <div class="meta">Posted on 2005-03-14 20:38:31 by Homer</div>
+   </div>
+   <div class="post" id="post-157944">
+    <div class="subject"><a href="#post-157944">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">My code supports the BMP format&nbsp; :P i made a bitmap struct to read out the width and height of the image as following:<br /><br />.BitMap.imgwidth<br />.BitMap.imgheight<br /><br />and i calculate the dataoffset as following:<br /><br />mov ebx, mMem<br />mov eax, .BitMap.dataoffset<br />add eax, ebx<br /><br />this adds the imagedata offset (which is relative to the start of the file) to the start of the Allocated space.<br />The bmp im using is a normal paint-made 24-bits bitmap and my structure is correct.<br /><br />Scorpie</div>
+    <div class="meta">Posted on 2005-03-15 01:59:25 by Scorpie</div>
+   </div>
+   <div class="post" id="post-157947">
+    <div class="subject"><a href="#post-157947">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">Try this: <br /><br />&nbsp; &nbsp; invoke glPixelStorei , GL_UNPACK_ALIGNMENT, 1&nbsp;  ; This sets the alignment requirements for the start of each pixel row in memory.<br /><br />Do it just before you bind to the newly-generated textureid.<br />That&#39;s the only fundamental difference between your bmp loader and mine, other than I use auxDIBImageLoad to load the file data.<br /><br />Are you sure your BMP is 24bit color? If not, you might want to use auxDIBImageLoad.<br />Also, if I remember correctly,when loading BMP by hand as you do,&nbsp; you need to switch around the ARGB/RGBA pixel colors even if your BMP is 24bits. <br />Using DIB loading will ensure the color formats of the File and the Display are matched.<br /><br />In the following example, ptexture is a pointer to a dword to receive the returned textureid.<br />Your<br /><pre><code><br />CreateTexture proc ptexture, pstrFileName<br />local pBitmap:ptr AUX_RGBImageRec<br />	<br />&nbsp; &nbsp; .if !pstrFileName&nbsp; &nbsp; &nbsp;  ; Return from the function if no file name was passed in<br />&nbsp; &nbsp; &nbsp; &nbsp; return E_FAIL<br />&nbsp; &nbsp; .endif<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; invoke auxDIBImageLoad,&nbsp; pstrFileName&nbsp;  ;Load the bitmap and store the data<br />&nbsp; &nbsp; .if eax == NULL&nbsp; &nbsp;  ; If we can&#39;t load the file, quit!<br />&nbsp; &nbsp; &nbsp; &nbsp; return E_FAIL<br />&nbsp; &nbsp; .endif<br />&nbsp; &nbsp; mov pBitmap , eax	<br /><br />&nbsp; &nbsp; invoke glGenTextures,1, ptexture&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Generate a texture with the associated texture variable<br />&nbsp; &nbsp; invoke glPixelStorei , GL_UNPACK_ALIGNMENT, 1&nbsp;  ; This sets the alignment requirements for the start of each pixel row in memory.<br /><br />&nbsp; &nbsp; mov eax,ptexture <br />&nbsp;  invoke glBindTexture,GL_TEXTURE_2D, dword ptr&nbsp; &nbsp; ; Bind the texture to the texture variable passed in<br />&nbsp; <br />&nbsp; ; Build Mipmaps (builds different versions of the picture for distances - looks better)<br />&nbsp; &nbsp; &nbsp; mov ebx, pBitmap<br />&nbsp; &nbsp; &nbsp; invoke gluBuild2DMipmaps,GL_TEXTURE_2D, 3, .AUX_RGBImageRec.dwsizeX, .AUX_RGBImageRec.dwsizeY, GL_RGB, GL_UNSIGNED_BYTE, .AUX_RGBImageRec.data<br />&nbsp; <br />&nbsp; ; Lastly, we need to tell OpenGL the quality of our texture map.&nbsp; GL_LINEAR_MIPMAP_LINEAR<br />&nbsp; ; is the smoothest.&nbsp; GL_LINEAR_MIPMAP_NEAREST is faster than GL_LINEAR_MIPMAP_LINEAR, <br />&nbsp; ; but looks blochy and pixilated.&nbsp; Good for slower computers though.&nbsp; <br />&nbsp; &nbsp; &nbsp; invoke glTexParameteri,GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_NEAREST<br />&nbsp; &nbsp; &nbsp; invoke glTexParameteri,GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR_MIPMAP_LINEAR<br /><br />; Now we need to free the bitmap data that we loaded since openGL stored it as a texture<br />&nbsp; &nbsp; mov ebx, pBitmap<br />&nbsp; &nbsp; free .AUX_RGBImageRec.data<br />&nbsp; &nbsp; free pBitmap<br />&nbsp; &nbsp; return S_OK<br />CreateTexture endp<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2005-03-15 03:42:08 by Homer</div>
+   </div>
+   <div class="post" id="post-157953">
+    <div class="subject"><a href="#post-157953">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">i think that the parameter is the problem indeed GL_RGB uses floats as far as i can see on msdn and i need to use GL_BGR_EXT for 24bits bitmaps i think, ill let you know when i get home (forgot to upload my code so i couldt edit at school :()</div>
+    <div class="meta">Posted on 2005-03-15 07:05:20 by Scorpie</div>
+   </div>
+   <div class="post" id="post-157975">
+    <div class="subject"><a href="#post-157975">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">yey, working now after some tweaking of parameters i use the following now:<br />invoke glPixelStorei , GL_UNPACK_ALIGNMENT, 4<br />and the GL_BGR_EXT parameter for gluBuild2DMipmaps<br /><br />so i can now load and display a model made in Milkshape (1.6.4) with textures, next step, animations :) </div>
+    <div class="meta">Posted on 2005-03-15 14:21:15 by Scorpie</div>
+   </div>
+   <div class="post" id="post-157987">
+    <div class="subject"><a href="#post-157987">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">Bitmaps and DIBs are strange formats - having the image upside-down, and that 4-byte alignment per row :). That&#39;s why I prefer .tga&nbsp; :P (ugly icon isn&#39;t it)</div>
+    <div class="meta">Posted on 2005-03-16 01:33:21 by Ultrano</div>
+   </div>
+   <div class="post" id="post-157999">
+    <div class="subject"><a href="#post-157999">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">Homer, what include holds the auxDIBImageLoad function?</div>
+    <div class="meta">Posted on 2005-03-16 08:23:08 by Scorpie</div>
+   </div>
+   <div class="post" id="post-158008">
+    <div class="subject"><a href="#post-158008">Re: Texture madness (OpenGL)</a></div>
+    <div class="body"><div class="quote"><br />Bitmaps and DIBs are strange formats - having the image upside-down, and that 4-byte alignment per row :). That&#39;s why I prefer .tga? :P (ugly icon isn&#39;t it)<br /></div><br />Well my card supports A32R32B32G32 floating point textures, but if I want to load textures from memory, what file format should I emulate, to make it possible for me to make a procedural texture with SSE and transfer it to vram?<br /><br /></div>
+    <div class="meta">Posted on 2005-03-16 11:42:07 by daydreamer</div>
+   </div>
+   <div class="post" id="post-158012">
+    <div class="subject"><a href="#post-158012">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">I have little experience with hardware-accelerated 3D, and even less with SSE - but I think you should first allocate Width*Height*16 bytes , make with SSE some procedural texture, then convert it to integer A8R8G8B8/R8G8B8A8, send the first Width*Height*4 bytes to vram with lock/unlock of the texture, and finally release the memory taken for the temporary buffer. <br />Your card may support cool formats, but not everyone has a card like yours ^_^. And I doubt floats on vcards are as fast as integers to compute. 8 bits are more than enough for a color channel anyway :)</div>
+    <div class="meta">Posted on 2005-03-16 12:59:02 by Ultrano</div>
+   </div>
+   <div class="post" id="post-158031">
+    <div class="subject"><a href="#post-158031">Re: Texture madness (OpenGL)</a></div>
+    <div class="body">He&#39;s on the right track, but still thinking in terms of 16bit color.<br />The following information will allow you to write texture loaders for ANY file format, and how to modify the imagedata sourced from the file to create OpenGL Textures from them.<br /><br />Most graphic file formats, including bmp and tga, store the pixel color data in either 24 or 32bit words these days.<br />Examples:<br />TGA, stored as 24bit (BGR) , or as 32bit (BGRA) words.<br />iirc BMP is RGB or ARGB for 24 or 32bit.<br /><br />Basically you need to get your color data into RGB or RGBA format, depending on if you want to create/preserve the Alpha channel for transparent textures.<br /><br />After you have done this, you should create the texture as normal, except you specify the bitsperpixel (24 or 32) in your call to glTexImage2D as follow:<br /><br /><pre><code><br />invoke glTexImage2D,GL_TEXTURE_2D,dwLOD,&nbsp; dwChannels, dwWidth, dwHeight, dwBorderWidth, dwType, GL_UNSIGNED_BYTE, pimageData<br /></code></pre><br /><br />where dwLOD = MipMap Level Of Density (0 = default)<br />where dwChannels = 1, 2, 3 or 4 (number of color components, 1=mono, 2=16bpp, 3=24bpp, 4=32bpp)<br />where Width and Height are some power of 2 (ie 128,256 etc)<br />where Border is the thickness of pixel border around image (0 or 1)<br />where dwType = usually GL_RGB or GL_RGBA (GL_COLOR_INDEX, GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA, GL_RGB, GL_RGBA, GL_LUMINANCE, and GL_LUMINANCE_ALPHA)<br />where pImageData is a pointer to the image data in the same format as given in dwType<br /><br />That is the only critical part of creating your own textures in OpenGL.<br />You should also be able to see that you can create procedural textures using this information.<br /><br />Have a nice day&nbsp; :P</div>
+    <div class="meta">Posted on 2005-03-16 21:02:50 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

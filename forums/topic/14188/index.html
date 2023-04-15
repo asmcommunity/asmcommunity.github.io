@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>kernel-level api hooking? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14188" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=14188">kernel-level api hooking?</a></p>
+   <div class="post" id="post-109660">
+    <div class="subject"><a href="#post-109660">kernel-level api hooking?</a></div>
+    <div class="body">Hi,<br /><br />     I've spawned recent interests in hooking APIs, and i was just wondering if anybody knew/knows how to achieve API hooking via KMD? I couldn't find anything by googling, and the only stuff i found were v*ral stuff, which i won't mention here...plus, everything i tried to look for were in C++, with really vague inline ASM. So far, i've scourged up some articles and read them, and apparently there are a bunch of ways to hook API, most of them were sort-of explained, and they worked in ring3. My goal that i wish to reach is coding a professional &quot;semi-AV&quot; program, in which if a executable is executed, and it is labeled as &quot;suspicious&quot;, the execution is intercepted, and the user is given the choice to allow the task to execute or not...I've looked on other examples, such as IAT patching (still sort of unclear in my mind...), but i think patching the IAT for everything deems unrealistic for me, as i would have to patch all the processes in memory? So the alternative i found was a KMD, hooking in kernel level....does anybody know/have some examples of this?<br /><br />Thanks for your help! any help is greatly appreciated!<br /><br /><br />                            -Drocon</div>
+    <div class="meta">Posted on 2003-07-08 09:08:14 by Drocon</div>
+   </div>
+   <div class="post" id="post-109671">
+    <div class="subject"><a href="#post-109671">Re: kernel-level api hooking?</a></div>
+    <div class="body">If you mean system servises hooking ( Nt* or Zw ) download Invisibility (masm32 source) from Iczelion's  <a target="_blank" href="http://win32asm.cjb.net/">http://win32asm.cjb.net/</a><br /><br />RegMom or FileMon ( sysinternals.com ) are very good examples. The c-sources were available till ~v4.24. May be you will be able to find it.<br /><br />If you mean user mode API hooking from KM, it gives you no advantages. It's better to use well known methods.<br />Explore this thread. <a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=7637">Hook question for advanced coders</a>  It contents doesn't matter but the links are useful.</div>
+    <div class="meta">Posted on 2003-07-08 11:26:32 by Four-F</div>
+   </div>
+   <div class="post" id="post-113203">
+    <div class="subject"><a href="#post-113203">kernel-level api hooking?</a></div>
+    <div class="body">Windows NT ( at least since W2K, dunno about NT4 ) uses a feature called COW ( Copy On Write ).<br /><br />The system memory pages considered as shared ( shared: pages that every process can see but they all point to same real memory pages ) are read only ( yes, read only, no matter if you madify their portection flags by VirtualProtect or alike, they will still be write protected ).<br /><br />Why?, Imagine you do:<br /><br />...<br />mov eax,<br />mov ,MyHookFunction ( this is only to ilustrate a possible hook escenario )<br />...<br /><br />What would happen if you would be able to write to that memory page ( if that page was really ReadWrite )? All the processes would see the change, cos being a shared page, all processes map their virtual address for this page to the same real memory page.<br /><br />So this is not possible, then, what does really happen? <br /><br />Imagine you &quot;&quot;&quot;unprotect&quot;&quot;&quot; that memory page by VirtualProtect and then:<br /><br />...<br />mov eax,<br />mov ,MyHookFunction<br />...<br /><br />You would just hooked ExitProcess FOR YOUR PROCESS MEMORY SPACE... &quot;How?! didn?t you say its shared memory? Then why does the change affect only my process? memory view?&quot;<br /><br />As I said, the page is write protected so when you perform a write access to the page a fage fault occurs and kernel catches the exception...<br /><br />Then when it catches the exception it checks ( among other things ) if a shared memory page is being written and so if this was the case, it:<br /><br />A) Allocates a page ( 4096 bytes ) of real ( physical ) memory and copies the still untouched shared memory page that the write instruction was trying to write on to this newly allocated real memory page.<br /><br />B) Changes the LinearToPhysical memory correspondence info ( PAGE TABLE ENTRY in system info structs for the process... see 386 protected mode info ... ) for the process and makes it point to the newly allocated physical memory page.<br /><br />C) Sets this new page as read&amp;write by changing its PAGE TABLE ENTRY too so that further write accesses are possible as for a normal data page.<br /><br />D) Continues the execution and the instruction that caused the fault no longer causes the fault, it is executed normally cos the page has now read&amp;write access.<br /><br />So, this way, your process sees the changes in its virtual memory, but as real memory page corresponding to that virtual memory page has been copied to another real memory page and ONLY THEN has been changed, other processes still see the original contents of the original real memory page.<br /><br />P.S.: I have written this quite in a hurry :S // Does this all sound as martian language ?? &gt;&gt; <a target="_blank" href="http://www.cl.cam.ac.uk/~nej22/cprg/i386manual/">http://www.cl.cam.ac.uk/~nej22/cprg/i386manual/</a> ( chapters 5, and 6, but everything of it in general ) a MUST for every x86 ASM programmer I think... Just to jump out of the matrix ;D</div>
+    <div class="meta">Posted on 2003-08-06 08:25:10 by sheroc</div>
+   </div>
+   <div class="post" id="post-113204">
+    <div class="subject"><a href="#post-113204">kernel-level api hooking?</a></div>
+    <div class="body">If you get ring0 ( by a WDM a KMD or a Ring0Call/IntGate trick ) in NT, then to modify a page you would:<br /><br />mov eax,cr0<br />push eax<br />and eax,0FFFEFFFFh    ; Disable WP ( write protection ) bit in CR0<br />mov cr0,eax                 ; so that write access violations dont occur ( everything is writable if its present )<br /><br />;; This will disable CopyOnWrite temporally<br /><br />then modify that kernel32.dll module pages in memory ( be careful, this might not be directly accesible from kernel mode -IT IS if you use Call/IntGate trick- ) as you want/please<br /><br />then:<br /><br />pop eax<br />mov cr0,eax              ; restore the original CR0 settings and original WP state ;D<br /><br />;; This will re ENABLE ( or DISABLE if it was originally disabled -some old softice versions need it disabled- ) CopyOnWrite or better to say kernel mode write protection.<br /><br />P.S.: See Mark Russinovich?s article on direct Physical Memory Mapping under WinNT ( used for the NT Call/IntGate trick that might be needed to implement global system hook propperly ) in <a target="_blank" href="www.sysinternals.com">www.sysinternals.com</a> // needless to say this will require admin privileges :P // Other authors have also written more on this, EliCZ and some others ( google for it! ).</div>
+    <div class="meta">Posted on 2003-08-06 08:39:08 by sheroc</div>
+   </div>
+   <div class="post" id="post-113239">
+    <div class="subject"><a href="#post-113239">kernel-level api hooking?</a></div>
+    <div class="body">You could use Elicz? backdoor trick too. And in XP atleast this works:<br /><br />example:<br /><br />void func() {<br />DWORD FuncAddr = (DWORD) GetProcAddress( GetModuleHandle( &quot;ntdll&quot; ), &quot;NtSomeCommand&quot; ) );<br />VirtualProtect....<br /><br />__asm {<br />mov edi, FuncAddr<br />mov byte ptr , 90h<br />}<br />}<br />That does work...</div>
+    <div class="meta">Posted on 2003-08-06 14:02:50 by SFP</div>
+   </div>
+   <div class="post" id="post-113242">
+    <div class="subject"><a href="#post-113242">kernel-level api hooking?</a></div>
+    <div class="body">Well, I dont know if we are speaking about the same stuff but \Device\Physicalmemory editing to create Call/IntGate is from not EliCZ ( although he has done a variant as other have done too; originally its Mark Russinovich?s trick... )<br /><br />And yes, the thing can be done several ways but easiest is to a) modify the memory page directly or b) go ring0, disable kernel write protection and modify the page and return to ring3.<br /><br />But a) approach needs some serious surgery ( is not easy to manage physical addressing for virtual addresses out of 80000000h to A0000000h memory range... -maybe seek&amp;destroy alike way?, I would use b) way- )<br /><br />Bye!</div>
+    <div class="meta">Posted on 2003-08-06 14:18:20 by sheroc</div>
+   </div>
+  </div>
+ </body>
+</html>

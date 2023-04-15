@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>later search algo - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27551" />
+    <link rel="next" href="../?id=27551&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27551">later search algo</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=27551&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=27551&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="27551" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=27551&amp;page=2">&gt;</a><a href="../?id=27551&amp;page=2">&raquo;</a></form>   <div class="post" id="post-196856">
+    <div class="subject"><a href="#post-196856">later search algo</a></div>
+    <div class="body">I have pasted in below a variation on the search algo that
+I posted here earlier. This version does the branch compare
+in reverse order to find a mismatch faster when the last byte
+does not match.
+
+It clocks up very slightly faster than the last one in most
+instances but it is generally faster on average. This algo
+has had a fiar bit of optimisation work done on it at close
+range and it seems to be about as fast as it will run.
+
+I have a lot of work done on a fast Boyer Moore search algo
+but it is still not catching all cases as I am using a single
+table. When I get a bit more technical data, I will try and
+get a more reliable one going.
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; #########################################################################
+
+bSearchrc proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+                             lpSubStr:DWORD,lnSubSt:DWORD
+
+    push ebx
+    push esi
+    push edi
+
+  ; -----------------------------
+  ; calculate the reset position
+  ; for EDI in compare loop
+  ; -----------------------------
+    mov eax, lpSubStr
+    add eax, lnSubSt
+    dec eax
+
+  ; -----------------------------------------
+  ; get 1st sub string byte and put it in BH
+  ; -----------------------------------------
+    mov esi, lpSubStr
+    mov bh,            ; 1st byte in BH
+
+  ; ----------------------------------------
+  ; source string address in ESI + StartPos
+  ; ----------------------------------------
+    mov esi, lpString       ; source in ESI
+    add esi, StartPos
+
+  ; ------------------------------
+  ; main loop exit test condition
+  ; ------------------------------
+    mov edx, lnStrng        ; len in EDX
+    lea edx,     ; add esi to edx + 1
+    sub edx, lnSubSt        ; subtract substr len from source len
+
+; ---------------------- Main Loop --------------------------
+  bsStr:
+    mov bl, 
+    inc esi
+    cmp bh, bl
+    je sbLoopr              ; jump to subloop if equal
+    cmp esi, edx            ; test exit condition
+    jne bsStr               ; jump back if not equal
+
+    mov eax, -1             ; -1 = no match
+    jmp bsOutr
+; -----------------------------------------------------------
+  sbLoopr:
+    push esi                ; source offset is in ESI
+    mov ecx, lnSubSt        ; substr len in ECX
+    lea esi, [(esi+ecx)-2]  ; add ECX to ESI - 2
+    mov edi, eax            ; copy reset position into EDI
+; -------------- Reverse Compare Sub Loop -------------------
+  cmStr:
+    mov bl,            ; read source byte
+    dec esi
+    dec edi
+    cmp bl, byte ptr ; test byte
+    jne cmOutr              ; exit subloop if not matching
+    dec ecx                 ; decrement counter
+    jnz cmStr               ; return to compare next byte if ECX not zero
+; -----------------------------------------------------------
+;   if ECX = 0 fall through to following instruction
+; ---------------------- If Match ---------------------------
+    pop esi                 ; restore esi
+    dec esi                 ; correct to get true position
+    sub esi, lpString       ; sub start address from esi
+    mov eax, esi            ; copy to eax as return value
+    jmp bsOutr
+; ------------------------ Else -----------------------------
+  cmOutr:
+    pop esi                 ; restore ESI
+    jmp bsStr               ; return to start
+
+  bsOutr:
+
+    pop edi
+    pop esi
+    pop ebx
+
+    ret
+
+bSearchrc endp
+
+; #########################################################################
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-06 00:18:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196857">
+    <div class="subject"><a href="#post-196857">later search algo</a></div>
+    <div class="body">hutch--, how do you measure the speeds of your codes?</div>
+    <div class="meta">Posted on 2001-04-06 09:29:00 by wolfao</div>
+   </div>
+   <div class="post" id="post-196858">
+    <div class="subject"><a href="#post-196858">later search algo</a></div>
+    <div class="body">Good work, Steve.
+I may suggest some minor improvement on start before
+Main Loop.
+1. We need remove dependences such as 
+--------------------
+    mov eax, lpSubStr
+    add eax, lnSubSt
+    dec eax	
+-------------------
+    mov esi, lpSubStr
+    mov bh,            ; 1st byte in BH we can use 
+
+  ; ----------------------------------------
+  ; source string address in ESI + StartPos
+  ; ----------------------------------------
+    mov esi, lpString       ; source in ESI
+    add esi, StartPos
+---------------------
+    mov edx, lnStrng        ; len in EDX
+    lea edx,     ; add esi to edx + 1
+    sub edx, lnSubSt        ; subtract substr len from source len
+---------------------
+In those siquences next command depends on previous wich
+doesn't allow to use second ALU (prevent paring) and known as AGI stall.	
+
+2. We can remove double loading of some values such as lpSubStr ect.
+Here is  another version of start it saves few clocks and bytes:
+;esi+1 = c
+;lnStrng = a
+;lnSubSt = b
+;C + a - b = -(b-a)+C
+;
+<pre><code>
+bSearchrc proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+                             lpSubStr:DWORD,lnSubSt:DWORD
+
+
+	mov edx,lnSubStr ;edx = lnSubStr
+	push ebx		;save ebx
+	mov eax,lpSubStr ;eax = pointer to SubStr
+	push esi		;save esi
+	mov bh,         ;eax =lpSubStr bh=first byte of SubStr
+	mov esi,lpString	;esi = addr of String
+	lea eax,[-1] ;eax = last bytes addr lp = lpSubStr + lnSubStr - 1
+	add esi,StartPos        ;esi = lpString + StartPos
+        neg edx ;edx = - (lnSubStr)
+	push edi		 ;save edi
+	lea edx, ;edx = -(lnSubStr)+(lpString + StartPos)+1
+	add edx,lnStrng	;edx = (lnStrng-lnSubStr)+(lpString+StartPos)+1
+
+;---------------- Main Loop ----------------
+.....
+</code></pre>
+
+The Svin.
+
+This message was edited by The Svin, on 4/6/2001 3:52:45 PM</div>
+    <div class="meta">Posted on 2001-04-06 11:22:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196859">
+    <div class="subject"><a href="#post-196859">later search algo</a></div>
+    <div class="body">Alex,
+
+Thanks for the suggestion, I had put the work in the nested loops
+without taking much notice of the prefix code. I will plug it in
+and see how it clocks up.
+
+I use 2 techniques to clock an algo of this type, the first is to
+loop it through a short string enough times to get a duration of
+about half a second, the second is to make a test file that is
+long enough to get a similar duration with the test pieces at the
+end.
+
+I clock them with the API call GetTickCount() which is nominal
+millisecond resolution but suffers from ring3 interference. The
+reason for going for such a long sample in real time is to get
+the variation down under 1% which does the job fine for comparing
+minor code modifications.
+
+What I am testing here is both recursive usage and long linear
+reads as a general purpose search algo can be used for both. Most
+code is run in ring3 so it is relevant to test it in real time to
+get closest to the running conditions for an application.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-06 20:14:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196860">
+    <div class="subject"><a href="#post-196860">later search algo</a></div>
+    <div class="body">Alex,
+
+I removed the dual loading of the memory operand and changed the
+instruction order to break the dependency chain but predictably
+it is no faster as the time is taken in the nested loops. The
+three pushes at the beginning could be used to further space the
+instructions but the algorithm will not go any faster because of
+it.
+
+What I had hoped for was an improvement in the loop timings by
+being able to use one of the alternatives but it just did not
+clock up any faster.
+
+Regards,
+
+hutch@pbq.com.au
+<pre><code>
+    push ebx
+    push esi
+    push edi
+
+    mov ecx, lpSubStr       ; sub string address
+    mov edx, lnStrng        ; source len in EDX
+    mov eax, lnSubSt        ; sub string length
+    mov esi, lpString       ; source in ESI
+    mov bh,            ; 1st byte in BH
+
+    lea edx,     ; add ESI to EDX + 1
+    lea eax,     ; reset position for EDI in subloop
+    sub edx, lnSubSt        ; main loop exit test condition
+    add esi, StartPos       ; add startpos to ESI
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-07 04:06:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196861">
+    <div class="subject"><a href="#post-196861">later search algo</a></div>
+    <div class="body">Steve, 
+I looked closely to your proc and have a question:
+What is lnString?
+a) Whole lenth of the source string?
+b) Lenth of the source string from StartPos to the end of the String.
+
+If answer is "a" then test end condition in edx would be calculated incorrectly.
+'Cause it'll be shifted by StartPos.
+
+The Svin.
+PS: You know my method of clocking speed , so I'm not going to
+waste your time by talking you in it, but if you decided to stick to timer while
+clocking, may be you can think of QueryPerfomanceCounter?</div>
+    <div class="meta">Posted on 2001-04-07 09:08:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196862">
+    <div class="subject"><a href="#post-196862">later search algo</a></div>
+    <div class="body">Here is a way how you can remove one instruction from  bsStr loop:
+1.before the loop calculate current difference between esi and edx and put it in index
+reg.
+2.neg index reg
+3.use edx as base pointer and index reg as index pointer increamenting it untill it 0
+4.to get address of found byte you need just lea edi,
+
+it will allow increament pointer and chek if address !=edx by one instruction
+instead of two.
+prep4bsStr:
+	mov ecx,esi
+	sub ecx,edx
+bsStr:	
+	cmp bh,byte ptr  
+	je sbLoopr
+	inc ecx
+	jnz bsStr
+	
+	mov eax,-1
+	jmp bsOutr
+
+..... if you need to get addr addr of found byte in esi just
+	lea esi,
+
+I could reorganize the whole algo, but you'd better feel logic if do it yourself.
+
+We shall over come...
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-07 12:55:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196863">
+    <div class="subject"><a href="#post-196863">later search algo</a></div>
+    <div class="body">Say a couple words to me, please :)
+Check it!
+<pre><code>
+bSearchrc proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+                             lpSubStr:DWORD,lnSubSt:DWORD
+
+	push edi
+	push esi
+	push ebx
+
+	mov edi,lenSubStr  ;edi = lenSubStr
+	mov edx,lpString	;edx = pointer to String
+	mov eax,lpSubStr	;eax = pointer to SubStr
+	lea esi,edx[-1]	;esi = pointer to String -1 need to meet cond. of prep4bsStr
+	add edx,lnString	;edx = pointer to first byte after String
+	add esi,StartPos	;0 based index of start search
+	sub edx,edi    	;next to highest  possible address of first byte of SubStr in String
+	mov bl,	;bl = first byte of string
+	dec edi		;edi = lenth SubStr -1 to use it as couner and a pointer at the same time
+
+prep4bsStr:
+	inc esi
+	mov ecx,esi
+	sub ecx,edx	;negative difference esi = edx + (esi-edx) = esi + edx -edx = esi
+	jz notmatch	;it's possible that next byte will be == edx (see above cont. of edx)
+bsStr:	cmp   bl,byte ptr 
+	je sbLoopr
+	inc ecx
+	jnz bsStr
+notmatch:
+    	mov eax, -1             ; -1 = no match
+    	jmp bsOutr
+
+sbLoop:   lea esi,	;esi = address of possible SubStr in String
+	mov ecx,edi	;index and counter
+cmStr:	mov bh,	;byte in ecx index pos from SubStr
+	cmp bh,byte ptr  ;byte in the same (ecx) index pos from String
+	jne prep4bsStr	;notequal - proceed with next byte of String (esi will
+			;be incr. on start of prep4bsStr
+	dec ecx		;dec index
+	jns cmStr		;untill it less than start 
+	mov eax,esi 	;ret address of SubStr in String if all bytes are equal then esi
+			;in correct position of start SubStr in String
+	
+bsOutr:
+	pop ebx
+	pop esi
+	pop edi
+        ret
+bSearchrc endp
+</code></pre>
+
+This message was edited by The Svin, on 4/7/2001 6:04:40 PM</div>
+    <div class="meta">Posted on 2001-04-07 17:02:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196864">
+    <div class="subject"><a href="#post-196864">later search algo</a></div>
+    <div class="body">I missed one simple thing -
+cause 1st byte is already checked we dont't need to check it again
+so may change
+<pre><code>
+cmStr:	mov bh,	;byte in ecx index pos from SubStr
+	cmp bh,byte ptr  ;byte in the same (ecx) index pos from String
+	jne prep4bsStr	;notequal - proceed with next byte of String (esi will
+			;be incr. on start of prep4bsStr
+	dec ecx		;dec index
+	jns cmStr		;untill it less than start 
+
+to
+cmStr:	mov bh,	;byte in ecx index pos from SubStr
+	cmp bh,byte ptr  ;byte in the same (ecx) index pos from String
+	jne prep4bsStr	;notequal - proceed with next byte of String (esi will
+			;be incr. on start of prep4bsStr
+	dec ecx		;dec index
+	jnz cmStr		;search until first checked byte
+</code></pre>
+It will save us 1 needless iteration.
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-07 18:27:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196865">
+    <div class="subject"><a href="#post-196865">later search algo</a></div>
+    <div class="body">Alex,
+
+I reformatted the test algo and set it up in my test piece and I
+think the logic will be faster but I cannot track down why it
+crashes on exit with ECX = FFFFFFFF hex.
+
+I renamed the labels so it would run in the same app as the
+others, the "a" endings are for "Alex" so I know which algo is
+which.
+
+When I am a bit more awake later in the day, I will see if I can
+find what is happening, the shorter main loop in instruction
+count should yield a faster read speed and the shorter count
+in the subloop should improve its branch compare speed.
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; #########################################################################
+
+bSearcha proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+              lpSubStr:DWORD,lnSubSt:DWORD
+
+    push edi
+    push esi
+    push ebx
+
+    mov edi,lnSubSt    ;edi = sub string length
+    mov edx,lpString   ;edx = pointer to String
+    mov eax,lpSubStr   ;eax = pointer to SubStr
+
+  ; --------------------
+  ; illegal instruction
+  ; --------------------
+  ; lea esi, edx[-1]   ; esi = pointer to String -1 need to meet cond. of preLoop
+
+    mov esi, edx
+    dec esi
+
+    add edx,lnStrng    ; edx = pointer to first byte after String
+    add esi,StartPos   ; 0 based index of start search
+    sub edx,edi        ; next to highest  possible address of first byte of SubStr in String
+    mov bl,     ; bl = first byte of string
+    dec edi            ; edi = lenth SubStr -1 to use it as couner and a pointer at the same time
+
+  preLoopa:
+    inc esi
+    mov ecx,esi
+    sub ecx,edx        ; negative difference esi = edx + (esi-edx) = esi + edx -edx = esi
+    jz noMatcha        ; it's possible that next byte will be == edx (see above cont. of edx)
+  ; ------------------------- main loop ------------------------
+  mLoopa:
+    cmp bl,byte ptr 
+    je  sbLoopa
+    inc ecx
+    jnz mLoopa
+  ; ------------------------------------------------------------
+  noMatcha:
+    mov eax, -1                 ; -1 = no match
+    jmp bsOutr
+  ; ------------------------- sub loop -------------------------
+  sbLoopa:
+    lea esi,          ; esi = address of possible SubStr in String
+    mov ecx,edi                 ; index and counter
+  cmStra:
+    mov bh,           ; byte in ecx index pos from SubStr
+    cmp bh,byte ptr   ; byte in the same (ecx) index pos from String
+    jne preLoopa                ; not equal - proceed with next byte of String
+                                ; (esi will be incr on start of preLoop)
+    dec ecx         ; dec index
+    jns cmStra      ; until it less than start 
+  ; ------------------------------------------------------------
+    mov eax,esi     ; ret address of SubStr in String if all bytes are equal then esi
+                    ; in correct position of start SubStr in String
+                 
+  bsOutr:
+    pop ebx
+    pop esi
+    pop edi
+
+bSearcha endp
+
+; #########################################################################
+
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-07 18:55:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196866">
+    <div class="subject"><a href="#post-196866">later search algo</a></div>
+    <div class="body">You forget RET at the and of the proc :)
+and I a little improve it even more
+Here is the opti proc:
+<pre><code>
+bSearchrca proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+                             lpSubStr:DWORD,lnSubSt:DWORD
+
+	push edi
+	push esi
+	push ebx
+
+	mov edi,lnSubStr  ;edi = lenSubStr
+	mov edx,lpString	;edx = pointer to String
+	mov eax,lpSubStr	;eax = pointer to SubStr
+	lea esi,[-1]	;esi = pointer to String -1 need to meet cond. of prep4bsStr
+	add edx,lnStrng	;edx = pointer to first byte after String
+	add esi,StartPos	;0 based index of start search
+	sub edx,edi    	;next to highest  possible address of first byte of SubStr in String
+	mov bl,	;bl = first byte of string
+	dec edi		;edi = lenth SubStr -1 to use it as couner and a pointer at the same time
+
+prep4bsStr:
+	inc esi
+	mov ecx,esi
+	sub ecx,edx	;negative difference esi = edx + (esi-edx) = esi + edx -edx = esi
+	jz notmatch	;it's possible that next byte will be == edx (see above cont. of edx)
+bsStr:	cmp   bl,byte ptr 
+	je sbLoopr
+	inc ecx
+	jnz bsStr
+notmatch:
+    	mov eax, -1             ; -1 = no match
+    	jmp bsOutr
+
+sbLoop:   lea esi,	;esi = address of possible SubStr in String
+	mov ecx,edi	;index and counter
+cmStr:	mov bh,	;byte in ecx index pos from SubStr
+	cmp bh,byte ptr  ;byte in the same (ecx) index pos from String
+	jne prep4bsStr	;notequal - proceed with next byte of String (esi will
+			;be incr. on start of prep4bsStr
+	dec ecx		;dec index
+	jnz cmStr		;untill it less than start 
+	mov eax,esi 	;ret address of SubStr in String if all bytes are equal then esi
+			;in correct position of start SubStr in String
+	
+bsOutr:
+	pop ebx
+	pop esi
+	pop edi
+	ret
+bSearchrca endp
+</code></pre>
+The Svin
+
+
+This message was edited by The Svin, on 4/7/2001 8:26:16 PM</div>
+    <div class="meta">Posted on 2001-04-07 20:11:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196867">
+    <div class="subject"><a href="#post-196867">later search algo</a></div>
+    <div class="body">;I do aplolagize - just test it, and found a bug - need to be mov bl,
+;istead of mov bl, :).
+;I test it with all possible ways, now it's OK and it's FAST.
+;I'm happy for your new proc, Steve. M32LIB every day better.
+;Here it is along with test prog ready to compile:
+<pre><code>
+
+
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\kernel32.inc
+include C:\masm32\include\user32.inc
+includelib kernel32.lib
+includelib user32.lib
+bSearchrca proto :DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+
+.data
+mstring	db '	TimeTest_ON',13,10
+	db '	mov ecx,10000h',13,10
+	db 'test1:	push ecx',13,10
+	db ';Caanu oanoeðoaiue eia',13,10
+	db '	pop ecx',13,10
+	db '	dec ecx',13,10
+	db '	jne test1',13,10
+	db '	TimeTest_OFF',13,10
+	db '	shr eax,16',13,10
+	db '	mov firstres,eax',13,10
+	db '	TimeTest_ON',13,10
+	db '	mov ecx,10000h',13,10
+	db 'test2:	push ecx',13,10
+	db ';Aoiðie oanoeðoaiue eia',13,10
+	db '	pop ecx',13,10
+	db '	dec ecx',13,10
+	db '	jne test2',13,10
+	db '	TimeTest_OFF',13,10
+	db '	shr eax,16',13,10
+	db '	mov secondres,eax',13,10
+	db 'invoke wsprintf,addr buffer,addr tmpl,firstres,secondres',13,10,0
+	db '	invoke MessageBox,0,addr buffer,0,0',13,10
+	db '	call ExitProcess',13,10,0
+mstrlen equ $-mstring
+substring	db  'invoke wsprintf,addr buffer,addr tmpl,firstres,secondres',13,10
+sstrlen equ $-substring
+notfound db 'Not found',0
+
+.code
+start:
+;with startpos
+	invoke bSearchrca,10,addr mstring,mstrlen,addr substring,sstrlen
+	.IF eax !=-1
+	invoke MessageBox,0,eax,0,0
+	.ENDIF
+;without startpos
+ 	invoke bSearchrca,0,addr mstring,mstrlen,addr substring,sstrlen
+	.IF eax !=-1
+	invoke MessageBox,0,eax,0,0
+	.endif
+;startpos make it out or range
+ 	invoke bSearchrca,0FFFFh,addr mstring,mstrlen,addr substring,sstrlen
+	.IF eax == -1
+	invoke MessageBox,0,addr notfound,0,0
+	.ELSE
+	invoke MessageBox,0,eax,0,0
+	.ENDIF
+	call ExitProcess
+
+bSearchrca proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+                             lpSubStr:DWORD,lnSubStr:DWORD
+
+	push edi
+	push esi
+	push ebx
+
+	mov edi,lnSubStr    ;edi = lenSubStr
+	mov edx,lpString	;edx = pointer to String
+	mov eax,lpSubStr	;eax = pointer to SubStr
+
+	lea esi,[-1]	;esi = pointer to String -1 need to meet cond. of prep4bsStr
+	add edx,lnStrng	;edx = pointer to first byte after String
+	add esi,StartPos	;0 based index of start search
+	sub edx,edi    	;next to highest  possible address of first byte of SubStr in String
+	mov bl,	;bl = first byte of string
+	dec edi		;edi = lenth SubStr -1 to use it as couner and a pointer at the same time
+
+prep4bsStr:
+	inc esi
+	mov ecx,esi
+	sub ecx,edx	;negative difference esi = edx + (esi-edx) = esi + edx -edx = esi
+	ja notmatch	;it's possible that next byte will be == edx (see above cont. of edx)
+
+bsStr:	cmp   bl,byte ptr 
+	je sbLoopr
+	inc ecx
+	jnz bsStr
+notmatch:
+    	mov eax, -1             ; -1 = no match
+    	jmp bsOutr
+
+sbLoopr:   lea esi,	;esi = address of possible SubStr in String
+	mov ecx,edi	;index and counter
+cmStr:	mov bh,	;byte in ecx index pos from SubStr
+	cmp bh,byte ptr  ;byte in the same (ecx) index pos from String
+	jne prep4bsStr	;notequal - proceed with next byte of String (esi will
+			;be incr. on start of prep4bsStr
+	dec ecx		;dec index
+	jnz cmStr		;untill it less than start 
+	mov eax,esi 	;ret address of SubStr in String if all bytes are equal then esi
+			;in correct position of start SubStr in String
+	
+bsOutr:
+	pop ebx
+	pop esi
+	pop edi
+
+	ret
+bSearchrca endp
+
+
+	end start
+
+</code></pre>
+;The Svin</div>
+    <div class="meta">Posted on 2001-04-07 21:37:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196868">
+    <div class="subject"><a href="#post-196868">later search algo</a></div>
+    <div class="body">Alex,
+
+I just plugged it in and it ran OK but its returning the wrong
+location. I am testing it against two previous versions that both
+agree with their return values.
+
+Speed wise it should be faster as it has a shorter instruction
+path in both the main loop and the sub loop but it clocks almost
+identically to the other two I have working so it appears to be
+the memory access speed limit limiting all of them.
+
+The test condition is a 52 meg file with the search string at the
+end of it. It is read into memory before the tests are performed.
+
+All 3 algos are clocking about 450 milliseconds with my net
+connection running on my PIII 600 so they are all running at about
+110 meg/sec. I have run into the memory speed limit on a number
+of occasions and without trying "prefetch" which depends on .XMM
+compatible hardware, I think the limit is hardware.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-07 22:14:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196869">
+    <div class="subject"><a href="#post-196869">later search algo</a></div>
+    <div class="body">The last testing prog I sent returns right result.
+I sent source of real prog. Wich I compiled and tested.
+Otherwise in MsgBox there would be different string.
+It returns address of substring in mainstring.
+Shall it return index?
+Or talking of previous proc?
+There was mistake - I put as first byte to bl not first byte of substr but first byte of
+main string :)
+Try to clock with shorter strings. I got faster clocking.
+
+
+BTW: Is it famous Boyer Moore algo?
+It's funny, I wrote the same logic in one search proc a while ago,
+but didn't think there was anything fancy about it :)
+It's not too bad for usual string search, but complite junk with searching words.
+If words are in English, French, Russian there a lot of cases with words similar
+size and end. If lenth >= 4  then some case maybe faster filtered with dword comparasion.
+Anyway with word a simple combinatoric logic with linguistic approach tells us
+that to filter out first time coincident we need to move in both opposite directions.
+
+Who is Boyer Moore?
+Is he young?
+Sorry if its offtopic, the only fouring algorithmist I studied was D.Knuth.
+Was happy to buy new edition of AOP. But even his old books was still contemorary for
+30 + years. Wrote algos in asm. Though strange kind of it - 6 bit fiction MIX machine :)
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-07 22:45:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196870">
+    <div class="subject"><a href="#post-196870">later search algo</a></div>
+    <div class="body">I fixed the problem with the following line,
+<pre><code>
+     sub eax, lpString
+</code></pre>
+
+Started clocking with different length search strings and the
+speed is starting to show, when I get a bit more time today, I
+will do all of the benchmarking without a net connection running
+which should make the timings a lot more reliable.
+
+Bob Boyer and L. Moore wrote the Boyer Moore algorithm in about 1975 and published it in 1977. I have just tweaked Jeremy Collake's version and on longer strings, it is much faster than a brute force search algorithm, where it is limited is in recursive applications as it pays a time penalty building the shift table.
+
+My view is that both are useful although the brute force algo is a lot more general purpose, the Boyer Moore is well suited for searching very long strings where the table loading time does not matter.
+
+Regards,
+
+hutch@pbq.com.au
+
+This message was edited by hutch--, on 4/7/2001 11:52:03 PM</div>
+    <div class="meta">Posted on 2001-04-07 23:45:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196871">
+    <div class="subject"><a href="#post-196871">later search algo</a></div>
+    <div class="body">The Svin, can you show me your method of clocking speed?
+Thanks. :)</div>
+    <div class="meta">Posted on 2001-04-08 10:56:00 by wolfao</div>
+   </div>
+   <div class="post" id="post-196872">
+    <div class="subject"><a href="#post-196872">later search algo</a></div>
+    <div class="body">Alex,
+
+I chased down the problem with the timing of the last bnSearch
+procedure that you did, I was geting large fluctuations in the
+times that did not make sense so I aligned part of the code by
+16 bytes and the time became much more uniform and is clearly
+faster than the earlier versions.
+
+After some testing, I unrolled the loop by a factor of 4 and it
+became more uniform on the first read of a test piece and did
+not show as much variation from repeated reads of the buffer.
+
+I have pasted it in below for you to have a look at. Let me know
+what you think.
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; #########################################################################
+
+bnSearch proc StartPos:DWORD,lpString:DWORD,lnStrng:DWORD,
+              lpSubStr:DWORD,lnSubStr:DWORD
+
+     push edi
+     push esi
+     push ebx
+
+     mov edi,lnSubStr   ; SubStr length
+     mov edx,lpString   ; pointer to String
+     mov eax,lpSubStr   ; pointer to SubStr
+
+     lea esi,[-1]  ; pointer to String -1 for prep4bsStra
+     add edx,lnStrng    ; edx = pointer to first byte after String
+     add esi,StartPos   ; add starting position to ESI
+     sub edx,edi        ; sub EDI from EDX to get exit
+     mov bl,       ; bl = first byte of string
+     dec edi            ; edi = lenth SubStr -1 to use it as counter
+                        ; and a pointer at the same time
+
+     jmp prep4bsStra
+     align 16
+
+  prep4bsStra:
+     inc esi
+     mov ecx,esi
+     sub ecx,edx   ; negative difference esi = edx + (esi-edx) = esi + edx -edx = esi
+     ja notmatch   ; it's possible that next byte will be == edx (see above cont. of edx)
+
+  bsStra:
+  ; ------------
+  ; unroll by 4
+  ; ------------
+    REPEAT 3
+     cmp bl,byte ptr 
+     je sbLoopr
+     inc ecx
+     jz notmatch
+    ENDM
+
+     cmp bl,byte ptr 
+     je sbLoopr
+     inc ecx
+     jnz bsStra
+  ; ------------
+
+  notmatch:
+     mov eax, -1            ; -1 = no match
+     jmp bsOutr
+
+  sbLoopr:
+     lea esi,     ; esi = address of possible SubStr in String
+     mov ecx,edi            ; index and counter
+  cmStr:
+     mov bh,      ; byte in ecx index pos from SubStr
+     cmp bh,byte ptr  ; byte in the same (ecx) index pos from String
+     jne prep4bsStra        ; not equal - proceed with next byte of String (esi will
+                            ; be incr. on start of prep4bsStra
+     dec ecx                ; dec index
+     jnz cmStr              ; until it less than start 
+     mov eax,esi            ; ret address of SubStr in String if all bytes are equal
+                            ; then esi in correct position of start SubStr in String
+
+     sub eax, lpString      ; get zero based offset
+
+  bsOutr:
+     pop ebx
+     pop esi
+     pop edi
+
+     ret
+
+bnSearch endp
+
+; #########################################################################
+
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-11 05:26:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196873">
+    <div class="subject"><a href="#post-196873">later search algo</a></div>
+    <div class="body">Hutch,
+
+Do you have a specific reason for the search, or is it just a general text searcher?
+
+I ask because I got thinking about the problem, and tried out a few tests, I've now got a algorithm which can search for long pieces of text faster the the one above:
+
+Text to search: First three paragraphs of this thread
+String to Find: "a more reliable one going"
+original      : 2689 cycles
+mine          : 2244 cycles
+
+I did notice that the text I was searching sometimes took ages for short words e.g. 
+
+Text to search: First three paragraphs of this thread
+String to Find: "Moore"
+original      : 1024 cycles
+mine          : 2916 cycles
+
+
+For a shorter string I would have expected the search to be faster, but it wasn't, then I thought about the string "Moore" 
+It ends in an 'e' - bad character for english text, it's the most popular. 
+
+So basically I got to thinking about alphabetic frequencies, and possible looking at a search which decided to use either the first or last character, whichever was less frequent, if it used that idea then it should be quicker...
+
+thoughts?
+
+Umbongo
+
+p.s. anyone willy to try, here are the frequencies of a-z in english:-
+
+Letter	Percent
+E	13.05
+T	9.02
+O	8.21
+A	7.81
+N	7.28
+I	6.77
+R	6.64
+S	6.46
+H	5.85
+D	4.11
+L	3.60
+C	2.93
+F	2.88
+U	2.77
+M	2.62
+P	2.15
+Y	1.51
+W	1.49
+G	1.39
+B	1.28
+V	1.00
+K	0.42
+X	0.30
+J	0.23
+Q	0.14
+Z	0.09</div>
+    <div class="meta">Posted on 2001-04-11 10:33:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-196874">
+    <div class="subject"><a href="#post-196874">later search algo</a></div>
+    <div class="body"><strong>Umbongo</strong> look at Boyer-Moore String Search - it's faster because it doesn't do comparisons.  Or, maybe I misunderstand you - do you mean incorporating frequency analysis into Boyer-Moore?  Adding it to the above algorithm would require greater difficulty than Boyer-Moore. :)  As my grandmother told me when I was little, "If you didn't make the mess - you don't have to clean-up the mess."   The same goes for fast coding, but you already know that. :)
+
+Here is such an algorithm: Optimal Mismatch algorithm
+
+This message was edited by bitRAKE, on 4/11/2001 5:00:32 PM</div>
+    <div class="meta">Posted on 2001-04-11 12:43:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-196875">
+    <div class="subject"><a href="#post-196875">later search algo</a></div>
+    <div class="body"><div class="quote">
+look at Boyer-Moore String Search - it's 
+faster because it doesn't do comparisons
+</div>
+
+I'm going to have to disagree with you there, it <strong>must</strong> do comparisons, otherwise how would it know it found it?
+
+Boyer-Moore does comparisons, but it also skips letters that can't possibly match, based on how close the last match was. So you don't have the brute force method of checking every single char each time.
+
+It generally runs using the last character in the substring to use as a mtach, I was suggesting that the 'least frequent' character could be used for this purpose instead.
+
+<div class="quote"> "If you didn't make the mess -  you don't have to clean-up the mess." </div>
+
+That a good saying :)
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-04-11 18:58:00 by umbongo</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=27551&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=27551&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="27551" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=27551&amp;page=2">&gt;</a><a href="../?id=27551&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

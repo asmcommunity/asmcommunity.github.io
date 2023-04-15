@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bitmap image processing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29550" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29550">Bitmap image processing</a></p>
+   <div class="post" id="post-208713">
+    <div class="subject"><a href="#post-208713">Bitmap image processing</a></div>
+    <div class="body">Hey guys, hopefully someone can help me getting starting with loop inside loops. &nbsp;I struggled with this for at least 5 or 6 hours yesterday and finally got something working. &nbsp;What I have is a 256 * 256 bitmap image (indexed color). &nbsp;I want to flip the bitmap across the horizontal axis like most image program can do. &nbsp;I realized that all I have is a 256 * 256 &quot;matrix&quot; of bytes essentially. &nbsp;And so I need to swap the 1st row the 256th row, 2nd &lt;-&gt; 255th etc..but copy 256 bytes across at a time. &nbsp;<br /><br /><pre><code><br />	Mov Esi,  ;0th row start<br />	Mov Edi, Esi<br />	Lea Edi,  ;255th row end<br />	Sub Edi, 256 ;dont want to start at end of data but 256 bytes before end of data = 255 th row start<br />	Mov Edx, 128 ;total row ops needed= (rows /2)<br />oloop:<br />	Mov Ecx, 64 ;64dwords = 256 bytes<br />iloop:<br />	Dec Ecx<br />	Push <br />	Push <br />	Pop <br />	Pop <br />	Jcxz idone<br />	Jmp iloop<br />idone:<br />	Add Esi, 256<br />	Sub Edi, 256<br />	Dec Edx<br />	Jns oloop<br /></code></pre><br /><br /><br /><br />I wish there was a swapsd instruction :) But since there isnt I tried numerous times with movsd and couldn&#039;t ever get it right. So I decided to push and pop instead. &nbsp;Other attempts included allocating 2x the memory and putting the rows in the &quot;2nd&quot; buffer but that was flawed too. Eventually I may have to flip other image sizes than 256 * 256.</div>
+    <div class="meta">Posted on 2009-09-12 11:10:45 by GoldStar611</div>
+   </div>
+   <div class="post" id="post-208765">
+    <div class="subject"><a href="#post-208765">Re: Bitmap image processing</a></div>
+    <div class="body">A row of pixels in a bitmap image is always 32-bit padded so you can transfer a DWORD of data at a time without worrying about overflow regardless of the size of the image. In pseudo code:<br /><br /><pre><code><br />for( i = 0 ; i &lt; height / 2 ; i++ )<br />{<br />&nbsp; for( j = 0 ; j &lt; width / 4 ; j += 4 )<br />&nbsp; {<br />&nbsp; &nbsp; eax = raster<em><br />&nbsp; &nbsp; raster<em> = raster[(height-i-1)*width+j]<br />&nbsp; &nbsp; raster[(height-i-1)*width+j] = eax<br />&nbsp; }<br />}<br /></code></pre><br /><br />Height is the number of scan lines in the image and width is the number of bytes per scan line (not always the number pixels). Don&#039;t forget to negate the height of the image in the bitmap header or it will be displayed upside down.<br /><br />Spara</div>
+    <div class="meta">Posted on 2009-09-14 07:33:43 by Sparafusile</div>
+   </div>
+   <div class="post" id="post-208781">
+    <div class="subject"><a href="#post-208781">Re: Bitmap image processing</a></div>
+    <div class="body"><div class="quote"><br />A row of pixels in a bitmap image is always 32-bit padded<br /> Don&#039;t forget to negate the height of the image in the bitmap header or it will be displayed upside down.<br /></div><br /><br />Thanks for that info on the bitmap images.&nbsp; I do have a question about the 32bit padding -- is that for the OS/2 and Windows format bitmaps?&nbsp; So far as negating the height of the bitmap, I&#039;m actually converting between Amiga IFF format and windows bitmap headers.&nbsp; The bitmap data is the same except it is flipped for some reason</div>
+    <div class="meta">Posted on 2009-09-14 20:22:27 by GoldStar611</div>
+   </div>
+   <div class="post" id="post-208789">
+    <div class="subject"><a href="#post-208789">Re: Bitmap image processing</a></div>
+    <div class="body">Hm, iirc windows bitmaps are only WORD padded, not DWORD?<br /><br />Padding depends on format, http://www.wotsit.org is your friend :)</div>
+    <div class="meta">Posted on 2009-09-15 02:41:55 by f0dder</div>
+   </div>
+   <div class="post" id="post-208796">
+    <div class="subject"><a href="#post-208796">Re: Bitmap image processing</a></div>
+    <div class="body">Windows bitmaps are always DWORD padded. I&#039;m not sure about OS/2 bitmaps though, I&#039;ve never seen one.<br /><br />If the bitmap data is the same between IFF and Bitmap except for the scan row order, simply copy the data as it is and set the bitmap height to negative the IFF height. The only problem you&#039;ll run into is if the IFF file format doesn&#039;t DWORD pad its scan lines.<br /><br />Spara</div>
+    <div class="meta">Posted on 2009-09-15 13:11:39 by Sparafusile</div>
+   </div>
+   <div class="post" id="post-208797">
+    <div class="subject"><a href="#post-208797">Re: Bitmap image processing</a></div>
+    <div class="body">Checked wotsit, seems you&#039;re right - looking up BITMAP in MSDN, I get the following though:<br /><div class="quote"><strong>bmWidthBytes</strong> - Specifies the number of bytes in each scan line. This value must be divisible by 2, because the system assumes that the bit values of a bitmap form an array that is word aligned.</div><br /><br />memory vs. disk representation issue?</div>
+    <div class="meta">Posted on 2009-09-15 13:18:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-208798">
+    <div class="subject"><a href="#post-208798">Re: Bitmap image processing</a></div>
+    <div class="body">That is odd. I can&#039;t explain why it states that. I can&#039;t find anywhere in the documentation where they talk about proper padding either. I suggest using wotsit.org for your file formatting needs, as F0dder stated.</div>
+    <div class="meta">Posted on 2009-09-15 13:37:55 by Sparafusile</div>
+   </div>
+  </div>
+ </body>
+</html>

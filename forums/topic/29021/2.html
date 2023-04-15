@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Been out of the loop, got a question... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29021" />
+  <link rel="prev" href="../?id=29021&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29021">Been out of the loop, got a question...</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=29021&amp;page=1" style="">&laquo;</a><a href="../?id=29021&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="29021" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-205126">
+    <div class="subject"><a href="#post-205126">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">OK, I got some sleep now ^^&#039;<br /><br />So, as Synfire said, COORD made of 2 words. And they&#039;re supposed to be passed by value, not by pointer. I gues they&#039;re supposed to be pushed as 2 dwords (like 2 parameters), and that&#039;s probably why masm defines them as 2 dwords.<br /><br />So try pushing 2 dword values instead of 1 COORD value.</div>
+    <div class="meta">Posted on 2008-04-14 02:55:08 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-205127">
+    <div class="subject"><a href="#post-205127">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">cHome should be a dword value - low word x, high word y.<br /><pre><code><br />&nbsp; &nbsp; include \masm32\include\masm32rt.inc<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; .data?<br />&nbsp; &nbsp; hStdOut dd ?<br />&nbsp; &nbsp; nConsoleSize dd ?<br />&nbsp; &nbsp; nCharsWritten dd ?<br /><br />&nbsp; &nbsp; .data<br />&nbsp; &nbsp; cHome COORD &lt;0,0&gt;<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; .code<br />start:<br />&nbsp; &nbsp; ;the next line gets the error<br />&nbsp; &nbsp; invoke FillConsoleOutputCharacter,hStdOut,&#039; &#039;,nConsoleSize,cHome,offset nCharsWritten<br />&nbsp; &nbsp; ;the next line works OK<br />&nbsp; &nbsp; invoke FillConsoleOutputCharacter,hStdOut,&#039; &#039;,nConsoleSize,DWORD PTR cHome,offset nCharsWritten<br />&nbsp; &nbsp; exit<br />end start<br /></code></pre><br />cHome sounds like (cursor 0,0) so you can replace &quot;DWORD PTR cHome&quot; with &quot;0&quot;<br /></div>
+    <div class="meta">Posted on 2008-04-14 04:29:39 by sinsi</div>
+   </div>
+   <div class="post" id="post-205128">
+    <div class="subject"><a href="#post-205128">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">The default definition for the COORD structure in windows.inc is:<br /><br />COORD STRUCT<br />&nbsp; x&nbsp; WORD&nbsp; &nbsp; &nbsp; ?<br />&nbsp; y&nbsp; WORD&nbsp; &nbsp; &nbsp; ?<br />COORD ENDS<br /><br />I sorta assume it would push this as a DWORD, so I don&#039;t get why it&#039;s complaining. If you passed the struct as a single DWORD value, you&#039;d have the whole thing without any extra padding or anything. all the documentation I&#039;ve seen would seem to suggest that (since passing each word as a DWORD is kinda stupid).<br /><br />I tried using the invoke statement with simply replacing cHome with eax,ebx (each holding cHome.x and cHome.y respectively), and got a &quot;Too many arguments&quot; error.<br /><br />Tried manually calling, and it looked good, except I got an exception when I called the first function. The exception was ERROR_INVALID_ACCESS (0000000C).<br /><br />Part of my problem is that I have to multiply the X and Y values to find out how big the console buffer is, so I can tell it how many characters to write to the screen, and somewhere in my code (I&#039;m not sure yet, I haven&#039;t completely traced down the problem) it&#039;s multiplying 2 values I don&#039;t think it should be, and going to a piece of code that I don&#039;t think it should be. I don&#039;t think the buffer is big enough to cause my multiplication to have overflow in EDX (it&#039;s multiplying EAX and EBX, which contain the screen size information as X and Y coordinate values), but it is. I&#039;m gonna have to spend some more time debugging this.<br /><br />Anyway, I think that manually calling them and pushing the X and Y coords as individual DWORDs seemed to work, I&#039;ve just got that pesky unintentional overflow to deal with. (which caused that exception later, because it skipped over some essential code for the next call to work properly.)<br /><br />FAKE_EDIT:<br /><br />Well, pushing it as 2 DWORDS seemed to work fine when I run through it in OllyDBG (that exception seems to have nothing to do with this issue, lol).<br /><br />I can always try that DWORD PTR syntax if I find out later that it doesn&#039;t work after all, and this exception is masking the true problem.</div>
+    <div class="meta">Posted on 2008-04-14 05:11:33 by Bobbias</div>
+   </div>
+   <div class="post" id="post-205131">
+    <div class="subject"><a href="#post-205131">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">Winapi functions are STDCALL. You should be able to tell how many parameters are required by watching how the function adjusts the ESP register. Push, like, 15 NULL dwords and make a call to this function. The function will most probably return with some error (due to the parameters being all 0s), but it WILL adjust the stack the way it thinks it&#039;s supposed to be adjusted. If you know how many parameters are required (every parameter is a 32-bit dword, after all), then it&#039;ll be obvious whether the call requires 1 or 2 dwords to pass the COORD structure by value.</div>
+    <div class="meta">Posted on 2008-04-14 17:33:16 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-205134">
+    <div class="subject"><a href="#post-205134">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">The correct struct translation is :<br /><pre><code>COORD	struct <br />X	SWORD	?<br />Y	SWORD	?<br />COORD	ends</code></pre><br />Notice the uppercase members and <strong>SIGNED</strong> WORDS.<br /><br />I&#039;m using japheth includes which are better than masm32 (see : http://www.japheth.de/win32inc.html&nbsp; for the correct sdk translated headers)<br /><br />here are my functions for use with win32inc<br /><pre><code>ConsoleGoto proc stdcall coordX:sdword,coordY:sdword<br />	LOCAL hStdOut:DWORD, co:COORD<br />	invoke GetStdHandle,STD_OUTPUT_HANDLE<br />	mov hStdOut,eax<br />	mov eax,coordX<br />	mov edx,coordY<br />	mov co.X,ax;; change to &quot;x&quot; if using masm32<br />	mov co.Y,dx;; change to &quot;y&quot; if using masm32<br />	;; change to &quot;dword ptr co&quot; if using masm32<br />	invoke SetConsoleCursorPosition,hStdOut,co<br />	ret<br />ConsoleGoto endp<br /><br />ConsoleClear proc stdcall<br />	LOCAL nbrw:DWORD,hStdOut:DWORD,csbi:CONSOLE_SCREEN_BUFFER_INFO, co:COORD<br />	invoke GetStdHandle,STD_OUTPUT_HANDLE<br />	mov hStdOut,eax<br />	invoke GetConsoleScreenBufferInfo,hStdOut,addr csbi<br />	movzx eax,csbi.dwSize.X<br />	movzx ecx,csbi.dwSize.Y<br />	imul eax,ecx<br />	lea edx,nbrw<br />	push eax<br />	xor ecx,ecx<br />	mov dword ptr co,ecx<br />	invoke FillConsoleOutputCharacter,hStdOut,&#039; &#039;,eax,co,edx<br />	movzx edx,csbi.wAttributes<br />	pop ecx<br />	;; change to &quot;dword ptr co&quot; if using masm32<br />	invoke FillConsoleOutputAttribute,hStdOut,dx,ecx,co,addr nbrw<br />	invoke ConsoleGoto,0,0<br />	ret<br />ConsoleClear endp<br /></code></pre><br /><br />ps: did you guys know that japheth is making masm compatible assembler? yay&nbsp; :D <br />http://www.japheth.de/JWasm.html</div>
+    <div class="meta">Posted on 2008-04-15 04:00:06 by drizz</div>
+   </div>
+   <div class="post" id="post-205135">
+    <div class="subject"><a href="#post-205135">Re: Been out of the loop, got a question...</a></div>
+    <div class="body"><div class="quote"><br />ps: did you guys know that japheth is making masm compatible assembler? yay&nbsp; :D <br />http://www.japheth.de/JWasm.html<br /></div><br /><br />Can&#039;t think of anyone more qualified to do that. :thumbsup:</div>
+    <div class="meta">Posted on 2008-04-15 07:40:22 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-205136">
+    <div class="subject"><a href="#post-205136">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">Hope he fixes all the bugs and shortcomings then :P - and perhaps spices the stuff up a bit.</div>
+    <div class="meta">Posted on 2008-04-15 07:59:36 by f0dder</div>
+   </div>
+   <div class="post" id="post-205137">
+    <div class="subject"><a href="#post-205137">Re: Been out of the loop, got a question...</a></div>
+    <div class="body">Lol, I think I can say that this thread has been officially derailed.<br /><br />In any case, I&#039;ll post an update whenever I get around to fixing my code and figuring out what&#039;s going on.<br /><br />I&#039;m just coding a couple hours every now and again when I feel like it, so this is going to be a rather slow moving project for now. I think I have more stuff typed about what I&#039;m planning on doing with this game than I have lines of code written, lol.<br /><br />It doesn&#039;t help that for the 2 years or so I&#039;ve been away, I haven&#039;t touched ASM at all (or pretty much any other language for that matter.)</div>
+    <div class="meta">Posted on 2008-04-15 12:05:30 by Bobbias</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=29021&amp;page=1" style="">&laquo;</a><a href="../?id=29021&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="29021" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

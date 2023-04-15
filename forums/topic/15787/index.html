@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GetOpenFileName trouble - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15787" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15787">GetOpenFileName trouble</a></p>
+   <div class="post" id="post-122331">
+    <div class="subject"><a href="#post-122331">GetOpenFileName trouble</a></div>
+    <div class="body">I have a crazy problem with GetOpenFileName. It terminates my program. <br /><br />If the desired file happens to be in the default directory, everything works OK. But in the moment i click the upper left combo box to change the directory, the whole program crashes. There's no system error message whatsoever, the process just vanishes. <br /><br />I have in the same program 2 other GetOpenFileName dialogs, they work just fine. Below is the code with the problem:<br /><br /><pre><code><br />.data<br />DWGofn   OPENFILENAME &lt;&gt;<br />DWGFilterString  db &quot;DWG Files&quot;,0,&quot;*.dwg&quot;,0<br />	           db &quot;All Files&quot;,0,&quot;*.*&quot;,0,0<br />DWGbuffer db 260 dup &#40;0&#41;<br /><br />.code<br />mov DWGofn.lStructSize,SIZEOF DWGofn<br />mov  DWGofn.hWndOwner,NULL<br />push hInstance<br />pop  DWGofn.hInstance<br />mov  DWGofn.lpstrFilter, OFFSET DWGFilterString<br />mov  DWGofn.lpstrFile, OFFSET DWGbuffer	<br />mov  DWGofn.nMaxFile,260		<br />mov  DWGofn.Flags, OFN_FILEMUSTEXIST or \<br />OFN_PATHMUSTEXIST or OFN_LONGNAMES or\<br />OFN_EXPLORER or OFN_HIDEREADONLY<br />&#91;color=red&#93;invoke GetOpenFileName, ADDR DWGofn&#91;/color&#93;<br /></code></pre><br /><br />What could cause this?</div>
+    <div class="meta">Posted on 2003-10-24 11:40:16 by Janne</div>
+   </div>
+   <div class="post" id="post-122334">
+    <div class="subject"><a href="#post-122334">GetOpenFileName trouble</a></div>
+    <div class="body">That's strange<br /><br />it does work well the error maybe some place else so it would be better if you could paste more detailed code.<br /><br />additionally, do try copying and pasting code blocks from the sections that work.<br /><br />Regards,<br />Art</div>
+    <div class="meta">Posted on 2003-10-24 12:07:59 by art_sands</div>
+   </div>
+   <div class="post" id="post-122348">
+    <div class="subject"><a href="#post-122348">GetOpenFileName trouble</a></div>
+    <div class="body">This is the context of the problem code:<br /><br /><pre><code><br />ZoomSingleObj proc uses ebx esi edi pObjToZoom&#58;dword<br />;pObjToZoom is an address BSOBJ.<br />;1. get it's floor ID<br />;2. find that ID from Floor array<br />;3. switch to autocad drawing of the found floor <br />;4. zoom to coordinates of pObjToZoom<br />LOCAL LowLeftVar&#58;VARIANT<br />LOCAL UpRightVar&#58;VARIANT<br />LOCAL LowLeftArr&#58;SAFEARRAY<br />LOCAL UpRightArr&#58;SAFEARRAY<br />LOCAL LowLeftPnt&#58;F3DPOINT<br />LOCAL UpRightPnt&#58;F3DPOINT<br /><br />LOCAL openvar&#58;VARIANT<br />LOCAL acHWND&#58;DWORD<br /><br />.if pIAcadDocuments==0<br />	invoke InitAcad<br />.endif<br /><br />mov edi,pObjToZoom<br />mov eax,pFloors<br />mov ebx,&#91;eax&#93;.Floor.Floor_ID<br />mov esi,1<br /><br />.while &#40;ebx!=&#91;edi&#93;.BSOBJ.Floor_ID&#41;<br />	inc esi<br />	.if esi&gt;FloorAmount<br />		MsgBox NULL,&quot;Objects floor ID not in floor list&quot;,&quot;ERROR&quot;,MB_OK or MB_ICONSTOP<br />		mov eax,-1<br />		ret<br />	.endif<br />	add eax,FloorSize<br />	mov ebx,&#91;eax&#93;.Floor.Floor_ID<br />.endw<br />;when here, the ID was found in Floor array<br /><br />mov esi,eax<br /><br />.if &#91;esi&#93;.Floor.pDwgDoc==UnusedSlot<br />	;fill the variant structure needed for file open method<br />	invoke VariantInit,addr openvar<br />	mov openvar.vt,VT_BOOL<br />	mov openvar.wReserved1,0<br />	mov openvar.wReserved2,0<br />	mov openvar.wReserved3,0<br />	mov openvar.boolVal,VBTRUE;OPEN READ-ONLY<br />	;;;;;;;;;<br />	<br />	lea ecx,&#91;esi&#93;.Floor.DwgName<br />	Open&#58;<br />	invoke MultiByteToWideChar,CP_ACP,MB_PRECOMPOSED,ecx,-1,addr Wbuffer,SIZEOF Wbuffer	<br />	.if eax==0<br />		MsgBox NULL,&quot;MultiByteToWideChar of DWG file name failed&quot;,&quot;ERROR&quot;,MB_OK or MB_ICONSTOP<br />		mov eax,-1<br />		ret<br />	.endif<br />	invoke SysAllocString, addr Wbuffer<br />	mov ebx,eax<br />	lea ecx,&#91;esi&#93;.Floor.pDwgDoc<br />	invoke vf&#40;pIAcadDocuments,IAcadDocuments,Open&#41;,ebx,openvar,ecx<br />	.IF eax!=S_OK<br />		lea ecx,&#91;esi&#93;.Floor.DwgName<br />		invoke MessageBox,NULL,CStr&#40;&quot;File not found, specify the location manually?&quot;&#41;,ecx,\<br />		MB_YESNO or MB_ICONQUESTION or MB_TASKMODAL		<br />		.if eax==IDNO<br />			ret<br />		.endif<br />		<br />		;fill the DWG OPENFILENAME struct<br />		mov DWGofn.lStructSize,SIZEOF DWGofn<br />		mov  DWGofn.hWndOwner,NULL<br />		push hInstance<br />		pop  DWGofn.hInstance<br />		mov  DWGofn.lpstrFilter, OFFSET DWGFilterString<br />		mov  DWGofn.lpstrFile, OFFSET DWGbuffer	<br />		mov  DWGofn.nMaxFile,260		<br />		mov  DWGofn.Flags, OFN_FILEMUSTEXIST or \<br />	    OFN_PATHMUSTEXIST or OFN_LONGNAMES or\<br />	    OFN_EXPLORER or OFN_HIDEREADONLY<br />&#91;color=red&#93;		invoke GetOpenFileName, ADDR DWGofn&#91;/color&#93;<br />		.if eax==0<br />			mov eax,-1<br />			ret<br />		.endif<br />		mov ecx,DWGofn.lpstrFile	<br />		jmp Open<br />	.endif<br /><br />.endif<br /><br /><br /><br />;fill the safearray structures<br />mov LowLeftArr.cDims,1<br />mov LowLeftArr.fFeatures,1<br />mov LowLeftArr.cbElements,8<br />mov LowLeftArr.cLocks,0<br />lea eax,LowLeftPnt<br />mov LowLeftArr.pvData,eax<br />mov LowLeftArr.rgsabound.lLbound,0<br />mov LowLeftArr.rgsabound.cElements,3<br /><br />mov UpRightArr.cDims,1<br />mov UpRightArr.fFeatures,1<br />mov UpRightArr.cbElements,8<br />mov UpRightArr.cLocks,0<br />lea eax,UpRightPnt<br />mov UpRightArr.pvData,eax<br />mov UpRightArr.rgsabound.lLbound,0<br />mov UpRightArr.rgsabound.cElements,3<br /><br />;fill the variant structures<br />mov LowLeftVar.vt,VT_R8 or VT_ARRAY<br />mov LowLeftVar.wReserved1,0<br />mov LowLeftVar.wReserved2,0<br />mov LowLeftVar.wReserved3,0<br />lea eax,LowLeftArr<br />mov LowLeftVar.parray,eax<br /><br />mov UpRightVar.vt,VT_R8 or VT_ARRAY<br />mov UpRightVar.wReserved1,0<br />mov UpRightVar.wReserved2,0<br />mov UpRightVar.wReserved3,0<br />lea eax,UpRightArr<br />mov UpRightVar.parray,eax<br /><br />finit<br />;set the X coord for both points<br />fld &#91;edi&#93;.BSOBJ.AbsPos.X<br />fsub AcZoomXsize<br />fst LowLeftPnt.X<br />fadd AcZoomXsize<br />fadd AcZoomXsize<br />fstp UpRightPnt.X<br /><br />;set the Y coord for both points<br />fld &#91;edi&#93;.BSOBJ.AbsPos.Y<br />fsub AcZoomYsize<br />fst LowLeftPnt.Y<br />fadd AcZoomYsize<br />fadd AcZoomYsize<br />fstp UpRightPnt.Y<br /><br />;set the Z coord for both points<br />fldz<br />fst LowLeftPnt.Z<br />fstp UpRightPnt.Z<br /><br /><br />invoke vf&#40;pIAcadApplication,IAcadApplication,put_ActiveDocument&#41;,&#91;esi&#93;.Floor.pDwgDoc<br />invoke vf&#40;&#91;esi&#93;.Floor.pDwgDoc,IAcadDocument,put_ActiveSpace&#41;,acModelSpace<br />invoke vf&#40;pIAcadApplication,IAcadApplication,put_WindowState&#41;,acMax<br />invoke vf&#40;&#91;esi&#93;.Floor.pDwgDoc,IAcadDocument,put_WindowState&#41;,acMax<br />invoke vf&#40;pIAcadApplication,IAcadApplication,ZoomWindow&#41;,LowLeftVar,UpRightVar<br />invoke vf&#40;pIAcadApplication,IAcadApplication,Update&#41;<br />invoke vf&#40;&#91;esi&#93;.Floor.pDwgDoc,IAcadDocument,get_HWND&#41;,addr acHWND<br />INVOKE SetForegroundWindow,acHWND<br />ret<br />ZoomSingleObj endp<br /></code></pre><br /><br />Above is called by a double click in a listview<br /><br /><pre><code><br />.elseif &#91;edi&#93;.NMHDR.code==NM_DBLCLK<br />.if errorcount &gt; 0<br />                invoke GetCurrentFocusLparam,hList<br />	mov ecx,sizeof BSOBJ<br />	mul ecx<br />	add eax,pBSbase<br />	invoke ZoomSingleObj,eax<br />.endif<br /></code></pre></div>
+    <div class="meta">Posted on 2003-10-24 15:39:26 by Janne</div>
+   </div>
+   <div class="post" id="post-122364">
+    <div class="subject"><a href="#post-122364">GetOpenFileName trouble</a></div>
+    <div class="body">I suspect this is the problem:<br /><br />invoke MultiByteToWideChar,CP_ACP,MB_PRECOMPOSED,ecx,-1,addr Wbuffer,SIZEOF Wbuffer	<br /><br />The last parameter is the <strong>character count</strong>, so it should be (SIZEOF Wbuffer)/2. Then you won't overrun the buffer.</div>
+    <div class="meta">Posted on 2003-10-24 20:19:49 by tenkey</div>
+   </div>
+   <div class="post" id="post-122368">
+    <div class="subject"><a href="#post-122368">GetOpenFileName trouble</a></div>
+    <div class="body">If the crash happens when calling GetOpenFileName, the problem could also be in the DWGofn structure. Could you post it's contents? (I'm assuming it's in the .data or .data? section. Otherwise you should initialize all of it's members, because the initial value of local variables is undefined).</div>
+    <div class="meta">Posted on 2003-10-24 21:09:33 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-122375">
+    <div class="subject"><a href="#post-122375">GetOpenFileName trouble</a></div>
+    <div class="body">try to fill other members of OPENFILENAME.</div>
+    <div class="meta">Posted on 2003-10-24 21:47:40 by cakmak</div>
+   </div>
+   <div class="post" id="post-122383">
+    <div class="subject"><a href="#post-122383">GetOpenFileName trouble</a></div>
+    <div class="body"><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winui/WinUI/WindowsUserInterface/UserInput/CommonDialogBoxLibrary/UsingCommonDialogBoxes.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winui/WinUI/WindowsUserInterface/UserInput/CommonDialogBoxLibrary/UsingCommonDialogBoxes.asp</a><br /><br />Look almost halfway down the page for opening a file and click 'Show Example' to expand it.  It's in C/C++ but hopefully you can work it out.</div>
+    <div class="meta">Posted on 2003-10-24 22:13:46 by drarem</div>
+   </div>
+   <div class="post" id="post-122392">
+    <div class="subject"><a href="#post-122392">GetOpenFileName trouble</a></div>
+    <div class="body">Tried filling all the OPENFILENAME members<br /><br /><pre><code><br />		mov DWGofn.lStructSize,SIZEOF DWGofn<br />		mov  DWGofn.hWndOwner,NULL<br />		push hInstance<br />		pop  DWGofn.hInstance<br />		mov  DWGofn.lpstrFilter, OFFSET DWGFilterString<br />		mov DWGofn.lpstrCustomFilter,0<br />		mov DWGofn.nMaxCustFilter,0<br />		mov DWGofn.nFilterIndex,0<br />		mov  DWGofn.lpstrFile, OFFSET DWGbuffer	<br />		mov  DWGofn.nMaxFile,260<br />		mov DWGofn.lpstrFileTitle,0<br />		mov DWGofn.nMaxFileTitle,0<br />		mov DWGofn.lpstrInitialDir,0<br />		mov DWGofn.lpstrTitle,0<br />		mov  DWGofn.Flags, OFN_FILEMUSTEXIST or \<br />	    OFN_PATHMUSTEXIST or OFN_LONGNAMES ;or\<br />	    OFN_EXPLORER or OFN_HIDEREADONLY<br />	    mov DWGofn.nFileOffset,0<br />	    mov DWGofn.nFileExtension,0<br />	    mov DWGofn.lpstrDefExt,0<br />	    mov DWGofn.lCustData,0<br />	    mov DWGofn.lpfnHook,0<br />	    mov DWGofn.lpTemplateName,0<br /></code></pre><br /><br />Did not help.<br /><br />I must have a big bug somewhere else in the program, i just wonder why the crash happens inside the GetOpenFileName call.</div>
+    <div class="meta">Posted on 2003-10-25 00:14:33 by Janne</div>
+   </div>
+   <div class="post" id="post-122397">
+    <div class="subject"><a href="#post-122397">GetOpenFileName trouble</a></div>
+    <div class="body">Hi Janne,<br /><br />just a guess: if youre using winnt/2k/xp it could be an alignment problem. change code<br /><br /><pre><code><br />.data<br />align 4<br />DWGofn   OPENFILENAME &lt;&gt;<br />align 4<br />DWGFilterString  db &quot;DWG Files&quot;,0,&quot;*.dwg&quot;,0<br />	           db &quot;All Files&quot;,0,&quot;*.*&quot;,0,0<br />align 4<br />DWGbuffer db 260 dup &#40;0&#41;<br /></code></pre><br /><br />Japheth</div>
+    <div class="meta">Posted on 2003-10-25 01:40:47 by japheth</div>
+   </div>
+   <div class="post" id="post-122410">
+    <div class="subject"><a href="#post-122410">GetOpenFileName trouble</a></div>
+    <div class="body">Try<br /><pre><code><br />invoke RtlZeroMemory, addr DWGofn, sizeof DWGofn<br /></code></pre><br />I had a similar problem in Xp, but, with this instruction, the problem is solved</div>
+    <div class="meta">Posted on 2003-10-25 04:09:49 by greenant</div>
+   </div>
+   <div class="post" id="post-122411">
+    <div class="subject"><a href="#post-122411">GetOpenFileName trouble</a></div>
+    <div class="body">Are you sure it is happening in there?  You can trace the bug down hardcore style, something like:<br /><br />DTEXT MACRO TEXT1<br />  szText title1,&quot;title&quot;<br />  invoke MessageBox,NULL,ADDR TEXT1,ADDR title1,MB_OK<br />ENDM<br /><br />and do:<br />szText test,&quot;test&quot;<br />DTEXT test<br /><br />before and after every call and trace it through..  I question this though:<br /><br />        mov ecx,DWGofn.lpstrFile    (after you have retrieved the filename).. it looks suspicious<br /><br />and FILEMUSTEXIST?? PATHMUSTEXIST?   Are those flags necessary?<br /><br />Hope that helps..</div>
+    <div class="meta">Posted on 2003-10-25 04:10:18 by drarem</div>
+   </div>
+   <div class="post" id="post-122444">
+    <div class="subject"><a href="#post-122444">GetOpenFileName trouble</a></div>
+    <div class="body">This code was not tested, but it should work (sorry for the lack of formatting, but IE's text editing is terrible):<br /><pre><code><br />.data?<br />align DWORD<br />DWGbuffer db MAX_PATH dup &#40;?&#41;<br /><br />.data<br />align DWORD<br />DWGofn   OPENFILENAME &lt;sizeof OPENFILENAME,,,offset DWGFilterString,,,,offset DWGbuffer,sizeof DWGbuffer,,,,offset DWGtitle,OFN_FILEMUSTEXIST or OFN_PATHMUSTEXIST or OFN_HIDEREADONLY&gt;<br />DWGFilterString  db &quot;DWG Files&quot;,0,&quot;*.dwg&quot;,0<br />	           db &quot;All Files&quot;,0,&quot;*.*&quot;,0,0<br />align DWORD<br />DWGTitle db &quot;Open DWG file...&quot;,0<br /><br />.code<br />GetDWGFileName proc hWin<br /><br />push hWin<br />pop DWGofn.hwndOwner<br />invoke GetOpenFileName,offset DWGofn<br />ret    ;returns TRUE if successful, FALSE on error<br /><br />GetDWGFileName endp<br /></code></pre><br />Tell me how it did. :)</div>
+    <div class="meta">Posted on 2003-10-25 10:55:29 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-122460">
+    <div class="subject"><a href="#post-122460">GetOpenFileName trouble</a></div>
+    <div class="body">Thanks for all the ideas.<br /><br />Fixed <br /><pre><code><br />invoke MultiByteToWideChar,CP_ACP,MB_PRECOMPOSED,ecx,-1,addr Wbuffer,SIZEOF Wbuffer <br /></code></pre><br />to<br /><pre><code><br />invoke MultiByteToWideChar,CP_ACP,MB_PRECOMPOSED,ecx,-1,addr Wbuffer,&#40;SIZEOF Wbuffer&#41;/2 <br /></code></pre><br />That did'nt solve the GetOpenFileName problem, though.<br /><br /><br />I'm running the program on Win98, but tested anyway<br /><pre><code><br />align 4<br />DWGofn   OPENFILENAME &lt;&gt;<br />align 4<br />DWGFilterString  db &quot;DWG Files&quot;,0,&quot;*.dwg&quot;,0<br />				 db &quot;All Files&quot;,0,&quot;*.*&quot;,0,0<br />align 4				 <br />DWGbuffer db 260 dup &#40;0&#41;<br /></code></pre><br />That did'nt have any effect.<br /><br /><br />Tested adding before the OPENFILENAME filling code<br /><pre><code><br />invoke RtlZeroMemory, addr DWGofn, sizeof DWGofn<br /></code></pre><br />but no effect.<br />And actually, looking with a debugger, it can be seen that the structure is initially all zeros anyway.<br /><br />I am pretty sure that the crash happens inside the GetOpenFileName because<br />- the error always occures when clicking the upper left combobox. If a file is selected without using the combo, everything works.<br />- i used vkim's debug macros<br /><pre><code><br />PrintText &quot;About to GetOpenFileName&quot;<br />invoke GetOpenFileName, ADDR DWGofn<br />PrintHex eax,&quot;GetOpenFileName ret value&quot;<br /></code></pre><br />The first string is displayed in debug window, the second one not.<br />- i made a Softice breakpoint to the instruction after the GetOpenFileName call, but it won't break.<br /><br />Soon after the program has crashed in the GetOpenFileName, few other programs usually crash too, like Explorer and Radasm. So i must have an ugly bug somewhere.<br /><br />I wonder, what actually happens on a click of the GetOpenFileName combobox. Messages are naturally sent, but which messages and to who?</div>
+    <div class="meta">Posted on 2003-10-25 14:38:54 by Janne</div>
+   </div>
+   <div class="post" id="post-122461">
+    <div class="subject"><a href="#post-122461">GetOpenFileName trouble</a></div>
+    <div class="body">What is the value in hinstance?</div>
+    <div class="meta">Posted on 2003-10-25 14:46:36 by roticv</div>
+   </div>
+   <div class="post" id="post-122466">
+    <div class="subject"><a href="#post-122466">GetOpenFileName trouble</a></div>
+    <div class="body">Hi roticv,<br />hinstance=400000h</div>
+    <div class="meta">Posted on 2003-10-25 15:47:13 by Janne</div>
+   </div>
+   <div class="post" id="post-122481">
+    <div class="subject"><a href="#post-122481">GetOpenFileName trouble</a></div>
+    <div class="body">This leads me to the final conclusion which is that your flag values are wrong. For me I use the following code:<br /><pre><code><br />ofn OPENFILENAME &lt;sizeof OPENFILENAME,0,40000h,OFFSET FileFilter,0,0,0,OFFSET FileName,\<br />				256,0,0,0,0,\<br />				OFN_FILEMUSTEXIST or OFN_PATHMUSTEXIST or OFN_LONGNAMES or OFN_EXPLORER or OFN_HIDEREADONLY,\<br />				0,0,0,0,0,0&gt;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-10-25 23:47:49 by roticv</div>
+   </div>
+   <div class="post" id="post-122486">
+    <div class="subject"><a href="#post-122486">GetOpenFileName trouble</a></div>
+    <div class="body">Can you post a log of your crashed program? You can use Dr Watson</div>
+    <div class="meta">Posted on 2003-10-26 02:03:24 by greenant</div>
+   </div>
+   <div class="post" id="post-122502">
+    <div class="subject"><a href="#post-122502">GetOpenFileName trouble</a></div>
+    <div class="body">greenant, <br />thanks for mentioning Dr Watson, did'nt even know that such thing exists.<br /><br />However,  the problem is that Dr Watson does not craete any log regarding this problem. There's no any system error message either, the process just disappears.</div>
+    <div class="meta">Posted on 2003-10-26 06:01:54 by Janne</div>
+   </div>
+   <div class="post" id="post-122646">
+    <div class="subject"><a href="#post-122646">GetOpenFileName trouble</a></div>
+    <div class="body">Just tested on a different machine, using Win2000, program runs just fine without the above error.</div>
+    <div class="meta">Posted on 2003-10-28 00:58:03 by Janne</div>
+   </div>
+   <div class="post" id="post-122729">
+    <div class="subject"><a href="#post-122729">GetOpenFileName trouble</a></div>
+    <div class="body"><div class="quote"><br />greenant, <br />thanks for mentioning Dr Watson, did'nt even know that such thing exists.<br /><br />However,  the problem is that Dr Watson does not craete any log regarding this problem. There's no any system error message either, the process just disappears. </div><br />As I recall there are two kind of errors that can cause that. One is a stack overflow, and the other is failure to preserve registers (esi, edi, ebx, ebp). But in the second case it should work under Win9x and fail under NT (not the other way around). And stack overflows cause the program to crash always. So I'm puzzled about this one. :confused: <br />Perhaps you could try OllyDbg to see exactly where does the crash happen inside comdlg32.dll.</div>
+    <div class="meta">Posted on 2003-10-28 17:21:33 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

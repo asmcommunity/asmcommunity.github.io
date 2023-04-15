@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Forcing client size - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5751" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5751">Forcing client size</a></p>
+   <div class="post" id="post-41080">
+    <div class="subject"><a href="#post-41080">Forcing client size</a></div>
+    <div class="body">I have a custom control and want to add something like the TB_AUTOSIZE message. Basically I want to ensure the client area height of the window is big enough. As the control can have different border styles (WS_EX_CLIENTEDGE, WS_BORDER) and a possibly a horizontal scrollbar, the non-client space is not always the same.<br /><br />So how can I calculate the window rect from it's client rect? I think I should use something like WM_NCCALCSIZE but I'm not sure if that's the right way to do it.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 09:15:35 by Thomas</div>
+   </div>
+   <div class="post" id="post-41094">
+    <div class="subject"><a href="#post-41094">Forcing client size</a></div>
+    <div class="body">Thomas,<br /><br />You can use both GetClientRect and GetWindowRect to get the difference, then calculate from this how much to resize the window to get the client size you want.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-06-02 10:59:59 by hutch--</div>
+   </div>
+   <div class="post" id="post-41096">
+    <div class="subject"><a href="#post-41096">Forcing client size</a></div>
+    <div class="body"><strong>Hutch--</strong>: I'll try that, I first thought it would give wrong results because of the scrollbars. When you calculate the right size, set the new size, scrollbars may (dis)appear. Of course this influences the client size and thus the new size would be wrong again.<br />However I only change the height so the horizontal scrollbar won't be influenced..<br /><br />Thanks,<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 11:08:23 by Thomas</div>
+   </div>
+   <div class="post" id="post-41098">
+    <div class="subject"><a href="#post-41098">Forcing client size</a></div>
+    <div class="body">I just found an interesting API called <strong>AdjustWindowRectEx</strong>:<br /><br /><div class="quote">The AdjustWindowRectEx function calculates the required size of the window rectangle, based on the desired size of the client rectangle. The window rectangle can then be passed to the CreateWindowEx function to create a window whose client area is the desired size. </div><br /><br />Although it doesn't account for the WS_H/VSCROLL styles, it seems like the API I need.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 11:13:25 by Thomas</div>
+   </div>
+   <div class="post" id="post-41107">
+    <div class="subject"><a href="#post-41107">Forcing client size</a></div>
+    <div class="body">Thomas,<br />  I recommend the WM_NCCALCSIZE, although it's a bit tricky to decipher. It is however, very quick and it saves you calling the APIs.<br /><br />When you enter WM_NCCALCSIZE, lParam points to a RECT that contains the new window coordinates. This is where I typically save the window size. Then call DefWindowProc. When it returns the same RECT pointed to by lParam will have the client rectangle in screen coordinates. DefWindowProc takes care of subracting the size of scrollbars menu bars, status bars, the caption the border etc. Or, you could do this all yourself.... but I don't recommend it. I find if you handle this yourself certain elements won't be drawn by WM_NCPAINT. Don't know why... perhaps the DefWindowProc sets some internal structure??<br /><br />BTW, if you want to reserve some NC area, this is the place to do it. Right after DefWindowProc returns.<br /><br />Cya,<br />--Chorus<br /><br />Quick example...<br /><pre><code><br /><br />@@NCCalcSize&#58;       mov ebx,lParam              ;get pointer to RECT<br />                    push &#91;ebx&#93;.RECT.top         ;copy the rect if you want<br />                    pop Parent.top              ;the window coords<br />                    push &#91;ebx&#93;.RECT.left<br />                    pop Parent.left<br />                    ...<br />                    invoke DefWindowProc,hWin,uMsg,wParam,lParam<br /><br />                    mov ebx,lParam              ;ebx now contains client rect<br />               ;copy the rectangle<br />                    add &#91;ebx&#93;.RECT.top,100      ;save yourself 100 pixels<br />                                                ;of NC area<br /><br />                    ret<br /></code></pre></div>
+    <div class="meta">Posted on 2002-06-02 12:22:54 by chorus</div>
+   </div>
+   <div class="post" id="post-41110">
+    <div class="subject"><a href="#post-41110">Forcing client size</a></div>
+    <div class="body"><strong>chorus</strong>: I tried your code, but what happens is that the drawing the control does has the right size, but the actual window rect is bigger (the window border is too big). The space between the client rect and the window border (=window rect) is empty and not drawn (shows a big mess of previous screen data).<br /><br />So the client size has changed, but the window rect is not adjusted.<br /><br />Thomas<br /><br /><strong>edit:</strong><br />WM_NCCALCSIZE docs:<br /><br /><div class="quote">If wParam is FALSE, lParam points to a RECT structure. On entry, the structure contains the proposed window rectangle for the window. On exit, the structure should contain the screen coordinates of the corresponding window client area. </div><br /><br />Actually, I want the opposite, thus specifiying a certain client area, and let windows tell me the corresponding window rectangle.</div>
+    <div class="meta">Posted on 2002-06-02 12:33:20 by Thomas</div>
+   </div>
+   <div class="post" id="post-41113">
+    <div class="subject"><a href="#post-41113">Forcing client size</a></div>
+    <div class="body">hmm... sorry, that's my bad...kinda mis-read your post.<br /><br />Just to clarify: you want to change the window size to properly accomodate a given client size right??<br /><br />ok.. if you were to use NCCalcSize you would have to:<br /><br />--on entry, save the window rect<br />--call DefWindowProc<br />--compare the difference between the returned client rect and the one you want.<br />--adjust the window rect accordingly (ex. if client rect must be 5 pixels wider, make the window rect 5 pixels wider)<br />--Call MoveWindow to get the right size<br /><br />This is probably what AdjustWindowRectEx does...<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-06-02 12:40:42 by chorus</div>
+   </div>
+   <div class="post" id="post-41116">
+    <div class="subject"><a href="#post-41116">Forcing client size</a></div>
+    <div class="body">Yeah I think that's what AdjustWindowRectEx does (&quot;The AdjustWindowRectEx function calculates the required size of the window rectangle, based on the desired size of the client rectangle&quot;).<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 12:46:38 by Thomas</div>
+   </div>
+   <div class="post" id="post-41117">
+    <div class="subject"><a href="#post-41117">Forcing client size</a></div>
+    <div class="body">I tested AdjustWindowRectEx and it works great, the only thing left to do is to account for the scrollbar if it's present.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-06-02 12:51:37 by Thomas</div>
+   </div>
+   <div class="post" id="post-41297">
+    <div class="subject"><a href="#post-41297">Forcing client size</a></div>
+    <div class="body">Im sure your doing something simular, but i keep a private rectangle and manage the client area with it in my calculations. <br /><br />I dont use the NC stuff, as i dont fully understand *how* it is to be used properly, but his API does look promising.<br /><br />Thomas, if you do manage to pound out a clean way of dynamically controlling client from non-client areas, and having them repainted properly (ie, scrollbars as non-client and still drawn when needed, and only client area stuff in WM_PAINT), i would be interested in seeing the skeleton framework needed, if you dont mind.<br /><br />I search a bit for some way of 'defining' non-client areas once and gave up and wrote my own management.  But the downside is alot of extra overhead through out your code.. (like your scrollbar example)..<br /><br />Best of luck..<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-06-03 16:37:54 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

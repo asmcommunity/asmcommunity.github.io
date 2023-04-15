@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ASM too fast for winsock? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28201" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28201">ASM too fast for winsock?</a></p>
+   <div class="post" id="post-199859">
+    <div class="subject"><a href="#post-199859">ASM too fast for winsock?</a></div>
+    <div class="body">i have the following problem, i send a http request (using post) and the server sends back the text/html page.
+
+only problem is, if i recv the data directly it doesnt receive all the data in one recv, but data remains on the sock.. if i put a 'invoke Sleep, 30' in front of the recv it usually fetches the data in 1 time.. (depends on how big the data is i guess)
+
+how can i fix this without a delay?
+
+i think i can also use the ioctlsocket in a short loop to check if there is remaining data and if there is, expand the located buffer and append it to it, but maybe anyone else has an other idea?</div>
+    <div class="meta">Posted on 2001-05-28 12:11:00 by flanders</div>
+   </div>
+   <div class="post" id="post-199860">
+    <div class="subject"><a href="#post-199860">ASM too fast for winsock?</a></div>
+    <div class="body">You can NEVER rely on the fact that all data can be received at once. That's why recv can read less bytes than you specified or fail if no data is available yet. You can solve this by waiting for new data, either with select or WSAASyncSelect. The first one just waits (like sleep) until there's a network event (conn. closed, new data, etc.), the second one does not wait but sends a message to a window when an event happens. You should receive data and add it to a buffer each time until recv failes, then wait for new data and receive it again. 
+
+Thomas
+
+btw I'm currently writing a tutorial about networking that explains everything, but it's far from finished...</div>
+    <div class="meta">Posted on 2001-05-28 13:56:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-199861">
+    <div class="subject"><a href="#post-199861">ASM too fast for winsock?</a></div>
+    <div class="body">i personally think looping recv until it fails isnt a good idea.
+
+i more thought of looping ioctlsocket(FIONREAD) to check if there is remaining data on the socket, if there is, realloc the buffer with GlobalReAlloc and append the recv to it.
+
+i did this, but it still doesnt work quite good as i thought.
+
+imagine this:
+
+on FD_READ:
+ioctlsocket says there is 0800h bytes (in win2k you get a bigger number, strange..) available.
+i allocate the buffer and recv the 0800h bytes.
+then it loops again, so it call ioctlsocket again. only ASM does this so fast after the recv or for whatever the reason is, ioctlsocket says there is 0 bytes left. and thats the sign that it should exit the loop.
+
+if i put a delay before ioctlsocket with 30 ms or so i usually can recv the data in 1 time.
+
+any suggestions?</div>
+    <div class="meta">Posted on 2001-06-06 09:57:00 by flanders</div>
+   </div>
+   <div class="post" id="post-199862">
+    <div class="subject"><a href="#post-199862">ASM too fast for winsock?</a></div>
+    <div class="body">I'm no expert on HTTP, but I was under the impression that once the data had been received the server closes the connection, so you just read in a loop until the socket gets closed....
+
+umbongo</div>
+    <div class="meta">Posted on 2001-06-06 10:16:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-199863">
+    <div class="subject"><a href="#post-199863">ASM too fast for winsock?</a></div>
+    <div class="body">flanders: The number of bytes ioctlsocket returns is not the number of bytes left to read, it's just the number of bytes <em>available right now</em>. So if it returns 0 it just means: wait for more data, no data available right now. It does not mean: that was it, all data received.
+umbongo: this depends on the protocol but for HTTP this is certainly true, except for if "connection: keep-alive" is set. In HTTP, if the total data is not indicated by a closed connection, the 'content length' header should be set to the number of bytes to receive.
+back to flanders: with looping recv, you can process much data with a fixed buffer, just receiving as much as fits in the buffer, process it, and then receive more bytes. This is essentially the same as with ioctlsocket, but then you receive all data at once and require a different size for the buffer each time. When recv failes (in non-blocking mode), it indicates that no data is available right now. This indication is equivalent to the return value 0 of ioctlsocket. Then you should wait for another FD_READ message, and process the rest of the data. That should be used instead of the delay.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-06-06 13:07:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-199864">
+    <div class="subject"><a href="#post-199864">ASM too fast for winsock?</a></div>
+    <div class="body">ok i misread the api reference,
+
+FIONREAD returns an amount of data which can be read in a single recv; this may or may not be the same as the total amount of data queued on the socket
+
+anyway, i shall try your way thomas, but how do i know WHEN the end of the file/data is. certainly not when ioctlsocket returns 0 with FIONREAD or when recv failes, same thing i have now..
+i made the loop stop when ioctlsocket(FIONREAD) returned 0, because else it would go into an infinite loop..
+
+is there some EOT/EOF located in the header or some errorcode maybe?
+
+this is what i get from the server:
+
+---
+HTTP/1.1 200 OK
+Date: Wed, 06 Jun 2001 17:51:34 GMT
+Server: Apache/1.2.5
+Set-Cookie: xxxid='5b50d52c';expires=Tue, 4-Sep-2001 19:51:34 GMT; path=/
+Keep-Alive: timeout=15, max=99
+Connection: Keep-Alive
+Transfer-Encoding: chunked
+Content-Type: text/html
+
+HTML DATA HERE
+---
+
+there is no Content-Length coming with it :/
+
+oh and umbongo, i use connection keep-alive, so i can re-use the socket and request for other data, so the connection wont be closed when the server is done sending data (it does close in HTTP 1.0 unless you request it with Connection: Keep-Alive, with HTTP 1.1+ the default is Keep-Alive)</div>
+    <div class="meta">Posted on 2001-06-06 13:54:00 by flanders</div>
+   </div>
+   <div class="post" id="post-199865">
+    <div class="subject"><a href="#post-199865">ASM too fast for winsock?</a></div>
+    <div class="body">section 14.13 in rfc2616:
+<pre><code>
+...
+Any Content-Length greater than or equal to zero is a valid 
+value. Section 4.4 describes how to determine the length of a 
+message-body if a Content-Length is not given.
+...
+</code></pre>
+Sometimes the server cannot determine the size of the response before responding (like cgi scripts etc.). Then you should follow the rules in section 4.4:
+
+<pre><code>
+4.4 Message Length
+
+   The transfer-length of a message is the length of the
+   message-body as it appears in the message; that is, 
+   after any transfer-codings have been applied. When a 
+   message-body is included with a message, the transfer-
+   length of that body is determined by one of the following
+   (in order of precedence):
+
+   1.Any response message which "MUST NOT" include a 
+     message-body (such as the 1xx, 204, and 304 responses and
+     any response to a HEAD request) is always terminated by the
+     first empty line after the header fields, regardless of the
+     entity-header fields present in the message.
+   2.If a Transfer-Encoding header field (section 14.41) is 
+     present and has any value other than "identity", then the 
+     transfer-length is defined by use of the "chunked" transfer-
+     coding (section 3.6), unless the message is terminated by 
+     closing the connection.
+   3.If a Content-Length header field (section 14.13) is 
+     present, its decimal value in OCTETs represents both the 
+     entity-length and the transfer-length. The Content-Length 
+     header field MUST NOT be sent if these two lengths are 
+     different (i.e., if a Transfer-Encoding Fielding, et al.
+     header field is present). If a message is received with  
+     both a Transfer-Encoding header field and a Content-Length 
+     header field, the latter MUST be ignored.
+   4.If the message uses the media type "multipart/byteranges", 
+     and the transfer-length is not otherwise specified, then 
+     this self-elimiting media type defines the transfer-length. 
+     This media type MUST NOT be used unless the sender knows   
+     that the recipient can arse it; the presence in a request  
+     of a Range header with ultiple byte-range specifiers from a 
+     1.1 client implies that the lient can parse
+     multipart/byteranges responses.
+     A range header might be forwarded by a 1.0 proxy that does 
+     not understand multipart/byteranges; in this case the server
+     MUST delimit the message using methods defined in items 1,3 
+     or 5 of this section.
+   5.By the server closing the connection. (Closing the connection
+     cannot be used to indicate the end of a request body, since 
+     that would leave no possibility for the server to send back 
+     a response.)
+(....)
+</code></pre>
+So in your case you can use the chunked transfer encoding to determine the total size. I have no experience with this so I can't help you much, but it's explained in section 3.6.1 of rfc2616.
+
+Thomas</div>
+    <div class="meta">Posted on 2001-06-06 14:50:00 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>bug (?) in masm v7 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12539" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=12539">bug (?) in masm v7</a></p>
+   <div class="post" id="post-97014">
+    <div class="subject"><a href="#post-97014">bug (?) in masm v7</a></div>
+    <div class="body">i wrote a program in the last time. i implemented a function to show or hide a window. notice that visible was a byte (for size-saving):<br /><br /><pre><code><br />;switch between SW_SHOW/SW_HIDE<br />xor byte ptr &#91;visible&#93;,SW_SHOW ;SW_SHOW=0x0005, SW_HIDE=0x0000<br />invoke ShowWindow,hWin,visible<br /></code></pre><br /><br />and what came out was:<br /><br /><pre><code><br />xor byte ptr &#91;004031C6&#93;, 05<br />push 00 ;since we operate w/ 32 bits a dword is pushed<br />mov al, byte ptr &#91;004031C6&#93;<br />movzx ax, al<br />push ax<br />push &#91;ebp+08&#93; ;hWin<br />call 00401496 ;ShowWindow<br /></code></pre><br /><br />it seems as if the assembler wanted to push a word 0x0000 and then the value. but a dword 0x00000000 is pushed. in addition the value is pushed as word in ax. as you can see the stack gets messed up by 2 bytes. i wondered when i found this out...<br />so, is this a bug? if so, please fix it! is it fixed in masm v8?</div>
+    <div class="meta">Posted on 2003-04-15 13:50:40 by hartyl</div>
+   </div>
+   <div class="post" id="post-97071">
+    <div class="subject"><a href="#post-97071">Re: bug (?) in masm v7</a></div>
+    <div class="body"><div class="quote">so, is this a bug? if so, please fix it! is it fixed in masm v8? </div><br /><br />uh...  Maybe you want to talk to Bill G. about this.  :grin:  <br /><br />BTW, did MS release MASM v8?  Or, did you mean MASM32 v8?</div>
+    <div class="meta">Posted on 2003-04-15 17:09:51 by Starless</div>
+   </div>
+   <div class="post" id="post-98421">
+    <div class="subject"><a href="#post-98421">bug (?) in masm v7</a></div>
+    <div class="body">nah! i meant masm32 v8 (why sould i ask here if i didn't?)<br />so, is it fixed? if not, whom can i tell?</div>
+    <div class="meta">Posted on 2003-04-21 14:29:53 by hartyl</div>
+   </div>
+   <div class="post" id="post-98442">
+    <div class="subject"><a href="#post-98442">bug (?) in masm v7</a></div>
+    <div class="body">Masm is trying to promote the byte value 'visible' to a dword as specified in the ShowWindow proto.  It should do this:<br /><br />push word ptr 0<br />movzx ax, visible<br />push ax<br /><br />The 'push 0' it generates is a dword value.  This is a bug and I reported it<br />to MSDN several months ago.</div>
+    <div class="meta">Posted on 2003-04-21 18:48:58 by gfalen</div>
+   </div>
+   <div class="post" id="post-98456">
+    <div class="subject"><a href="#post-98456">bug (?) in masm v7</a></div>
+    <div class="body">I am a little lost here as to what is going on. In the WINDOWS.INC file the equates are defined as numbers that do not have a data size attached.<br /><br />SW_HIDE equ 0<br />SW_SHOW equ 5<br /><br />You size cast them by placing them into a function like ShowWindow(). The parameter size is DWORD for the parameter.<br /><pre><code><br />    invoke ShowWindow,hWnd,SW_SHOW<br /></code></pre><br />This will generate from the prototype for ShowWindow two DWORD parameters.<br /><br />If you wish to set the value prior to the use of ShowWindow(), you must observe the size set in the prototype which is DWORD.<br /><br />===============================<br />xor byte ptr ,SW_SHOW<br />===============================<br /><br />This is simply an error as the parameter for ShowWindow IS DWORD, not BYTE. Size saving is not an option here as ShowWindow() is determined by the code existing in the operating system and it takes the native 32 bit size parameters as normal.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-21 20:56:32 by hutch--</div>
+   </div>
+   <div class="post" id="post-98482">
+    <div class="subject"><a href="#post-98482">bug (?) in masm v7</a></div>
+    <div class="body">From Masm32.hlp:<br /><br />Syntax:   INVOKE expression [,arguments]<br /> <br />  Description:<br /> ...     <br />The &lt;invokelist&gt; is passed to the procedure according to the types<br />     given in that procedure's prototype. If necessary, the assembler<br />     will generate code to convert the elements of &lt;invokelist&gt; to the<br />     types specified in the prototype.<br />...<br /><br />He was trying to let msm 'promote' visible to a dword.   But as you can see<br />it is buggy and generates a 'push dword ptr 0' instead of a 'push word ptr 0'.</div>
+    <div class="meta">Posted on 2003-04-21 22:56:25 by gfalen</div>
+   </div>
+   <div class="post" id="post-98527">
+    <div class="subject"><a href="#post-98527">bug (?) in masm v7</a></div>
+    <div class="body">I don't understand. Why don't you do somethnig like<br /><br /><pre><code><br />xor byte ptr &#91;visible&#93;,SW_SHOW <br />movzx eax, byte ptr&#91;visible&#93;<br />invoke ShowWindow,hWin,eax<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-22 03:17:27 by roticv</div>
+   </div>
+   <div class="post" id="post-98537">
+    <div class="subject"><a href="#post-98537">bug (?) in masm v7</a></div>
+    <div class="body">Greg,<br /><br />As far as I understand, the extent of MASM seting the correct data type extends to determining the difference between data in the .DATA section or LOCAL variables which generates respectively the normal MOV reg, OFFSET data or for a LOCAL lea reg , data.<br /><br />I have never seen it do anything like change the SIZE of the data and in fact there are macro capacities to determine the difference. Normal rule is to pass the correct data size to a procedure in accordance with the size set in the prototype.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 03:45:42 by hutch--</div>
+   </div>
+   <div class="post" id="post-98540">
+    <div class="subject"><a href="#post-98540">bug (?) in masm v7</a></div>
+    <div class="body">Just look at the code posted by hartyl -<br /><br />xor byte ptr [004031C6], 05     &lt;- 'visible' - a byte<br />; masm tries to promote it to dword here<br />push 00                                   &lt;- BUG - should be push word ptr 0 <br />mov al, byte ptr [004031C6]     <br />movzx ax, al<br />push ax                                    &lt; masm is trying to promote it to dword<br />push  ;hWin<br />call 00401496 ;ShowWindow<br /><br />The docs (my prev. post) say that masm will do this, but it does it incorrectly - ie. a bug!</div>
+    <div class="meta">Posted on 2003-04-22 03:58:04 by gfalen</div>
+   </div>
+   <div class="post" id="post-98560">
+    <div class="subject"><a href="#post-98560">bug (?) in masm v7</a></div>
+    <div class="body">Greg,<br /><br />I have seen both assemblers and compilers do unusual things in my time but with this example, just use the correct data size with the parameter and it will not happen.<br /><br />Start with an error and generate other does not mean much, use the correct data size and there is no error. I understand what you refer to and it looks like MASM may have some old code in it from the 16 bit days but it no problem to avoid it, just don't force the error.<br /><br />The original reference in the posting contained the error,<br /><pre><code><br />xor byte ptr &#91;visible&#93;,SW_SHOW ;SW_SHOW=0x0005, SW_HIDE=0x0000<br /></code></pre><br />The parameters ARE DWORD in size, not WORD.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 05:29:24 by hutch--</div>
+   </div>
+   <div class="post" id="post-98567">
+    <div class="subject"><a href="#post-98567">bug (?) in masm v7</a></div>
+    <div class="body">Hutch, again you're demonstrating your ignorance ^_^<br /><br />Even if a DWORD value was used for the &quot;visible&quot; parameter, the XOR would be fine, as long as SW_SHOW is within the byterange. It's a rather silly optimization though, in my opinion.<br /><br />Next, listen to what gfalen has to say. Masm is a highlevel macro assembler, and just like compiler it will (try to) convert arguments to correct sizes. Just like a 32bit C compiler will extend char/short to (32bit) int, and float to double. That it fails to do this is a bug, and if I'm not very mistaken I've seen people bitch about this more than once.</div>
+    <div class="meta">Posted on 2003-04-22 06:18:11 by f0dder</div>
+   </div>
+   <div class="post" id="post-98595">
+    <div class="subject"><a href="#post-98595">bug (?) in masm v7</a></div>
+    <div class="body">f0dder,<br /><br />Go blow your nose and learn something. Many compilers try and fix mistakes but this IS assembler and the error is trying to use the incorrect data size. You can mess up most compilers/assemblers somewhere but you can fix the error easily by using the correct data size.<br /><br />ML.EXE is a very old progeram now and while it was patched from 16 bit to 32 bit as of version 6.11d from memory, it will probably have some ancient code floating around in it somewhere so if you feed it the wrong data size in relation to the prototype, you have every chance of making a mess of it.<br /><br />Simple answer is as usual in assembler, use the RIGHT data size.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 08:49:38 by hutch--</div>
+   </div>
+   <div class="post" id="post-98597">
+    <div class="subject"><a href="#post-98597">bug (?) in masm v7</a></div>
+    <div class="body">Hutch, it's not about &quot;fixing errors&quot;, it's about promoting a data type to a more natural size for the current mode of operation. (most) compilers do this, and masm appearantly does it too (or tries to).</div>
+    <div class="meta">Posted on 2003-04-22 08:56:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-98607">
+    <div class="subject"><a href="#post-98607">bug (?) in masm v7</a></div>
+    <div class="body">f0dder,<br /><br />I know where you are coming from but a compiler is a different animal, with an assembler you are supposed to know what the data size is and use the right size. Ancient ML is but some basic rules apply to any assembler, ALWAYS use the correct data size, never rely on an assembler or compiler to do this for you.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 09:18:08 by hutch--</div>
+   </div>
+   <div class="post" id="post-98614">
+    <div class="subject"><a href="#post-98614">bug (?) in masm v7</a></div>
+    <div class="body">You can call it whatever you want, but masm attempts to do size extending and fails to do so properly. Imo, they ought to have flagged it as an error instead, but I guess it's okay for it to do size extension when it has a proc prototype, as it _is_ a highlevel macro assembler, and not a &quot;raw&quot; style assembler like debug or nasm.</div>
+    <div class="meta">Posted on 2003-04-22 09:34:41 by f0dder</div>
+   </div>
+   <div class="post" id="post-98653">
+    <div class="subject"><a href="#post-98653">bug (?) in masm v7</a></div>
+    <div class="body">*sniff* i know what i've done wrong, i know how to do it right, and i know the movzx instruction... and i know that this is a bug i reported. i just wanted to tell everybody about this...<br /><br />@<strong>hutch</strong>:<br />i don't believe that constants have a specific size. if its value doesn't exceed 0xff i can use them as a byte, as i do in the example in this special case</div>
+    <div class="meta">Posted on 2003-04-22 14:07:11 by hartyl</div>
+   </div>
+   <div class="post" id="post-98727">
+    <div class="subject"><a href="#post-98727">bug (?) in masm v7</a></div>
+    <div class="body">hartyl,<br /><br />Never mind about the discussion with f0dder, he an OK dude anyway. :tongue: <br /><br />You are right that a constant does not have a specified size and it is size casted when the assembler places the value into a prototype for a function.<br /><br />&quot;push 0&quot; is size determined at assembly time on the basis of the prototype size specifier so while the size optimisation may have been an interesting idea, no matter what, the code in the API function expects a DWORD and you can get oddities by trying to pass anything else.<br /><br />You can design tricky ways of handing the different equates depending on what you wish to display but sometimes a simple approach just works better.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-22 21:28:13 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

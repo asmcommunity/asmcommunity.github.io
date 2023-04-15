@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Displaying the windows - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27229" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27229">Displaying the windows</a></p>
+   <div class="post" id="post-195164">
+    <div class="subject"><a href="#post-195164">Displaying the windows</a></div>
+    <div class="body">Hi everyone,
+
+I was trying to use SetWindowLong (or subclassing) to change the GWL_EXSTYLE od a BUTTON, from NULL to WS_EX_CLIENTEDGE when the mouse cursor is over the button. I am checking the WM_MOUSEMOVE message and checking the coord's of the cursor against the coord's of the button.
+When this is done, how do I display the change on the screen. By the way, I tried sending a WM_PAINT by invalidating the rectangle (tried both the button rect and the window rect), processing BeginPaint/EndPaint, but I'm not sure the latter is required. Do I need a separate procedure for the subclassed window?
+
+In fact, can someone please give  a rundown on how/when in general the window is displayed on the screen. How is Windows doing this?
+I was browsing through the API reference help file, but I'm still struggling to get a firm grasp on the fundamentals.
+
+p.s. I know it's supposed to be easy, but it's a bit frustrating at the moment.
+
+Thanx a lot.</div>
+    <div class="meta">Posted on 2001-03-14 02:24:00 by matz</div>
+   </div>
+   <div class="post" id="post-195165">
+    <div class="subject"><a href="#post-195165">Displaying the windows</a></div>
+    <div class="body">i know what ya mean. Just a point to make, if you are sucessfuly changing the style of the button, it should automacticly updte itself, if not an UpdateWindow API call should do the trick. 
+
+
+
+For the way windows does the inbehinds. First of all when you call SetWindowLong, it does two things, sends a pair of messages to the window, WM_STYLECHANGED & WM_STYLECHANGING and changing the value changed internaly. Most window controls seems to process this message, thus they then repaint themselves.</div>
+    <div class="meta">Posted on 2001-03-14 02:51:00 by George</div>
+   </div>
+   <div class="post" id="post-195166">
+    <div class="subject"><a href="#post-195166">Displaying the windows</a></div>
+    <div class="body">My suggestion <strong>is</strong> subclassing, the trick i keeping your origional proc' for the window (in this case the button child windows) stored.
+
+<strong>In you main window add:</strong>
+<pre><code>
+.data?
+      OldButtonProc dd ?
+.code 
+      ...
+     .IF uMsg == WM_CREATE
+      invoke GetDlgItem, hWnd, TheButtonIDtoSubclass
+      invoke SetWindowLong, eax, GWL_WNDPROC, ADDR NewButtonProc
+      mov OldButtonProc,eax
+      ...
+</code></pre>
+Now you have your Button Subclassed, all windows messages the button's proc would have recieved will now go to you NewButtonProc instead.
+
+The New Button proc should follow (but doenst have to) a format simular to DlgProc's..:
+
+<strong>NewButtonProc: </strong>
+<pre><code>
+NewButtonProc PROC  hWnd:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
+    
+    ; NOTE: hWnd is the BUTTON child window, not the main window
+    .IF uMsg== WM_MOUSEMOVE
+         ...
+    .ELSEIF uMsg == WM_PAINT
+         ...
+    .ELSE
+         invoke CallWindowProc, OldButtonProc, hWnd, uMsg, wParam, lParam
+         ret
+    .endif
+   
+   xor eax, eax
+   ret
+NewButtonProc endp
+</code></pre>
+
+Here if you dont want to handle a Window Message in your sub class it passes it on by calling the OldButtonProc you saved in the create cycle. This should get you going with your modifications...
+
+NaN
+
+This message was edited by NaN, on 3/14/2001 9:48:04 AM</div>
+    <div class="meta">Posted on 2001-03-14 08:40:00 by NaN</div>
+   </div>
+   <div class="post" id="post-195167">
+    <div class="subject"><a href="#post-195167">Displaying the windows</a></div>
+    <div class="body">One big GOTCHA you're up against in SetWindows long really should have highlights all around it in whatever help file you use:
+
+"Certain window data is cached, so changes you make using SetWindowLong will not take effect until you call the SetWindowPos function."
+
+Setting the window position with SWP_NOMOVE, SWP_NOSIZE and SWP_NOZORDER set (ie, so you don't have to calculate a position or find the parent it's over) has worked for me in the past.
+
+<pre><code>
+invoke SetWindowLong, hWnd, GWL_EXSTYLE, NewValue
+invoke SetWindowPos, hWnd, NULL, 0,0,0,0,SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER 
+</code></pre>
+
+
+
+This message was edited by Ernie, on 3/14/2001 1:05:12 PM</div>
+    <div class="meta">Posted on 2001-03-14 12:03:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

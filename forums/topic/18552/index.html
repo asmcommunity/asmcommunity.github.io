@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>hook + chain interrupt - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18552" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18552">hook + chain interrupt</a></p>
+   <div class="post" id="post-143619">
+    <div class="subject"><a href="#post-143619">hook + chain interrupt</a></div>
+    <div class="body">I am attempting to hook and chain an interrupt.  I have written code which sets up timer2 so that int 19 will be called every 10ms.  Now I need to hook this int 19 call to another subroutine, so the subroutine will excecute every 10ms.  In order to do this, I know I have to save the current interrupt vector, hook the vector to point to the new subroutine, then chain it back to point to where it pointed originally.  My question is, how do I know what the new CP:IP value will be so that I can move it into the int vector?  <br /><br />something along the lines of:<br /><br />CALL &lt;subroutine that initialized int 19 to be called every 10 mseconds&gt;<br />CLI                                      ;so I have time to change segment and offset before interrupt kicks in<br />push es<br />mov ax,0<br />mov es,ax<br />mov ax,es:[4*19]     <br />mov oldIP,ax    	            ;save old IP for int 19<br />mov ax,es:[4*19+2]    <br />mov oldCS,ax    	            ;save old CS for int 19<br />hook interrupt here              ; point int vector to new subroutine<br />pop es<br /><br />using NASM as my assembler and this is to run on an old 8086<br />thanks.</div>
+    <div class="meta">Posted on 2004-06-12 19:01:20 by illz</div>
+   </div>
+   <div class="post" id="post-143623">
+    <div class="subject"><a href="#post-143623">hook + chain interrupt</a></div>
+    <div class="body">wait a minute, if you want to call the old routine already installed, you should just get its address push the flags (I believe) and do a call to the address. This is how I did it in my DOS timer routine for my DOS game so that I dont have to mess up my time. I'm not sure I understand what you want, but I'll clear this up, do the following:<br /><br />-Read the old int 19 handler and save the segment and offset of the handler (in a variable)<br />-Put in the segment and offset of your handler in the int 19 area<br />-In your int 19 handler have code call the OLD handler, by pushing the flags (double check what the x86 does in respond to an interrupt) and invoking a FAR call to the old address.</div>
+    <div class="meta">Posted on 2004-06-12 20:23:38 by x86asm</div>
+   </div>
+   <div class="post" id="post-143625">
+    <div class="subject"><a href="#post-143625">hook + chain interrupt</a></div>
+    <div class="body">I guess my question is, how do I know what the handler of the new code is.  I assume it will be loaded into the code segment, so could I just say:<br /><br />extern _newcode<br />.<br />.<br />.<br />es mov word [4*19], _newcode<br /><br />after setting es = 0<br /><br />or if I have the new code as<br />newcode:<br />      blah<br />       blah<br /><br />could I just do <br /> mov word ax, offset newcode<br />	  es mov [4*19],ax<br />	  mov ax,cs<br />	  es mov [4*19+2],ax</div>
+    <div class="meta">Posted on 2004-06-12 20:54:14 by illz</div>
+   </div>
+   <div class="post" id="post-143650">
+    <div class="subject"><a href="#post-143650">hook + chain interrupt</a></div>
+    <div class="body">hi illz,<br /><br />mov word ax, offset newcode<br />es mov [4*19],ax<br />mov ax,cs<br />es mov [4*19+2],ax<br /><br />Yes, this should work. and it can be simplified by:<br /><br />es mov [4*19],offset newcode<br />es mov [4*19+2],cs<br /><br />BTW: int 19 = int 13h, that is the interrupt for disk access. So be careful.<br /><br />Japheth</div>
+    <div class="meta">Posted on 2004-06-13 04:53:00 by japheth</div>
+   </div>
+   <div class="post" id="post-143691">
+    <div class="subject"><a href="#post-143691">hook + chain interrupt</a></div>
+    <div class="body">Well, that's on the PC, this certainly doesn't sound like it's for the PC.<br /><br />Illz: You should hook the interrupt before you set up the timer. <br /><br />This code should do it, if oldIP is accessible from ES and you aren't using SI and DI.<br /><pre><code><br />push es<br />push ds<br />xor cx,cx<br />mov ds,cx<br />mov si,0x5c<br />push si<br />mov di,oldIP wrt &#40;Name of segment that ES points to&#41;<br />movsw<br />movsw<br />pop di<br />mov es,cx<br />mov ax,_newcode<br />stosw<br />mov &#91;di&#93;,cs<br />pop ds<br />pop es<br />call &#40;subroutine to set up timer&#41;<br /></code></pre><br />If that's not the case, this would be the shortest I think:<br /><pre><code><br />push es<br />xor ax,ax<br />mov es,ax<br />mov ax,_newcode<br />xchg ax,es&#58;&#91;0x5c&#93;<br />mov &#91;oldIP&#93;,ax<br />mov ax,cs<br />xchg ax,es&#58;&#91;0x5e&#93;<br />mov &#91;oldCS&#93;,ax<br />pop es<br />call &#40;subroutine to set up timer&#41;<br /></code></pre><br />You should know which segment the code is in by which section in the ASM file you have defined it in. If it's not in the same section as the setup code, then use SEG _newcode for the segment (assuming there is provision for it in the executable format)<br /><br />Then just end your interrupt code with JMP FAR cs: or if the instruction is in a range accessible from ES or DS, use opcode 0xea and patch the address in the setup code.</div>
+    <div class="meta">Posted on 2004-06-13 15:45:08 by Sephiroth3</div>
+   </div>
+  </div>
+ </body>
+</html>

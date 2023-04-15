@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Exchange data between threads? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12426" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12426">Exchange data between threads?</a></p>
+   <div class="post" id="post-95921">
+    <div class="subject"><a href="#post-95921">Exchange data between threads?</a></div>
+    <div class="body">Hey guys<br /><br />I'm making a program which gots some threads that should exchange data. However since the environment I am working in got some limitations I have run out of ideas of how to solve my problem.<br /><br />Lets say we got a program consisting of 2 files, 1 exe and 1 dll. The exe file will load the dll before it starts up itself so first the dllmain is run and after that the exe will run.<br /><br />The dll and the exe got 1 spare thread each and these two threads needs to communicate. What I need to do is that the exe file will detect there is already a thread opened (from the dll) and recieve 32 bit data (a memory poiner) which only the dll knows about.<br /><br />This problem boiles down to:<br />1. 2 threads finds each other<br />2. exchange of data<br /><br />I thought of using named mutexes because they would allow me to have a mutex which I could query for. This could work by creating a named mutex in both exe and dll and on the 2nd creating it would fail by saying it's already existing which is solving the first part of the problem. But this won't allow me to exchange data.<br />Another way would be using a file. Thread 1 would create the file and save the data needed. Thread 2 already knows the filename so it will attempt to open this file and read it. But I don't want to have external devices involved because it's something that really belongs inside memory and not on HD.<br /><br />Maybe someone knows if a mailslot can solve the situation?<br /><br />The ideal situation would be to have a api which allows that you send a data value with it when you signal it's state.<br /><br />Thanks in advance.<br /><br />// CyberHeg</div>
+    <div class="meta">Posted on 2003-04-12 13:07:19 by CyberHeg</div>
+   </div>
+   <div class="post" id="post-95928">
+    <div class="subject"><a href="#post-95928">Exchange data between threads?</a></div>
+    <div class="body">You can register a custom window message or use a memory mapped file as a FIFO.</div>
+    <div class="meta">Posted on 2003-04-12 13:40:33 by rdaneel</div>
+   </div>
+   <div class="post" id="post-95955">
+    <div class="subject"><a href="#post-95955">Exchange data between threads?</a></div>
+    <div class="body">Why a memory mapped file? The two threads are associated with the same process, and therefore the same context anyway.<br /><br />Erm, how about just having a function in the DLL that returns the handle of <br />the thread it has started, and post messages to this thread.</div>
+    <div class="meta">Posted on 2003-04-12 16:05:17 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-96084">
+    <div class="subject"><a href="#post-96084">Exchange data between threads?</a></div>
+    <div class="body">Might WM_COPYDATA not work?  The COPYDATASTRUCT structure is designed to pass data to another application and should work between exe and dll without problem.  The mutex is a good idea to establish communication, but you might also be able to use an event, Create it in the exe and Open it in the dll where you want to signal the exe (you can use this to wait until the dll is fully loaded for example before resuming exe execution)<br /><br /><pre><code><br />invoke CreateEventA, 0, 0, 0, ADDR EventName<br />mov hCreateEvent, eax           <br /><br />invoke WaitForSingleObject, hCreateEvent, 100000<br /><br />...and in another thread far far away...<br /><br />   ;-------------------<br />   ; Signal Event<br />   ;-------------------<br />	invoke OpenEventA, EVENT_MODIFY_STATE, 0, ADDR EventName<br />	push eax<br />	invoke SetEvent, eax<br />	pop eax<br />	invoke CloseHandle, eax<br /></code></pre><br />Kayaker</div>
+    <div class="meta">Posted on 2003-04-13 03:20:26 by Kayaker</div>
+   </div>
+   <div class="post" id="post-96085">
+    <div class="subject"><a href="#post-96085">Exchange data between threads?</a></div>
+    <div class="body">Would it be possible to make window messages without actually showing anything on screen?<br /><br />About having a function in the DLL that returns the handle of the thread it has started it would require that the exe file knows the name of the dll which might not always be possible in my case. The program should be dynamic in such a way so two threads should still be able to communicate even if you replace one dll with another or two dll's exist.<br /><br />// CyberHeg</div>
+    <div class="meta">Posted on 2003-04-13 03:25:31 by CyberHeg</div>
+   </div>
+   <div class="post" id="post-96096">
+    <div class="subject"><a href="#post-96096">Exchange data between threads?</a></div>
+    <div class="body">But the program has to have the DLL's name stored somewhere, how else is it going to load it?<br />If you meant that another program loads the DLL, then the situation is different. You should then use CreateFileMapping to create a named shared memory block in both processes.<br /><br />You can use the PostThreadMessage function to post messages to a thread that doesn't have a window. But the thread has to have a message queue.</div>
+    <div class="meta">Posted on 2003-04-13 04:39:25 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-96842">
+    <div class="subject"><a href="#post-96842">Exchange data between threads?</a></div>
+    <div class="body">I solved it now but in a completely other way then originally proposed.<br /><br />Environment strings using _putenv() and _getenv() are specific to the current process so what I did was to run getenv() and see if I got a null pointer. If this is the case then I would make the data to be shared with sprintf like &quot;var=data&quot; and save it using _putenv(). The next dll will then run getenv() and will get a pointer which is not NULL and from there I can get the data out by using sscanf().<br />This gives flexibility because I can run an unlimited number of sub dll's without worrying about how many there are or their names. The only thing they need to know is the environment variable name.<br /><br />// CyberHeg</div>
+    <div class="meta">Posted on 2003-04-15 03:05:27 by CyberHeg</div>
+   </div>
+   <div class="post" id="post-96854">
+    <div class="subject"><a href="#post-96854">Exchange data between threads?</a></div>
+    <div class="body">Mutex == bad, as they won't be cleaned if process terminates abruptly.<br /><br />environment vars? Well, why not. I'd probably have gone for a Memory Mapped File (backed by swap, ie not creating a &quot;real&quot; file on disk) or named pipes (if I don't care about 9x). I still need to have a look at mailslots and other IPC methods.</div>
+    <div class="meta">Posted on 2003-04-15 03:45:30 by f0dder</div>
+   </div>
+   <div class="post" id="post-96883">
+    <div class="subject"><a href="#post-96883">Exchange data between threads?</a></div>
+    <div class="body">I still don't see how you can load the DLLs without knowing their names. I take it that you have a setup program which patches the import section with some DLL names. In this case, you could have the main program export a function for communicating with it. The DLLs could then retrieve the address of that function when starting up. That is much simpler.</div>
+    <div class="meta">Posted on 2003-04-15 06:54:08 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-96983">
+    <div class="subject"><a href="#post-96983">Exchange data between threads?</a></div>
+    <div class="body"><div class="quote"><br />I still don't see how you can load the DLLs without knowing their names. I take it that you have a setup program which patches the import section with some DLL names. In this case, you could have the main program export a function for communicating with it. The DLLs could then retrieve the address of that function when starting up. That is much simpler. </div><br /><br />There is a reason for everything...<br /><br />The thing I'm developing is a library which other developments can link their code against. What I need is one shared global variable among all exe and dll's in the running process. The names of the dll's aren't unknown. They are defined by the users of this library. However they are not known to me. This is why I could not rely on filenames and only on other data which can be used as a identifier (in this case a variable name). Using exported functions could be a way but again since I don't know the filenames it's not easy for me to deal with that.<br /><br />// CyberHeg</div>
+    <div class="meta">Posted on 2003-04-15 11:50:30 by CyberHeg</div>
+   </div>
+   <div class="post" id="post-96988">
+    <div class="subject"><a href="#post-96988">Exchange data between threads?</a></div>
+    <div class="body">again, mutex == bad.<br />And rather than fisrt checking for mutex then env var, you can just check if env var exists.</div>
+    <div class="meta">Posted on 2003-04-15 12:02:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-96990">
+    <div class="subject"><a href="#post-96990">Exchange data between threads?</a></div>
+    <div class="body">I really am sorry f0dder I skipped right over your post without seeing it. I have deleted mine.</div>
+    <div class="meta">Posted on 2003-04-15 12:05:01 by donkey</div>
+   </div>
+   <div class="post" id="post-96992">
+    <div class="subject"><a href="#post-96992">Exchange data between threads?</a></div>
+    <div class="body">don't delete posts donkey, others will see and learn from mistakes :)</div>
+    <div class="meta">Posted on 2003-04-15 12:07:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-96999">
+    <div class="subject"><a href="#post-96999">Exchange data between threads?</a></div>
+    <div class="body">:grin: That's not the reason I deleted it, It's because we said the same thing. The EnVar problem is about the same as the mutex, how do you know if it isn't supposed to be modified. If you delete it when the last thread is finished, well when you have a bad exit it won't be deleted and how is the software supposed to know. Just a thought about that.</div>
+    <div class="meta">Posted on 2003-04-15 12:58:30 by donkey</div>
+   </div>
+   <div class="post" id="post-97083">
+    <div class="subject"><a href="#post-97083">Exchange data between threads?</a></div>
+    <div class="body">Ah, I see, that explains it very well. Well, actually, the environment block is freed automatically by the system when the process ends, but I think you could do all this by having the main executable export the necessary data, and then the DLLs could get at it with GetModuleHandle(0) and then GetProcAddress, if I understood you correctly. What kind of library is this anyway?</div>
+    <div class="meta">Posted on 2003-04-15 17:39:40 by Sephiroth3</div>
+   </div>
+  </div>
+ </body>
+</html>

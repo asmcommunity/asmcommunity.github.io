@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Execute Memory-Mapped Code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20065" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20065">Execute Memory-Mapped Code</a></p>
+   <div class="post" id="post-153747">
+    <div class="subject"><a href="#post-153747">Execute Memory-Mapped Code</a></div>
+    <div class="body">Does anyone know some cool technique to execute an pe file that is only present in memory? I might be able to read the EIP and then run a CreateThread on that...has anyone ever tried? Any other ways to do so (except for writing the memory map to file)? What about the MS Executeable Loader? Can I run it somehow?<br /><br />Dominik</div>
+    <div class="meta">Posted on 2004-12-05 14:59:35 by Dom</div>
+   </div>
+   <div class="post" id="post-153764">
+    <div class="subject"><a href="#post-153764">Execute Memory-Mapped Code</a></div>
+    <div class="body">Dom,<br /><br />You have the problem that an EXE expects to be loaded at 400000h where when you load an exe file into a memory mapped address, it will be at the wrong location to run by itself. A DLL handles the problem by a section that has relocation data but you are going to have to know a lot about the details of a PE file and the OS loader to get this to work.<br /><br />I have seen it done but its not for the faint of heart.<br /><br />Regards,<br /><br />hutch at movsd dot com</div>
+    <div class="meta">Posted on 2004-12-05 21:24:35 by hutch--</div>
+   </div>
+   <div class="post" id="post-153767">
+    <div class="subject"><a href="#post-153767">Execute Memory-Mapped Code</a></div>
+    <div class="body">I think Qweerty coded something like that. Try emailing him or something.</div>
+    <div class="meta">Posted on 2004-12-06 00:04:02 by roticv</div>
+   </div>
+   <div class="post" id="post-153784">
+    <div class="subject"><a href="#post-153784">Execute Memory-Mapped Code</a></div>
+    <div class="body">It's not that big a problem. You can link your loader-program to another base address, and/or you can include relocations in the modules you want to load - that takes care of the base address problems.<br /><br />Loading the the file to memory is easy. You VirtualAlloc a chunk of peheader.SizeOfImage bytes, at peheader.BaseAddress. If this fails, the memory region isn't available. Then you have to check whether the image contains relocations - if they are stripped, fail. If not stripped, do the VirtualAlloc again, but with a NULL baseaddress, and set a flag that you need to handle relocations.<br /><br />Then loop through the PE sections. Seek the file to section.RawOffset, read section.RawSize to memchunk + section.VirtualAddress.<br /><br />If you &quot;image needs to be relocated&quot; flag is set, process relocations. The format is a bit funky, but not too bad - have a look at the PECOFF specification from microsoft.<br /><br />Handle imports. This isn't too bad either. I would advise you to stick with LoadLibrary and GetProcAddress rather than coding your own, at least to start with. Unless you put some effort to it, your version of GetProcAddress will be slower than the one in windows, and will fail on NT (binary search of exports, forwarded exports, etc.).<br /><br />This should be enough for most standard PE files - but fancy stuff like TLS and such aren't handled. Also, the PE file cannot use it's own resource items, to do that you probably have to look for and hook all it's imports to resource-related API functions and code some sneaky replacements.</div>
+    <div class="meta">Posted on 2004-12-06 06:41:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-153819">
+    <div class="subject"><a href="#post-153819">Execute Memory-Mapped Code</a></div>
+    <div class="body"><div class="quote"> I would advise you to stick with LoadLibrary and GetProcAddress rather than coding your own, at least to start with. Unless you put some effort to it, your version of GetProcAddress will be slower than the one in windows, and will fail on NT (binary search of exports, forwarded exports, etc.).</div><br /><br />yeah, forwarded exports are a REAL pain :/. However, there is a problem with using GetProcAddress under 9x, for some stupid reason, it will randomly return a kernel &quot;thunk&quot; to the _actual_ address of the api function, and not the actual address. i thought this only applied to ordinals, but apparently not. i ran into some problems with that when i was messing with 9x. read some pietrek i guess.</div>
+    <div class="meta">Posted on 2004-12-06 20:53:15 by Drocon</div>
+   </div>
+   <div class="post" id="post-153845">
+    <div class="subject"><a href="#post-153845">Execute Memory-Mapped Code</a></div>
+    <div class="body">Why is the thunking a problem? You should still be able to call the address returned by GPA, right?</div>
+    <div class="meta">Posted on 2004-12-07 08:24:01 by f0dder</div>
+   </div>
+   <div class="post" id="post-153853">
+    <div class="subject"><a href="#post-153853">Execute Memory-Mapped Code</a></div>
+    <div class="body">Possibly function MapAndLoad from imagehlp.dll can be used for your purposes. There are some quite interesting articles about that stuff in MSDN (Matt Pietrek).</div>
+    <div class="meta">Posted on 2004-12-07 09:22:43 by japheth</div>
+   </div>
+   <div class="post" id="post-153856">
+    <div class="subject"><a href="#post-153856">Execute Memory-Mapped Code</a></div>
+    <div class="body">There is another technique that you can use which is to hook the underlying file operations (NtOpenFile, NtCreateSection, NtMapViewOfFile, etc) used by NTDLL when mapping a and loading a dynamic library.  By hooking these routines you can emulate their operations against a region of memory rather than allowing them to operate against a file on disk.  The basic concept to this approach is to use a unique file name that your hook routine will recognize as symbolizing the memory region that you wish to map as a library from memory.  Once NtOpenFile is called with this unique file name you can return a unique file handle that will then be passed to NtCreateSection/NtOpenSection.  Once this happens your hook routine can compare the passed in file handle with your unique file handle to see if it should perform emulation and return a unique section handle.  Finally, NtMapViewOfSection will be called with your unique section handle.  At this point all you need do is set the out pointer BaseAddress to the address in memory that you have already mapped the PE file at and return STATUS_IMAGE_NOT_AT_BASE.  This will cause NTDLL to process relocations, handle bound imports and do everything that would typically be done when loading a DLL from disk.<br /><br />The above described technique is meant for use with DLL files, but can also work for executable files that are compiled with relocations (/FIXED:NO).  It can also work for executable files that do not have relocations in scenarios where you can ensure that the address at which you mapped the executable in memory is the same as the load address that it expected to be mapped at (obviously).  I'm unsure if this is helpful for the specific condition under which you wish to execute an image file only from memory but may at least be of some help.<br /><br />If you are curious about reading more about this approach you can reference <a target="_blank" href="http://www.hick.org/code/skape/papers/remote-library-injection.pdf">http://www.hick.org/code/skape/papers/remote-library-injection.pdf</a></div>
+    <div class="meta">Posted on 2004-12-07 10:17:36 by nohaven</div>
+   </div>
+  </div>
+ </body>
+</html>

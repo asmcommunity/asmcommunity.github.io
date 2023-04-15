@@ -1,0 +1,247 @@
+This module provides basic string operations on zero-terminated static strings. 
+Static strings are just strings residing in some buffer. Such strings may have
+problem, when there is no terminating zero inside buffer. To prevent such buffer
+overflow, you must always pass buffer size, with string/buffer pointer.
+
+This causes problems when procedure finds that string is not ended with zero until end
+of buffer. When this happens on source string (one which is not changed by procedure),
+then all characters until end of buffer are used.
+
+When this happens on destination string, then only characters which are inside buffer
+are filled, same way first characters of destination string would be, and then error
+ERR_BUFFER_FULL is returned.
+
+This behavior was chosen after thinking about many others. I chose it to allow this module
+to operate on buffers which doesn't need to be ended with zero (like section name in
+windows PE file header). After operation that is inteded to work in this manner, you 
+should catch and ignore ERR_BUFFER_FULL. In other cases this error can tell you that
+provided buffer is too small.
+
+You can test if string is zero-terminated inside buffer with OF flag returned by "str.len".
+
+
+
+
+
+
+ proc	str.copy	dest, destlen, src, srclen
+ proc	str.cat		dest, destlen, src, srclen
+ proc	str.catchar	string, buflen, char
+ proc	str.ins		dest, destlen, src, srclen, pos
+ proc	str.inschar	string, buflen, char, pos
+ proc	str.sub		dest, destlen, src, srclen, index, len
+ proc	str.lowcase	string buflen
+ proc	str.upcase	string, buflen
+ proc	str.len		string, buffer	
+ proc	str.cmp		str1, str1len, str2, str2len
+ proc	str.cmpi	str1, str1len, str2, str2len
+ proc	str.pos		string, buflen, pattern, patlen
+ proc	str.poschar	string, buflen, char
+
+
+
+proc str.copy dest, destlen, src, srclen
+========================================
+desc:	copy contents of string into another one
+args:	dest    - destination buffer pointer
+	destlen - length of destination buffer
+	src     - pointer to string whose contents will be copied to dest
+	srclen  - length of source string buffer
+ret:	CF set on error, otherwise
+	EAX = dest (for nested libcalls)
+error:	ERR_ZERO_SIZE   - destlen=0 or srclen=0
+	ERR_BUFFER_FULL - destination buffer not long enough. in this case only	first
+		destlen chars, are copied, and dest buffer is not terminated by zero
+
+
+
+proc str.cat dest, destlen, src, srclen
+=======================================
+desc:	append one string to another
+args:	dest    - pointer to destination string buffer
+	destlen - size of destination string buffer
+	src     - pointer to source string
+	srclen  - size of source string buffer
+ret:	CF set on error, otherwise
+	EAX = dest
+error:	ERR_ZERO_SIZE   - destlen=0 or srclen=0
+	ERR_BUFFER_FULL - destination buffer not long enough. in this case only first destlen chars
+		are copied, and dest buffer is not terminated by zero
+	+str.len
+	+str.copy
+
+
+
+proc str.catchar string, buflen, char
+=====================================
+desc:	append character to end of string
+args:	string - pointer to string to which the char will be appended
+	buflen - length of string buffer
+	char   - character which will be appended, low-order byte of dword used
+ret:	CF set on error, otherwise
+	EAX = string, and
+note:	char arument is stored as dword, use "dword 'c'" to push such char with libcall macro
+error:	ERR_ZERO_SIZE   - buflen=0
+	ERR_ZERO_VALUE  - char=0
+	ERR_BUFFER_FULL - destination buffer not long enough. in this case only first destlen chars
+		are copied, and dest buffer is not terminated by zero
+	+str.len
+
+
+
+proc str.ins dest, destlen, src, srclen, pos
+============================================
+desc:	insert string into another string
+args:	dest    - pointer to string into which we insert
+	destlen - length of destination string buffer
+	src     - pointer to string which we insert
+	srclen  - length of buffer of string which we insert
+	pos     - position in destination string where we insert
+ret:	CF set on error, otherwise
+	EAX = dest
+error:	ERR_OUT_OF_RANGE - pos is greater than strlen(dest)
+	ERR_ZERO_SIZE    - destlen=0 or srclen=0
+	ERR_BUFFER_FULL  - destination buffer not long enough. in this case only first destlen chars
+		are filled, and dest buffer is not terminated by zero
+	+str.len
+	+mem.copy
+
+
+
+proc str.inschar string, buflen, char, pos
+==========================================
+desc:	insert character into string
+args:	string - pointer to destination string
+	buflen - length of destination string's buffer
+	char   - character which will be inserted, low-order byte of dword used
+	pos    - position where to store character
+ret:	CF set on error, otherwise
+	EAX = string
+note:	char arument is stored as dword, use "dword 'c'" to push such char with libcall macro
+error:	ERR_ZERO_VALUE - char=0
+	+str.ins
+
+
+
+proc str.sub dest, destlen, src, srclen, index, len
+===================================================
+desc:	extract substring from string
+args:	dest    - destination string buffer
+	destlen - destination string buffer length
+	src     - source string pointer
+	srclen  - source string buffer length
+	index   - index in string from where we start extracting
+	len     - number of characters to take into new string
+ret:	CF set on error, otherwise
+	EAX = dest (for use with nested libcalls), and
+	OF set if index+len is behind source string (eg. dest string contains less than len chars)
+error:	ERR_OUT_OF_RANGE - index is higher than length of string (length of buffer)
+	ERR_ZERO_SIZE    - destlen=0 or srclen=0 or len=0
+	ERR_BUFFER_FULL  - destination buffer not long enough. in this case only first
+		destlen chars are copied, and dest buffer is not terminated by zero
+	+str.len
+	+mem.copy
+
+
+
+proc str.lowcase string buflen
+==============================
+desc:	converts string to lowcase (converts all characters 'A'-'Z' to 'a'-'z')
+args:	string - pointer to destination string
+	buflen - length of destination string's buffen
+ret:	CF set on error, otherwise
+	EAX = string (for use with nested libcalls)
+error:	ERR_ZERO_SIZE - buflen=0
+
+
+
+proc str.upcase string, buflen
+==============================
+desc:	converts string to upcase (converts all characters 'a'-'z' to 'A'-'Z')
+args:	string - pointer to destination string
+	buflen - length of destination string's buffen
+ret:	CF set on error, otherwise
+	EAX = string (for use with nested libcalls)
+error:	ERR_ZERO_SIZE - buflen=0
+
+
+
+proc str.len string, buffer
+===========================
+desc:	gets length of string
+args:	string - string pointer
+	buflen - length of string buffer
+ret:	CF set on error, otherwise
+	OF set and EAX=buflen if ending 0 wasn't found in buffer, otherwise
+	OF clear and EAX=length of string
+error:	ERR_ZERO_SIZE - buflen=0
+
+
+
+proc str.cmp str1, str1len, str2, str2len
+=========================================
+desc:	compare two strings (case sensitive)
+args:	str1    - pointer to first string
+	str1len - pointer to first string's buffer length
+	str2    - pointer to second string
+	str1len - pointer to second string's buffer length
+ret:	CF set on error, otherwise
+	EAX = offset where strings differ, and
+	flags set for signed conditional jumps (je, jne, jg, jge, jl, jle and equivalents)
+note:	- use returned value in EAX with caution, because it can point behind end of buffer,
+	  if some of strings is not zero terminated. for example str.cmp("abcd",4,"abcde",6)
+	  returns EAX=4, which is behind end of buffer of first string
+	- if one string is longer than another, then it is considered "greater".
+error:	ERR_ZERO_SIZE - str1len=0 or str2len=0
+	+str.len
+
+
+
+proc str.cmpi str1, str1len, str2, str2len
+==========================================
+desc:	compare two strings (case insensitive)
+args:	str1    - pointer to first string
+	str1len - pointer to first string's buffer length
+	str2    - pointer to second string
+	str1len - pointer to second string's buffer length
+ret:	CF set on error, otherwise
+	EAX = offset where strings differ, and
+	flags set for signed conditional jumps (je, jne, jg, jge, jl, jle and equivalents)
+note:	- use returned value in EAX with caution, because it can point behind end of buffer,
+	  if some of strings is not zero terminated. for example str.cmp("abcd",4,"abcde",6)
+	  returns EAX=4, which is behind end of buffer of first string
+	- if one string is longer than another, then it is considered "greater".
+error:	ERR_ZERO_SIZE - str1len=0 or str2len=0
+	+str.len
+
+
+
+proc str.pos string, buflen, pattern, patlen
+============================================
+desc:	find position of string inside another string
+args:	string  - pointer to string inside which we search
+	buflen  - length of buffer of string, inside which we search :)
+	pattern - pointer to pattern string for which we searching
+	patlen  - length of buffer of pattern string
+ret:	CF set on error, otherwise
+	ZF set if pattern doesn't occur inside string, otherwise
+	eax = offset of first occurence of pattern inside string
+error:	ERR_ZERO_SIZE  - buflen=0 or patlen=0
+	ERR_ZERO_VALUE - pattern is empty string
+	+str.len
+	+mem.find
+
+
+
+proc str.poschar string, buflen, char
+=====================================
+desc:	find character position in string
+args:	string - pointer to string
+	buflen - length of string buffer
+	char   - character to seek inside string
+ret:	CF set on error, otherwise
+	ZF set if character doesn't occur inside string, otherwise
+	EAX = offset of first character occurence inside string
+note:	char is zero-extended to dword, use "dword 'c'" to push such char with libcall
+error:	ERR_ZERO_SIZE  - buflen=0
+	ERR_ZERO_VALUE - char=0

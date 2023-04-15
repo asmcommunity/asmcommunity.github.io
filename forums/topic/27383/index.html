@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. examples #1. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27383" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27383">Basics of Asm32 in opt. examples #1.</a></p>
+   <div class="post" id="post-195969">
+    <div class="subject"><a href="#post-195969">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">Part1: Prefixes
+(analizing one reverse string proc)
+
+I hope this section will be practical and allow myself proceed with
+simple and obvious statement.
+Assemble language is mnemonics represantation of machine language, therefor
+asm programmer MUST understand machine language it is NOT OPTIONAL.
+To increase his power he MAY use macros, HLL statments, but he MUST be able  truely
+understand what exactly will be produced from those statements in machine level.
+If he is not able to yet - he needs to study it, he is a begginer as asm programmer.
+If he think it's not important - he'll never become one.
+It's major difference between asm programmer and other kind of programmers, for
+the rest we are the same. We think algorithm on machine language, they are think
+algo on HLL algo languages and then allow compilers to translate it to machine language.
+Each group has its own advantages and disadvantages and I'm not going to discuss it here,
+cause its asm msgboard, and choice for particepents is obvious.
+I spent almost a month to formulate words the above, 'cause it was something needed to be
+said here. Lots of evidends were talking that some of us not only unaware of macine basics
+but in addition not in the way  to study it.
+
+I'll discuss practical stuff of 32bit Intel asm programming, through analizing some procs and progs
+written in Win32 asm, spotted to common weak spots of nowdays outgoing procs and demos.
+Let's start then.
+------------------------------------------------
+For begginers:
+What is prefix?
+
+
+Prefixes are one or more bytes that precede an instruction and modify the operation of the instruction. 
+These prefixed opcodes cause penalties or pairing restrictions: lock, segment override, 
+address size, second opcode map (0F), and operand size. In particular, 16-bit instructions executing 
+in 32-bit mode require an operand-size prefix.
+
+Let's illustarate it with code of Mirno's reverse string func:
+OpCodes	   Instructions	 
+
+668B07   	   ax, 	WORD PTR 
+668B11   	   dx, 	WORD PTR 
+66C1C808  ror      	ax, 08h
+66C1CA08  ror      	dx, 08h
+668901   	  mov      	WORD PTR , ax
+668917   	  mov      	WORD PTR , dx
+
+Note:
+1. All opecodes first byte is 66
+2. All instructions use 16 register.
+As you probably gessed - 66 is operand-size prefix.
+------------------------------------------------------------------------------------------
+It makes each instruction wich uses 16bit reg 1 byte longer.
+
+It's about size, so what about speed?
+To understand it better let's put the whole block into V-TUNE(the best profiler available)
+
+OpCodes	   Instructions	                             Clocks	Penalties and Warnings	Pairing Issues
+83EF02   	"   sub      edi, 02h"                 	1		
+668B07   	"   Size  mov      ax, WORD PTR "	3	"Exp_AGI_U_Pen:1, Prefix_Pen:1"	"Exp_AGI, Not_in_Fetch, Prefix"
+668B11   	"   Size  mov      dx, WORD PTR "	4	Prefix_Pen:3	"Not_in_Fetch, Prefix"
+66C1C808   	"   Size  ror      ax, 08h"	3	Prefix_Pen:2	"NP_Inst, Not_in_Fetch, Prefix"
+66C1CA08   	"   Size  ror      dx, 08h"	4	Prefix_Pen:3	"NP_Inst, Prev_PV/NP"
+668901   	"   Size  mov      WORD PTR , ax"	4	Prefix_Pen:3	Prev_PV/NP
+668917   	"   Size  mov      WORD PTR , dx"	4	Prefix_Pen:3	"Not_in_Fetch, Prefix"
+83C102   	"   add      ecx, 02h"	                                1 - 1		
+3BCF   	"   cmp      ecx, edi"	                                1		
+Totals 9 instructions 22,22% pairing,24 total Cycles
+28 bytes.
+24 clocks!
+
+Let's try to reorgonize code to do the same task, but without 16 bit registers.
+I can offer one of possible ways:
+
+Address	Label	OpCodes	   Instructions	 		Clocks	
+ 1:156 	L_156:	8B11   	"   mov      edx, DWORD PTR "	1		
+ 1:158 		8B47FE   	"   mov      eax, DWORD PTR "	1 - 1		
+ 1:15b 		8821   	"   mov      BYTE PTR , ah"	1		
+ 1:15d 		8877FE   	"   mov      BYTE PTR , dh"	1 - 1		
+ 1:160 		884101   	"   mov      BYTE PTR , al"	1		
+ 1:163 		8857FF   	"   mov      BYTE PTR , dl"	1 - 1		
+ 1:166 		83C</div>
+    <div class="meta">Posted on 2001-03-25 12:32:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-195970">
+    <div class="subject"><a href="#post-195970">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">Alex,
+
+Compliments, this is good stuff. This type of analysis is what makes
+assembler go faster and I guess thats why most people are here,
+performance and size.
+
+I agree with the view of not using 16 bit registers but I know that
+there are times when it is needed. The general view is that you
+should ALWAYS use a 32 bit register when you can, (counters etc ..)
+as they are faster. The later series of Intel processors are native
+32 bit devices and while they will run in 8 and 16 bit registers,
+they pay a huge speed penalty doing so.
+
+This alone is a good enough reason not to just port 16 bit code
+but to rewrite it so that it takes advantage of the additional
+performance.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-03-25 18:17:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-195971">
+    <div class="subject"><a href="#post-195971">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">this section is a keeper. It's proving itself already :)</div>
+    <div class="meta">Posted on 2001-03-26 00:17:00 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-195972">
+    <div class="subject"><a href="#post-195972">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">Steve,
+8 bit registers are OK.
+They don't need prefixes nor in 16 bit neither in 32 bit modes.
+And they don't need one extra clock to decode wich could make
+them NP.
+So the problem is only 16 regs in 32bit address models.
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-26 00:51:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-195973">
+    <div class="subject"><a href="#post-195973">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body"><pre><code>
+xchg al,ah
+xchg dl,dh
+ror eax, 16
+ror edx, 16
+xchg al,ah
+xchg dl,dh
+</code></pre>
+Too bad that these instructions don't pair :(  Is there a faster way to do a 32 bit version of the Mirno's routine above?  I don't have VTune, is it really worth the price?
+bitRAKE
+
+This message was edited by bitRAKE, on 3/26/2001 5:37:55 PM</div>
+    <div class="meta">Posted on 2001-03-26 16:35:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195974">
+    <div class="subject"><a href="#post-195974">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">What's the timing of BSWAP?
+It was introduced in the 486.</div>
+    <div class="meta">Posted on 2001-03-26 18:57:00 by tank</div>
+   </div>
+   <div class="post" id="post-195975">
+    <div class="subject"><a href="#post-195975">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">I wrongly assumed it was bad.  Michael Abrash's book as well as other sources on the web say it takes 1 cycle on the P/PII, but 4 on the AMD K6  (wonder about the Athlon?)  I'd be an excellent choice here!
+bitRAKE
+
+*Athlon has a latency of 1
+0x0F 0xC8+reg
+
+I think <pre><code>bswap esp</code></pre> would be a very rare instruction :)
+
+This message was edited by bitRAKE, on 3/26/2001 9:02:38 PM</div>
+    <div class="meta">Posted on 2001-03-26 19:46:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195976">
+    <div class="subject"><a href="#post-195976">Basics of Asm32 in opt. examples #1.</a></div>
+    <div class="body">to bitRAKE:
+Forget about xchg.
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-28 04:11:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

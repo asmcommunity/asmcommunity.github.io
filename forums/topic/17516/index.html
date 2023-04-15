@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Blocking socks and select problem... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17516" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=17516">Blocking socks and select problem...</a></p>
+   <div class="post" id="post-135513">
+    <div class="subject"><a href="#post-135513">Blocking socks and select problem...</a></div>
+    <div class="body">Hello everybody, I've wrote a thread which relays data from one socket to another, but I now found a problem which I can't understand. Maybe someone can say what it is... Here are some sources:<br /><br /><pre><code><br />SOCK_BUF         Equ &#40;32*1024&#41;<br /><br />; Some used functions<br />FdSet            Proc USES Eax Ebx Edx Sock&#58;DWORD, lpFd&#58;DWORD<br />  LOCAL FdCount&#58;DWORD<br /><br />  mov   ebx, lpFd<br /><br />  mov   eax, &#40;fd_set Ptr &#91;ebx&#93;&#41;.fd_count<br />  mov   edx, Sock<br />  push  ebx<br />  lea   ebx, &#40;fd_set Ptr &#91;ebx&#93;&#41;.fd_array<br />  mov   Dword Ptr &#91;ebx + eax * SIZEOF DWORD&#93;, edx<br />  inc   eax<br />  pop   ebx<br />  mov   &#40;fd_set Ptr &#91;ebx&#93;&#41;.fd_count, eax<br />  ret<br />FdSet            Endp<br /><br />FdZero           Proc USES Ebx lpFd&#58;DWORD<br /><br />  mov   ebx, lpFd<br />  mov   &#40;fd_set Ptr &#91;ebx&#93;&#41;.fd_count, 0<br />  ret<br />FdZero           Endp<br /><br />FdIsSet          Proc USES Ebx Ecx Sock&#58;DWORD, lpFd&#58;DWORD<br />  LOCAL Result&#58;DWORD<br /><br />  mov   Result, FALSE<br /><br />  mov   ebx, lpFd<br />  mov   ecx, &#40;fd_set Ptr &#91;ebx&#93;&#41;.fd_count<br />  lea   ebx, &#40;fd_set Ptr &#91;ebx&#93;&#41;.fd_array<br /><br />  .if ecx<br />    .repeat<br />      dec   ecx<br />      mov   eax, Dword Ptr &#91;ebx + ecx * SIZEOF DWORD&#93;<br /><br />      .if eax == Sock<br />        mov   Result, TRUE<br />      .endif<br />    .until Ecx == 0 || Result == TRUE<br />  .endif<br /><br />  mov   eax, Result<br />  ret<br />FdIsSet          Endp<br /><br />FdInit           Proc Sock&#58;DWORD, lpFd&#58;DWORD<br /><br />  invoke FdZero, lpFd<br />  invoke FdSet, Sock, lpFd<br />	Ret<br />FdInit           Endp<br /><br />;&#91;B&#93;The code in which the problem is...&#91;/B&#93;<br />ClientSock       Proc sserver&#58;DWORD, sclient&#58;DWORD<br />  LOCAL rdFds  &#58;fd_set<br />  LOCAL lpBuf  &#58;DWORD<br />  <br />  LOCAL lpCrit &#58;CRITICAL_SECTION<br /><br />  @GetMemory SOCK_BUF<br />  mov    lpBuf, eax<br />  <br />  invoke InitializeCriticalSection, ADDR lpCrit<br />_new&#58;<br />  &#91;B&#93;invoke Sleep, 50&#91;/B&#93;                                ; Here is the problem! I'll say about it at the bottom<br />  invoke FdZero, ADDR rdFds<br />  invoke FdSet, sserver, ADDR rdFds<br />  invoke FdSet, sclient, ADDR rdFds<br />  invoke select, NULL, ADDR rdFds, NULL, NULL, NULL<br />  .if eax == SOCKET_ERROR || eax == 0<br />    jmp  _exit<br />  .endif<br />  invoke EnterCriticalSection, ADDR lpCrit<br /><br />  invoke FdIsSet, sserver, ADDR rdFds<br />  .if eax<br />    invoke recv, sserver, lpBuf, SOCK_BUF, 0<br />    .if eax == SOCKET_ERROR || eax == 0<br />      jmp  _exit<br />    .endif<br />    invoke send, sclient, lpBuf, eax, 0<br />    <br />  invoke FdIsSet, sclient, ADDR rdFds<br />  .if eax<br />    invoke recv, sclient, lpBuf, SOCK_BUF, 0<br />    .if eax == SOCKET_ERROR || eax == 0<br />      jmp  _exit<br />    .endif<br />    invoke send, sserver, lpBuf, eax, 0<br />	<br />  invoke LeaveCriticalSection, ADDR lpCrit<br />  jmp    _new<br />  <br />_exit&#58;  <br />  invoke DeleteCriticalSection, ADDR lpCrit<br />  <br />  @FreeMemory lpBuf<br /><br />  invoke closesocket, sserver<br />  invoke closesocket, sclient<br />  <br />  invoke ExitThread, 0<br />ClientSock       Endp</code></pre><br /><br />The problem is that if there is no that string (Sleep, 50) select doesnt return. But the data is there! Can someone explain this?:confused:</div>
+    <div class="meta">Posted on 2004-03-09 19:19:10 by The CHEMI$T</div>
+   </div>
+  </div>
+ </body>
+</html>

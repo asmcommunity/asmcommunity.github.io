@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>read a word from a file by knowing it''s line number - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27820" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27820">read a word from a file by knowing it''s line number</a></p>
+   <div class="post" id="post-198193">
+    <div class="subject"><a href="#post-198193">read a word from a file by knowing it''s line number</a></div>
+    <div class="body">hi,
+i would like to use a word file for an application. every word is seperated from the other by 13,10 (linefeed). how to access for example the 5th word? i tried something but it doesn't really work. btw: i don't want to use a listview control to solve that.
+
+<pre><code>
+;first open the file
+invoke CreateFile,addr FileName,GENERIC_READ,0,0,OPEN_EXISTING,0,0
+mov FileHandle,eax
+invoke GetFileSize, eax, 0
+mov file_size, eax
+invoke GlobalAlloc,GMEM_MOVEABLE or GMEM_ZEROINIT,eax
+mov  hMemory,eax
+invoke GlobalLock,hMemory
+mov  pMemory,eax
+invoke ReadFile,FileHandle,pMemory,file_size,ADDR bytes_read,NULL
+invoke CloseHandle,FileHandle
+
+;goto a special line
+;LinePointer is a dd variable
+GotoLine proc uses esi edi ebx edx lnnumber:DWORD
+	mov edi,pMemory
+	mov al,13
+	mov ecx,file_size
+	mov ebx,lnnumber
+     beginning:
+	repne scasb
+	.if ecx!=0
+		.if ebx>0
+			dec ebx
+			jmp beginning
+		.else
+			add edi,2
+			mov LinePointer,edi
+		.endif
+	.endif
+	invoke MessageBox,NULL,pMemory,addr szDisplayName,0   ;this messagebox never appears
+	ret
+GotoLine endp
+
+;now read the word in the line into a buffer
+ReadWord proc uses edi esi ebx edx 
+	mov esi,LinePointer
+	lea edi,szZuRatWort
+	cld
+  copy_loop:
+  	movsb
+  	lodsb
+  	.if al==13
+  		jmp out_here
+  	.endif
+  	loop copy_loop
+  out_here:
+  	invoke MessageBox,NULL,addr szZuRatWort,addr szDisplayName,0  ;doesn't appear too
+  	ret
+ReadWord endp
+
+</code></pre>
+first the GotoLine function is called and then the ReadWord function
+
+what's wrong with this code? it crashes my app.
+
+tnx</div>
+    <div class="meta">Posted on 2001-04-27 12:29:00 by [SaFc0n]</div>
+   </div>
+   <div class="post" id="post-198194">
+    <div class="subject"><a href="#post-198194">read a word from a file by knowing it''s line number</a></div>
+    <div class="body">I don't have any modular code to hand to paste up but I'll try and explain my method of loading text. The code posted is part of the next tutorial and load a series of numbers from a text file. Its modified and should be looked on a something to learn from, not to just copy and assume it works as it probably won't.
+Therefore I'll explain it here.
+
+I hope your writing the text files yourself, this allows you to format it for easy loading. 
+
+Simply seperate each item or work by a space after it. even at the end of a line up a space before a 13,10
+
+then do the search yourself, don't bother with rpne etc
+
+Start with edi as a pointer to the string set esi to the same.
+read  into al, see if its equal to 32 (space). If it is then move esi into ecx, subtract edi for ecx, then enter a loop which starts at edi and reads that byte into a buffer, then increment edi and repeat the number of time ecx indicates ( less one if you don't want the space included. Set edi to esi+1
+
+then continue to search.
+
+If you need to account of linefeeds check  after every space if its equal to 13, then youv'e got a new line, to skip it add 2 to esi and set edi to esi.
+
+
+<pre><code>
+mov esi, pMemory
+mov edi, esi
+mov DDt1, 5
+
+NxtChk:
+	mov al, byte ptr 
+	cmp al, Space
+	jz ANum
+	inc esi
+jmp NxtChk
+ANum:
+
+mov ecx, esi
+sub ecx, edi
+xor edx, edx
+NxtLtr:
+	mov al, byte ptr 
+	mov byte ptr buffer, al
+	inc edx
+	inc edi
+	dec ecx
+jnz NxtLtr
+mov byte ptr buffer, 0
+inc edi
+mov esi, edi
+
+cmp byte ptr , EndOfLine
+jnz NxtChk
+
+add edi, 2
+mov esi, edi
+
+dec DDt1
+jnz NxtChk
+</code></pre>
+
+In the above code DDt1 indicated to loop for five lines</div>
+    <div class="meta">Posted on 2001-04-27 13:17:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-198195">
+    <div class="subject"><a href="#post-198195">read a word from a file by knowing it''s line number</a></div>
+    <div class="body">You are incrementing edi by too much after you found the correct line!
+Change the
+<pre><code> .else
+   add edi, 2
+   mov LinePointer,edi
+ .endif </code></pre>
+in GotoLine, to "inc edi".
+This could have caused the crash if you were checking for the last item in your file (as adding 2 would take it passed the null pointer).
+
+You may also want to look at Icz's tut on file mapping!
+It'll mean that you don't need to use GlobalAlloc...
+
+This is a quick, and dirty hack of your code with tut 13:
+<pre><code>
+.386
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+include \masm32\include\comdlg32.inc
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+includelib \masm32\lib\comdlg32.lib
+
+.const
+MAXSIZE equ 260
+
+.data
+AppName  db "Win32 ASM File Mapping Example",0
+ofn   OPENFILENAME <>
+FilterString db "All Files",0,"*.*",0
+             db "Text Files",0,"*.txt",0,0
+
+buffer db MAXSIZE dup(0)
+hMapFile HANDLE 0
+
+.data?
+file_size DWORD ?
+hInstance HINSTANCE ?
+hFileRead HANDLE ?
+pMemory DWORD ?
+
+.code
+start:
+    invoke GetModuleHandle, NULL
+    mov    hInstance,eax
+
+    mov ofn.lStructSize,SIZEOF ofn
+    mov  ofn.hWndOwner, NULL
+    push hInstance
+    pop  ofn.hInstance
+    mov  ofn.lpstrFilter, OFFSET FilterString
+    mov  ofn.lpstrFile, OFFSET buffer
+    mov  ofn.nMaxFile,MAXSIZE
+
+    mov  ofn.Flags, OFN_FILEMUSTEXIST or \
+                    OFN_PATHMUSTEXIST or OFN_LONGNAMES or\
+                    OFN_EXPLORER or OFN_HIDEREADONLY
+    invoke GetOpenFileName, ADDR ofn
+    .if eax==TRUE
+        invoke CreateFile, ADDR buffer, GENERIC_READ, 0,\
+                           NULL,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,\
+                           NULL
+        mov hFileRead,eax
+        invoke CreateFileMapping,hFileRead,NULL,PAGE_READONLY,0,0,NULL
+        mov  hMapFile,eax
+
+        invoke MapViewOfFile,hMapFile,FILE_MAP_READ,0,0,0
+        mov pMemory,eax
+        invoke GetFileSize,hFileRead,NULL
+        mov file_size, eax
+
+        push edi
+        mov edi,pMemory
+        mov al,13
+        mov ecx,file_size
+        mov ebx, 3
+
+beginning:
+        repne scasb
+
+        .if ecx != 0
+            .if ebx > 0
+                dec ebx
+                jmp beginning
+            .else
+                inc edi
+            .endif
+        .endif
+
+        invoke MessageBox, NULL, edi, NULL, MB_OK
+        pop edi
+
+        invoke UnmapViewOfFile,pMemory
+        invoke CloseHandle,hMapFile
+        invoke CloseHandle,hFileRead
+    .endif
+
+    invoke ExitProcess,eax
+
+end start
+</code></pre>
+
+I haven't checked the ReadWord proc.
+Plus, remember you don't <strong>have</strong> to preserve edx....
+
+Mirno</div>
+    <div class="meta">Posted on 2001-04-27 13:34:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-198196">
+    <div class="subject"><a href="#post-198196">read a word from a file by knowing it''s line number</a></div>
+    <div class="body">hey guys,
+thanks to ya all, but i found my own solution with the help of you. here it is:
+
+<pre><code>
+ReadWord proc uses esi edi ebx edx lnnumber:DWORD
+	cld
+	mov ebx,lnnumber
+	mov esi,pMemory
+        .while ebx>0
+		mov al,byte ptr 
+		cmp al,13
+		jnz @F
+		dec ebx
+		inc esi   ;|> we have to jump over 10
+		@@:
+		inc esi
+	.endw
+	xor ecx,ecx
+	@@:
+	mov al,byte ptr 
+	cmp al,13
+	je _ready
+	mov byte ptr buffer,al
+	inc ecx
+	inc esi
+	jmp @B
+    _ready:
+    	ret
+ReadWord endp
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-28 07:49:00 by [SaFc0n]</div>
+   </div>
+  </div>
+ </body>
+</html>

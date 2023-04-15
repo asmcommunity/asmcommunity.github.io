@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Compare Jumps to Tables - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18601" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=18601">Compare Jumps to Tables</a></p>
+   <div class="post" id="post-144065">
+    <div class="subject"><a href="#post-144065">Compare Jumps to Tables</a></div>
+    <div class="body">I am not very good at timing different code snips.<br />Given this perhaps someone already knows which is faster.<br /><br />I would like a brief comparison (no testing verbal is fine) on<br />if a properly coded jump table or cmp MSG je combo is prefered<br />where speed is concerned in WndProcs...<br /><br />I was curious as im starting to try and spread myself thin again :grin:<br />Only this time im concentrating on SBB for now.  Interesting<br />instruction that one.  Lots of possibilities.<br /><br />Ive tried to reduce it as much as I could but perhaps it can be refined<br />more.  And of course I am curious as to how a loop does instead of<br />multiple jumps and mispredicted branches<br /><br /><pre><code><br />.data<br />Messages	dd	0,			WM_DESTROY,		WM_LBUTTONDOWN<br />JumpTable	dd	OFFSET WP_DEFAULT,	OFFSET WP_DESTROY,	OFFSET WP_LBUTTONDOWN<br />.code<br /><br />; #########################################################################<br /><br />WndProc proc hWnd&#58;DWORD, uMsg&#58;DWORD, wParam&#58;DWORD, lParam&#58;DWORD<br />		xor	edx, edx		; edx = 0<br />		mov	ecx, 2			; ecx = number of messages<br /><br />	start&#58;<br />		mov	eax, uMsg		; eax = uMsg<br />		sub	eax, &#91;Messages+ecx*4&#93;	; eax = 0 if uMsg is in Messages table<br />		cmp	eax, 1			; copy zero flag to carry flag<br />		sbb	eax, eax		; eax = 0FFFFFFFFh if uMsg is in Messages table, 0 otherwise<br />		and	eax, ecx		; eax = index into jump table uMsg is defined<br />		add	edx, eax		; store offset in edx<br />		loop	start<br /><br />		lea	eax, &#91;JumpTable+edx*4&#93;<br />		jmp	DWORD PTR &#91;eax&#93;<br />		<br />	WP_DEFAULT&#58;&#58;<br />		invoke DefWindowProc, hWnd, uMsg, wParam, lParam<br />		ret<br />	WP_LBUTTONDOWN&#58;&#58;<br />		&lt;&lt;&lt;CODE HERE&gt;&gt;&gt;<br />		ret<br />	WP_DESTROY&#58;&#58;<br />		invoke PostQuitMessage, 0<br />		xor	eax, eax<br />		ret<br />	WndProc endp<br /><br />; #########################################################################<br /></code></pre></div>
+    <div class="meta">Posted on 2004-06-16 19:28:18 by Graebel</div>
+   </div>
+   <div class="post" id="post-144082">
+    <div class="subject"><a href="#post-144082">Compare Jumps to Tables</a></div>
+    <div class="body">A jumptable is constant-time. You get the target address immediately from the table. So no matter how many different cases you have, you always require the same time: only one lookup from the table, and one jump.<br /><br />A set of cmp/jmps is logarithmic time at best, if you construct it as a weighed binary tree. So for N cases, you require log N/log 2 cmp/jmp pairs.<br /><br />The 'downside' to a jumptable is that the CPU cannot predict where the code will jump to until the address is actually loaded. So it will have to stall until it is known. Effectively this is a mispredicted brance.<br />But since it only happens once, no matter how many cases you have, it's still hard to beat.<br />Another potential problem is that the table is not cached, so you get a cache-miss aswell. But again this can only happen once, regardless of how many cases you have.<br />The cmp/jmp method can be predicted, if you have the same case multiple times in a row. But as soon as you get another case, you will have at least one mispredicted branch, and there are more branches to take in general, so there is more code to be processed until you reach the target.<br /><br />In short, nothing can beat a jumptable :)<br />But the logarithmic cmp/jmp method is a good alternative when the table required would be too large to store.</div>
+    <div class="meta">Posted on 2004-06-17 02:15:32 by Scali</div>
+   </div>
+   <div class="post" id="post-144098">
+    <div class="subject"><a href="#post-144098">Compare Jumps to Tables</a></div>
+    <div class="body">The jump-table algorithm shown is obviously not constant time. It is of worst-case linear order complexity O(N), where N is the number of messages in the table.<br /><br />I may be wrong, but your WndProc's message deduction isn't going to help your application's efficiency greatly. It may make your code easier to maintain, though. How about using a call-table?</div>
+    <div class="meta">Posted on 2004-06-17 07:33:43 by death</div>
+   </div>
+   <div class="post" id="post-144109">
+    <div class="subject"><a href="#post-144109">Compare Jumps to Tables</a></div>
+    <div class="body">Oh yea, I didn't really look at the code. This one uses a loop, which is rather useless :P<br />You just want to do:call <br />That's the whole idea.</div>
+    <div class="meta">Posted on 2004-06-17 10:23:35 by Scali</div>
+   </div>
+   <div class="post" id="post-144118">
+    <div class="subject"><a href="#post-144118">Compare Jumps to Tables</a></div>
+    <div class="body">Nods, I know the absolute fastest would the direct table lookup.  Mainly<br />I was just playing around with SBB and the different flags.<br /><br />I would like something better than the cmp je combos, but also I dont<br />see where wasting 4096 some odd bytes for a complete lookup table<br />is justified.  At the same time I thought I would see if there was a happy<br />medium between some sort of lookup and table size.<br /><br />Perhaps there is a better algo out there for a direct lookup but use a<br />smaller table... perhaps a fast hash of sorts, right now im not sure.  Its<br />just nagging at me... it just seems there should be a better solution it<br />just hasnt hit me yet.</div>
+    <div class="meta">Posted on 2004-06-17 11:30:44 by Graebel</div>
+   </div>
+   <div class="post" id="post-144120">
+    <div class="subject"><a href="#post-144120">Compare Jumps to Tables</a></div>
+    <div class="body">Graebel, you could sort the table and use a binary search... or, &quot;if you're one of those&quot;, order the table by message frequency. It's pretty irrelevant for a wndproc anyway, so I'd go for the shortest code.<br /><br />Btw, you can use a single table of &lt;msg,offset&gt; pairs, and use reg*8+0 and reg*8+4. That way, you're guaranteed the offset part will be in the cache when you've found the msg - not that it matters that much :)</div>
+    <div class="meta">Posted on 2004-06-17 11:37:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-144145">
+    <div class="subject"><a href="#post-144145">Compare Jumps to Tables</a></div>
+    <div class="body">Well thanks much for the various inputs :)<br /><br />I think I just found my happy medium.  A duel table lookup. Saves space<br />and still quick.  I save space by using a byte index table which is a forth<br />the size I would normally need.  Wouldnt have thought of it without the<br />feedback.<br /><br />Although I am not very happy I cant figure out how to patch the byte<br />table at compile time instead of run time... oh well, more research for me!<br /><br /><pre><code><br />...<br />.data<br />	ALIGN 4<br />	TOffset	dd	265 dup&#40;0&#41;<br />	Table	dd	OFFSET WP_DEFAULT, OFFSET WP_DESTROY, OFFSET WP_LBUTTONDOWN<br /><br />.code<br />...<br />	; Patch the index jump table<br />	lea	eax, &#91;TOffset+WM_DESTROY&#93;<br />	mov	&#91;eax&#93;, BYTE PTR 1<br />	lea	eax, &#91;TOffset+WM_LBUTTONDOWN&#93;<br />	mov	&#91;eax&#93;, BYTE PTR 2<br />...<br /><br />WndProc proc hWnd&#58;DWORD, uMsg&#58;DWORD, wParam&#58;DWORD, lParam&#58;DWORD<br />		lea	eax, &#91;TOffset&#93;		; eax = address of byte index table<br />		xor	ecx, ecx		; ecx = 0<br />		add	eax, uMsg		; adjust index<br />		mov	cl, BYTE PTR &#91;eax&#93;	; get table index<br />		lea	edx, &#91;Table+ecx*4&#93;	; edx = label address<br />		jmp	DWORD PTR &#91;edx&#93;		; jump to label<br />			<br />	WP_DEFAULT&#58;&#58;<br />		ret<br />	WP_LBUTTONDOWN&#58;&#58;<br />		ret<br />	WP_DESTROY&#58;&#58;<br />		PostQuitMessage&#40; 0 &#41;<br />		xor	eax, eax<br />		ret<br />WndProc endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-06-17 18:24:54 by Graebel</div>
+   </div>
+  </div>
+ </body>
+</html>

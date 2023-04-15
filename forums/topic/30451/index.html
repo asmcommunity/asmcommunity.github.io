@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Question about index pointer multiplication - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30451" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30451">Question about index pointer multiplication</a></p>
+   <div class="post" id="post-213932">
+    <div class="subject"><a href="#post-213932">Question about index pointer multiplication</a></div>
+    <div class="body">Well, let&#039;s assume we have the following piece of code:<br /><pre><code><br />mov eax, <br /></code></pre><br />In this case, ecx is playing the role of an index pointer. It is being multiplied by 4 because it is dealing with DWORD data size.<br /><br />-My question is, where is the multiplication by 4 actually being performed? Does it happen in the same micro-operation block as the MUL instruction?<br />-If so, how does multiplication using LEA instruction is faster than the MUL instruction if they are both performed in the place? For example:<br /><pre><code><br />;this multiplication<br />mov eax, 15<br />mov ebx, 10<br />mul bx<br /><br />;same as<br />mov eax, 15<br />lea eax, <br />add eax, eax<br /></code></pre></div>
+    <div class="meta">Posted on 2011-01-22 00:06:12 by banzemanga</div>
+   </div>
+   <div class="post" id="post-213933">
+    <div class="subject"><a href="#post-213933">Re: Question about index pointer multiplication</a></div>
+    <div class="body">No, it&#039;s not really a multiply-operation anyway. It can only do factors 1, 2, 4 and 8. Since these are all powers of two, a simple bit shift is enough to perform them.<br />This is not performed by the ALU itself, but by a special address generation unit (AGU).</div>
+    <div class="meta">Posted on 2011-01-22 03:12:17 by Scali</div>
+   </div>
+   <div class="post" id="post-213934">
+    <div class="subject"><a href="#post-213934">Re: Question about index pointer multiplication</a></div>
+    <div class="body">Cool. That is new to me. I didn&#039;t know t was only power of 2 and not done my multiplication unit.<br /><br />I wonder what is faster:<br /><div class="quote"><br />;This<br />lea		eax, <br />shl		eax, 1<br /><br />:Or this<br />mov		ecx, eax<br />shl		eax, 1<br />shl		ecx, 3<br />add		eax, ecx<br /></div><br /><br />-One takes less instructions but does not allow out of order execution.<br />-The other one uses one more register and is bigger but has a higher chance of out of order execution.</div>
+    <div class="meta">Posted on 2011-01-22 12:02:15 by banzemanga</div>
+   </div>
+   <div class="post" id="post-213935">
+    <div class="subject"><a href="#post-213935">Re: Question about index pointer multiplication</a></div>
+    <div class="body">That depends a lot on the specific microarchitecture.<br />Different operations have different latencies and different throughputs for various operations.<br />Some CPUs will break up certain variations of the lea instruction into two consecutive operations, others can process them in one go.<br />Since the LEA is executed by the AGU rather than the ALU, some CPUs require an extra cycle to forward the operands between AGU/ALU.<br /><br />Then there&#039;s the shift, which may not always be as fast as you might think. The Pentium 4 architecture for example, took 2-4 cycles for a single shift.<br />Therefore, an add eax, eax is always preferred over a shl eax, 1. Depending on the situation, a lea eax,  may be preferred over a regular add.<br /><br />I would say that the best solution is probably:<br /><pre><code>lea eax, <br />lea eax, <br /></code></pre><br /><br />If you look at your second bit:<br /><pre><code>mov ecx, eax ; This can execute right away<br />shl eax, 1&nbsp;  ; This can execute in parallel with the mov<br />shl ecx, 3&nbsp;  ; This has to wait until the mov is completed<br />add eax, ecx ; This has to wait for both shl&#039;s to complete</code></pre><br /><br />So you have created a dependency chain of three instructions here: mov -&gt; shl -&gt; add.<br />This will take at least 3 cycles.<br />The other routine has only two dependent instructions, and would take at least 2 cycles. So you could afford to get an extra cycle penalty between AGU/ALU. Combine that with the fact that it only needs one register, and I think this is the preferred form by far.</div>
+    <div class="meta">Posted on 2011-01-22 12:46:39 by Scali</div>
+   </div>
+   <div class="post" id="post-213936">
+    <div class="subject"><a href="#post-213936">Re: Question about index pointer multiplication</a></div>
+    <div class="body">Thanks and awesome Scal. Where did you learn about those? Is there any book in specific i could read to learn about instructions and architecture insights?i</div>
+    <div class="meta">Posted on 2011-01-22 17:33:18 by banzemanga</div>
+   </div>
+   <div class="post" id="post-213937">
+    <div class="subject"><a href="#post-213937">Re: Question about index pointer multiplication</a></div>
+    <div class="body">Well, you can find quite a bit of info on microarchitectures in the <a target="_blank" href="http://www.intel.com/Assets/PDF/manual/248966.pdf">Intel Optimization Manual.</a> AMD has a similar manual, but they are not that detailed about their architecture.<br />You could also look at <a target="_blank" href="http://www.agner.org/optimize/">Agner Fog&#039;s optimization resources</a>. He put together some very detailed microarchitecture information for all the popular CPUs.</div>
+    <div class="meta">Posted on 2011-01-23 10:04:17 by Scali</div>
+   </div>
+  </div>
+ </body>
+</html>

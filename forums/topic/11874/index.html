@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>invoke with a reg? ie invoke [eax] - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11874" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=11874">invoke with a reg? ie invoke [eax]</a></p>
+   <div class="post" id="post-90850">
+    <div class="subject"><a href="#post-90850">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Is this possible? Or is there some marco that covers this?  Here's the code:<br /><pre><code><br />	OPTION PROLOGUE&#58;NONE<br />	OPTION EPILOGUE&#58;NONE<br /><br />Render PROC PUBLIC<br />	LOCAL D3D&#91;0&#93;&#58;_D3D<br /><br />	mov .EBP,ebp<br />	mov ebp,&#91;D3Dvt&#93;<br /><br />	push 0<br />	push one<br />	push 0FF0000FFh<br />	push D3DCLEAR_TARGET<br />	push 0<br />	push 0<br />	push &#91;g_pd3dDevice&#93;<br />	call D3D.Clear<br /><br />	push &#91;g_pd3dDevice&#93;<br />	call D3D.BeginScene<br /><br />	push &#91;g_pd3dDevice&#93;<br />	call D3D.EndScene<br /><br />	push 0<br />	push 0<br />	push 0<br />	push 0<br /><br />	push &#91;g_pd3dDevice&#93;<br />	call D3D.Present<br /><br />	mov ebp,.EBP<br />	ret<br />Render endp<br /><br />	OPTION PROLOGUE&#58;PROLOGUEDEF<br />	OPTION EPILOGUE&#58;EPILOGUEDEF<br /></code></pre><br />It's Direct3D 9.  I'm highjacking ebp. So call D3D.Clear is really something like call . I'd really like to find a way to put all those pushes on the same line like invoke.<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2003-03-27 06:39:27 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-90863">
+    <div class="subject"><a href="#post-90863">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Here is a snippet from a window procedure that invokes via a register. The important part is in blue color, the rest serves as an example of usage. The assumptions are: &quot;currentWndProc&quot; holds either the address of a function (then call it) or zero (then don't call it). Those functions, in turn, return zero if they handle the message, or something else if they don't.<br /><pre><code><br />.DATA<br />currentWndProc  dd  0                   ; the current plug-in's window procedure<br /><br />.CODE<br /><br />; Application window procedure<br /><br />App_WndProc proc hWnd, uMsg, wParam, lParam<br /><br />; Pass Msg to plug-in, if possible &#40;if so, then EAX must not be 0&#41;<br /><br />    mov     eax,    currentWndProc<br />    test    eax,    eax                 ; any plug-in active?<br />    je      @F<br /><br />&#91;COLOR=blue&#93;    lpfnWndProc typedef PROTO &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD<br />    invoke  lpfnWndProc ptr &#40;eax&#41;, hWnd, uMsg, wParam, lParam&#91;/COLOR&#93;<br />    test    eax,    eax                 ; Msg handled by plug-in?<br />    jz      @done<br /><br />; Arriving here?  ==&gt; No plug-in active, or Msg not handled<br /><br />@@&#58; cmp     uMsg,   WM_LBUTTONDOWN<br />    je      @wmlbuttondown<br /><br />; remainder of the window procedure snipped<br /></code></pre><br />Regards, Frank</div>
+    <div class="meta">Posted on 2003-03-27 07:28:55 by Frank</div>
+   </div>
+   <div class="post" id="post-90872">
+    <div class="subject"><a href="#post-90872">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Another example:<br /><br /><pre><code><br /><br />.386<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\user32.inc<br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\user32.lib<br /><br />myproto typedef proto &#58;dword,&#58;dword,&#58;dword,&#58;dword<br /><br />.data<br />msg  db 'How are you?',0<br />capt db 'Hello my friend!',0<br />.data?<br />.code<br />start&#58;<br />mov eax,MessageBox<br />invoke myproto ptr eax,0,addr msg,addr capt,MB_OK<br />invoke ExitProcess,0<br />end start<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-03-27 07:50:04 by Vortex</div>
+   </div>
+   <div class="post" id="post-91080">
+    <div class="subject"><a href="#post-91080">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Thanks! My quick test works great:<br /><pre><code><br />	invoke CD3D PTR D3D.Clear,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL<br /></code></pre><br />Still learning new uses for TYPEDEF :grin:</div>
+    <div class="meta">Posted on 2003-03-28 00:54:48 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-91121">
+    <div class="subject"><a href="#post-91121">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Alright, this is even more of a challenge.....<br /><pre><code><br />	LCALL@4 TYPEDEF proto &#58;dword<br />	FCALL@4 TYPEDEF PTR LCALL@4<br /><br />	vt@0 EQU FCALL@0 PTR<br />.<br />.<br />Render PROC PUBLIC<br />	LOCAL D3D&#91;0&#93;&#58;_D3D<br />	mov .EBP,ebp<br />	mov ebp,&#91;D3Dvt&#93;<br /><br />		invoke vt@28 D3D.Clear,&#91;g_pd3dDevice&#93; ,0,0,D3DCLEAR_TARGET,0FF0000FFh,f1x0,0<br />	<br />		invoke vt@4 D3D.BeginScene,&#91;g_pd3dDevice&#93;<br /><br />		invoke vt@4 D3D.EndScene,&#91;g_pd3dDevice&#93;<br /><br />		invoke vt@20 D3D.Present,&#91;g_pd3dDevice&#93;,0,0,0,0<br /><br />	mov ebp,.EBP<br />	ret<br />Render endp<br /></code></pre><br />I'm making it more compact by combining the type and the pointer operator, but I'd like to compact it more.<br />I'd like to be able to say something like:<br /><br />invoke DevClear, where it will expand to invoke vt@28 D3D.Clear, but the stucture is giving me some problems.  Is there a way to reference a structure member in an equate? ie:<br /><br />DevClear TEXTEQU vt@28 D3D.Clear<br /><br />or <br /><br />DevClear EQU vt@28 D3D.Clear<br /><br />or <br /><br />?<br /><br />So far I get A2076: jump destination must specify a label.<br /><br />I would like to wrap this up so the invokes already know the number of parameters.<br /><br />Any ideas?<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2003-03-28 04:32:09 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-91453">
+    <div class="subject"><a href="#post-91453">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">If anyone is curious.....<br /><br />DevClear TEXTEQU &lt;vt@28 D3D.Clear&gt;<br /><br />Works and lets me hide some uneeded 'code bloat'.</div>
+    <div class="meta">Posted on 2003-03-29 10:28:29 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-91466">
+    <div class="subject"><a href="#post-91466">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Something like this works for me:<pre><code>	LCALL@0 TYPEDEF proto<br />	FCALL@0 TYPEDEF PTR LCALL@0<br /><br />	LCALL@4 TYPEDEF proto &#58;dword<br />	FCALL@4 TYPEDEF PTR LCALL@4<br /><br /><br /><br />	xObject STRUCT<br />		Copy	FCALL@4 PTR ?<br />		Release	FCALL@0 PTR ?<br />		Set	FCALL@4 PTR ?<br />	xObject ENDS<br /><br /><br />Render PROC<br />	LOCAL oTemp&#91;0&#93;&#58;xObject<br /><br />	invoke &#91;oTemp&#93;.Copy, eax<br /><br />	ret<br />Render ENDP</code></pre>All the type stuff can be put into the structure.</div>
+    <div class="meta">Posted on 2003-03-29 10:54:42 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-91651">
+    <div class="subject"><a href="#post-91651">invoke with a reg? ie invoke [eax]</a></div>
+    <div class="body">Thanks! It looks like the direction I'm headed.  I'm not sure if that will work will a com vtable however. So I still might have to adjust ebp to the start of the table.<br /><br />Does the invoke make it a call to an offset from ebp?<br /><br /><br />.<br />.<br />.<br />.<br />.<br /><br /><br />Just tried it. My original method structure had every method as a DWORD.  I guess I missed that I could put the type info there instead   :rolleyes:  .  Thanks BitRAKE.<br /><br />I like the pre-appending:<br /><br />	invoke .Clear, ,0,0,D3DCLEAR_TARGET,0FF0000FFh,f1x0,0<br /><br />That will take care of problems for which COM objects Release method I'm calling.<br />:alright:</div>
+    <div class="meta">Posted on 2003-03-29 23:08:45 by ThoughtCriminal</div>
+   </div>
+  </div>
+ </body>
+</html>

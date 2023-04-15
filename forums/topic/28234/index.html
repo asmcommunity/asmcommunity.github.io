@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>compare byte data algorithm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28234" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28234">compare byte data algorithm</a></p>
+   <div class="post" id="post-200031">
+    <div class="subject"><a href="#post-200031">compare byte data algorithm</a></div>
+    <div class="body">This one below is one I am playing with at the moment, it is testing
+up OK at the moment. It compares any 2 addresses for the length set
+in the ln parameter and exits on mismatch.
+
+I think some of the traditional ones exit with the byte count for the
+mismatch but this one does not. It can probably be made a bit faster
+if it is necessary but I doubt that there is much to gain from doing
+it.
+
+Regards,
+
+hutch@pbq.com.au
+
+<pre><code>
+; ########################################################################
+
+cmpstr proc lpStr1:DWORD,lpStr2:DWORD,ln:DWORD
+
+    push esi
+    push edi
+
+    mov esi, lpStr1
+    mov edi, lpStr2
+    mov ecx, ln
+    cmp ecx, 4
+    jb bLoop
+    shr ecx, 2              ; divide by 4
+    xor edx, edx
+
+  @@:
+    mov eax, 
+    cmp eax, 
+    jne Mis_Match
+    add edx, 4
+    dec ecx
+    jnz @B
+
+    mov ecx, ln
+    and ecx, 3
+    cmp ecx, 0
+    je OK_Match
+    add ecx, edx
+
+  bLoop:
+    mov al, 
+    cmp al, 
+    jne Mis_Match
+    inc ecx
+    cmp ecx, ln
+    jne bLoop
+
+  OK_Match:
+    mov eax, 1
+    jmp cmpQuit
+
+  Mis_Match:
+    xor eax, eax
+
+  cmpQuit:
+    pop edi
+    pop esi
+
+    ret
+
+cmpstr endp
+
+; ########################################################################
+
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-01 05:40:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-200032">
+    <div class="subject"><a href="#post-200032">compare byte data algorithm</a></div>
+    <div class="body">Since your only concerned with equality/inequality you can compare the bytes in the string in any sort of order you want.  While I'll admit that your algorithm above is straight-forward and easy to read, here is another solution:
+<pre><code>; ########################################################################
+
+cmpstr proc lpStr1:DWORD,lpStr2:DWORD,ln:DWORD
+
+    push esi
+    push edi
+
+    mov ecx, ln
+    mov esi, lpStr1
+    mov edi, lpStr2
+    and ecx, -4      ; DWORD align
+    jmp xLoopStart
+
+dLoop:
+    mov eax, 
+    cmp eax, 
+    jne Mis_Match
+dLoopStart:
+    sub ecx, 4
+    ja dLoop
+
+    mov ecx, ln
+    and ecx, -4
+    add esi, ecx
+    add edi, ecx
+
+    mov ecx, ln
+    and ecx, 3
+    jmp bLoopStart
+
+  bLoop:
+    mov al, 
+    cmp al, 
+    jne Mis_Match
+bLoopStart:
+    dec ecx
+    ja bLoop
+
+  OK_Match:
+    mov eax, 1
+    jmp cmpQuit
+
+  Mis_Match:
+    xor eax, eax
+
+  cmpQuit:
+    pop edi
+    pop esi
+
+    ret
+
+cmpstr endp
+</code></pre>
+
+The loops can easily be converted to string instructions if one wishes to make a size optimized version.  And I didn't use <strong>edx</strong>, so the registers could be renamed and save a push/pop pair; or improve the calculation in the center.  This is just a quick hack from work.  Please, point out errors I've made. :)  I think this is slower. :)
+
+Oh, the <strong>'and ecx, -4 ; DWORD align'</strong> assumes that the two strings are DWORD aligned.
+
+This message was edited by bitRAKE, on 6/1/2001 11:41:10 AM</div>
+    <div class="meta">Posted on 2001-06-01 11:26:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-200033">
+    <div class="subject"><a href="#post-200033">compare byte data algorithm</a></div>
+    <div class="body">It's a shame that <strong>repne cmpsb</strong> doesn't work differently - then this algo would hardly be needed. :)  Another version just for fun:<pre><code>
+cmpstr proc lpStr1:DWORD,lpStr2:DWORD,ln:DWORD
+    push esi
+    push edi
+
+    mov esi, lpStr1
+    mov edi, lpStr2
+    mov eax, ln
+    jmp xLoopStart
+
+  dLoop:
+    cmpsd
+    jne Mis_Match
+  dLoopStart:
+    sub eax, 4
+    ja dLoop
+
+    add eax, 4
+    jmp bLoopStart
+
+  bLoop:
+    cmpsb
+    jne Mis_Match
+  bLoopStart:
+    dec eax
+    ja bLoop
+
+  OK_Match:
+    mov eax, 1
+    jmp cmpQuit
+
+  Mis_Match:
+    xor eax, eax
+
+  cmpQuit:
+    pop edi
+    pop esi
+
+    ret
+cmpstr endp
+</code></pre>
+<strong>...or in a macro...</strong>
+<pre><code>
+STRCMP MACRO str1, str2, len
+  LOCAL Loop, intoLoop, StrNE
+
+    mov esi, str1
+    mov edi, str2
+    mov eax, len
+    jmp intoLoop
+Loop:
+    cmpsb
+    jne StrNE  ;z flag is clear
+intoLoop:
+    dec eax
+    ja Loop
+    inc eax    ;set z flag!
+StrNE:
+  ENDM
+</code></pre>
+...use it like this...
+<pre><code>
+    STRCMP MyString1, MyString2, 25
+    jne TheyAreNotEqual
+</code></pre></div>
+    <div class="meta">Posted on 2001-06-01 13:43:00 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

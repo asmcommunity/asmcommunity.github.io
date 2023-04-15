@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>help optimizing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29603" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29603">help optimizing</a></p>
+   <div class="post" id="post-209045">
+    <div class="subject"><a href="#post-209045">help optimizing</a></div>
+    <div class="body">I&#039;m using the code below to draw 24 bit bmp&#039;s (1024x768 or higher res) for a slideshow type app, each bmp is over 2mb and the drawing is kinda slow.. can I speed it up anyway? both src and dest are aligned on a 16 byte boundary..<br /><br /><pre><code><br /><br />mov&nbsp; ecx, X*Y<br />mov&nbsp; edi, <br />mov&nbsp; esi, <br /><br />drawbmp:<br />&nbsp; &nbsp; zero eax, ebx, edx<br /><br />&nbsp; &nbsp; mov&nbsp; al, <br />&nbsp; &nbsp; mov&nbsp; bl, <br />&nbsp; &nbsp; mov&nbsp; dl, <br /><br />&nbsp; &nbsp; shl&nbsp; bx, 8<br />&nbsp; &nbsp; shl&nbsp; edx, 16<br /><br />&nbsp; &nbsp; or&nbsp;  edx, ebx<br />&nbsp; &nbsp; or&nbsp;  edx, eax<br /><br />&nbsp; &nbsp; mov&nbsp; , edx<br /><br />&nbsp; &nbsp; add&nbsp; edi, 4<br />&nbsp; &nbsp; add&nbsp; esi, 3<br />&nbsp; &nbsp; sub&nbsp; ecx, 1<br />&nbsp; &nbsp; jnz&nbsp; short drawbmp<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2009-10-07 23:05:34 by lone_samurai5</div>
+   </div>
+   <div class="post" id="post-209047">
+    <div class="subject"><a href="#post-209047">Re: help optimizing</a></div>
+    <div class="body">Start by moving your data 4 bytes at a time, forget that its 24bit data since it is tightly packed and we are simply block-copying it.. therefore we don&#039;t need to be accessing pixels individually, we can ignore the &#039;pixel boundaries&#039;. I&#039;ve taken the liberty to eliminate some unnecessary opcodes by using an indexed addressing mode for esi/edi accesses.<br /><br /><pre><code><br />mov&nbsp; ecx, X*Y<br />mov&nbsp; edi, <br />mov&nbsp; esi, <br /><br />drawbmp:<br />&nbsp; &nbsp; mov&nbsp; eax, dword ptr<br />&nbsp; &nbsp; mov&nbsp; dword ptr, eax<br />&nbsp; &nbsp; dec ecx<br />&nbsp; &nbsp; jnc&nbsp; short drawbmp&nbsp; &nbsp;  ;jnz would miss pixel #0<br /></code></pre><br /><br />That should be slightly more than 4 times faster.<br /><br /><br /></div>
+    <div class="meta">Posted on 2009-10-08 00:18:23 by Homer</div>
+   </div>
+   <div class="post" id="post-209049">
+    <div class="subject"><a href="#post-209049">Re: help optimizing</a></div>
+    <div class="body">that doesn&#039;t draw the image properly.. it b,g,r,b,g,r etc in mem.. can&#039;t copy 4 bytes at a time..</div>
+    <div class="meta">Posted on 2009-10-08 00:35:23 by lone_samurai5</div>
+   </div>
+   <div class="post" id="post-209050">
+    <div class="subject"><a href="#post-209050">Re: help optimizing</a></div>
+    <div class="body">Oh, thats bad :D<br /><br />You&#039;re copying it from a BMP image?<br />We need to swap the endin-ness of the dwords:<br /><br /><pre><code><br />mov &nbsp;ecx, X*Y<br />mov &nbsp;edi, <br />mov &nbsp;esi, <br /><br />drawbmp:<br /> &nbsp; &nbsp;mov &nbsp;eax, dword ptr<br /> &nbsp; &nbsp;shl eax,8 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;eliminate unwanted high order byte<br /> &nbsp; &nbsp;bswap eax &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;;swap endian-ness<br /> &nbsp; &nbsp;mov &nbsp;dword ptr, eax<br /> &nbsp; &nbsp;dec ecx<br /> &nbsp; &nbsp;add esi,3<br /> &nbsp; &nbsp;add edi,3<br /> &nbsp; &nbsp;jnc &nbsp;short drawbmp <br /></code></pre><br /><br />Note that this code will write one extra zero byte at the end of the destination data which was not present in the source data - not a big deal.<br /><br />You could use the first method if you preloaded all the images and reformatted the data to suit simple block image transfers ... then the first version would work too.<br /></div>
+    <div class="meta">Posted on 2009-10-08 02:06:06 by Homer</div>
+   </div>
+   <div class="post" id="post-209057">
+    <div class="subject"><a href="#post-209057">Re: help optimizing</a></div>
+    <div class="body">All 24-bit bitmaps are 32-bit padded on each scan line. X*Y does not work as you intended. I&#039;m also not sure why you&#039;re swapping bytes around. What happened to using memcopy or even BitBlt?<br /><br />Spara</div>
+    <div class="meta">Posted on 2009-10-08 11:51:42 by Sparafusile</div>
+   </div>
+   <div class="post" id="post-209071">
+    <div class="subject"><a href="#post-209071">Re: help optimizing</a></div>
+    <div class="body"><div class="quote">&nbsp; &nbsp; dec ecx<br />&nbsp; &nbsp; jnc&nbsp; short drawbmp&nbsp; &nbsp;  ;jnz would miss pixel #0</div><br /><br />For those who may not yet be aware of it, the &quot;dec&quot; opcode does NOT modify the carry flag. Because nothing else in the subject loop would modify the carry flag, the exit from the loop would depend on the condition of the carry flag on entrance, i.e. exit after first pass if set or endless loop if clear.<br /><br />In this current context, the proper instruction would be:<br />&nbsp;  jns short drawbmp ;which would cover pixel #0<br /><br />However, with ecx initialized with X*Y, the first pass of the loop would process data beyond the last pixel. It should be initialized to X*Y-1.</div>
+    <div class="meta">Posted on 2009-10-09 21:33:36 by Raymond</div>
+   </div>
+   <div class="post" id="post-209104">
+    <div class="subject"><a href="#post-209104">Re: help optimizing</a></div>
+    <div class="body">Thanks Ray, I guess I wasn&#039;t thinking.<br />That&#039;s a sign of early onset senility :|</div>
+    <div class="meta">Posted on 2009-10-11 03:54:10 by Homer</div>
+   </div>
+   <div class="post" id="post-209139">
+    <div class="subject"><a href="#post-209139">Re: help optimizing</a></div>
+    <div class="body">thanks for the help guys.. i pretty much just switched to using bmp that are padded to 32 bit and block copy it now.. </div>
+    <div class="meta">Posted on 2009-10-12 22:02:22 by lone_samurai5</div>
+   </div>
+   <div class="post" id="post-209141">
+    <div class="subject"><a href="#post-209141">Re: help optimizing</a></div>
+    <div class="body">If I recall correctly, BMP images are ALWAYS padded to 32 bits &quot;per horizontal scan line&quot;, this is known as the &quot;image Stride&quot;, which is typically slightly larger than the image width * the Bytes Per Pixel. Intuitively, this means that the BMP image, as a whole, is also 32-bit aligned, irrespective of the pixel format.<br /><br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2009-10-13 00:26:50 by Homer</div>
+   </div>
+   <div class="post" id="post-209142">
+    <div class="subject"><a href="#post-209142">Re: help optimizing</a></div>
+    <div class="body">hmm photoshop doesn&#039;t seem to do that when i save it as a 24 bit bmp..&nbsp; </div>
+    <div class="meta">Posted on 2009-10-13 01:01:17 by lone_samurai5</div>
+   </div>
+  </div>
+ </body>
+</html>

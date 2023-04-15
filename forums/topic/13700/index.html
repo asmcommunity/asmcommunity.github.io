@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>VA's in PE files that are not loaded by OS - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13700" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=13700">VA's in PE files that are not loaded by OS</a></p>
+   <div class="post" id="post-106113">
+    <div class="subject"><a href="#post-106113">VA's in PE files that are not loaded by OS</a></div>
+    <div class="body">Greetings fellow asm coders, this is my first post to your board.<br /><br />I am coding a program to access a certain section in a PE file.  However, I'm mapping PE files straight from disk, rather than accessing a process that has already been loaded by the OS.<br /><br />Would I be right in saying that the diskimage of the file is different from its memory image (when loaded by the OS) ? I say this because when I try and navigate through the diskimage by reading section VAs from the data directory and aligning them to the imagebase(mapping view), the addresses I get are invalid. However, these same addresses are valid once that file has been loaded by the OS itself.<br /><br />If this is the case and the diskimage is different from the memoryimage, how can I find the location of the import section in the diskimage ?<br /><br />Regards,<br />             Binary construct</div>
+    <div class="meta">Posted on 2003-06-05 16:34:48 by Binary construct</div>
+   </div>
+   <div class="post" id="post-106117">
+    <div class="subject"><a href="#post-106117">VA's in PE files that are not loaded by OS</a></div>
+    <div class="body">Yes. To get file offset from VA, scan all sections, see which in which section VA is, then take relative offset to VA, and add section file offset.</div>
+    <div class="meta">Posted on 2003-06-05 16:52:30 by comrade</div>
+   </div>
+   <div class="post" id="post-106118">
+    <div class="subject"><a href="#post-106118">VA's in PE files that are not loaded by OS</a></div>
+    <div class="body">Check Iczelions PE-tutorials, part 6 has a function in the source called RVAToOffset that does just that ( what comrade mentions )</div>
+    <div class="meta">Posted on 2003-06-05 16:59:15 by david</div>
+   </div>
+   <div class="post" id="post-106150">
+    <div class="subject"><a href="#post-106150">VA's in PE files that are not loaded by OS</a></div>
+    <div class="body"><pre><code><br />OPTION PROLOGUE&#58;NONE<br />OPTION EPILOGUE&#58;NONE<br />RVAToOffset PROC<br />	mov esi,&#91;esp+4&#93;;pPE<br />	assume esi&#58;ptr IMAGE_DOS_HEADER<br />	add esi,&#91;esi&#93;.e_lfanew<br />	assume esi&#58;ptr IMAGE_NT_HEADERS<br />	mov edi,&#91;esp+8&#93;	; edi == RVA<br />	mov edx,esi<br />	add edx,sizeof IMAGE_NT_HEADERS<br />	movzx ecx,WORD PTR&#91;esi&#93;.FileHeader.NumberOfSections<br />	assume edx&#58;ptr IMAGE_SECTION_HEADER<br />	.while ecx&gt;0	; check all sections<br />		.if edi&gt;=&#91;edx&#93;.VirtualAddress<br />			mov eax,&#91;edx&#93;.VirtualAddress<br />			add eax,&#91;edx&#93;.SizeOfRawData<br />			.if edi&lt;eax	; The address is in this section<br />				mov eax,&#91;edx&#93;.VirtualAddress<br />				sub edi,eax	; edi == difference between the specified RVA and the section's RVA<br />				mov eax,&#91;edx&#93;.PointerToRawData<br />				add eax,edi	; eax == file offset<br />				add eax,&#91;esp+4&#93;<br />				ret 2*4<br />			.endif<br />		.endif<br />		add edx,sizeof IMAGE_SECTION_HEADER<br />		dec ecx<br />	.endw<br />	mov eax,edi<br />	ret 2*4<br />RVAToOffset endp<br />OPTION PROLOGUE&#58;PROLOGUEDEF<br />OPTION EPILOGUE&#58;EPILOGUEDEF<br /></code></pre><br />Ripped off from my code. Careful when using this since I did not preserve edi and esi.</div>
+    <div class="meta">Posted on 2003-06-06 01:15:23 by roticv</div>
+   </div>
+   <div class="post" id="post-106359">
+    <div class="subject"><a href="#post-106359">Thanks. Works but don't fully understand code</a></div>
+    <div class="body">Thanks for your replies. I've got the code working and can now find the import section inside the file. <br /><br />However, there's something that I don't understand.  Roticv's code searches the section headers to see if the target RVA falls between the RVA for the section and its end. Why would the RVA for the import section (read from the data directory) not match exactly the RVA from the respective section header ?<br /><br />Thanks again,<br />                     Binary construct</div>
+    <div class="meta">Posted on 2003-06-08 08:32:35 by Binary construct</div>
+   </div>
+   <div class="post" id="post-106361">
+    <div class="subject"><a href="#post-106361">VA's in PE files that are not loaded by OS</a></div>
+    <div class="body">It is a generic code to find fileoffset from RVA. It could be applied to finding the fileoffset of the entrypoint or import table and so on. <br /><br />Anyway the code is just something I have extracted from icezlion's tutorial and reused it to my needs, thus it could not be considered my work.</div>
+    <div class="meta">Posted on 2003-06-08 08:44:47 by roticv</div>
+   </div>
+   <div class="post" id="post-106429">
+    <div class="subject"><a href="#post-106429">VA's in PE files that are not loaded by OS</a></div>
+    <div class="body"><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/debug/base/imagervatova.asp">http://msdn.microsoft.com/library/default.asp?url=/library/en-us/debug/base/imagervatova.asp</a><br /><br />API function todo it for you</div>
+    <div class="meta">Posted on 2003-06-08 19:44:16 by SFP</div>
+   </div>
+  </div>
+ </body>
+</html>

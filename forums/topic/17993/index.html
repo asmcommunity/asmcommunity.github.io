@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>TSS-based task switching - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17993" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=17993">TSS-based task switching</a></p>
+   <div class="post" id="post-138889">
+    <div class="subject"><a href="#post-138889">TSS-based task switching</a></div>
+    <div class="body">Does anyone have an basic (read: very simply) examples on how to do this?<br /><br />I have read through the intel spec, and some examples from others - but I can't seem to get it.<br /><br />The simplest example I could find uses 2 TSS', one for the main program and one for the 'child' process - This would work fine for me (if I could get it to work) as the 'main' process can be the IDLE loop, while the child can be the test app I want to load.<br /><br />Step by step documentation on how to set it up would be great, but I'll take any help I can get :)<br /><br />Thanks</div>
+    <div class="meta">Posted on 2004-04-13 23:24:17 by Sentient</div>
+   </div>
+   <div class="post" id="post-138895">
+    <div class="subject"><a href="#post-138895">TSS-based task switching</a></div>
+    <div class="body">Okay... first, I assume you are in proper 32bit mode, have set up your GDT with entries for the TSS'es you want to use, and second that you TSS structures are filled out properly :)<br /><br />Next, before any task switching is done, you must initially load the task register - something along the lines of &quot;mov ax, tsrs_ring0 / ltr ax / clts&quot;.<br /><br />Now, you're basically ready to do a task switch. Depending on your OS kernel, your might do additional initialization either before or after setting up the initial task. I prefer setting up the initial task early, so various faults can be handled through TSS.<br /><br />Anyway, iirc a taskswithc is as simple as a jmp imm16:imm32 - like &quot;jmp mytss:0&quot;. But it's been a while since I messed with this stuff, so I might be wrong. (Oh, and keep in mind that this might be easier to encode in nasm or fasm than masm).</div>
+    <div class="meta">Posted on 2004-04-14 00:00:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-138900">
+    <div class="subject"><a href="#post-138900">TSS-based task switching</a></div>
+    <div class="body">Im using nasm (which I never thought I'd like, but now I love it :) )<br /><br />I have created a default GDT with 20 entries, with NULL, CODE, DATA, STACK and the rest are NULLS<br /><br />I load this when I first enter PMode.<br /><br />Because the file is relocated when its loaded, I dont know the values for the TSS descriptor until after the GDT is loaded - so I recalculate one of the NULL (at the end) descriptors and make it a valid TSS descriptor then reload the GDT via LGDT again. (Is this ok?) :)<br /><br />Everything else you said makes sense to me, except one thing.<br /><br />When issuing the:<br />   JMP desc:0x0000<br /><br />the system will attempt to update the current task's TSS - in particular clearing the Busy flag. How do I handle this?</div>
+    <div class="meta">Posted on 2004-04-14 01:03:19 by Sentient</div>
+   </div>
+   <div class="post" id="post-138908">
+    <div class="subject"><a href="#post-138908">TSS-based task switching</a></div>
+    <div class="body">If anyone can understand this, and spot the problem - it would be hugely appreciated.<br /><br />When I execute the JMP 0x28:0, i get a GPF<br /><br /><br />-- START CODE --<br /><br />GDTR:<br />	DW		6*8-1				; GDT = 6 Entries<br />	DD		BIG_GDT				; GDT Base<br />BIG_GDT:<br />; NULL (0x00)<br />	DD	0x00000000<br />	DD	0x00000000<br />; CODE (0x08)<br />	DD	0x0000FFFF<br />	DD	0x00CF9A00<br />; DATA (0x10)<br />	DD	0x0000FFFF<br />	DD	0x00CF9200<br />; STACK (0x18)<br />	DD	0x00000040<br />	DD	0x00C09210<br />; TASK SELECTOR (0x20)<br />	DD	0x00000000<br />	DD	0x00000000<br />; TASK SELECTOR (0x28)<br />	DD	0x00000000<br />	DD	0x00000000<br /><br /><br /><br /><br />ALIGN 16<br />KERNEL_SEL	TIMES 26 DD 0<br />ALIGN 16<br />TASK_SEL	TIMES 26 DD 0<br /><br /><br />;	link,	00 	[2]<br />;       esp0,	04	[4]<br />;       ss0,	08	[2]<br />;       esp1,	0C	[4]<br />;       ss1,	10	[2]<br />;       esp2,	14	[4]	<br />;       ss2,	18	[2]<br />;       cr3,	1C	[4]<br />;       eip,	20	[4]<br />;       eflags,	24	[4]<br />;       eax,	28	[4]<br />;       ecx,	2C	[4]<br />;       edx,	30	[4]<br />;       ebx,	34	[4]<br />;       esp,	38	[4]<br />;       ebp,	3C	[4]<br />;       esi,	40	[4]<br />;       edi,	44	[4]<br />;       es,	48	[2]<br />;       cs,	4C	[2]<br />;       ss,	50	[2]<br />;       ds,	54	[2]<br />;       fs,	58	[2]<br />;       gs,	5C	[2]<br />;       ldtr;	60	[2]<br />;  	trace	64	<br />;       io_map_addr 66	[2]<br />;	LENGTH = 68<br /><br />;===============================================================================<br />;	CREATE TASK DESCRIPTOR<br />;		: EAX = START EIP<br />;		: NONE<br />;		: NONE<br />;===============================================================================<br /><br />; BTW: EAX = MAIN: from another module.<br /><br />TSS_SETUP:<br />	MOV	DWORD , EAX	; EIP<br /><br />	; SETUP KERNEL TSS<br />	<br />	MOV	WORD , 0	; Trace<br />	MOV	WORD , 0x68	; IO Map<br />	MOV	DWORD , 0x00	; LDTR<br />	MOV	DWORD , 0x10	; GS<br />	MOV	DWORD , 0x10	; FS<br />	MOV	DWORD , 0x10	; DS<br />	MOV	DWORD , 0x18	; SS<br />	MOV	DWORD , 0x10	; ES<br />	MOV	DWORD , 0x08	; CS<br />	MOV	DWORD , 0x3FFFF; ESP<br />	MOV	DWORD , 0x202	; FLAGS<br />	MOV	DWORD , 0x18	; SS0<br />	MOV	DWORD , 0x3FFFF; ESP0<br />	<br />; SETUP SELECTOR 0x20<br />	MOV	WORD , 0x68<br />	MOV	DWORD , KERNEL_SEL<br />	MOV	BYTE , 0x89<br />	MOV	BYTE , 0x00<br />	MOV	EAX, KERNEL_SEL<br />	SHR	EAX, 24<br />	MOV	BYTE , AL<br /><br />	; SETUP TASK TSS<br />	<br />	MOV	WORD , 0		; Trace<br />	MOV	WORD , 0x68	; IO Map<br />	MOV	DWORD , 0x00	; LDTR<br />	MOV	DWORD , 0x10	; GS<br />	MOV	DWORD , 0x10	; FS<br />	MOV	DWORD , 0x10	; DS<br />	MOV	DWORD , 0x18	; SS<br />	MOV	DWORD , 0x10	; ES<br />	MOV	DWORD , 0x08	; CS<br />	MOV	DWORD , 0xFFFF	; ESP0<br />	MOV	DWORD , 0x18	; SS0<br />	MOV	DWORD , 0x202	; FLAGS<br />	MOV	DWORD , 0xFFFF	; ESP<br />	<br />; SETUP SELECTOR 0x28<br />	MOV	WORD , 0x68<br />	MOV	DWORD , TASK_SEL<br />	MOV	BYTE , 0x89<br />	MOV	BYTE , 0x00<br />	MOV	EAX, TASK_SEL<br />	SHR	EAX, 24<br />	MOV	BYTE , AL<br /><br />; RELOAD NEW DESCRIPTORS<br />	LGDT	<br /><br />; LOAD NULL LDT<br />	XOR	EAX, EAX<br />	LLDT	AX<br /><br />; LOAD CURRENT TASK INTO TR<br />	MOV	AX, 0x20<br />	LTR	AX<br /><br />; JMP TO NEW TASK 0x28<br />	JMP	0x28:0<br /><br />	RET<br /><br /><br />Any help greatly appreciated as from best I can tell, I am doing the same as everyone else and following the Intel docs.</div>
+    <div class="meta">Posted on 2004-04-14 04:33:09 by Sentient</div>
+   </div>
+   <div class="post" id="post-138936">
+    <div class="subject"><a href="#post-138936">TSS-based task switching</a></div>
+    <div class="body">Hi  Sentient <br /><br />     Maybe the source code of the Menuet Operating System help you!<br />     Install the Menuet in to a floppy disk and read the disk by<br />     using Windows, because the file format of the disk is FAT.<br /><br />     Inside, there is a zip file with the source of the kernel.<br /><br />     The first version was made for NASM, but now is for FASM.<br /><br />     Good luck :alright: <br /><br />Regards,<br />Opcode</div>
+    <div class="meta">Posted on 2004-04-14 07:21:53 by Opcode</div>
+   </div>
+   <div class="post" id="post-138937">
+    <div class="subject"><a href="#post-138937">TSS-based task switching</a></div>
+    <div class="body">Ooops,<br /><br />     Here is the link:<br /><br />     <a target="_blank" href="http://www.menuetos.org">http://www.menuetos.org</a></div>
+    <div class="meta">Posted on 2004-04-14 07:22:37 by Opcode</div>
+   </div>
+   <div class="post" id="post-138938">
+    <div class="subject"><a href="#post-138938">TSS-based task switching</a></div>
+    <div class="body">Thank you for the link.<br /><br />I just noticed it when I came back to say I had figured it out - not that I'm sure what the problem was.<br /><br />I just went back to the completely idiot proof, super simple, leave nothing untouched theory and wrote 200+ lines of ASM to initalize everything. Works great now - pre-emptive multitasking with TSS working perfectly (well.. enough for what I wanted anyway) :)<br /><br />Thanks for all your help guys - Hopefully I can return the favour one day<br /><br />:alright:</div>
+    <div class="meta">Posted on 2004-04-14 07:50:26 by Sentient</div>
+   </div>
+  </div>
+ </body>
+</html>

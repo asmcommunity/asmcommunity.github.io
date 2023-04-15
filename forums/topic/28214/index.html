@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Getting status bar to appear - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28214" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28214">Getting status bar to appear</a></p>
+   <div class="post" id="post-199938">
+    <div class="subject"><a href="#post-199938">Getting status bar to appear</a></div>
+    <div class="body">I put a status bar in a simple asm prog and it didn't
+appear in the window. So I compared my source with the
+example COMCTLS.ASM in the win32asm package. One
+difference was that I hadn't provided a handler for
+WM_SIZE. COMCTLS.ASM has this WM_SIZE handler:
+<pre><code>
+    .elseif uMsg == WM_SIZE
+        invoke SendMessage,hToolBar,TB_AUTOSIZE,0,0
+        m2m caW, lParam[0]  ; client area width
+        m2m caH, lParam[2]  ; client area height
+        invoke GetWindowRect,hStatus,ADDR Rct
+        mov eax, Rct.bottom
+        sub eax, Rct.top
+        sub caH, eax
+        invoke MoveWindow,hStatus,0,caH,caW,caH,TRUE
+    .elseif uMsg == WM_PAINT
+    ...
+</code></pre>
+(caW and caH are local dwords.)
+I remmed out the part about the status bar and, as
+hoped, the status bar did not appear at run time.
+But the calculation for MoveWindow looks incorrect
+(e.g. lParam[2] is a dword, not a zero-extended word).
+So, I modified COMCTLS.ASM like this:
+<pre><code>
+    .elseif uMsg == WM_SIZE
+        invoke SendMessage,hToolBar,TB_AUTOSIZE,0,0
+        invoke MoveWindow,hStatus,0,0,0,0,TRUE  ;<<<NB
+    .elseif uMsg == WM_PAINT
+    ...
+</code></pre>
+and behold, the status bar shows up in its usual
+position with the correct size.
+Can anyone explain? It seems unnatural that an
+application would have to move a status bar "by hand".
+But if it doesn't, what else should we be doing to
+get it to appear?
+
+PS (edit): Instead of the MoveWindow instruction, this
+also gets the status bar to show up:
+invoke SendMessage,hStatus,uMsg,wParam,lParam
+
+
+This message was edited by Larry Hammick, on 5/30/2001 3:02:19 AM</div>
+    <div class="meta">Posted on 2001-05-30 00:53:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-199939">
+    <div class="subject"><a href="#post-199939">Getting status bar to appear</a></div>
+    <div class="body">It may seem unnatural to have to size a status bar, but that's a holdover thought from languages like VB, which does tons of additional work for you behind the scenes. I say additional, because the hard part of a status bar is drawing it, and the control is doing that for VB, VC or ASM.
+
+In the VB version, the status 'control' OCX wraps the status bar inside a wrapper of code. One thing this additional code does in sets up an event sink between itself and the parent form. Then, when the parent is sized, the status control resizes with it. It only seems to do it without code.
+
+In asm (or C/C++, analagous code), you must code for this event yourself, explicitly. That's what you did there in the WM_SIZE message. For the status bar to do this itself, it would have to intercept all the messages going to the parent window, and adjust itself when that message comes in.
+
+Catching all the messages like this is what's meant by subclassing. Since it forces all the window's messages to be processed TWICE, it isn't exactly the fastest way to do things.
+
+It isn't surprising that the following worked for you:
+
+<pre><code>
+.elseif uMsg == WM_SIZE
+        invoke SendMessage,hToolBar,TB_AUTOSIZE,0,0
+        invoke SendMessage,hStatus,uMsg,wParam,lParam
+    .elseif uMsg 
+    ...
+</code></pre>
+
+When this section executes, uMsg is WM_SIZE. wParam and lParam are the width and height of the window's client area. Aparently, the height is being ignored (MSDN suggests setting it to zero) over the SB_SETMINHEIGHT parameter. The width is of course exactly how wide we want it, so it works.
+
+It's actually an improvement over using MoveWindow, as MoveWindow must itself call SendMessage, and you've skiped an unneccessary step.</div>
+    <div class="meta">Posted on 2001-05-31 07:46:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-199940">
+    <div class="subject"><a href="#post-199940">Getting status bar to appear</a></div>
+    <div class="body">Thanks Ernie, you have made it quite clear. After
+reading your reply, I experimented with both wParam
+and lParam in
+invoke SendMessage,hStatusBar,uMsg,wParam,lParam.
+(uMsg = WM_SIZE)
+Both params seem to be ignored.</div>
+    <div class="meta">Posted on 2001-05-31 16:02:00 by Larry Hammick</div>
+   </div>
+  </div>
+ </body>
+</html>

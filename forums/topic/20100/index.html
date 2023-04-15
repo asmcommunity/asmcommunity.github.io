@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CreateThread &amp; CloseHandle question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20100" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20100">CreateThread &amp; CloseHandle question</a></p>
+   <div class="post" id="post-154011">
+    <div class="subject"><a href="#post-154011">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">People tell me each handle/ThreadID that is received during CreateThread call needs to be freed up with CloseHandle, or else windows just drops the thread object without freeing it. What about when I call CreateThread with last param = 0h? So now there is no handle i could free from the main process... What do I need to do now?<br />Dominik</div>
+    <div class="meta">Posted on 2004-12-11 05:36:21 by Dom</div>
+   </div>
+   <div class="post" id="post-154012">
+    <div class="subject"><a href="#post-154012">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">Thread identifier and thread handle is not the same thing. Even if you use null for last parameter, thread handle is still returned in eax. This handle can be closed anyway disregarding status of lpThreadId parameter.</div>
+    <div class="meta">Posted on 2004-12-11 06:06:14 by arafel</div>
+   </div>
+   <div class="post" id="post-154013">
+    <div class="subject"><a href="#post-154013">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">As <strong>arafel</strong> said, the thread handle isn't the same as the <em>ThreadID</em> - the return value from <em>CreateThread</em> is the thread handle, and this is the value you must call <em>CloseHandle</em> with. This is important if you want to avoid leaks; windows keeps a kernel-mode object open until all handles are closed, because you need to be able to query the return value from the thread even after the thread has stopped execution.<br /><br />You should not use <em>NULL</em> for the <em>lpThreadId</em> parameter, as this will cause your application to fail on 9x.<br /><br />The leak is not much of an issue on NT based systems (but of course should be fixed anyway!), but on 9x it can cause your application to run out of handles if you use a lot of threads - for instance the make/build process of an IDE.<br /><br />Using <em>CloseHandle</em> on the thread handle doesn't cause the thread to close, btw - it just means you can't suspend/resume/terminate the thread &quot;from the outside&quot;. So, close the handle right after <em>CreateThread</em> if you don't need to control the thread, otherwise close the handle once the thread has stopped executing.</div>
+    <div class="meta">Posted on 2004-12-11 06:38:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-154016">
+    <div class="subject"><a href="#post-154016">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">thx arafel, that was probably the reason why my TerminateThread call returned &quot;Unknown Handle&quot;<br />to f0dder: thx for the tip with failing on win9x. Before a friend of mine showed me his code (with lpThreadId = 0h) I always thought the call would only create the thread if there was a pointer &quot;lpThreadId&quot; given. So now I can tell him I was right not liking his source...<br /><br />whatever assembly question comes up you guys can always help. it's nice to know such guys... :)<br />Dominik</div>
+    <div class="meta">Posted on 2004-12-11 11:22:18 by Dom</div>
+   </div>
+   <div class="post" id="post-154147">
+    <div class="subject"><a href="#post-154147">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">Dom:<br /><br />When thread ends its works, OS check if there is one or more opened handles to it. If there are no handles, then OS free all resources created by the OS for the thread (not by the thread).<br /><br />If you call CloseHandle, then OS check if thread is still running. If it is not running, do the &quot;free resource&quot; thing.<br /><br />If you call TerminateThread while thread is running, thread will be destroyed without freeing resources.<br /><br />Try no using TerminateThread. Using it must be your last option. Try using messages or events to communicate between Threads. You can tell to other thread when the current thread has finished for example. I know there is an Iczelion's tutorial about threads, and another one about events. I read them and I think they are good to learn, but remember to try avoiding use of TerminateThread.<br /><br />That's all for now.<br /><br />Kecol.-</div>
+    <div class="meta">Posted on 2004-12-14 10:05:10 by Kecol</div>
+   </div>
+   <div class="post" id="post-154153">
+    <div class="subject"><a href="#post-154153">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">i know, TerminateThread is what's often called &quot;dirty programming&quot;...<br />as my thread writes some stuff to a file I just close the global file handle in my main process; the thread recognizes that WriteFile fails and terminates on his own...</div>
+    <div class="meta">Posted on 2004-12-14 12:22:00 by Dom</div>
+   </div>
+   <div class="post" id="post-154154">
+    <div class="subject"><a href="#post-154154">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">I suppose <div class="quote">...fails and terminates on his own...</div> means end thread with <pre><code>ret or ExitThread, and no TerminateThread</code></pre>.<br /><br />Simple idea: writting a file normally take no much time, so when main thread want close application, it can check if thread writing to the file has end. If no, then wait a few seconds and check it again. And If no..., then you can exit from your main thread in same way as you are doing until now.<br /><br />Kecol.-</div>
+    <div class="meta">Posted on 2004-12-14 12:58:22 by Kecol</div>
+   </div>
+   <div class="post" id="post-154156">
+    <div class="subject"><a href="#post-154156">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">If you want to wait for a thread to terminate, use WaitForSingleObject(Ex). If you want to wait for multiple threads to terminate, use WaitForMultipleObjects. OOP is wonderful ;)</div>
+    <div class="meta">Posted on 2004-12-14 14:37:37 by f0dder</div>
+   </div>
+   <div class="post" id="post-154200">
+    <div class="subject"><a href="#post-154200">CreateThread &amp; CloseHandle question</a></div>
+    <div class="body">to kecol: in this case writing to the file does not take much time, you are right. but the thread also needs to fetch the data that gets written and this takes some time. Actually it creates a list of files, so it browses trough all my fixed hard drives in order to put out a 30mb asci file list... so when the file handle gets closed by the main process, the writing thread just ret's.</div>
+    <div class="meta">Posted on 2004-12-15 09:16:36 by Dom</div>
+   </div>
+  </div>
+ </body>
+</html>

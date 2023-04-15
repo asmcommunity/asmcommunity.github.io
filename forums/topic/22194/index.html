@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GoAsm approach for external functions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22194" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22194">GoAsm approach for external functions</a></p>
+   <div class="post" id="post-166944">
+    <div class="subject"><a href="#post-166944">GoAsm approach for external functions</a></div>
+    <div class="body">GoAsm declares defaulty all invoked functions as externals. Based on the GoAsm approach, the <span class="mono">apicall</span> macro eliminates the use of include files and import libraries but there is no parameter checking.<br /><br /><pre><code>.386<br />.model flat,stdcall<br />option casemap:none<br />include \masm32\include\windows.inc<br />include apicall.inc<br /><br />WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD<br /><br />.data<br />ClassName    db &quot;WndClass&quot;,0<br />Application  db &quot;Simple Window&quot;,0<br /><br />.data?<br />hInstance HINSTANCE ?<br />CommandLine LPSTR ?<br />.code<br />start:<br />	apicall GetModuleHandleA, NULL<br />	mov    hInstance,eax<br />	apicall GetCommandLineA<br />	mov    CommandLine,eax<br />	apicall WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT<br />	apicall ExitProcess,eax<br />.<br />.</code></pre><br /><br /><pre><code>apicall MACRO name:REQ,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13,p14,p15<br /><br />local pos,counter<br />counter=0<br /><br />    FOR arg,&lt;p15,p14,p13,p12,p11,p10,p9,p8,p7,p6,p5,p4,p3,p2,p1&gt;<br />        IFNB &lt;arg&gt;<br /><br />            counter=counter+1<br />            pos=@InStr(1,arg,&lt;ADDR&gt;) OR @InStr(1,arg,&lt;addr&gt;) OR @InStr(1,arg,&lt;Addr&gt;)<br /><br />            IF pos<br /><br />                IF (OPATTR(@SubStr(arg,%pos+5))) EQ 98<br />                    lea eax,@SubStr(&lt;arg&gt;,%pos+5)<br />                    push eax<br />                ELSE<br />                    push OFFSET @SubStr(&lt;arg&gt;,%pos+5)<br />                ENDIF<br /><br />             ELSE<br />             <br />             push arg<br />             <br />             ENDIF<br />        ENDIF<br />    ENDM<br /><br />API_function TEXTEQU @CatStr(name,&lt;@&gt;,%4*counter)<br />EXTERNDEF API_function:proc<br />call API_function<br /><br />ENDM</code></pre><br /><br /><pre><code>\masm32\bin\ml /c /coff SimpleWnd.asm<br />\goasm\golink SimpleWnd.obj kernel32.dll user32.dll</code></pre><br /><br />Notice that it&#39;s possible to link the object file with Polink or MS link.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1061" target="_blank">Apicall2.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-10-16 05:05:27 by Vortex</div>
+   </div>
+   <div class="post" id="post-166949">
+    <div class="subject"><a href="#post-166949">Re: GoAsm approach for external functions</a></div>
+    <div class="body">Time a go I have played with Golink for do the assembly of my nasm files (basic ones, included some of the iczelions), you should note that GoLink let to his assembler pass a flag or something about where a section is shared, the tutorial about Hooks was not able to run OK (even that is linked OK), because I dont find any flag in the Linker, the only way that I can think of is a hex editor and reverse the section???<br /><br /><br /><br />Geremy know about this issue, tought dont know if new version of GoLink support this now???</div>
+    <div class="meta">Posted on 2005-10-16 10:25:27 by rea</div>
+   </div>
+   <div class="post" id="post-167104">
+    <div class="subject"><a href="#post-167104">Re: GoAsm approach for external functions</a></div>
+    <div class="body"><div class="quote">Geremy know about this issue, tought dont know if new version of GoLink support this now???</div><br /><br />Hi rea!<br />Yes we corresponded about this before.<br /><br />So you want to be able to use a linker switch to make a section shared because (unlike GoAsm) the assembler you are using does not permit you to specify this in the source script?<br /><br />I have not actually added this feature to GoLink, but I have done something else which ought to provide you with a solution.&nbsp; Previously if GoLink found two sections of the same name, one which had the shared attribute (characteristics flag 10000000h) and one which did not, it would make two separate sections.&nbsp; This was on the assumption that the user intended this.&nbsp; However the GoAsm help file has advised for some time that shared sections ought to have a unique name eg. &quot;ShData&quot; or something like that.&nbsp; And there does not seem to be any harm in combining same-name shared and non-shared sections.&nbsp; So the version of GoLink attached below (version 26.4 beta) will now combine such sections (ie. it will combine two sections of the same name after all, even if their shared flags are different).<br /><br />So you can now:-<br /><br />1. Make a small source file and declare a section using this syntax:-<br />&nbsp; &nbsp; DATA SECTION &quot;ShData&quot; SHARED<br />2. Add a little data to make sure that the object file is made.<br />3. Assemble using GoAsm.<br />4. In your source code which you are going to assemble using the other assembler, ensure that the section which you want to be shared has the same name as the one in the GoAsm file.<br />5. Link all object files together with GoLink.<br /><br />You should then find that your intended shared section does indeed have the shared attribute.<br /><br />This version of GoLink is a beta version because it is a 32/64-bit version of GoLink.&nbsp; This works fine however, I haven&#39;t had any bug reports.<br /><br />See <a target="_blank" href="http://www.GoDevTool.com">my web site</a> for full details and free downloads of the &quot;Go&quot; tools and 64-bit developments.<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1079" target="_blank">Golink264.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-10-22 04:24:28 by jorgon</div>
+   </div>
+  </div>
+ </body>
+</html>

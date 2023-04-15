@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>line count routine - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14300" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=14300">line count routine</a></p>
+   <div class="post" id="post-110613">
+    <div class="subject"><a href="#post-110613">line count routine</a></div>
+    <div class="body">I've read a few posts and different algos about line counting, and it got me courious about my solution.  Mainly I'm curious if I'm doing it the 'wrong' way.<br /><br />Basically, I use CreateFile/GetFileSize/GlobalAlloc/GlobalLock/ReadFile.  Then I loop through every char byte by byte checking for  10 (line feed).  It seems like it would be horribly unoptimized doing it byte by byte but it's pretty fast on my work machine (p4 2.4 ghz/256mb ram).  I'm not exactly a hardware guru by any means, so I don't know if that's a good enough test platform to test average speed or whatnot.<br /><br />I'm grabbing the filename from the commandline and the program just displays a messagebox with the number of lines and then exits.  Windows.inc (28 thousand odd lines) pops up the messagebox a split second after hitting enter at a dos prompt (lc &quot;c:\masm32\include\windows.inc&quot;.  Now I don't think I've ever had a single source file that comes anywhere close to 28000 lines, so am I safe with the byte by byte loop?<br /><br /><pre><code><br />        mov esi,pMemory<br />        xor ebx,ebx<br />_start&#58;<br />    cmp ebx,fSize<br />    jge _eof<br />    cmp byte ptr&#91;esi + ebx&#93;,13<br />    jz _crlf<br />    inc ebx<br />    jmp _start<br />_crlf&#58;<br />    inc ebx<br />    inc lCount<br />    jmp _start<br />_eof&#58;<br />;here I just clean up and close the file handle, free the memory, etc<br /></code></pre> <br /><br />Is that a bad solution?  It seems that it would be, but all of my tests seem really good.<br /><br /><br />cheers,<br />will</div>
+    <div class="meta">Posted on 2003-07-15 14:20:02 by Will</div>
+   </div>
+   <div class="post" id="post-110639">
+    <div class="subject"><a href="#post-110639">line count routine</a></div>
+    <div class="body">Byte by byte is pretty much the only way I can think of doing this.<br />Unless you find a magic number that'll test 4 bytes at a time for the character.<br /><br />A good test platform is what you'll expect to run the code on under normal conditions. If you're standard platform is a 386, then your P4 will be misleading as a benchmark system, but if you're targeting current and future processors Intel has a good share of the market!<br /><br />You should consider using a register such as edx to store the &quot;lCount&quot; variable, it may help performance a bit.<br /><br />Here is my version. I take some pain in setting up, as it allows me to remove the comparison to &quot;fSize&quot; inside the loop (done via the increment). On a P4, you may want to replace the inc and dec instructions with add XXX, 1 and sub XXX, 1 respectively.<br /><br />Also try to ensure that the loop is aligned, this will buy you a fair bit of speed!<br /><br /><pre><code><br />  mov eax, fSize<br />  mov ecx, pMemory<br />  xor edx, edx<br />  lea ecx, &#91;eax + ecx&#93;<br />  neg eax<br />  dec eax<br /><br />@@&#58;<br />  inc eax<br />  jz  @F<br />  cmp byte ptr &#91;eax + ecx&#93;, 13<br />  jne @B<br />  inc edx<br />  jmp @B<br /><br />@@&#58;<br />  mov lCount, edx<br /></code></pre><br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-07-15 17:29:50 by Mirno</div>
+   </div>
+   <div class="post" id="post-110643">
+    <div class="subject"><a href="#post-110643">line count routine</a></div>
+    <div class="body">Thanks for the info Mirno.  Please forgive my ignorance, but what do you mean by 'ensure that the loop is aligned'?</div>
+    <div class="meta">Posted on 2003-07-15 18:05:51 by Will</div>
+   </div>
+   <div class="post" id="post-110645">
+    <div class="subject"><a href="#post-110645">line count routine</a></div>
+    <div class="body">dunno! if this is faster.<pre><code>lcnt&#58;<br />    push    ebx<br />    push    esi<br />    mov     esi, &#91;esp+12&#93;<br />    mov     ecx, &#91;esp+16&#93;<br />    dec     ecx<br />    xor     ebx, ebx<br />    inc     ebx<br />    xor     eax, eax<br />    __bytec&#58;<br />        xor     edx, edx<br />        cmp     BYTE PTR &#91;esi+ecx&#93;, 13d<br />        cmove   edx, ebx<br />        add     eax, edx<br />        dec     ecx<br />        jnz     __bytec<br />    pop     esi<br />    pop     ebx<br />    retn    8</code></pre>you can use MMX-SSE with a combination of pcmpeqb-pmovmskb-shr-adc, propagate 13(0Dh) using movd-punpcklbw(3x). Just an idea. :)</div>
+    <div class="meta">Posted on 2003-07-15 18:24:25 by arkane</div>
+   </div>
+   <div class="post" id="post-110651">
+    <div class="subject"><a href="#post-110651">line count routine</a></div>
+    <div class="body">Been there, done that, bought the T-shirt:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=13727">http://www.asmcommunity.net/board/index.php?topic=13727</a></div>
+    <div class="meta">Posted on 2003-07-15 18:40:39 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-110656">
+    <div class="subject"><a href="#post-110656">Re: line count routine</a></div>
+    <div class="body"><div class="quote"><br />I've read a few posts and different algos about line counting, and it got me courious about my solution.  Mainly I'm curious if I'm doing it the 'wrong' way.</div><br /><br />That's great.  As I said, I've read different posts on this subject.  I was curious if there was anything wrong with <strong>my</strong> simpler algo, since it seems to work pretty fast for me.</div>
+    <div class="meta">Posted on 2003-07-15 18:50:47 by Will</div>
+   </div>
+   <div class="post" id="post-110658">
+    <div class="subject"><a href="#post-110658">line count routine</a></div>
+    <div class="body">There is nothing 'wrong' with the code - it does the job.  Other code would have other features.  Use that code that has the features you desire.  Often for me the primary feature of the code I use is that it is mine. :)</div>
+    <div class="meta">Posted on 2003-07-15 18:58:15 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-110659">
+    <div class="subject"><a href="#post-110659">line count routine</a></div>
+    <div class="body">I think there is nothing wrong.<br /><br />I'm sure you've already done this: test the algo using odd and even string length.<br /><br />here's more info:<br /><br />Windows = CRLF or 0D0A or \r\n<br />Unix = LF<br />Mac OS = CR</div>
+    <div class="meta">Posted on 2003-07-15 19:04:16 by arkane</div>
+   </div>
+   <div class="post" id="post-110666">
+    <div class="subject"><a href="#post-110666">line count routine</a></div>
+    <div class="body"><strong>Mirno,</strong><br /><br />&quot;Byte by byte is pretty much the only way I can think of doing this.<br />Unless you find a magic number that'll test <strong>4 bytes at a time</strong> for the character.&quot;<br /><br />If the working buffer is for example 2000 bytes long<br />put zero at 2001 byte (your buffer should be larger at least 10 bytes!!)<br />and try my faster InSrtCR proc:<pre><code><br />InStrCR proto    lpBuffer&#58;DWORD<br /><br />;Usage&#58;  push offset Buffer<br />;        call InStrCR <br />;On exit&#58; eax-&gt;num of CRs<br /><br />OPTION PROLOGUE&#58;NONE                   ; turn it off<br />OPTION EPILOGUE&#58;NONE                   ;<br />Align 16                               ; Align 16 before the proc<br />InStrCR proc    lpBuffer&#58;DWORD<br />        mov     edx, &#91;esp+4&#93;           ; edx-&gt;lpBuffer<br />        db      3Eh<br />        mov     ecx, -4<br />        push    ebx                    ; save ebx<br />        push    edi                    ; save edi<br />        mov     edi, &#91;edx&#93;             ; edi-&gt;lpBuffer<br />        xor     ebx, ebx               ; ebx-&gt;counter<br />BytesScan&#58;<br />        lea     eax, &#91;edi+0FEFEFEFFh&#93;<br />        xor     edi, 0D0D0D0Dh         ; 0Dh =13-&gt;CR<br />        add     edx, 4<br />        add     edi, 0FEFEFEFFh<br />        or      eax, edi               ; testing 13 and 0 simultaneously<br />        mov     edi, &#91;edx&#93;<br />        test    eax, 80808080h<br />        je      BytesScan              ; 4 clocks per 4 bytes<br />SrchNextByte&#58;<br />        cmp     byte ptr &#91;edx+ecx&#93;,0Dh<br />        je      IncCounter<br />        cmp     byte ptr &#91;edx+ecx&#93;,0   ; is it the end of buffer-&gt;2001 byte and beyond!!!<br />        je      ToEnd<br />        add     ecx, 1                 ; ecx-&gt; -4 to 0<br />        jne     SrchNextByte<br />        add     ecx, -4                ; ecx = -4<br />        jno     BytesScan<br />Align 16<br />IncCounter&#58;<br />        add     ebx, 1                 ; inc counter<br />        add     ecx, 1                 ; ecx-&gt; -4 to 0<br />        jne     SrchNextByte           <br />        add     ecx, -4                ; ecx = -4<br />        jno     BytesScan<br />Align 16<br />ToEnd&#58;<br />        pop     edi                    ; restore edi<br />        mov     eax, ebx               ; ebx=eax-&gt;counter<br />        pop     ebx                    ; restore ebx <br />        ret     4	<br />InStrCR endp<br />OPTION PROLOGUE&#58;PROLOGUEDEF            ; turn back on the defaults<br />OPTION EPILOGUE&#58;EPILOGUEDEF</code></pre><br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-07-15 19:49:09 by lingo12</div>
+   </div>
+   <div class="post" id="post-110722">
+    <div class="subject"><a href="#post-110722">line count routine</a></div>
+    <div class="body">Hi all!<br />IMHO, to minimize time of counting need previously write MOV AL,13 and use CMP al,[ ] inside the loop.</div>
+    <div class="meta">Posted on 2003-07-16 07:55:19 by MikDay</div>
+   </div>
+   <div class="post" id="post-110727">
+    <div class="subject"><a href="#post-110727">line count routine</a></div>
+    <div class="body"><strong>MikDay</strong>, that would not work.  The goal is to count multiple lines.</div>
+    <div class="meta">Posted on 2003-07-16 08:24:13 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-110811">
+    <div class="subject"><a href="#post-110811">line count routine</a></div>
+    <div class="body">Thanks guys!  You've all given me some new ideas that I'm playing with.<br /><br />What exactly did you mean though Mirno, with 'ensure that the loop is aligned'?</div>
+    <div class="meta">Posted on 2003-07-16 17:32:43 by Will</div>
+   </div>
+   <div class="post" id="post-111009">
+    <div class="subject"><a href="#post-111009">line count routine</a></div>
+    <div class="body">Hi  bitRAKE. In my previous post I want to say something like this:<br /><br />	mov esi,PMemory<br />	xor eax,eax<br />	cdq<br />	mov ecx,fSize<br />	jecxz L1		;FileLength may be=0<br />	dec ecx<br />	jz EofCount<br />	mov bl,13                 ;outside the loop<br /><br />CountLoop:<br />	cmp ,bl<br />	sete dl<br />	add eax,edx<br />	dec ecx<br />	jnz CountLoop<br />	<br />EofCount:<br />	mov lCount,eax	<br />	<br />	<br /><strong>By the way, Will. Why your sample contains:</strong><br />	cmp ebx,fSize<br />                jge _eof	;?signed jump<br /> <br />FileSize is unsigned value. If the size of tested file is more or equal 2^31,<br />you will get wrong result.</div>
+    <div class="meta">Posted on 2003-07-18 07:00:56 by MikDay</div>
+   </div>
+   <div class="post" id="post-111042">
+    <div class="subject"><a href="#post-111042">line count routine</a></div>
+    <div class="body">MikDay:<br />I test for file length of 0 prior to entering that loop.  The jge is kind of a long story.  I've gotten in the habit of doing that on the off chance that something else fails and the file pointer increments past the actual file size.  It's more of a paranoid thing to catch any other error in my code while I'm testing a new algo so I don't have to do an end task on a frozen program.  Is a jge any different then a je in terms of speed or general performance?  I'm not too knowledgeable in that respect.  As for the 2^31 filesize being greater then 0ffffffffh or whatever.....this is only meant for my use for counting lines in source code files and if I ever have source files that large I'll have more to worry about (like all my hair being pulled out, needing a padded room, etc) then a gpf.  Besides, this algo is really only 'good' for small source files anyways.  :)<br /><br />I still don't understand the 'ensure loop is aligned' comment though.</div>
+    <div class="meta">Posted on 2003-07-18 11:12:16 by Will</div>
+   </div>
+   <div class="post" id="post-111070">
+    <div class="subject"><a href="#post-111070">line count routine</a></div>
+    <div class="body"><strong>Will</strong>, alignment is the placing of code on particular boundaries. As you know powers of 2 mean a lot in computing, and the case of placing your code is no exception.<br /><br />The cache will hold chunks of data (a cache line) of a particular size (the size is processor architecture dependant). Typically this will be something like 32 bytes. Each of these chunks are a copy of memory that is fast to access (2 clocks vs 100s of memory on a P4), and so making the most of this space is important. Caches for implementation reasons will only fetch lines that are aligned to a boundary in memory. This means that the bottom N bits are zero, and in the case of a 16 byte cache line, N will usually be 4 (2^N = size of cache line). This makes things easy to find:<br /><br />If you want data at address X in our 16-byte cache line machine, then:<br /><pre><code><br />found = -1;<br />for &#40;i = 0; i &lt; cache_size; i++&#41;<br />  if &#40;cacheline&#91;i&#93;.addr == &#40;X &amp; 0xFFFFFFF0&#41;&#41;<br />  &#123;<br />    found = i;<br />    break;<br />  &#125;<br /><br />if &#40;found &lt; 0&#41;<br />  return CacheMiss&#40;&#41;; // We need to go fetch the data!<br />else<br />  return cacheline&#91;i&#93;.data &gt;&gt; &#40;X &amp; 0xF&#41;;<br /></code></pre><br /><br />It means that the hardware should never have 2 cached copies of the same data (updating one, and not the other could be a disaster if the wrong one got copied back with stale data), and that the comparators in the hardware can be smaller that the full address width (this can help timing, searching a big cache can push the limits of the clock, this is why the P3 Celerons were more overclockable than the P3-propper. The smaller cache meant less things to search, so more tolerance on the clock edges).<br /><br />This method though does have the downside of making the cache less effective if the programmer hasn't put data on boundaries. If the data isn't packed tight, then part of the cache line is going to waste, hence more lines are taken up (this in it self isn't bad if the data set is small, but if you have a bigger amount of data, then you could run out of cache). Second problem is that of the data being misaligned, this means that half of the data is on one cache line, the other half is in another. So a worst case scenario would be to place data such that you need two cache lines per item.<br /><br />Code suffers from the exact same problem, if a loop is placed so that it starts on a cache boundary, it is going to take less space inside the cache, and so less likely to be flushed out. If it is in the cache then there is less strain on memory bandwidth, so other data accesses should potentially be quicker too.<br /><br /><br />If you use the &quot;ALIGN&quot; directive, then MASM will insert NOPs for you to get the code placed on the appropriate boundary. If you benchmark your code with and without an &quot;ALIGN 16&quot; command before the loop, you should see some difference in speed (asuming you weren't lucky, and it already was)! Also use this before the PROC declaration to make that start on a suitable boundary.<br /><br />When building your code use the following command line to generate a list file:<br />\masm32\bin\ml /c /Flcode.txt /Sa /Sn mycode.asm<br /><br />This will create a HUGE file (it lists all of the includes and all that junk) called code.txt.Down the bottom of this file there will be the code and the hex that it represents. If you look at where things are placed, then you can (if you are really concerned about speed) select instructions accordingly (e.g. changing &quot;cmp &lt;reg&gt;, 0&quot; for &quot;or &lt;reg&gt;, &lt;reg&gt;&quot;, and &quot;dec &lt;reg&gt;&quot;, &quot;sub &lt;reg&gt;, 1&quot;) for placement reasons. But only if you REALLY want to crush every last clock out of your code!<br /><br />Mirno</div>
+    <div class="meta">Posted on 2003-07-18 15:01:00 by Mirno</div>
+   </div>
+  </div>
+ </body>
+</html>

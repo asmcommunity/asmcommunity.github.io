@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>SysInit / SysDone - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25185" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25185">SysInit / SysDone</a></p>
+   <div class="post" id="post-184348">
+    <div class="subject"><a href="#post-184348">SysInit / SysDone</a></div>
+    <div class="body">BiteRider,<br /><br />I came across a unique problem while attempting to write custom controls and packing them into a DLL.&nbsp; My problem was where to stick the SysInit/SysDone routine.&nbsp; A DLL has a different type of entry point, one that may be called more than once, so I&#39;m leery of placing it in the DLL Entry routine.&nbsp; Since the objects I&#39;m using doesn&#39;t require the startup/shutdown routine I was tempted not to even add SysInit/SysDone until i realized that I had a more reliable location: inside the WndProc for the WM_CREATE and WM_DESTORY messages.&nbsp; Since I&#39;m writing custom controls, this will be perfect since it could run startup/shutdown code for every instance of the custom control (as long as I don&#39;t use any global memory).<br /><br />So why am I writing this?<br /><br />The problem is I&#39;m limited to having only ONE custom control per DLL in this fashion.&nbsp; I have no way of controlling what objects are to be affected by the SysInit/SysDone.&nbsp; This is because everything is being MACRO compiled at once.&nbsp; The only way I can think of to allow for two unique object &#39;namespaces&#39; to be compiled together and stored into a DLL is to build each once separately in separate *.OBJ&#39;s and link them into one more encompassing DLL.&nbsp;  I haven&#39;t tried this yet, but I thought I would point out the limitation.&nbsp; You seem to be full of bright idea&#39;s these days, so I thought I would bring the issue into the lime light to see what comes of it :)<br /><br />Best Regards,<br />:NaN:<br /></div>
+    <div class="meta">Posted on 2006-08-08 23:05:16 by NaN</div>
+   </div>
+   <div class="post" id="post-184353">
+    <div class="subject"><a href="#post-184353">Re: SysInit / SysDone</a></div>
+    <div class="body">Hi NaN<br />First of all, it’s nice to see your are back!<br /><br />I’m using this code to initialize a DLL. I’m not aware of a problem with it.<br />SysInit&nbsp; is called only once on the DLL attach. All included objects calls their Startup method (BoundMethod) if defined. SysDone is called the same way on detach making the object housekeeping calling the defined Shutdown methods.<br /><br /><pre><code>DllMain proc public hDllInstance:Handle, dReason:dword, dReserved:dword<br />&nbsp; &nbsp; mov eax, dReason<br />&nbsp; &nbsp; .if eax == DLL_PROCESS_ATTACH<br />&nbsp; &nbsp; &nbsp; SysInit hDllInstance<br />&nbsp; &nbsp; &nbsp; DbgText &quot;Dll attached&quot;<br />&nbsp; &nbsp; &nbsp; m2m hInstance, hDllInstance<br />&nbsp; &nbsp; .elseif eax == DLL_PROCESS_DETACH<br />&nbsp; &nbsp; &nbsp; DbgText &quot;Dll dettached&quot;<br />&nbsp; &nbsp; &nbsp; SysDone<br />&nbsp; &nbsp; .endif<br />&nbsp; &nbsp; xor eax, eax<br />&nbsp; &nbsp; inc eax<br />&nbsp; &nbsp; ret<br />DllMain endp</code></pre><br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-08-09 05:01:54 by Biterider</div>
+   </div>
+   <div class="post" id="post-184371">
+    <div class="subject"><a href="#post-184371">Re: SysInit / SysDone</a></div>
+    <div class="body">My concern with that approach is the following:<br /><br />(1)&nbsp; You write your controls all in one DLL, and when attached to a process, the startup does any initializations globally for the controls.<br />(2)&nbsp; Your process is running happily and displaying the controls as needed (say one is persistant through the entire process).<br />(3)&nbsp; At some point, with out quiting this processs, a new process is started, perhaps uniquely different program, but uses the same controls<br />(4)&nbsp; As it starts up, it calls the very same assembly code and potentially corrupts the global memory that the first process depends on.<br /><br />Im probably being overly concerned over nothing, as I dont ever need to spell out a Startup/Shutdown routine in the objects, but I really dont know if any of the objects I&#39;m inheriting from does.&nbsp; <br /><br />What do you think?<br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2006-08-09 19:14:13 by NaN</div>
+   </div>
+   <div class="post" id="post-184372">
+    <div class="subject"><a href="#post-184372">Re: SysInit / SysDone</a></div>
+    <div class="body">Instead of talking about it, I decided to put it to the test and found I was half correct.&nbsp; As expected, every process attached/detached to the DLL will execute the Startup/Shutdown methods.&nbsp; However, in the startup method, incremented an object variable that is defined as 0 in the Object definition.&nbsp; Likewise, in the shutdown method I placed a decrement to the same variable.&nbsp; Lastly, I wrote an exportable proc that created an instance of the object, and then call an object method that will show a message box which displays the current value of the variable.<br /><br />To my surprise, the variable remained constant at 1 no matter how many concurrent processes were attached (and hence called the startup routine). I expected each process to affect the template in the DLL memory sequencially as more processes attach.&nbsp; I expected the number to reflect the number of active processes attached to the DLL.&nbsp; For me, this is a good thing, but im still surprised this is the result.&nbsp; <br /><br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2006-08-09 23:05:59 by NaN</div>
+   </div>
+   <div class="post" id="post-184373">
+    <div class="subject"><a href="#post-184373">Re: SysInit / SysDone</a></div>
+    <div class="body">All the joys of the paging mechanism and COW :)</div>
+    <div class="meta">Posted on 2006-08-09 23:33:20 by SpooK</div>
+   </div>
+   <div class="post" id="post-184374">
+    <div class="subject"><a href="#post-184374">Re: SysInit / SysDone</a></div>
+    <div class="body">Hi NaN<br />You have to think about DLLs like other resources. <br />Each process has a single copy and is responsible to manage it. Internally for the OS, this may be different, but each process has an exclusive (non shared) data section. <br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-08-10 00:53:48 by Biterider</div>
+   </div>
+   <div class="post" id="post-184394">
+    <div class="subject"><a href="#post-184394">Re: SysInit / SysDone</a></div>
+    <div class="body">Ah...¦nbsp; my bad! (Spiders in the attic it would seem).<br /><br />I&#39;m confusing .dll .Data? memory with memory mapped files, and the fact that you can share data between process (through the use of a dll) via memory mapped files.<br /><br />I was blurring this fact into the assumption that the .data segment itself is common to all process attached.<br /><br />The things you forget when you&#39;re a parent... ;)<br /><br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2006-08-10 18:36:20 by NaN</div>
+   </div>
+   <div class="post" id="post-185080">
+    <div class="subject"><a href="#post-185080">Re: SysInit / SysDone</a></div>
+    <div class="body">There is one thing that has been nagging me ever since this conversation:<br /><br />Com must do more than simply renaming DLL&#39;s and having a more structured approach to linked libraries.&nbsp; I know that ClassFactory objects increment an internal counter that is stored in the DLL&#39;s memory to keep track of how many COM objects are in use (through various processes).&nbsp; So how come in this case the number will increment as more objects/processes are created, and not in my simple DLL test?<br /><br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2006-09-04 16:47:59 by NaN</div>
+   </div>
+   <div class="post" id="post-185092">
+    <div class="subject"><a href="#post-185092">Re: SysInit / SysDone</a></div>
+    <div class="body">Humm...<br /><br />if multiple apps are using the DLL, that shouldn&#39;t increase the reference counter, since processes have a private memory space (unless of course your object is already shared across multiple processes, of course).<br /></div>
+    <div class="meta">Posted on 2006-09-04 17:50:13 by f0dder</div>
+   </div>
+   <div class="post" id="post-185113">
+    <div class="subject"><a href="#post-185113">Re: SysInit / SysDone</a></div>
+    <div class="body">Hi NaN<br />If you are speaking of a server in a DLL, then it is a ?in process server?. That means that all the code is placed in the same process as the client. The instance counter of each COM-Object is per process basis. It has no way to know what is running in another process.<br /><br />Exe and Remote Servers have other mechanisms (stubs and proxies) that allow to ?share? the code beyond the process boundary. This is a more advanced topic. IIRC, Japheth has an example on his homepage.<br /><br />Regards,<br /><br />Biterider<br /></div>
+    <div class="meta">Posted on 2006-09-05 01:06:23 by Biterider</div>
+   </div>
+   <div class="post" id="post-185213">
+    <div class="subject"><a href="#post-185213">Re: SysInit / SysDone</a></div>
+    <div class="body">Thanks for you thoughts.&nbsp; I thought the reference pointer tracked *all* COM objects created, regardless of process.&nbsp; So there must be more going on behind in the OS before it unloads a DLL.&nbsp; Having a ref count of 0 is obviously process dependent, and would have to ensure all process agree before it actually unloads.<br /><br />Thanks allot.<br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2006-09-09 16:53:43 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

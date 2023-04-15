@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Blocking Network Interrupt and HLT instruction issue.  - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30673" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30673">Blocking Network Interrupt and HLT instruction issue. </a></p>
+   <div class="post" id="post-215033">
+    <div class="subject"><a href="#post-215033">Blocking Network Interrupt and HLT instruction issue. </a></div>
+    <div class="body">Hi, <br />I have written a COM32 program which pxelinux loads it and executes when<br /> machine is booted over network. And the COM32 program should be blocked<br />till it receives an instruction from deployment server in UDP packet.<br /><br /> I am looking for a network interrupt that will make my machine to wait for<br /> an incoming udp packet, so that my server can send udp packet. Upon receiving the udp packet, the target machine should be able to reboot. <br /> <br />I have a issue with HLT instruction which is embedded inside the &#039;C&#039; language in COM32 program. It looks like this. . <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; int main()<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; for(;;)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; asm volatile(&quot;hlt&quot;);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; recv packet and execute instruction that is part of UDP packet.<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  }<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  return 0;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  }<br />I am executing this instruction to make the machine to halt. but this is not working. <br /><br /> <br />could you please help me out with this issue?<br />Any help on this issue will be highly appreciated. <br /><br />thank you, <br />Madhusudan M I</div>
+    <div class="meta">Posted on 2011-09-20 07:20:37 by Madhu</div>
+   </div>
+   <div class="post" id="post-215034">
+    <div class="subject"><a href="#post-215034">Re: Blocking Network Interrupt and HLT instruction issue. </a></div>
+    <div class="body">The hlt instruction only halts the CPU temporarily. Only until the next event (usually an interrupt) is triggered. On a modern system, lots of interrupts will occur, so a hlt never lasts long.<br />See here:<br />http://siyobik.info/main/reference/instruction/HLT<br /><br />You shouldn&#039;t use it yourself, as there is no need. It is also not a legal instruction for regular applications, as it is a privileged instruction (You will probably get a general protection fault).<br />The idle thread of the OS will issue hlt instructions.<br />You just need to design your code so that it will become idle when waiting.<br />In this case, just calling a blocking recv() is enough. Inside recv(), the OS will set your thread into a waiting state, and remove it from the active scheduling list (so it is idle, idle thread gets scheduled instead, and issues hlt instructions for you).<br />Once something comes in on the socket belonging to your thread, the OS will wake your thread back up, and your program will continue after the recv() call.<br />That is what blocking calls do, in a nutshell.</div>
+    <div class="meta">Posted on 2011-09-20 08:04:01 by Scali</div>
+   </div>
+   <div class="post" id="post-215038">
+    <div class="subject"><a href="#post-215038">Re: Blocking Network Interrupt and HLT instruction issue. </a></div>
+    <div class="body">Thanks. I will try this out. If any issue,&nbsp; I will get back to you. <br /><br />Thank you, <br /><br />Madhusudan M I</div>
+    <div class="meta">Posted on 2011-09-21 01:49:25 by Madhu</div>
+   </div>
+   <div class="post" id="post-215039">
+    <div class="subject"><a href="#post-215039">Re: Blocking Network Interrupt and HLT instruction issue. </a></div>
+    <div class="body">Hi, <br /><br />1.	Is there any way to wait for a network interrupt to occur in real mode? As our COM32 program is booted over network by pxelinux.<br /><br />2.	How&nbsp; COM32 program becomes idle in real mode when waiting?&nbsp; Is it through some synchronous/asynchronous interrupt such as waiting for a key store to be pressed or through NIC interrupt?<br /><br />3.	If there is no means of waiting for a NIC interrupt, is there any alternative way of finding NIC interrupts after HLT state is pushed out i.e. Check if NIC interrupt occurred after HLT state.?<br /><br />any help on this will be highly appreciated. <br /><br />Thank you, <br /><br />Madhusudan M I</div>
+    <div class="meta">Posted on 2011-09-21 02:13:56 by Madhu</div>
+   </div>
+   <div class="post" id="post-215040">
+    <div class="subject"><a href="#post-215040">Re: Blocking Network Interrupt and HLT instruction issue. </a></div>
+    <div class="body">I don&#039;t know enough about your environment to answer the questions in detail.<br />I can say this though:<br />Interrupts are basically always asynchronous. Whenever an interrupt occurs, the current code is...well...interrupted, and the interrupt handler is invoked. After the interrupt is handled, the current code will resume. You never know when such an interrupt occurs, until it does.<br />In the most basic environment, you could simply create only an &#039;idle thread&#039; as the current code (just a loop with hlt), and put the actual handling of the network traffic in the interrupt handler for the network card.<br />(That&#039;s pretty much how a basic OS works anyway... you start with just an idle thread, and a timer to periodically swap threads around. This timer also generates interrupts, so everything is done on interrupt-basis).<br /><br />However, since you apparently already have some kind of environment with a network driver and a way to read packets, at least some of this is already done for you.<br />I mainly wonder though: why does it matter to you so much? It&#039;s just for a bit of bootup code, isn&#039;t it? Shouldn&#039;t be a big deal. Most POST/BIOS code doesn&#039;t make use of hlt either, so CPUs generally don&#039;t go into power saving modes until the OS kernel is initialized. Since this is generally only a matter of seconds, nobody cares.</div>
+    <div class="meta">Posted on 2011-09-21 02:50:00 by Scali</div>
+   </div>
+  </div>
+ </body>
+</html>

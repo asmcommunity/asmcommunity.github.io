@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Interrupt Descriptor Table - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6227" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6227">Interrupt Descriptor Table</a></p>
+   <div class="post" id="post-44808">
+    <div class="subject"><a href="#post-44808">Interrupt Descriptor Table</a></div>
+    <div class="body">Hello!<br /><br />After studying everything about protected mode techniques etc there's one thing which confuses me...<br /><br />The IDT is located at  and has one 64-bit Interrupt Descriptor after another, for each int .. of course :grin:<br /><br />In SoftIce, I read out the IDTR which points me to <strong>C000BE20h</strong> (in my case), and there I'm finding all Interrupt Descriptors especially the one for int 3 which brings me directly to SoftIce's code :cool:<br /><br />So far so good...<br />but when I use the IDT command in SoftIice, it displays me partially wrong int-handler addresses ... for example the real int 3 handler is, according to my eyes, at: <strong>0028:C0040C19h</strong><br />and IDT list of softice tells me it is at: <strong>0028:C0001220h</strong> which is inside VMM and seems to be also a table with 16-byte arrays....<br /><br />So now i am totally confused...<br /><br />Someone help me out. Thanks for your time!<br /><br />aweX &lt;-</div>
+    <div class="meta">Posted on 2002-06-23 06:47:28 by aweX</div>
+   </div>
+   <div class="post" id="post-44835">
+    <div class="subject"><a href="#post-44835">Interrupt Descriptor Table</a></div>
+    <div class="body">Ok it seems like that's just SoftIce hiding itself ... never mind...<br /><br />But the following problem is a really general one:<br /><br />I wrote a handler for interrupt 3 which should translate the selector of fs-register of the current task into its linear address.<br /><br />I'm trying that by fetching the LDTR from the Task-State-Segment of the current task... I can find this segment but it contains zero everywhere instead of correct CS/EIP/EAX/... values, also according to SoftIce!<br /><br />Why is that?<br /><br />aweX &lt;-</div>
+    <div class="meta">Posted on 2002-06-23 14:37:31 by aweX</div>
+   </div>
+   <div class="post" id="post-44905">
+    <div class="subject"><a href="#post-44905">Interrupt Descriptor Table</a></div>
+    <div class="body">The only fields used from the TSS in Win9x are SS:ESP0 (ring 0 stack) and the IO permission Bitmap. Thats because the x86 tasks arent used by Win9x.</div>
+    <div class="meta">Posted on 2002-06-24 06:19:16 by japheth</div>
+   </div>
+   <div class="post" id="post-44921">
+    <div class="subject"><a href="#post-44921">Interrupt Descriptor Table</a></div>
+    <div class="body">D'oh! So all my trying was useless...good to know!<br /><br />Well so how could I retrieve the selector of the FS-register of the current process from inside my int3-handler which has been called by that process? Also, can I just use current LDTR to translate that selector into its linear address?<br /><br />Another problem is that when my int 3 handler is called, the stack is not looking like: EIP, CS, EFlags, ESP, SS . So when I call IRETD at the end of my handler, it crashes... I have to call the original handler. Is that a MUST under Windows?<br /><br />Where can I find a good docu on how Windows uses protected mode (since it seems to be completely different) ?<br /><br />Thanks for any answer!<br /><br />aweX &lt;-</div>
+    <div class="meta">Posted on 2002-06-24 08:16:31 by aweX</div>
+   </div>
+   <div class="post" id="post-44946">
+    <div class="subject"><a href="#post-44946">Interrupt Descriptor Table</a></div>
+    <div class="body">there exist more than one way to get local descriptor base addresses:<br /><br />1.<br />- get LDT selector by &quot;sldt ax&quot;<br />- get GDT by &quot;sgdt fword ptr xxx&quot;<br />- search LDT descriptor in GDT, get base of descriptor<br />- now &quot;search&quot; FS entry in LDT<br /><br />2.<br />In Win9x there always exists an &quot;LDT alias&quot; which can be trtrieved by calling INT 2F, AX=16?? (forgotten by now). But as you probably know, you cant call this interrupt directly in win32.<br /><br />3. VWIN32 allows a Win32 app in Win9x to call DPMI functions.<br /><br /><br />About your Int 3 handler: SS+ESP are on the stack only if a switch to ring 0 occured. So is your handler a ring 0 proc? How did you install it? By directly manipulation IDT? If yes, is the entry in IDT a 386 interrupt/trap gate? if yes, IRETD should work.<br /><br />japheth</div>
+    <div class="meta">Posted on 2002-06-24 13:06:01 by japheth</div>
+   </div>
+   <div class="post" id="post-46305">
+    <div class="subject"><a href="#post-46305">Interrupt Descriptor Table</a></div>
+    <div class="body">I'm using method number 1 for translating fs into its linear address. That's not the problem. The problem is that I have installed a global int 3 handler which is called via 0CCh-instruction from a process. Now I want to know which value fs had before the process breaks into my interrupt handler since the registers seem to be modified.<br /><br />Simple structure of what I'm doing:<br /><br /><pre><code><br /><br />ring3 proc<br />  &lt;modify IDT to point int3 to ring0a proc&gt;<br />  &lt;call int 3&gt;<br />  &lt;exit program&gt;<br />ring3 endp<br /><br />ring0a proc<br />  &lt;call GetHeap service to allocate global system space&gt;<br />  &lt;copy ring0b and ring0c procs into allocated space&gt;<br />  &lt;modify IDT to let int3 point to ring0b&gt;<br />  iretd        &lt;-- this iretd works! &#40;because I am in my local mem i guess&#41;<br />ring0a endp<br /><br />ring0b proc  &lt;-- will be entered via int3 caused by some other process<br />  &lt;restore old int3 handler in IDT&gt;<br />  &lt;do some misc stuff like translating FS into linear address and setting breakpoint&gt;<br />  &lt;modify IDT to let int 1 point to ring0c&gt;<br />  iretd    &lt;-- leads to wrong mem because stack is messed up somehow! but why?<br />               when i'm calling the original handler via &quot;push &lt;addr&gt;, ret&quot; it works<br />ring0b endp<br /><br />ring0c proc<br />  &lt;further actions&gt;<br />  iretd    &lt;-- this will also crash or result in direct boot because stack is crappy!<br />ring0c endp<br /></code></pre><br /><br />I'm basically modifying IDT in both cases by just changing the offsets and not the selectors (which is 0028h in my case) ... that means I still (should) have a valid Interrupt Gate there.<br /><br />Oh and I really would appreciate it if anyone could give me a hint where Windows saves the Task-States.<br /><br /><br />aweX &lt;-</div>
+    <div class="meta">Posted on 2002-07-04 17:46:15 by aweX</div>
+   </div>
+  </div>
+ </body>
+</html>

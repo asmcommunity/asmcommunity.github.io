@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>another CopyMemory/ZeroMemory. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6465" />
+    <link rel="next" href="../?id=6465&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=6465">another CopyMemory/ZeroMemory.</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=6465&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=6465&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="6465" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=6465&amp;page=2">&gt;</a><a href="../?id=6465&amp;page=2">&raquo;</a></form>   <div class="post" id="post-46562">
+    <div class="subject"><a href="#post-46562">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">prev thread:<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4902&amp;highlight=rep+stosd">memset?</a> <br /><br /><pre><code><br />CopyMemD proc source&#58;DWORD,dest&#58;DWORD,len&#58;DWORD<br /><br />        cmp  len, 4        ; if &lt; DWORD size<br />        jl  @@@1           ; copy as BYTE<br />        <br />        mov  esi, source<br />        mov  edi, dest<br />        mov  ecx, len<br /><br />        push ecx           ; copy ecx<br />        shr  ecx, 2        ; integer divide by 4<br />        shl  ecx, 2        ; multiply by 4 for dividend<br />        pop  edx<br />        sub  edx, ecx      ; remainder in edx<br />        ; shr ecx             ; bug in original<br />        shr  ecx, 2           ; div by 4 for DWORD<br /><br />        rep  movsd         ; copy as DWORD<br />        mov  ecx, edx      ; put remainder in counter<br />        jmp  @@@2<br /><br />      @@@1&#58;<br />        mov  ecx, len<br />      @@@2&#58;<br />        rep  movsb         ; copy as BYTE<br /><br />        ret<br /><br />CopyMemD endp<br /></code></pre><br /><br />At least 3 problems in above proc (apart from commented out ;shr ecx):<br />1. source &amp; dest can be zero or something.<br />   But it's OK. Assume it's valid pointers.<br />2. Direction flag is ambiguous. In what direction we copy?<br />3. if (len &lt; 4) -&gt; CRASH! Because of esi &amp; edi are ambiguous.<br /><br />Too many bugs. And this proc is in masm32 package!<br />\masm32\PROCS\Memcopy.asm<br /><br />ZeroMemD in the attach of thread above has the same bugs.<br /><br />The procs below are smaler and a bit faster on medium size blocks<br /><br /><pre><code><br />fCopyMemory proc pSour&#58;LPVOID, pDest&#58;LPVOID, cbLen&#58;UINT<br /><br />; &#40;c&#41; Four-F, 2002<br />; &#91;email&#93;four-f@mail.ru&#91;/email&#93;<br /><br />; Assume pSour &amp; pDest are valid<br /><br />option PROLOGUE&#58;NONE<br />option EPILOGUE&#58;NONE<br /><br />	push esi<br />	push edi<br />	mov ecx, &#91;esp + sizeof DWORD * 5&#93;<br />	mov edx, ecx<br />	mov edi, &#91;esp + sizeof DWORD * 4&#93;<br />	cld<br />	mov esi, &#91;esp + sizeof DWORD * 3&#93;<br />	shr ecx, 2<br />	jz @F			; can be commented out<br />	rep movsd<br />	and edx, 011y<br />@@&#58;<br />	mov ecx, edx<br />	rep movsb<br />	pop edi<br />	pop esi<br /><br />	ret &#40;sizeof DWORD&#41;*3<br /><br />option PROLOGUE&#58;PROLOGUEDEF<br />option EPILOGUE&#58;EPILOGUEDEF<br /><br />fCopyMemory endp<br /></code></pre><br /><br /><pre><code><br />fZeroMemory proc pDest&#58;LPVOID, cbLen&#58;UINT<br /><br />; &#40;c&#41; Four-F, 2002<br />; &#91;email&#93;four-f@mail.ru&#91;/email&#93;<br /><br />; Assume pDest is valid<br /><br />option PROLOGUE&#58;NONE<br />option EPILOGUE&#58;NONE<br /><br />	xor eax, eax<br />	push edi<br />	mov ecx, &#91;esp + sizeof DWORD * 3&#93;<br />	mov edx, ecx<br />	cld<br />	mov edi, &#91;esp + sizeof DWORD * 2&#93;<br />	shr ecx, 2<br />	jz @F			; can be commented out<br />	rep stosd<br />	and edx, 011y<br />@@&#58;<br />	mov ecx, edx<br />	rep stosb<br />	pop edi<br /><br />	ret &#40;sizeof DWORD&#41;*2<br /><br />option PROLOGUE&#58;PROLOGUEDEF<br />option EPILOGUE&#58;EPILOGUEDEF<br /><br />fZeroMemory endp<br /></code></pre><br /><br />Hope it will be useful for someone.</div>
+    <div class="meta">Posted on 2002-07-07 09:01:13 by Four-F</div>
+   </div>
+   <div class="post" id="post-46572">
+    <div class="subject"><a href="#post-46572">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">This is the version in the MASM32 library, short of MMX or SIMD with prefetch, I doubt it can be done faster with integer instructions.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a><br /><pre><code><br />; #########################################################################<br /><br />MemCopy proc public uses esi edi Source&#58;PTR BYTE,Dest&#58;PTR BYTE,ln&#58;DWORD<br /><br />    ; ---------------------------------------------------------<br />    ; Copy ln bytes of memory from Source buffer to Dest buffer<br />    ;      ~~                      ~~~~~~           ~~~~<br />    ; USAGE&#58;<br />    ; invoke MemCopy,ADDR Source,ADDR Dest,4096<br />    ;<br />    ; NOTE&#58; Dest buffer must be at least as large as the source<br />    ;       buffer otherwise a page fault will be generated.<br />    ; ---------------------------------------------------------<br /><br />    cld<br />    mov esi, &#91;Source&#93;<br />    mov edi, &#91;Dest&#93;<br />    mov ecx, &#91;ln&#93;<br /><br />    shr ecx, 2<br />    rep movsd<br /><br />    mov ecx, &#91;ln&#93;<br />    and ecx, 3<br />    rep movsb<br /><br />    ret<br /><br />MemCopy endp<br />; #########################################################################<br /></code></pre></div>
+    <div class="meta">Posted on 2002-07-07 10:40:09 by hutch--</div>
+   </div>
+   <div class="post" id="post-46678">
+    <div class="subject"><a href="#post-46678">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">A bit faster and two bytes smaller ;-)<br />If integer instructions are only you have.<br /><br /><pre><code><br />fCopyMemory proc pSour&#58;LPVOID, pDest&#58;LPVOID, cbLen&#58;UINT<br /><br />; &#40;c&#41; Four-F, 2002<br />; &#91;email&#93;four-f@mail.ru&#91;/email&#93;<br />; sizeof 32 bytes<br /><br />option PROLOGUE&#58;NONE<br />option EPILOGUE&#58;NONE<br /><br />	push esi<br />	push edi<br /><br />	mov eax, esp<br />	cld<br />	mov ecx, &#91;eax + &#40;sizeof DWORD&#41;*5&#93;<br />	mov edi, &#91;eax + &#40;sizeof DWORD&#41;*4&#93;<br />	push ecx<br />	shr ecx, 2<br />	mov esi, &#91;eax + &#40;sizeof DWORD&#41;*3&#93;<br />	rep movsd<br />	pop ecx<br />	and ecx, 011y<br />	rep movsb<br /><br />	pop edi<br />	pop esi<br /><br />	ret &#40;sizeof DWORD&#41;*3<br /><br />option PROLOGUE&#58;PROLOGUEDEF<br />option EPILOGUE&#58;EPILOGUEDEF<br /><br />fCopyMemory endp<br /></code></pre></div>
+    <div class="meta">Posted on 2002-07-08 04:58:04 by Four-F</div>
+   </div>
+   <div class="post" id="post-46707">
+    <div class="subject"><a href="#post-46707">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">How about a forum devoted to copy memory routines? I think we had like a 100 posts about this topic already!</div>
+    <div class="meta">Posted on 2002-07-08 12:13:28 by comrade</div>
+   </div>
+   <div class="post" id="post-46751">
+    <div class="subject"><a href="#post-46751">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">Four-F,<br /><br />Why do you mark all of your posted source sampes (c) Every thing i seen by you got that hint. NaDa....  Save the hints...<br /><br />What's the point if you sharing it with fellow programmers at this board. Nine out of ten me, myself or eye wrote something like it or better many moons  agoooooooo.<br /><br />Just wondering<br /><br />comrade,  <span style="font-size:9px>you are right and it been great but it would be nice to see who REALLY, REALLY is the fastest with 4 BYTE----128BYTES----256BYTES----and a standard 5MB and under... Not no 100 GIGS or more</span></div>
+    <div class="meta">Posted on 2002-07-08 17:40:12 by cmax</div>
+   </div>
+   <div class="post" id="post-46758">
+    <div class="subject"><a href="#post-46758">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><div class="quote">How about a forum devoted to copy memory routines? I think we had like a 100 posts about this topic already!</div><br /><br />Similar idea here.  What about making memcpy/memset (or Win32 API equivalent) thread sticky?  I was this close to posting the same thing (only difference was I made mine in macro).  But one quick search about any previous posting revealed that the same code (although not in macro) has been posted over and over again.  I gave up at that point.  I was rebuilding (not reinventing) the wheel.  I felt so stupid.  :stupid:<br /><br />Considering that newbies tend to post whatever they have in mind before doing any search on the topic, why don't we make the thread sticky, so that the topic stands out without search?<br /><br />After all, memcpy/BitBlt is a focal point of speed improvement.  So there is nothing surprising why people are interested in it.  :)</div>
+    <div class="meta">Posted on 2002-07-08 18:41:09 by Starless</div>
+   </div>
+   <div class="post" id="post-46760">
+    <div class="subject"><a href="#post-46760">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">A FAQ would be much better, oops I think there is one already at the Test section. :grin:</div>
+    <div class="meta">Posted on 2002-07-08 18:47:28 by stryker</div>
+   </div>
+   <div class="post" id="post-46768">
+    <div class="subject"><a href="#post-46768">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">I'd say... don't check for NULL pointers on these routines;<br />better to crash, as that makes tracking down bugs rather<br />fast (much easier than stuff not being done :)). Assume<br />direction flag is clear, as that's what windows wants.<br />Routines that set the direction flag should clear it before<br />returning. After all, you want a clear direction most of<br />the time when dealing with string instructions. Assumption<br />on minimum length and transfer block size... well, a generic<br />routine ought not have these, and ought not overwrite even<br />a single byte of memory; routines for large copies can<br />have other assumptions.</div>
+    <div class="meta">Posted on 2002-07-08 19:12:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-46769">
+    <div class="subject"><a href="#post-46769">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><pre><code>; &#40;c&#41; bitRAKE<br />; &#91;email&#93;Rickey.Bowers@attbi.com&#91;/email&#93;<br />; 27 bytes<br />	pop edx ; return address!<br />	pop eax ; count<br /><br />	mov ecx, eax<br />	and eax, 011y<br /><br />	shr ecx, 2<br />;	cld ; this isn't required<br /><br />	xchg edi, &#91;esp&#93;&#91;4*0&#93; ; dest<br />	xchg esi, &#91;esp&#93;&#91;4*1&#93; ; src<br /><br />	rep movsd<br />	mov ecx, eax<br />	rep movsb<br />	pop edi<br />	pop esi<br />	jmp edx</code></pre>:grin: :grin: Faster &amp; Smaller</div>
+    <div class="meta">Posted on 2002-07-08 19:14:07 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46770">
+    <div class="subject"><a href="#post-46770">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">cute :grin:</div>
+    <div class="meta">Posted on 2002-07-08 19:15:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-46781">
+    <div class="subject"><a href="#post-46781">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">Since It was hot today, temperatures rising in the 90 F, I can't continue on my projects(Can't concentrate!!!), So I decided to try to code some ZeroMem...It's pretty lame BTW and &quot;slow&quot;??? :grin:<pre><code>ZeroMem&#58;<br /><br />    pop     edx     ;EIP<br />    pop     eax     ;Address In Memory<br />    pop     ecx     ;Count<br /><br />    pxor    MM0, MM0<br /><br />    @@&#58;<br /><br />    sub     ecx, 8<br />    jb      @F<br />    movq    &#91;eax+ecx&#93;, MM0<br />    jmp     @B<br /><br />    @@&#58;<br /><br />    add     ecx, 8<br />    jz      __exit<br /><br />    @@&#58;<br /><br />    dec     ecx<br />    mov     BYTE PTR &#91;eax+ecx&#93;, 0<br />    jnz     @B<br /><br />    __exit&#58;<br /><br />    jmp     edx     ;Ala bitRAKE</code></pre>Best suited for large memory, since it zeros a memory, 8 bytes per loop. :grin:<br /><br /><br />I forgot to add this(syntax):<br /><br />push NumberOfBytesToZero<br />push OFFSET buffer<br />call ZeroMem</div>
+    <div class="meta">Posted on 2002-07-08 20:38:51 by stryker</div>
+   </div>
+   <div class="post" id="post-46788">
+    <div class="subject"><a href="#post-46788">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><pre><code>OPTION PROLOGUE&#58;NONE<br />OPTION EPILOGUE&#58;NONE<br /><br />memCOPY PROC Bytes&#58;DWORD, Destination&#58;DWORD, Source&#58;DWORD<br />; &#40;c&#41; bitRAKE<br />; &#91;email&#93;Rickey.Bowers@attbi.com&#91;/email&#93;<br />; 27 bytes<br />	pop edx ; return address!<br />	pop eax ; count<br />	mov ecx, eax<br />	xchg edi, &#91;esp&#93;&#91;4*0&#93; ; dest<br />	shr ecx, 2<br />	xchg esi, &#91;esp&#93;&#91;4*1&#93; ; src<br />	and eax, 011y<br />	rep movsd<br />	mov ecx, eax<br />	rep movsb<br />	pop edi<br />	pop esi<br />	jmp edx<br />memCOPY ENDP<br /><br />memZERO PROC Bytes&#58;DWORD, Destination&#58;DWORD<br />; &#40;c&#41; bitRAKE<br />; &#91;email&#93;Rickey.Bowers@attbi.com&#91;/email&#93;<br />; 22 bytes<br />	pop edx ; return address!<br />	pop ecx ; count<br />	xor eax, eax<br />	xchg edi, &#91;esp&#93;&#91;4*0&#93; ; dest<br />	push ecx<br />	shr ecx, 2<br />	rep stosd<br />	pop ecx<br />	and ecx, 011y<br />	rep stosb<br />	pop edi<br />	jmp edx<br />memZERO ENDP<br /><br />OPTION PROLOGUE&#58;PROLOGUEDEF<br />OPTION EPILOGUE&#58;EPILOGUEDEF</code></pre>:grin:<br />You can make the memory copy smaller with:<pre><code>; &#40;c&#41; bitRAKE<br />; &#91;email&#93;Rickey.Bowers@attbi.com&#91;/email&#93;<br />; 24 bytes!<br />	pop edx<br />	pop ecx<br />	pop eax<br />	xchg esi, &#91;esp&#93;<br />	xchg eax, edi<br />	push eax<br />	push ecx<br />	shr ecx, 2<br />	rep movsd<br />	pop ecx<br />	and ecx, 011y<br />	rep movsb<br />	pop edi<br />	pop esi<br />	jmp edx</code></pre>But I don't like it.  In fact, I don't have a use for any of these algos.<br /><span style="font-size:9px>( But it is still a 25% size improvement over <strong>Four-F</strong>'s (c) code. )</span>  :tongue:</div>
+    <div class="meta">Posted on 2002-07-08 21:44:21 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46837">
+    <div class="subject"><a href="#post-46837">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">The only reductions I have seen here are in stack overhead, REP MOVSD/B are doing the work and short of writing late model processor specific code with prefetch, none of these will time any faster. Yawn etc ... :tongue: <br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-07-09 07:47:42 by hutch--</div>
+   </div>
+   <div class="post" id="post-46842">
+    <div class="subject"><a href="#post-46842">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">But they're still cute :grin:</div>
+    <div class="meta">Posted on 2002-07-09 07:55:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-46845">
+    <div class="subject"><a href="#post-46845">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">Well, maybe they aren't completely useless - think I'll put them in my collection of algos to build on the stack and execute - just to confuse some 'idiot fringe'.</div>
+    <div class="meta">Posted on 2002-07-09 09:08:10 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46846">
+    <div class="subject"><a href="#post-46846">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body">If I can find the time, I'll code a 64 byte zeromem on each loop and see if it can go any faster, ha! ha! ha! :grin: or better yet use all MMX and SSE registers on one loop :)</div>
+    <div class="meta">Posted on 2002-07-09 09:10:48 by stryker</div>
+   </div>
+   <div class="post" id="post-46849">
+    <div class="subject"><a href="#post-46849">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><div class="quote"><br />Four-F,<br />Why do you mark all of your posted source sampes (c) Every thing i seen by you got that hint. NaDa.... Save the hints...<br /></div><br /><br />Every thing? Really?... No. This one without (c). :tongue: <br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=6475">line number</a> <br /><br />What every first line should every good coder put in his listing?<br />...You know the answer. ;) <br />To be serious, dont't bother about my (c).<br />Simply remove these two annoing lines and do with my code everithing you like.<br />Sorry for causing trouble. I wrote it only for fun. Never mind.<br /><br />to bitRAKE<br />Nice solution. Did not think about args swapping.<br />Please don't sneer at me. No more (c) from me from now.</div>
+    <div class="meta">Posted on 2002-07-09 09:33:48 by Four-F</div>
+   </div>
+   <div class="post" id="post-46854">
+    <div class="subject"><a href="#post-46854">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><strong>Four-F</strong>, don't take it so hard - we are just having fun here.  I just thought it funny that you '(c)' your algo.  Guess that was a joke as well, so it was good of me to laugh at it, or no? :grin:</div>
+    <div class="meta">Posted on 2002-07-09 09:58:45 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-46855">
+    <div class="subject"><a href="#post-46855">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><pre><code>; &#40;c&#41; stryker, 2002     ;Ala Four-F<br />; email&#58; &#91;email&#93;6567693132407961686F6F2E636F6D&#91;/email&#93;<br /><br />ZeroMem&#58;<br />    pop     edx         ;EIP<br />    pop     eax         ;Address In Memory<br />    pop     ecx         ;Count<br />    pxor    MM0, MM0<br />    @@&#58;<br />    sub     ecx, 64<br />    jb      @F<br />    movntq  &#91;eax+ecx&#93;, MM0<br />    movntq  &#91;eax+ecx+8&#93;, MM0<br />    movntq  &#91;eax+ecx+16&#93;, MM0<br />    movntq  &#91;eax+ecx+24&#93;, MM0<br />    movntq  &#91;eax+ecx+32&#93;, MM0<br />    movntq  &#91;eax+ecx+40&#93;, MM0<br />    movntq  &#91;eax+ecx+48&#93;, MM0<br />    movntq  &#91;eax+ecx+56&#93;, MM0<br />    jmp     @B<br />    @@&#58;<br />    add     ecx, 64<br />    jz      __exit<br />    @@&#58;<br />    dec     ecx<br />    mov     BYTE PTR &#91;eax+ecx&#93;, 0<br />    jnz     @B<br />    __exit&#58;<br />    &#91;color=#3366FF&#93;sfence              ;Requested by bitRAKE from below. Is this right?<br />    emms                ;use femms for AMD??&#91;/color&#93;<br />    jmp     edx         ;Ala bitRAKE<br /></code></pre>Does this goes faster??? :grin:</div>
+    <div class="meta">Posted on 2002-07-09 10:10:44 by stryker</div>
+   </div>
+   <div class="post" id="post-46857">
+    <div class="subject"><a href="#post-46857">another CopyMemory/ZeroMemory.</a></div>
+    <div class="body"><strong>stryker</strong>, don't you have to use SFENCE/EMMS?<br />I'm not saying it wouldn't work. :grin:<pre><code>ZeroMem&#58;<br />    pop     edx         ;EIP<br />    pop     eax         ;Address In Memory<br />    pop     ecx         ;Count<br />    pxor    MM0, MM0<br />    jmp     _1<br /><br />        ALIGN 8<br /><br />_0&#58;<br />    movntq  &#91;eax+ecx&#93;, MM0<br />    movntq  &#91;eax+ecx+8&#93;, MM0<br />    movntq  &#91;eax+ecx+16&#93;, MM0<br />    movntq  &#91;eax+ecx+24&#93;, MM0<br />    movntq  &#91;eax+ecx+32&#93;, MM0<br />    movntq  &#91;eax+ecx+40&#93;, MM0<br />    movntq  &#91;eax+ecx+48&#93;, MM0<br />    movntq  &#91;eax+ecx+56&#93;, MM0<br />_1&#58;<br />    sub     ecx, 64<br />    jae      _0<br /><br />    lea ecx, &#91;_END&#93;&#91;ecx*4&#93;<br />    jmp ecx<br /><br />        ALIGN 8<br /><br />    i=64<br />    REPEAT 63<br />        i=i-1<br />        mov BYTE PTR &#91;eax+&#40;i&#41;&#93;,0<br />    ENDM<br /><br />_END&#58;<br />    sfence<br />    emms<br />    jmp edx</code></pre>Maybe this would work?</div>
+    <div class="meta">Posted on 2002-07-09 10:17:28 by bitRAKE</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=6465&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=6465&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="6465" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=6465&amp;page=2">&gt;</a><a href="../?id=6465&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

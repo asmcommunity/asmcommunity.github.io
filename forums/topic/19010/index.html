@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>optimize this? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19010" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=19010">optimize this?</a></p>
+   <div class="post" id="post-147076">
+    <div class="subject"><a href="#post-147076">optimize this?</a></div>
+    <div class="body">Can this be sped up, besides using MMX, 3DNOW, and other stuff which might be incompatible with other pc's?<br /><br /><pre><code><br />DrawMap proc sprno&#58;DWORD<br />LOCAL e&#58;DWORD,f&#58;DWORD<br />mov e,0<br />mov f,0<br /><br />	LT600&#58;<br />		mov e,0<br />	LT800&#58;<br />		mov eax, &#91;mapptr&#93;<br />		mov ecx, DWORD PTR &#91;eax&#93;<br />		cmp ecx,0<br />		je skipme<br />		invoke Sprite2,sprno,e,f,ecx<br />skipme&#58;<br /><br />		add mapptr,dword<br />		mov eax,WND.tilex<br />		add e,eax<br />		mov ebx,WND.mapx<br />		cmp e,ebx; 800<br />		jl LT800<br />		mov eax,WND.tiley<br />		add f,eax<br />		mov ebx,WND.mapy<br />	                cmp f,ebx; 600<br />                	jl LT600<br />	ret<br />DrawMap endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-07-29 11:08:26 by drarem</div>
+   </div>
+   <div class="post" id="post-147080">
+    <div class="subject"><a href="#post-147080">optimize this?</a></div>
+    <div class="body">Maybe like this:<br /><pre><code><br />DrawMap&#58;<br />push esi<br />push edi<br />push ebp<br />xor ebp,ebp<br />LT600&#58;<br />xor edi,edi<br />LT800&#58;<br />mov esi,mapptr<br />mov eax,&#91;esi&#93;<br />test eax,eax<br />jz skipme<br />invoke Sprite2,dword ptr &#91;esp+28&#93;,edi,ebp,eax<br />skipme&#58;<br />add edi,WND.tilex<br />add esi,4<br />cmp edi,WND.mapx<br />jl LT800<br />add ebp,WND.tiley<br />cmp ebp,WND.mapy<br />jl LT600<br />mov mapptr,esi<br />pop ebp<br />pop edi<br />pop esi<br />ret 4<br /></code></pre><br /><br />If WND.tilex, WND.mapx and WND.tiley are powers of 2, then it can be further optimized.<br />Have you made sure that Sprite2 is as fast as possible?</div>
+    <div class="meta">Posted on 2004-07-29 11:47:44 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-147082">
+    <div class="subject"><a href="#post-147082">optimize this?</a></div>
+    <div class="body">Thanks, I'll try that,  Sprite2 is below - using prebuilt masks and rectangles<br /><br />for anyone who wants to use SHL/SHR and the powers of 2, below is a chart I use - maybe someone<br />should add it to their tutorial site?<br /><br /><pre><code><br />;1  2  4  8  16  32  64 128 256 512 1024<br />;0  1  2  3   4   5   6   7   8   9   10<br /></code></pre><br /><br />To divide by 64:<br />SHR ecx,6<br /><br />To multiply by 8:<br />SHL ecx,3<br /><br /><br /><pre><code><br />Sprite2 proc sprbnkno&#58;DWORD, x&#58;DWORD, y&#58;DWORD, imgno&#58;DWORD<br />LOCAL e&#58;DWORD,f&#58;DWORD,e2&#58;DWORD,f2&#58;DWORD<br />;this is straight-forward, no background saving at all<br /><br />	mov edx,SPRPTR<br />	mov ecx,imgno<br />	shl ecx,5   ;32 &#40;5 dwords&#41; is size of basic sprite rect and shouldn't have to change<br />	mov ebx,sprbnkno<br />	shl ebx,9   ;imul ebx,512 &#40;9 dwords&#41; - each block is 512, see heapallocate function<br />	add ecx,ebx<br /><br />	m2m  e,&#91;edx+ecx&#93;.MSPR.SPX<br />	m2m  f,&#91;edx+ecx&#93;.MSPR.SPY<br />	m2m e2,&#91;edx+ecx&#93;.MSPR.SXZ<br />	m2m f2,&#91;edx+ecx&#93;.MSPR.SYZ<br /><br />	mov ecx,sprbnkno<br />	shl ecx,5  ;imul ecx, MAINBMPSZ  ;MAINBMP SZ &#40;sizeof..&#41; =  32 DWORDS or 5<br />	push ecx<br /><br />	invoke SelectObject,WND.maskDC,&#91;MAINBMP.MSKBMP + ecx&#93;<br />	invoke BitBlt,WND.backDC,x,y,e2,f2,WND.maskDC,e,f,SRCPAINT<br /><br />	pop ecx<br />	invoke SelectObject,WND.memDC,&#91;MAINBMP.HBMP + ecx&#93;<br />	invoke BitBlt,WND.backDC,x,y,e2,f2,WND.memDC,e,f,SRCAND<br /><br />	ret<br />Sprite2 endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-07-29 12:38:12 by drarem</div>
+   </div>
+   <div class="post" id="post-147085">
+    <div class="subject"><a href="#post-147085">optimize this?</a></div>
+    <div class="body">I'm getting a crash on the second call into the Sprite2 function.. on this call:<br />  m2m  e,.MSPR.SPX<br /><br />and why ret 4?   returning value of 4 or something else?<br /><br /><pre><code><br />DrawMapTest proc<br />push esi<br />push edi<br />push ebp<br />xor ebp,ebp<br />szText text1,&quot;dibstuff&quot;,0<br /><br />LT600&#58;<br />  xor edi,edi<br />LT800&#58;<br />  mov esi,mapptr<br />  mov eax,&#91;esi&#93;<br />  test eax,eax<br />  jz skipme<br />  pushad<br />  invoke MessageBox,NULL,ADDR text1, ADDR text1,MB_OK<br />  invoke Sprite2,dword ptr &#91;esp+28&#93;,edi,ebp,eax<br />  popad<br />skipme&#58;<br />  add edi,WND.tilex<br />  add esi,4<br />  cmp edi,WND.mapx<br />  jl LT800<br />  add ebp,WND.tiley<br />  cmp ebp,WND.mapy<br />  jl LT600<br />  mov mapptr,esi<br />  pop ebp<br />  pop edi<br />  pop esi<br />  ret 4<br />DrawMapTest endp<br /></code></pre></div>
+    <div class="meta">Posted on 2004-07-29 13:15:13 by drarem</div>
+   </div>
+   <div class="post" id="post-147086">
+    <div class="subject"><a href="#post-147086">optimize this?</a></div>
+    <div class="body">Sorry, the &quot;mov esi,mapptr&quot; should have been right above &quot;LT600:&quot;. In your code, you probably meant to put the popad right after the MessageBox call.</div>
+    <div class="meta">Posted on 2004-07-29 15:16:41 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-147087">
+    <div class="subject"><a href="#post-147087">optimize this?</a></div>
+    <div class="body">thanks but still crashing, moved popad to right place, it goes down on 5th messagebox display.</div>
+    <div class="meta">Posted on 2004-07-29 15:57:52 by drarem</div>
+   </div>
+  </div>
+ </body>
+</html>

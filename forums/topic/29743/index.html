@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>bswap for xmm / sse2 registers - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29743" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=29743">bswap for xmm / sse2 registers</a></p>
+   <div class="post" id="post-210091">
+    <div class="subject"><a href="#post-210091">bswap for xmm / sse2 registers</a></div>
+    <div class="body">byteswapping xmm / sse2 registers (without using BSWAP)<br /><br />aka, switching little endian to big endian and back.<br /><br />Intro: <br /><br />In SSE2 / XMM 128-bit registers, there is no BSWAP command. In fact there is no <br />way to shuffle bytes directly. You can shuffle quadwords, doublewords, and words, <br />but not bytes. What if you have 4 32-bit values in an XMM register that you <br />want to BSWAP? <br /><br />You could copy repeatedly into the 32-bit registers, then BSWAP, then copy back out<br />to the 128-bit register. &nbsp;However...... you can also do it another way, without using<br />any general purpose 32-bit registers, or BSWAP. Instead you can use SSE2 Shuffle Words<br />commands. <br /><br />So: given 1 xmm register (xmm5 here), swap the bytes within the 4 32-bit doublewords inside it.<br /><br />uses two temporary registers.<br /><br /><pre><code><br /> &nbsp; &nbsp; &nbsp; &nbsp;movdqu xmm0, xmm5<br /> &nbsp; &nbsp; &nbsp; &nbsp;movdqu xmm1, xmm5<br /> &nbsp; &nbsp; &nbsp; &nbsp;pxor &nbsp; &nbsp;xmm5, xmm5<br /> &nbsp; &nbsp; &nbsp; &nbsp;punpckhbw xmm0, xmm5 ; interleave &#039;0&#039; with bytes of original<br /> &nbsp; &nbsp; &nbsp; &nbsp;punpcklbw xmm1, xmm5 ; &nbsp;so they become words <br /> &nbsp; &nbsp; &nbsp; &nbsp;pshuflw xmm0, xmm0, 0b00_01_10_11 ; swap the words by shuffling<br /> &nbsp; &nbsp; &nbsp; &nbsp;pshufhw xmm0, xmm0, 0b00_01_10_11 <br /> &nbsp; &nbsp; &nbsp; &nbsp;pshuflw xmm1, xmm1, 0b00_01_10_11<br /> &nbsp; &nbsp; &nbsp; &nbsp;pshufhw xmm1, xmm1, 0b00_01_10_11<br /> &nbsp; &nbsp; &nbsp; &nbsp;packuswb xmm1, xmm0 ; pack/de-interleave, ie make the words back into bytes.<br /><br /> &nbsp; &nbsp; &nbsp; &nbsp;movdqu xmm5, xmm1<br /></code></pre><br /> <br />how it works<br /><br />in XMM / SSE2, you can&#039;t swap bytes. but you can...<br /><br />1. swap words<br />2. &#039;inflate&#039; bytes into words, by interleaving with 0<br />3. &#039;deflate&#039; words back into bytes, chopping off the 0<br /><br />EX:<br /><br />input 16 bytes / 128-bits:<br /><br />input register bytes: ABCD EFGH IJKL MNOP<br /><br />inflate / unpack / interleave with 0: (PUNPCKHBW, PUNPCKLBW)<br />temp register 1: 0A0B 0C0D 0E0F 0G0H<br />temp register 2: 0I0J 0K0L 0M0N 0O0P<br /><br />swap words: (PSHUFLW, PSHUFHW)<br />temp register 1: 0D0C 0B0A 0H0G 0F0E<br />temp register 2: 0L0K 0J0I 0P0O 0N0M<br /><br />deflate / pack / de-interleave (PACKUSWB)<br />input register bytes: DCBA HGFE LKJI PONM<br /><br /><br />Bonus:<br /><br />If you also want to swap the order of doublewords within the 128-bit register,<br />you can use one PSHUFD.<br /><br /><pre><code><br />NASM MACRO:<br />%macro xmmbswap 3<br /> &nbsp; &nbsp; &nbsp; &nbsp;movdqu &nbsp;%3, %1<br /> &nbsp; &nbsp; &nbsp; &nbsp;movdqu &nbsp;%2, %1<br /> &nbsp; &nbsp; &nbsp; &nbsp;pxor &nbsp; &nbsp;%1, %1<br /> &nbsp; &nbsp; &nbsp; &nbsp;punpckhbw %3, %1 ; interleave &#039;0&#039; with bytes of original<br /> &nbsp; &nbsp; &nbsp; &nbsp;punpcklbw %2, %1 ; &nbsp;so they become words <br /> &nbsp; &nbsp; &nbsp; &nbsp;pshuflw %3, %3, 0b00_01_10_11 ; swap the words by shuffling<br /> &nbsp; &nbsp; &nbsp; &nbsp;pshufhw %3, %3, 0b00_01_10_11 ; <br /> &nbsp; &nbsp; &nbsp; &nbsp;pshuflw %2, %2, 0b00_01_10_11<br /> &nbsp; &nbsp; &nbsp; &nbsp;pshufhw %2, %2, 0b00_01_10_11<br /> &nbsp; &nbsp; &nbsp; &nbsp;packuswb %2, %3 ; pack/de-interleave, ie make the words back into bytes.<br /> &nbsp; &nbsp; &nbsp; &nbsp;movdqu %1, %2<br /> &nbsp;%endmacro<br /><br />END<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2009-12-27 13:46:47 by decora</div>
+   </div>
+   <div class="post" id="post-210093">
+    <div class="subject"><a href="#post-210093">Re: bswap for xmm / sse2 registers</a></div>
+    <div class="body">I took the liberty of splitting your post into multiple text/code parts for easier reading - hope you don&#039;t mind :)</div>
+    <div class="meta">Posted on 2009-12-27 15:51:07 by f0dder</div>
+   </div>
+   <div class="post" id="post-210094">
+    <div class="subject"><a href="#post-210094">Re: bswap for xmm / sse2 registers</a></div>
+    <div class="body">how about :<br /><br /><pre><code>	pshufd xmm5,xmm5,000011011b<br />	pshuflw xmm5,xmm5,10110001b<br />	pshufhw xmm5,xmm5,10110001b<br />	movdqa xmm0,xmm5<br />	psrlw xmm0,8<br />	psllw xmm5,8<br />	por xmm5,xmm0</code></pre><br /> 8)</div>
+    <div class="meta">Posted on 2009-12-27 17:23:03 by drizz</div>
+   </div>
+  </div>
+ </body>
+</html>

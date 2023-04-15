@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>memset? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4902" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4902">memset?</a></p>
+   <div class="post" id="post-34383">
+    <div class="subject"><a href="#post-34383">memset?</a></div>
+    <div class="body">Okay, it's late Sunday and I have work early tomorrow morning.  Very sleepy, sorry if this question sounds poorly thought out.<br /><br />I want to zero out a LOGFONT structure.  The C way is<br /><pre><code>memset&#40;&amp;logFont, 0, sizeof&#40;LOGFONT&#41;&#41;;</code></pre><br /><br />And I'm wondering if there's a quick and clear way to do it in Masm32.  Here's what I have so far (haven't tested it yet):<br /><br /><pre><code><br />    local logfont&#58;LOGFONT<br /><br />@@&#58;<br />    mov edi, addr logfont<br />    mov ecx, SIZEOF LOGFONT<br />    mov &#91;edi&#93;, byte ptr 0   ; zero out the current byte<br />    inc edi<br />    dec ecx<br />    jnz @B<br /></code></pre><br /><br />Will this work?  What's the proper asm idiom?  I know offhand it's glaringly inefficient; I could write out 7 DWORDS and then append the trailing byte instead.  It seems that this is such a common thing that there should be a memset macro or somesuch.<br /><br />Is there one?<br /><br />Thanks!<br /><br />-Chalain</div>
+    <div class="meta">Posted on 2002-04-21 23:11:40 by Chalain</div>
+   </div>
+   <div class="post" id="post-34385">
+    <div class="subject"><a href="#post-34385">memset?</a></div>
+    <div class="body">just use the api:<br />invoke ZeroMemory,addr logFont,sizeof logFont</div>
+    <div class="meta">Posted on 2002-04-22 00:03:43 by grv575</div>
+   </div>
+   <div class="post" id="post-34386">
+    <div class="subject"><a href="#post-34386">memset?</a></div>
+    <div class="body"><pre><code>fill_struct MACRO aStruct&#58;REQ, tStruct&#58;REQ<br />  lea edi, aStruct<br />  mov ecx, &#40;SIZEOF tStruct&#41;/4 ; must be multiple of four<br />  rep stosd<br />ENDM<br /><br />xor eax,eax ; fill value<br />fill_struct logfont, LOGFONT</code></pre>This is a repeat question:<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=1969&amp;highlight=ZeroMemory">http://www.asmcommunity.net/board/index.php?topic=1969&amp;highlight=ZeroMemory</a><pre><code>$+0        $ 68 28FEFFFF    push -1D8<br />$+5        . 68 5D164000    push 0040165D<br />$+A        . E8 B0000000    call &lt;jmp.&amp;KERNEL32.RtlZeroMemory&gt;<br />$+F<br /><br />$+0        . 33C0           xor eax,eax<br />$+2        . 8D3D 5D164000  lea edi,&#91;40165D&#93;<br />$+8        . B9 A3FFFFFF    mov ecx,-5D<br />$+D        . F3&#58;AB          rep stos dword ptr es&#58;&#91;edi&#93;<br />$+F</code></pre>You can see from the disassembly that it takes the same amount of bytes to clear the memory yourself as to call the API to do it!  This doesn't include saving/restoring EDI/ECX/EAX, but that can usually be worked into the big picture.  No point to using the API!</div>
+    <div class="meta">Posted on 2002-04-22 00:15:09 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-34389">
+    <div class="subject"><a href="#post-34389">memset?</a></div>
+    <div class="body">Is that method faster? :)  If it is... then goodbye RtlZeroMemory :)<br /><br />Sliver</div>
+    <div class="meta">Posted on 2002-04-22 00:54:19 by Sliver</div>
+   </div>
+   <div class="post" id="post-34390">
+    <div class="subject"><a href="#post-34390">memset?</a></div>
+    <div class="body">hmm..<br /><br />push eax<br />push edx<br />mov edx, ecx<br />xor eax, eax<br />and edx, 3<br />je CopyByDword<br />CopyByByte:add edi, edx<br />neg edx<br />@@:mov byte ptr ,al <br />inc edx<br />jne @B<br />CopyByDword:and ecx, 0FFFFFFFCh<br />je Done<br />add edi, ecx<br />shr ecx, 2<br />neg ecx<br />@@:mov dword ptr , eax<br />inc ecx<br />jne @B<br />Done:pop edx<br />pop eax<br /><br />Maybe?</div>
+    <div class="meta">Posted on 2002-04-22 01:02:31 by bdjames</div>
+   </div>
+   <div class="post" id="post-34402">
+    <div class="subject"><a href="#post-34402">memset?</a></div>
+    <div class="body">With the size of the structure, its &quot;who cares&quot;.<br />You could do it with REP MOVSB and it would be smaller and plenty fast enough.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a><br /><br />PS : Actually this is a mistake, I use the old string instructions so little I am getting rusty with them, it should be STOSB.<br /><br />Something like,<br /><pre><code><br />    mov ecx, count      ; size of structure<br />    mov al, 0           ; fill byte<br />    mov edi, lpBuffer   ; address of structure<br />    rep stosb<br /></code></pre></div>
+    <div class="meta">Posted on 2002-04-22 03:11:34 by hutch--</div>
+   </div>
+   <div class="post" id="post-34410">
+    <div class="subject"><a href="#post-34410">memset?</a></div>
+    <div class="body">Wrong place, Sorry...I hit the wrong button.<br /><br />I think i got the smallest one<br /><br />A Poster a while back said if it a text buffer ...<br /><br /><strong>mov LOGFONT.WhatEver[0] , 0</strong> <br /><br />It might work.  It work with everything else.</div>
+    <div class="meta">Posted on 2002-04-22 06:25:18 by cmax</div>
+   </div>
+   <div class="post" id="post-34465">
+    <div class="subject"><a href="#post-34465">memset?</a></div>
+    <div class="body"><div class="quote"><br /><pre><code>fill_struct MACRO aStruct:REQ, tStruct:REQ<br />  mov ecx, (SIZEOF tStruct)/4 ; must be multiple of four<br />ENDM</div><br /><br />Ah, there's the rub: LOGFONT is 29 bytes long.<br /><br />I assume this macro would leave the last byte uninitialized?<br /><br />ZeroMemory is okay, I guess, but doesn't it incur a speed hit for the function call?<br /><br />Thanks,<br /><br />-Chalain</div>
+    <div class="meta">Posted on 2002-04-22 12:17:18 by Chalain</div>
+   </div>
+   <div class="post" id="post-34466">
+    <div class="subject"><a href="#post-34466">memset?</a></div>
+    <div class="body">Hmm, I just had a thort... assuming that BitRake's macro would leave the last byte of LOGFONT uninitialized, would this code work?  (I'm at work and don't have time to really test it out)<br /><br /><pre><code><br />fill_struct MACRO aStruct&#58;REQ, tStruct&#58;REQ<br />  lea edi, aStruct<br />  mov ecx, &#40;SIZEOF tStruct&#41;/4 ; must be multiple of four<br />  rep stosd<br /><br />  ; handle straggling bytes<br />  xor edx,edx<br />  mov ebx, eax  ; hang onto fill value<br />  mov eax, SIZEOF tStruct<br />  mov ecx, 4<br />  div ecx<br />  mov ecx, edx  ; mov remainder to counter<br />  mov eax, ebx  ; restore fill value<br />  rep stosb<br />ENDM<br /><br />xor eax,eax ; fill value<br />fill_struct logfont, LOGFONT</code></pre><br /><br />I'm sure it's gross and hideously inefficient... mostly it's just an exercise to see if I could get it to work. :)<br /><br />So... does it?  Is there a better way to go about it?  Er, perhaps a better question would be, how many better ways are there...<br /><br />Thanks,<br /><br />-Chalain</div>
+    <div class="meta">Posted on 2002-04-22 12:29:47 by Chalain</div>
+   </div>
+   <div class="post" id="post-34470">
+    <div class="subject"><a href="#post-34470">memset?</a></div>
+    <div class="body"><div class="quote">ZeroMemory is okay, I guess, but doesn't it incur a speed hit for the function call? </div><br /><br />With sizes like 29 byte, don't worry about this. Even on a slow machine it will probably take less than 100 cycles.<br />Only if you're clearing a memory area of several MBs, optimisation is an issue here.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2002-04-22 12:34:26 by Thomas</div>
+   </div>
+   <div class="post" id="post-34471">
+    <div class="subject"><a href="#post-34471">memset?</a></div>
+    <div class="body">Just change the macro to:<pre><code>fill_struct MACRO aStruct&#58;REQ, tStruct&#58;REQ<br />  lea edi, aStruct<br />  mov ecx, SIZEOF tStruct<br />  rep stosb<br />ENDM</code></pre>...and it works with non-dword multiple sizes.</div>
+    <div class="meta">Posted on 2002-04-22 12:50:10 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-34479">
+    <div class="subject"><a href="#post-34479">memset?</a></div>
+    <div class="body">I have been looking at the rep sto* instruction.<br />How can the overhead of that instruction be <br />only 3+n? One instruction per cycle, with only<br />three overhead?<br /><br />Some kind of jump table?</div>
+    <div class="meta">Posted on 2002-04-22 14:20:47 by bdjames</div>
+   </div>
+   <div class="post" id="post-34688">
+    <div class="subject"><a href="#post-34688">memset?</a></div>
+    <div class="body">Instead of using stosb for non dword aligned strings, the code included with masm32v7 is about 3 times as fast.  It uses rep movsd and then movsb for the last couple bytes.<br /><br /><pre><code><br />CopyMemD proc source&#58;DWORD,dest&#58;DWORD,len&#58;DWORD<br /><br />        cmp  len, 4        ; if &lt; DWORD size<br />        jl  @@@1           ; copy as BYTE<br />        <br />        mov  esi, source<br />        mov  edi, dest<br />        mov  ecx, len<br /><br />        push ecx           ; copy ecx<br />        shr  ecx, 2        ; integer divide by 4<br />        shl  ecx, 2        ; multiply by 4 for dividend<br />        pop  edx<br />        sub  edx, ecx      ; remainder in edx<br />        ; shr ecx             ; bug in original<br />        shr  ecx, 2           ; div by 4 for DWORD<br /><br />        rep  movsd         ; copy as DWORD<br />        mov  ecx, edx      ; put remainder in counter<br />        jmp  @@@2<br /><br />      @@@1&#58;<br />        mov  ecx, len<br />      @@@2&#58;<br />        rep  movsb         ; copy as BYTE<br /><br />        ret<br /><br />CopyMemD endp<br /></code></pre><br /><br />This is pretty easy to modify for stosb to zero structures.  Looks like the stosd version is 6x faster on my system.</div>
+    <div class="meta">Posted on 2002-04-23 15:03:34 by grv575</div>
+   </div>
+  </div>
+ </body>
+</html>

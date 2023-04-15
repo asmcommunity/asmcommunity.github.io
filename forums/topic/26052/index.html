@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>D3DXMatrixLookAtLH similar function? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26052" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26052">D3DXMatrixLookAtLH similar function?</a></p>
+   <div class="post" id="post-189781">
+    <div class="subject"><a href="#post-189781">D3DXMatrixLookAtLH similar function?</a></div>
+    <div class="body">hello everyone,<br />I was wondering if there was any D3DX function similar to D3DXMatrixLookAtLH, I mean, that you send a vector pointing somewhere in the scenery and a vector setting from where you&#39;re looking at, and the function returns you a matrix or a quaternion with the rotations needed to &quot;look&quot; at the point, from where the eye is, no matter how far the point is located.<br />The thing is, I have a point in the scenery, and I can get the rotation in X, Y and Z with trigonometric functions and with its position, but it&#39;d be easier to have a function that does that for me, like LookAtLH, the problem with that function is that when the point is above or below the eye, taking into account the Up vector, the result matrix isn&#39;t valid, and I can&#39;t change the Up vector, as you do when rotating the camera for example, because the viewer should be static.<br /><br />thanks in advanced for your help,<br />gallo<br /></div>
+    <div class="meta">Posted on 2007-07-09 20:01:14 by gallo</div>
+   </div>
+   <div class="post" id="post-189787">
+    <div class="subject"><a href="#post-189787">Re: D3DXMatrixLookAtLH similar function?</a></div>
+    <div class="body">There&#39;s several solutions that spring to mind.<br />One is to build your own View matrix, rather than using D3DXMatrixLookAtLH.<br />Another is to call that function once to build a view matrix for a fixed view, say &quot;straight ahead&quot;, and then to concatenate it with a rotation matrix that represents the 3D orientation, and then apply the resulting matrix as your view matrix.<br />I have written 6DOF camera code in the past, I had no problems using both these solutions.<br />Yes, the D3DXMatrixLookat function has a couple of mathematical anomolies.<br />They occur at 90 degrees vertical inclination and declination.<br />Please search for information on &#39;avoiding gimbal lock&#39; if you want to find alternatives.<br /></div>
+    <div class="meta">Posted on 2007-07-10 01:51:03 by Homer</div>
+   </div>
+   <div class="post" id="post-189839">
+    <div class="subject"><a href="#post-189839">Re: D3DXMatrixLookAtLH similar function?</a></div>
+    <div class="body">hello, well I didn&#39;t find any thing very near to what I was looking for, so I wrote the proc by my self, but now I have a little problem, here is the code:<br /><pre><code><br />.data<br />    float_1 REAL4 1.0<br />.code<br /><br />QuaternionLookAt proc pQuaternion:LPVOID,pPos:LPVOID<br />    local front:D3DXVECTOR3<br />    local pos:D3DXVECTOR3<br />    local axis:D3DXVECTOR3<br />    local angle:FLOAT<br /><br />    mov front.x,0<br />    mov front.y,0<br />    m2m front.z,float_1<br /><br />    invoke D3DXVec3Normalize,addr pos,pPos<br /><br />    invoke D3DXVec3Cross,addr axis,addr front,addr pos<br />    invoke D3DXVec3Normalize,addr axis,addr axis<br /><br />    invoke D3DXVec3Length,addr axis<br />    fldz<br />    fcompp<br />    fstsw ax<br />    test ah,01000000b    ;==<br />    jz @F<br />    m2m axis.x,float_1<br />    mov axis.y,0<br />    mov axis.z,0<br />@@:<br /><br />    invoke D3DXVec3Dot,addr front,addr pos<br /><br />    ;arccos<br />    fld st(0)<br />    fmul st(0),st(0)<br />    fld1<br />    fsubr<br />    fsqrt<br />    fxch st(1)<br />    fpatan<br /><br />    fstp angle<br /><br />    invoke D3DXQuaternionRotationAxis,pQuaternion,addr axis,angle<br /><br />    ret<br />QuaternionLookAt endp<br /></code></pre><br /><br />now, an example of the problem is that when I send as second parameter a vector which points back, the resulting quaternion is:<br /><pre><code><br />(LPD3DXQUATERNION) pQuaternion<br />    x    1.00000<br />    y    0.000000<br />    z    0.000000<br />    w    -4.37114e-008<br /></code></pre><br /><br />as you see, the w part is near zero, but it isn&#39;t and it should be zero, so, when I use this on a project, frame after frame it will affect the position of something that&#39;s being rotated by the resulting quaternion. I don&#39;t know if there&#39;s some way to correct this, because is not only for the case when the position vector is pointing back but everywhere. I tried to trace the error and it&#39;s on a <em>fsincos</em> made on the procedure D3DXQuaternionRotationAxis, and it happens as well in the D3DXMatrixRotationAxis; and, even in the procedure D3DXQuaternionRotationYawPitchRoll, when you set rotation parameters to (0,pi,0), you&#39;ll get a not very precise result.<br />I hope there&#39;s some way to overcome this problem, please help me,<br />thanks in advanced,<br />gallo.</div>
+    <div class="meta">Posted on 2007-07-17 17:39:24 by gallo</div>
+   </div>
+   <div class="post" id="post-189843">
+    <div class="subject"><a href="#post-189843">Re: D3DXMatrixLookAtLH similar function?</a></div>
+    <div class="body">There may be two options in my opinion to resolve this problem.<br /><br />1- If you are currently setting the precision control of the FPU to 24 bits (REAL4), switching it to 53 bits (REAL8) could help as long as you don&#39;t store intermediate results as REAL4 too often during the computation.<br /><br />2- If the above is not applicable or does not resolve the problem, the only option may be to check the final result for an excessively low value and change it to 0 when advisable. That could be performed either on the FPU, or on the ALU with &quot;integer&quot; instructions even though the result may be stored as a float.<br />The following is an example of how the latter could be done, assuming that &quot;w&quot; is a REAL4 in memory.<br /><br /><pre><code>mov&nbsp; eax,w<br />rol&nbsp; eax,9&nbsp; &nbsp; &nbsp; ;transfer the biased exponent bits to AL<br />.if&nbsp; al &lt; 6Ch&nbsp;  ;compare to approx. 10<sup>-7</sup><br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;use 6Fh for approx. 10<sup>-6</sup><br />&nbsp;  mov&nbsp; w,0<br />.endif</code></pre><br /><br />If you haven&#39;t done so already and you need a better understanding of floats, see Chapter 2 in the FPU tutorial at<br />http://www.ray.masmcode.com/tutorial/index.html<br /><br />Raymond<br /></div>
+    <div class="meta">Posted on 2007-07-17 22:20:25 by Raymond</div>
+   </div>
+  </div>
+ </body>
+</html>

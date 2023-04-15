@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>System level programming problems - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4226" />
+    <link rel="next" href="../?id=4226&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4226">System level programming problems</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=4226&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=4226&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="4226" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=4226&amp;page=2">&gt;</a><a href="../?id=4226&amp;page=2">&raquo;</a></form>   <div class="post" id="post-29191">
+    <div class="subject"><a href="#post-29191">System level programming problems</a></div>
+    <div class="body">Hi<br /><br />Some work/rest that i am doing involves sending the IRQ01 to my Ring3 or Ring0 handler. Basically i change the IDT to point to my routine, and of course i set it back to the correct address when my program exits. <br /><br />If i call the INT 51h by software after i do this IDT (re)setup....  all works ok, my routine is called (hehe with ring0 priviledges) and beeps 2 times. <br /><br />But if i press any key and a hardware INT01  is generated... :( arghh ...the system goes down like in no keyboard /mouse/hdd (aka no more ints) anymore... <br /><br />i have been fighting with this from some day now... any suggestions will be appreciated... esp from VECNA :)<br /><br />some code examples:<br /><pre><code><br /><br /><br />.data<br />	old_int01	dd	0<br />	old_int02	dd	0<br />.code<br /><br /><br />my_irq	equ	51h<br /><br />Method05_set&#58;<br /><br />	mov	esi,dword ptr &#91;IDT_Reg+2&#93;		;get IDT base addr<br />                                                                              <br />	mov	eax,dword ptr &#91;esi+&#40;8*my_irq&#41;+0&#93;		; save IDT entry<br />	mov	&#91;old_int01&#93;,eax<br /><br />	mov	eax,dword ptr &#91;esi+&#40;8*my_irq&#41;+4&#93;		; for intxxh<br />	mov	&#91;old_int02&#93;,eax<br /><br /><br />	push	offset Ring0_Irq01  <br />                                               <br />	pop	word ptr &#91;esi+&#40;8*my_irq&#41;+0&#93;		;set int addr part1<br /><br />	mov	word ptr &#91;esi+&#40;8*my_irq&#41;+2&#93;,0028h	;set code selector<br />	mov	word ptr &#91;esi+&#40;8*my_irq&#41;+4&#93;,0EE00h	;set int DPL3<br /><br />	pop	word ptr &#91;esi+&#40;8*my_irq&#41;+6&#93;		;set intxxh addr part2<br />                                                                                                             <br />ret<br /><br />Method05_generate&#58;<br /><br />	int	51h<br /><br />ret<br /><br />Method05_reset&#58;<br /><br />	mov	esi,dword ptr &#91;IDT_Reg+2&#93;		;get IDT base addr<br /><br />	cli<br /><br />	mov	eax,&#91;old_int01&#93;<br />	mov	dword ptr &#91;esi+&#40;8*my_irq&#41;+0&#93;,eax		; save IDT entry<br /><br />	mov	eax,&#91;old_int02&#93;<br />	mov	dword ptr &#91;esi+&#40;8*my_irq&#41;+4&#93;,eax		; for int20h<br /><br />        sti                    <br />                                                                                                             <br />ret<br /><br />align 4<br /><br />Ring0_Irq01 PROC FAR <br /><br />	pushad                                                                     <br />	xor	eax,eax<br />	call My_Beep           <br /><br /><br />	in	al,060h<br /><br />;-----------------------------<br />; send EOI to PIC<br />;-----------------------------<br />	mov	al,020h<br />	out	020h,al<br />	out	0A0h,al	<br /><br /><br />	call My_Beep                                                                  <br /><br />	popad                                                                                                                                            <br />	sti<br />	iretd                                                                                                                                            <br /><br />Ring0_Irq01 ENDP   <br /></code></pre></div>
+    <div class="meta">Posted on 2002-03-15 12:40:45 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-29196">
+    <div class="subject"><a href="#post-29196">System level programming problems</a></div>
+    <div class="body">BogdanOntanu,<br /><br />probably your problem isnt there, but seens to me that you forgot a PUSH in your Method5_set proc<br /><br /><pre><code><br />Method05_set&#58;<br />   mov     esi,dword ptr &#91;IDT_Reg+2&#93;  ;get IDT base addr<br />   mov     eax,dword ptr &#91;esi+&#40;8*my_irq&#41;+0&#93;  ; save IDT entry<br />   mov     &#91;old_int01&#93;,eax<br /><br />   mov     eax,dword ptr &#91;esi+&#40;8*my_irq&#41;+4&#93; ; for intxxh<br />   mov     &#91;old_int02&#93;,eax<br /><br />   push    offset Ring0_Irq01  <br />   push    offset Ring0_Irq01 ;***push once again, to match the number of POPs<br />                                                                       <br />   pop     word ptr &#91;esi+&#40;8*my_irq&#41;+0&#93; ;set int addr part1<br /><br />   mov     word ptr &#91;esi+&#40;8*my_irq&#41;+2&#93;,0028h ;set code selector<br />   mov     word ptr &#91;esi+&#40;8*my_irq&#41;+4&#93;,0EE00h ;set int DPL3<br /><br />   pop     word ptr &#91;esi+&#40;8*my_irq&#41;+6&#93; ;set intxxh addr part2 &#40;***unmatched POP in original code&#41;<br /><br />   ret<br /></code></pre><br /><br />ancev<br /><br />ps: for what you need this? coz you know that this can be used for evil things... :tongue:</div>
+    <div class="meta">Posted on 2002-03-15 12:59:42 by ancev</div>
+   </div>
+   <div class="post" id="post-29199">
+    <div class="subject"><a href="#post-29199">Hmmm</a></div>
+    <div class="body">i know this can be used for evil things, but IMHO there are other easyer methods (that you know better i guess) than hooking on hardware IRQ's. I need this for legitimate work i am doing (a kind of custom keyboard handler cant say more because of NDA)<br /><br />So basically i want IRQ01 to go thru my proggy and since IRQ01 is mapped to INT51h in windows... (job is only for Win9x/Me not for Win2k/Xp) <br /><br />i need to be able to efectively &quot;cut off&quot; the keyboard during some proggram phases and to re-enable it again<br /><br /><br />the first PUSH is a DWORD and the 2 POP's are for a word each one of them.... :) so i guess that is not the problem or am i wrong?<br /><br />thx anyway <br /><br />Bogdan</div>
+    <div class="meta">Posted on 2002-03-15 13:29:12 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-29209">
+    <div class="subject"><a href="#post-29209">System level programming problems</a></div>
+    <div class="body">BogdanOntanu,<br /><br />you right... i see word ptr so rarely that i mistake they by dword ptr :)<br /><br /><pre><code><br />mov     al,020h<br />out     020h,al<br />out     0A0h,al <br /></code></pre><br /><br />i dont understand what that code does... you write 0100000b to PIC1 and PIC2. isnt that what disable mouse/hdd/keyboard et all except IRQ5 and IRQ13?<br /><br />ancev</div>
+    <div class="meta">Posted on 2002-03-15 14:33:22 by ancev</div>
+   </div>
+   <div class="post" id="post-29223">
+    <div class="subject"><a href="#post-29223">Well</a></div>
+    <div class="body">that code is for sending the EOI command (ie 20h command code) to both PIC1 and PIC2 (works ok in my OS) however i have commented out everything besides the My_Beep in that IRQ01 handler routine and still nothing not even a Beep... a Beep and then a system crash whould be so nice :)<br /><br />i guess the addres is wrong in the context of a hardware generated INT .... but its Ok in the context of a software generates INT... <br /><br />because if i choose and execute the Method05_generate routine .... all works ok (using mouse of course) <br /><br /> but if i press a key...buff system hangs with no beep ...<br /><br />i checked and OS placed IRQ handlers are at C0001110h, C0001120h etc... but my handler is lower somewhere in the 401000h range... somehow i &quot;feel&quot; that my routine's addres is not ok for a hardware generated INT... but i wonder why?</div>
+    <div class="meta">Posted on 2002-03-15 16:08:18 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-29270">
+    <div class="subject"><a href="#post-29270">System level programming problems</a></div>
+    <div class="body">Are you using a ring3-&gt;ring0 hack? If so, I wonder if your &quot;hacked<br />ring0&quot; code is always present... like, if a IRQ1 is generated in the<br />context of another app. You really ought to use a VXD for this. And<br />if you're doing keyboard disabling as part of a protection scheme,<br />forget it... it's futile.</div>
+    <div class="meta">Posted on 2002-03-15 19:54:33 by f0dder</div>
+   </div>
+   <div class="post" id="post-29549">
+    <div class="subject"><a href="#post-29549">hehe</a></div>
+    <div class="body">fodder,<br /><br />Indeed I have used a VXD i another one of my methods, and YES it works just fine. <br /><br />However my current job is to browse all methods of doing the same thing ... and even if they look close to hacking i asure you they are not!<br /><br />Telling me to forget it will not help me at all, and what i need is help :) <br /><br />I know protection schemes are futile in front of a determined hacker, but i have the decency to let my clients (they are paying after all) decide that.<br /><br />Besides its an interesting thing to do, sending IRQs to my own handler routine ;) and its done theoretically before VXDs even get to know it (at a lower level)<br /><br />So if you can help me understand why my routine is no even called on a hardware IRQ but very nicely called on a software INT 51h please let me know<br /><br />i guess it could be that my IRQ handler that is located inside my ring3 application is eventually paged out, but i have no other applications running and even so it sould fail me sometimes not every time... isnt it?<br /><br />Unless windows is paging out every application every time a IRQ is generated ... and that is a scarry ideea for OS performance IMHO...</div>
+    <div class="meta">Posted on 2002-03-17 07:55:15 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-29556">
+    <div class="subject"><a href="#post-29556">System level programming problems</a></div>
+    <div class="body">Im not sure, but<br /><br /><pre><code><br />mov word ptr &#91;esi+&#40;8*my_irq&#41;+4&#93;,0EE00h ;set int DPL3<br /></code></pre><br /><br />may be a problem for hw ints. Have you already tried it with DPL0 (8E00h)?</div>
+    <div class="meta">Posted on 2002-03-17 08:25:40 by japheth</div>
+   </div>
+   <div class="post" id="post-29596">
+    <div class="subject"><a href="#post-29596">Yup</a></div>
+    <div class="body">I have tried both ways DPL3 and DPL0, both fail on hardware IRQ and DPL3 works ok on software INT</div>
+    <div class="meta">Posted on 2002-03-17 14:25:55 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-29720">
+    <div class="subject"><a href="#post-29720">System level programming problems</a></div>
+    <div class="body">Instead of beeping (which is a &quot;complex&quot; function :-) I would prefer to manipulate the screen in the irq routine, possibly in text mode with <br /><br />inc byte ptr ds:[0b8000h+79*2]          ;right char in first line in text mode<br /><br />just to see if your routine is called at all at irqs<br /><br />japheth</div>
+    <div class="meta">Posted on 2002-03-18 04:44:47 by japheth</div>
+   </div>
+   <div class="post" id="post-29742">
+    <div class="subject"><a href="#post-29742">System level programming problems</a></div>
+    <div class="body">Sorry if it's me who's dull, but I try again:<br />is your IRQ handling code in a vxd, or in a &quot;normal&quot; PE file that is<br />using a hack to gain ring0?</div>
+    <div class="meta">Posted on 2002-03-18 08:32:09 by f0dder</div>
+   </div>
+   <div class="post" id="post-29754">
+    <div class="subject"><a href="#post-29754">Well...</a></div>
+    <div class="body">Fodder:<br />==============<br />Yes, my IRQ handler is inside a normal PE that uses a &quot;hack&quot; to manipulate the IDT table and make vector 51h point to my code inside the PE... is this the problem? placeing code inside a VXD will help?<br /><br />Japeth:<br />==========<br />I guess beeping is a complex routine and indeed takes some time (but i just use the speaker not the sound Blaster :) ) my guess is that my code is never reached on a hardware IRQ... o wish i have a better way of testing if my IRQ handler is reached...<br /><br />but IMHO changing the screen mode to VGA text (forcefully) is even more complex... this is NOT inside my OS :) its insides windows and i do not like/want to change its video mode from gfx to text....<br /><br />anyway if you know a fast and sure way of doing that for any video board ... send me the code/example  :)</div>
+    <div class="meta">Posted on 2002-03-18 10:01:57 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-29755">
+    <div class="subject"><a href="#post-29755">System level programming problems</a></div>
+    <div class="body">Bogdan, I have one thing to say: DUH. You know about paging,<br />right? And that on wi32, each process has a separate address<br />space? Hardware IRQs can be generated any time... in the context<br />of any application. It is very likely a hardware IRQ will be<br />generated when not in the context of your process...<br /><br />Perhaps this can be worked around by marking the pages as<br />shareable, but I dunno. Hooking the IDT like this is dirty.</div>
+    <div class="meta">Posted on 2002-03-18 10:08:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-29757">
+    <div class="subject"><a href="#post-29757">System level programming problems</a></div>
+    <div class="body">Bogdan,<br />        Excuse me if I sound ignorant ( I know practically nill about systems level stuff), but why not take a cue from the virrii guys and &quot;infect&quot; the MBR with your own code? You could then hook the irq before windows even gets a shot at the machine to screw everthing up :) It's still dirty (IMHO) but it seems more logical to me. If you write the boot code correctly it won't even set off antivirus's and should then work on any OS. Without a driver.<br /><br />I have a couple of MBR examples of you want them.</div>
+    <div class="meta">Posted on 2002-03-18 10:39:53 by emonk</div>
+   </div>
+   <div class="post" id="post-29759">
+    <div class="subject"><a href="#post-29759">System level programming problems</a></div>
+    <div class="body">emonk, that wouldn't work at all. If we look away from some of the<br />very obvious problems (not very much space in MBR, av tools possibly<br />limiting access to MBR, etc) there's still more problems... like, windows<br />sets up its own IRQ handlers, effectively overriding whatever wank<br />you have installed while in realmode.</div>
+    <div class="meta">Posted on 2002-03-18 10:48:02 by f0dder</div>
+   </div>
+   <div class="post" id="post-29760">
+    <div class="subject"><a href="#post-29760">System level programming problems</a></div>
+    <div class="body">F0dder,<br /> Oh :) I was under the impression that if you hooked it first anything that came after would just be hooking your hook? If it's not this way then how do all of those virii work under windows by hooking  int 13h to trap MBR read/write? Here is a non-virus example of hooking int 13h before windows screws with you.</div>
+    <div class="meta">Posted on 2002-03-18 10:53:16 by emonk</div>
+   </div>
+   <div class="post" id="post-29763">
+    <div class="subject"><a href="#post-29763">System level programming problems</a></div>
+    <div class="body">This program is intended to run under DOS, where it is easy to hook an interrupt. Under Windows 9x the only way is to jump into Ring0. There is many way to do this from Ring3. If someone interested, I can find some viral technique how to achieve this.</div>
+    <div class="meta">Posted on 2002-03-18 11:04:47 by masquer</div>
+   </div>
+   <div class="post" id="post-29772">
+    <div class="subject"><a href="#post-29772">System level programming problems</a></div>
+    <div class="body">Masquer,<br />All MBR code is dos code... After the code is executed it then calls a back up of the old MBR and continues booting windows or whatever.<br /><br />-EDIT-<br /><br />For more info on how this example works see<br /><a target="_blank" href="http://randomperson.freeservers.com/cgi-bin/framed/3412/passprot2.htm">http://randomperson.freeservers.com/cgi-bin/framed/3412/passprot2.htm</a></div>
+    <div class="meta">Posted on 2002-03-18 11:46:51 by emonk</div>
+   </div>
+   <div class="post" id="post-29780">
+    <div class="subject"><a href="#post-29780">System level programming problems</a></div>
+    <div class="body">I know that. What I want to say is to write at MBR under windows you need to go to Ring0. That program run under DOS.<br />And MBR code is not DOS code, DOS is not loaded yet :)</div>
+    <div class="meta">Posted on 2002-03-18 12:35:41 by masquer</div>
+   </div>
+   <div class="post" id="post-29781">
+    <div class="subject"><a href="#post-29781">System level programming problems</a></div>
+    <div class="body">Masquer,<br /> Misunderstanding. I dont mean to install the MBR code from within windows. Install that from dos. I just mean using a fake MBR to hook the interrupt before windows loads. As a way to avoid fighting windows for ring 0 in the first place. It is then just a matter of writing plain ol' realmode crap :) Unless F0dder is right. Which I would believe if he would tell me why :)</div>
+    <div class="meta">Posted on 2002-03-18 12:45:24 by emonk</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=4226&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=4226&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="4226" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=4226&amp;page=2">&gt;</a><a href="../?id=4226&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>The devil's code... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17449" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=17449">The devil's code...</a></p>
+   <div class="post" id="post-135121">
+    <div class="subject"><a href="#post-135121">The devil's code...</a></div>
+    <div class="body">I'm having the strangest problem ever...<br /><br />I first noticed something strange when running my C++ code with debugging enabled. Performance was higher than with debugging disabled! After a big search, I focussed down on this code:<br /><pre><code><br />inline float fsqrt&#40;float x&#41;<br />&#123;<br />	__asm<br />	&#123;<br />		rsqrtss	xmm0, x<br />		mulss	xmm0, x<br />		movss	x, xmm0<br />	&#125;<br />		<br />	return x;<br />&#125;<br /></code></pre> <br />An inoccent function, or so I thought... I isolated it from my project, and compared it's performance with the standard fsqrt function. It is more than four times slower! Changing it to the code below, it outperformed fsqrt as expected:<br /><pre><code><br />rsqrtss	xmm0, x<br />rcpss	xmm0, xmm0<br />movss	x, xmm0<br /></code></pre><br />So what the HELL is going on? Am I really overlooking something or does the original code cause a major internal CPU stall? I'm working on a laptop with Pentium M processor, if that matters.<br /><br />Obviously I would rather work with the first method, because it uses only one approximation instruction. BTW, Scali suggested this 'optimization' to me. :notsure:</div>
+    <div class="meta">Posted on 2004-03-01 08:43:20 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-135283">
+    <div class="subject"><a href="#post-135283">The devil's code...</a></div>
+    <div class="body">There's a logical explanation! Although it's still devilish. :grin:<br /><br />The square root of 0 is 0, as we all know. If we compute it via rsqrt+rcp we first get Inf, then 0. However, with rsqrt+mul we multiply Inf by zero, which results in NaN. That ain't the right answer, and what's worse, doing further calculations with NaN is extremely slow.<br /><br />So, what appears to be the best method for fast square root computation, behaves very badly in the limit. :( Any idea if this can be avoided?</div>
+    <div class="meta">Posted on 2004-03-06 08:05:40 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-135398">
+    <div class="subject"><a href="#post-135398">The devil's code...</a></div>
+    <div class="body">Does anyone know what the precision loss is from using rsqrt+rsp? Both are supposed to have 12-bit mantissa precision but I don't know what the resulting precision would be like.</div>
+    <div class="meta">Posted on 2004-03-08 16:23:48 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-135410">
+    <div class="subject"><a href="#post-135410">The devil's code...</a></div>
+    <div class="body">I would suggest doing a precheck of the value you wish to square root:<br /><br /><pre><code>inline float fsqrt&#40;float x&#41;<br />&#123;<br />	__asm<br />	&#123;<br />		lea edx, x<br />		mov eax, &#91;edx&#93;<br />		or  eax, eax<br />		jnz @Nope<br />		mov eax, &#91;edx+4&#93;<br />		or  eax, eax<br />		jz @End<br />		@Nope&#58;<br /><br />		rsqrtss	xmm0, x<br />		mulss	xmm0, x<br />		movss	x, xmm0<br /><br />		@End&#58;<br />	&#125;<br />		<br />	return x;<br />&#125;<br /></code></pre><br /><br />Im sure you can do this somehow with mmx as well, however this should get the point across.  0.0f = 00000000 00000000h<br /><br />Regards,<br />NaN</div>
+    <div class="meta">Posted on 2004-03-08 20:32:39 by NaN</div>
+   </div>
+   <div class="post" id="post-135424">
+    <div class="subject"><a href="#post-135424">The devil's code...</a></div>
+    <div class="body">What about adding a tiny number to X before doing the sqrt? This should avoid sqt(0), and if the context is a 3D engine this miniscule loss of precision should be acceptable (at least more acceptable than a large performance hit). Or you could try avoiding ending up taking sqrt(0) at all?</div>
+    <div class="meta">Posted on 2004-03-09 01:36:32 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

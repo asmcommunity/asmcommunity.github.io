@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>more richedit problems - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26899" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26899">more richedit problems</a></p>
+   <div class="post" id="post-193516">
+    <div class="subject"><a href="#post-193516">more richedit problems</a></div>
+    <div class="body">for some unknown reason, the following code works fine when i streamin text with the SF_RTF flag, but if i use SF_TEXT, it creates a gigantic memory leak. can anyone help?
+
+<pre><code>
+EditStreamWrite	PROC uses ebx edi esi dwCookie:DWORD, pbBuff:DWORD, cb:DWORD, pcb:DWORD
+	;dwCookie is a pointer to allocated Virtual Memory
+
+	mov ecx, cb
+	mov ebx, ecx
+	mov eax, pcb
+	mov DWORD PTR, ebx
+	mov esi, dwCookie
+	mov edi, pbBuff
+	rep movsb
+	
+	xor eax, eax
+		
+	ret
+EditStreamWrite ENDP
+</code></pre></div>
+    <div class="meta">Posted on 2001-02-14 16:35:00 by Sloat</div>
+   </div>
+   <div class="post" id="post-193517">
+    <div class="subject"><a href="#post-193517">more richedit problems</a></div>
+    <div class="body">First, the StreamIn function gets called multiple times, yet each time you copy the text from the beginning of your buffer by using dwCookie, which never changes. You need to create a pointer to where you left off.
+Secondly, the function gets called forever, cause you didn't check for the end of your buffer and you never tell the rich edit to stop calling the function. By calling this function forever, the rich edit control eats up your entire memory and who knows what else.</div>
+    <div class="meta">Posted on 2001-02-14 16:51:00 by Hel</div>
+   </div>
+   <div class="post" id="post-193518">
+    <div class="subject"><a href="#post-193518">more richedit problems</a></div>
+    <div class="body">Sloat,
+
+Here are 2 procedures that load and save text into a rich edit control,
+they are the standard documented method of handling IO in a rich edit
+control and have proven very reliable. They both have their matching
+callbacks.
+
+Regards,
+hutch@pbq.com.au
+
+<pre><code>
+; #########################################################################
+
+reLoadFile proc hEdit:DWORD,lpszFileName:DWORD
+
+    LOCAL hFile :DWORD
+    LOCAL ofs   :OFSTRUCT
+    LOCAL est   :EDITSTREAM
+
+    invoke OpenFile,lpszFileName,ADDR ofs,OF_READ
+    mov hFile, eax
+
+    mov est.dwCookie, eax
+    mov est.dwError, 0
+    mov eax, offset ofCallBack
+    mov est.pfnCallback, eax
+
+    invoke SendMessage,hEdit,EM_STREAMIN,SF_TEXT,ADDR est
+    invoke CloseHandle,hFile
+
+    invoke SendMessage,hEdit,EM_SETMODIFY,0,0
+
+    mov eax, 0
+    ret
+
+reLoadFile endp
+
+; #########################################################################
+
+ofCallBack proc dwCookie:DWORD,pbBuff:DWORD,cb:DWORD,pcb:DWORD
+
+    invoke ReadFile,dwCookie,pbBuff,cb,pcb,NULL
+
+    mov eax, 0
+    ret
+
+ofCallBack endp
+
+; #########################################################################
+
+reSaveFile proc hEdit:DWORD,lpszFileName:DWORD
+
+    LOCAL hFile :DWORD
+    LOCAL ofs   :OFSTRUCT
+    LOCAL est   :EDITSTREAM
+
+    invoke OpenFile,lpszFileName,ADDR ofs,OF_CREATE
+    mov hFile, eax
+
+    mov est.dwCookie, eax
+    mov est.dwError, 0
+    mov eax, offset sfCallBack
+    mov est.pfnCallback, eax
+
+    invoke SendMessage,hEdit,EM_STREAMOUT,SF_TEXT,ADDR est
+    invoke CloseHandle,hFile
+
+    invoke SendMessage,hEdit,EM_SETMODIFY,0,0
+
+    mov eax, 0
+    ret
+
+reSaveFile endp
+
+; #########################################################################
+
+sfCallBack proc dwCookie:DWORD,pbBuff:DWORD,cb:DWORD,pcb:DWORD
+
+    invoke WriteFile,dwCookie,pbBuff,cb,pcb,NULL
+
+    mov eax, 0
+    ret
+
+sfCallBack endp
+
+; #########################################################################
+</code></pre></div>
+    <div class="meta">Posted on 2001-02-14 17:03:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-193519">
+    <div class="subject"><a href="#post-193519">more richedit problems</a></div>
+    <div class="body">hutch, i'm not using files, but thanks anyway.
+
+Hel, I don't need to use a pointer because i'm streaming the text out to memory, adding new text, then streaming it back. it works better for what i'm making.
+
+your second point, however, is troubling me. According to MSDN the callback will only stop if:
+1. a non-zero value is returned (signifying an error which causes pbBuff to be dumped)
+2. pcb is 0 (which causes 0 bytes to be written)
+3. an error occurs (dumps pbBuff)
+4. the end of an RTF block is reached (i'm not using rtf)
+5. an end-of-line character is reached on a single-line control (not using a single-line control)
+
+after reading this, i'm totally baffled, out of ideas and ready to give up. if you have anything left up your sleeve, i'd be glad to try it. thanks</div>
+    <div class="meta">Posted on 2001-02-15 00:12:00 by Sloat</div>
+   </div>
+   <div class="post" id="post-193520">
+    <div class="subject"><a href="#post-193520">more richedit problems</a></div>
+    <div class="body">Sloat,
+
+What you are after is easy to do, select the text you wish to
+process, copy it to a buffer, process it, write it back with
+
+      invoke SendMessage,hEdit,EM_REPLACESEL,0,hMem
+
+If you are selecting the whole edit control, use SetWindowText()
+to replace the text, it will load large text, about 5 meg at max.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-02-15 05:29:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-193521">
+    <div class="subject"><a href="#post-193521">more richedit problems</a></div>
+    <div class="body">This seems to work for me.
+<pre><code>
+BytesO       dd      0
+Hold         dd      0
+
+;=====================================================================
+; Writes to memory from a richedit control
+;=====================================================================
+         and     Hold, 0
+       MOVmd     EditS.dwCookie, pMem
+         mov     EditS.dwError, 0
+         mov     EditS.pfnCallback, offset EditStreamWrite4
+      INVOKE     SendMessage, hREdit, EM_STREAMOUT, SF_RTF, offset EditS
+; OR
+      INVOKE     SendMessage, hREdit, EM_STREAMOUT, SF_TEXT, offset EditS
+         mov     BytesO, eax   ; eax = bytes written
+
+
+;=====================================================================
+; Reads from memory to a richedit control
+;=====================================================================
+         and     Hold, 0
+       MOVmd     EditS.dwCookie, pMem
+         mov     EditS.dwError, 0
+         mov     EditS.pfnCallback, offset EditStreamRead4
+      INVOKE     SendMessage, hREdit, EM_STREAMIN, SF_RTF, offset EditS
+; If the input is RTF you can read it in as plain text
+      INVOKE     SendMessage, hREdit, EM_STREAMIN, SF_TEXT, offset EditS
+                              ; eax = bytes read
+      INVOKE     HeapDestroy, hMem
+
+
+;=====================================================================
+; Edit Stream Out Callback procedure - write to memory from a control
+;=====================================================================
+EditStreamWrite4 PROC  uses ebx esi edi  dwCookie:DWORD, pbBuff, cb, pcb
+         mov     ecx, cb             ; Block size for this callback
+         mov     ebx, ecx
+         mov     edi, dwCookie       ; Output
+         add     edi, Hold           ; Apply offset to the output buffer
+         mov     esi, pbBuff         ; InPut, doesn't need the offset??
+         rep     movsb
+         mov     eax, pcb            ; Pointer to pcb
+         mov     dword ptr, ebx ; Actual bytes written for this callback
+         add     Hold, ebx           ; Hold = accum offset for input buffer
+         mov     eax, 0              ; Must return zero
+         RET
+EditStreamWrite4 ENDP
+
+;=====================================================================
+; Edit Stream In Callback procedure - read from memory to a control
+;=====================================================================
+EditStreamRead4 PROC  uses ebx esi edi  dwCookie:DWORD, pbBuff, cb, pcb
+         mov     ecx, cb             ; Block size for this callback
+      .if BytesO > ecx
+            sub     BytesO, ecx      ; BytesO = total bytes to read
+      .else
+            mov     ecx, BytesO
+            and     BytesO, 0
+      .endif
+         mov     eax, pcb            ; Pointer to pcb
+         mov     dword ptr, ecx ; Actual bytes read for this callback
+         mov     esi, dwCookie       ; Input
+         add     esi, Hold           ; Apply offset to the input buffer
+         mov     edi, pbBuff         ; OutPut, doesn't need the offset??
+         add     Hold, ecx           ; Hold = accum offset for input buffer
+         rep     movsb
+      .if !BytesO
+            mov     eax, 0           ; Must return Zero for it to work
+      .else
+            mov     eax, 0 ;1        ; Must return Zero for it to work
+      .endif
+EditRet: RET
+EditStreamRead4 ENDP
+</code></pre>
+Ewayne
+
+This message was edited by Ewayne, on 2/15/2001 6:48:06 AM
+
+This message was edited by Ewayne, on 2/15/2001 6:50:11 AM</div>
+    <div class="meta">Posted on 2001-02-15 06:46:00 by Ewayne</div>
+   </div>
+   <div class="post" id="post-193522">
+    <div class="subject"><a href="#post-193522">more richedit problems</a></div>
+    <div class="body">to Ewayne
+hm instead of using in EditStreamRead4 the last .if .else .endif why don´t ya use a simple mov eax,0 ?</div>
+    <div class="meta">Posted on 2001-02-15 07:26:00 by justme</div>
+   </div>
+   <div class="post" id="post-193523">
+    <div class="subject"><a href="#post-193523">more richedit problems</a></div>
+    <div class="body">Well I thought it should be 1, but it won't work with 1 and
+I forgot to take it out.
+
+Ewayne</div>
+    <div class="meta">Posted on 2001-02-15 08:19:00 by Ewayne</div>
+   </div>
+   <div class="post" id="post-193524">
+    <div class="subject"><a href="#post-193524">more richedit problems</a></div>
+    <div class="body">thanks hutch, i got it working.</div>
+    <div class="meta">Posted on 2001-02-15 16:46:00 by Sloat</div>
+   </div>
+  </div>
+ </body>
+</html>

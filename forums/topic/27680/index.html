@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>GDI Animation, need help - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27680" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27680">GDI Animation, need help</a></p>
+   <div class="post" id="post-197515">
+    <div class="subject"><a href="#post-197515">GDI Animation, need help</a></div>
+    <div class="body">Hi all,
+
+I have to keep the message short because I just lost my last message due to timeout. SHIT!!
+Okay, I have a simple window and I loaded a bitmap on it using GDI with the WM_PAINT thing. Now I think it would be cool having such an animation as one finds on the title image of Space-Tris (the bit by bit displaying of the bitmap and not immediately complete.
+Has anyone a source for me showing this?
+Please help me
+
+Stefan</div>
+    <div class="meta">Posted on 2001-04-17 18:34:00 by Stefan Krause</div>
+   </div>
+   <div class="post" id="post-197516">
+    <div class="subject"><a href="#post-197516">GDI Animation, need help</a></div>
+    <div class="body">Hi
+
+Show me the Space Tris image and i will try explain you how to make a similar one :D
+
+Besides i think you cen use "SetDIBits" or something to do anything...allmost like in DirectX...only slower?
+
+And ...yeah dont forget to make a backbuffer for no tearing/artifacts on GDI animations ..</div>
+    <div class="meta">Posted on 2001-04-18 08:53:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-197517">
+    <div class="subject"><a href="#post-197517">GDI Animation, need help</a></div>
+    <div class="body">Hi Bogdan,
+
+thanks for offering help.
+
+The final thing I want to achieve is what the GIF below shows.
+<img src=" http://yawns.virtualave.net/avatar/ANIM.gif
+
+That means I would like to have a grey screen at the beginning and the picture is revealed slowly until it is finished.
+
+Here comes the source Chriss Hobbs uses in Space-Tris for this:
+
+<pre><code>
+Wipe_Trans	proc	strip_width:DWORD, direction:DWORD
+
+	;=======================================================
+	; This function will perform either a horizontal or
+	; a vertical wipe depending on what you pass in for the
+	; direction paramter. The width of each step is 
+	; determined by the width that you pass in to it.
+	;=======================================================
+
+	;=========================================
+	; Local Variables
+	;=========================================
+	LOCAL	StartTime	:DWORD
+
+	;========================================
+	; Setup the source rectangle and the 
+	; destination rectangle
+	;
+	; For the first iteration, the strip may 
+	; not be the height passed in. This is to 
+	; make sure we are on an even boundary 
+	; during the loop below
+	;========================================
+	.if direction == WIPE_HORZ
+		mov	SrcRect.top, 0
+		mov	SrcRect.left, 0
+		mov	eax, app_width
+		mov	ecx, strip_width
+		xor	edx, edx
+		div	ecx
+		.if edx == 0
+			mov	edx, strip_width
+		.endif
+		mov	ebx, app_height
+		mov	SrcRect.bottom, ebx
+		mov	SrcRect.right, edx
+		mov	DestRect.top, 0
+		mov	DestRect.left, 0
+		mov	DestRect.bottom, ebx
+		mov	DestRect.right, edx
+
+	.elseif direction == WIPE_VERT
+		mov	SrcRect.top, 0
+		mov	SrcRect.left, 0
+		mov	eax, app_height
+		mov	ecx, strip_width
+		xor	edx, edx
+		div	ecx
+		mov	eax, app_width
+		.if edx == 0
+			mov	edx, strip_width
+		.endif
+		mov	SrcRect.bottom, edx
+		mov	SrcRect.right, eax
+		mov	DestRect.top, 0
+		mov	DestRect.left, 0
+		mov	DestRect.bottom, edx
+		mov	DestRect.right, eax
+
+	.else
+		;==================
+		; Invalid direction
+		;==================
+		jmp	err
+
+	.endif
+
+	;================================
+	; Get the starting time
+	;================================
+	invoke Start_Time, ADDR StartTime
+
+	;================================
+	; Blit the strip onto the screen
+	;================================
+	DDS4INVOKE BltFast, lpddsprimary, SrcRect.left, SrcRect.top,\
+		lpddsback, ADDR DestRect, DDBLTFAST_WAIT
+
+	;===============================
+	; Make sure we succeeded
+	;===============================
+	.if eax != DD_OK
+		jmp	err
+	.endif
+
+	;===================================================
+	; Now adjust the distance between the left &
+	; right, or top and bottom, so that the top, or
+	; left, corner is where the right hand side was 
+	; at ... and the bottom, or right, is strip_width
+	; away from the opposite corner.
+	;===================================================
+	mov	eax, strip_width
+	.if direction == WIPE_HORZ
+		mov	ebx, SrcRect.right
+		mov	SrcRect.left, ebx
+		mov	DestRect.left, ebx
+		add	ebx, eax
+		mov	DestRect.right, ebx
+		mov	SrcRect.right, ebx
+
+	.elseif direction == WIPE_VERT
+		mov	ebx, SrcRect.bottom
+		mov	SrcRect.top, ebx
+		mov	DestRect.top, ebx
+		add	ebx, eax
+		mov	DestRect.bottom, ebx
+		mov	SrcRect.bottom, ebx
+
+	.endif
+
+	;===================================
+	; Wait to synchronize the time
+	;===================================
+	invoke Wait_Time, StartTime, TRANS_TIME
+
+	;=====================================
+	; Drop into a while loop and blit all
+	; of the strips synching to our 
+	; desired transition rate
+	;=====================================
+	.while TRUE
+		;================================
+		; Get the starting time
+		;================================
+		invoke Start_Time, ADDR StartTime
+
+		;================================
+		; Blit the strip onto the screen
+		;================================
+		DDS4INVOKE BltFast, lpddsprimary, SrcRect.left, SrcRect.top,\
+			lpddsback, ADDR DestRect, DDBLTFAST_WAIT
+
+		;===============================
+		; Make sure we succeeded
+		;=======================</div>
+    <div class="meta">Posted on 2001-04-18 10:18:00 by Stefan Krause</div>
+   </div>
+   <div class="post" id="post-197518">
+    <div class="subject"><a href="#post-197518">GDI Animation, need help</a></div>
+    <div class="body">Hi
+
+That is simple
+
+instead or DX Blt() methos use the BitBlt GDI function (please note diffrent parameters and calling conventions)
+
+on BitBlt start with a nWidth parameter of 1 then increment it until you get to the original source picture width
+
+oh...and yeah... first blit a full (or fill if so like) the background with dark grey or something :) on the whole width</div>
+    <div class="meta">Posted on 2001-04-18 17:09:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-197519">
+    <div class="subject"><a href="#post-197519">GDI Animation, need help</a></div>
+    <div class="body">Hmm, I think the party yesterday has somehow been too:
+
+<li>long</li>
+<li>hard</li>
+<li>drunk</li>
+
+
+I should have thought in this direction myself but I thank you Bogdan. Great to know there are people outside helping programmers who don't find the solution <em>I didn't say, that my question or I have been stupid *g*</em>
+
+Stefan</div>
+    <div class="meta">Posted on 2001-04-18 18:39:00 by Stefan Krause</div>
+   </div>
+   <div class="post" id="post-197520">
+    <div class="subject"><a href="#post-197520">GDI Animation, need help</a></div>
+    <div class="body">Dont worry i cannot stand GDI myself, anything i try to do with any functions, either works completly against all documentation (such as SetPixel only works with screen DC's and will not work with anything else (Or at least i couldn't get it to and if anyone could tell me why it would be much appreciated)), or manages to crash the entired OS for some reason i could not figure out for my life.
+
+That is all the luck i have ever had with GDI so yeah</div>
+    <div class="meta">Posted on 2001-04-19 03:18:00 by George</div>
+   </div>
+   <div class="post" id="post-197521">
+    <div class="subject"><a href="#post-197521">GDI Animation, need help</a></div>
+    <div class="body">Stefan,
+
+Along with BogdanOntanus suggestion, I'd also increase the offset in BitBlt too, that was you not doing this:-
+
+BitBlt column 1...
+BitBlt column 1 and 2...
+BitBlt column 1,2 and 3...
+
+etc,
+
+you'll do this:-
+
+BitBlt column 1...
+BitBlt column 2...
+BitBlt column 3...
+
+It will (ok should) be quicker, and smoother...
+
+umbongo</div>
+    <div class="meta">Posted on 2001-04-19 05:34:00 by umbongo</div>
+   </div>
+  </div>
+ </body>
+</html>

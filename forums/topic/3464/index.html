@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>movsb question - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3464" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3464">movsb question</a></p>
+   <div class="post" id="post-22968">
+    <div class="subject"><a href="#post-22968">movsb question</a></div>
+    <div class="body">ive been using lodsb then stosb so that i can do a cmp with the contents of al to know when to stop my loop.<br /><pre><code>@@&#58;<br />      lodsb<br />      stosb<br />      cmp al,20h<br />      jne @B&#58;</code></pre><br /><br />its probably possible to use movsb instead. ive been messing around with movsb but i havent been able to get it to work. im hoping for a little mini example of how i can use movsb and make it stop when i want it to. i do realize that movsb uses ecx as a counter and decreases it but i have an undetermined amount of bytes to move.<br /><br />please dont tell me to use scan to determined the amount of bytes i need moved by pinpointing the location and moving the amount into ecx otherwise i will have to keel you.:grin:</div>
+    <div class="meta">Posted on 2002-02-05 22:07:01 by smurf</div>
+   </div>
+   <div class="post" id="post-22969">
+    <div class="subject"><a href="#post-22969">movsb question</a></div>
+    <div class="body">movsb by itself does no ecx messing. It copies byte from <br />to , and increases both esi and edi. That's all it does. When<br />you use the rep prefix, it starts using ecx. The &quot;rep movsb&quot; (and<br />even better, movsd) is great when you know the length beforehand.<br />You can't break a &quot;rep movs&quot; sequence based on data.<br /><br />If your code snippet doesn't require high speed, your current code<br />will work fine, and has the advantage of being quite small. Unless<br />you'll be processing massive amounts of data this way, I would focus<br />on optimizing / implementing other parts of the application.</div>
+    <div class="meta">Posted on 2002-02-05 22:18:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-22971">
+    <div class="subject"><a href="#post-22971">movsb question</a></div>
+    <div class="body">It is better to use <strong>MOV</strong> instruction in your above case.<pre><code>@@&#58;<br />      mov al,&#91;esi&#93;<br />      inc esi<br />      mov &#91;edi&#93;,al<br />      inc edi<br />      cmp al,20h<br />      jne @B</code></pre>Less code is not always a better thing.  If you are just copying space separated words from a string, then it might be better to put zero bytes where the spaces are and just store pointers to the positions within the string - instead of copying the sub-strings.<pre><code>.data?<br />   MyTokens dd MAXTOKENS dup&#40;?&#41;<br />   TokenCount dd ?<br /><br />.code<br />   invoke GetTokenPointers, ADDR InputString, ADDR MyTokens<br />   mov TokenCount, eax<br />...<br />   mov edx, OFFSET MyTokens<br />   mov eax, TokenCount<br />@@&#58;<br />   ; &#91;edx&#93; is pointer to token<br />   ; do something with it...<br /><br />   add edx,4<br />   dec eax<br />   jne @B<br />...<br /><br />GetTokenPointers PROC theString&#58;DWORD, tokBuffer&#58;DWORD<br />   mov edx, theString<br />   mov ecx, tokBuffer<br />   push edx<br />   dec edx<br />   xor eax,eax ; number of tokens<br />@@&#58;inc edx<br />   cmp BYTE PTR &#91;edx&#93;,20h<br />   je aSpace<br />   cmp BYTE PTR &#91;edx&#93;,0<br />   jne @B<br />   pop DWORD PTR &#91;ecx + eax*4&#93; ; store last one<br />   inc eax<br />   ret<br />aSpace&#58;<br />   mov BYTE PTR &#91;edx&#93;,0 ; clear byte<br />   pop DWORD PTR &#91;ecx + eax*4&#93; ; store pointer to sub-string<br />   inc eax<br />   push edx<br />   jmp @B<br />GetTokenPointers ENDP</code></pre><strong>Warning:</strong> Code untested and subject to spurious modifications. :rolleyes:</div>
+    <div class="meta">Posted on 2002-02-05 22:21:47 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-22982">
+    <div class="subject"><a href="#post-22982">movsb question</a></div>
+    <div class="body">fodder: oops ya i was thinking about the rep prefix before the movsb.<br /><br />bitrake: very good point on that less code isnt always better. you just woke me up there thx.<br /><br />i have another question. i need to reuse some code in a procedure i made. here is a snipet of the code i need to reuse:<br /><pre><code>AddDir&#58;         <br />   pushad<br />   mov item.iItem,0<br />   mov item.iSubItem,0<br />   mov item.imask,LVIF_TEXT + LVIF_IMAGE<br />   push xName<br />   pop item.pszText<br />   mov item.cchTextMax,sizeof xName<br />   mov item.iImage,0<br />   invoke SendMessage,hListView,LVM_INSERTITEM,0,addr item<br />   popad<br />ret</code></pre><br /><br />i need to call this from my procedure(this is actually in my procedure but below my routine) and have a paramater to replace the xName in my call.<br /><br />call AddDir, xNamesReplacement &lt;-- so how do i pass this paramate to replace xName?</div>
+    <div class="meta">Posted on 2002-02-05 22:41:49 by smurf</div>
+   </div>
+   <div class="post" id="post-22985">
+    <div class="subject"><a href="#post-22985">movsb question</a></div>
+    <div class="body"><pre><code>YourAddDir PROC xName&#58;DWORD<br />;   pushad ; are these really needed?<br />   mov item.iItem,0<br />   mov item.iSubItem,0<br />   mov item.imask,LVIF_TEXT + LVIF_IMAGE<br />   push xName<br />   pop item.pszText<br /><br />   invoke YourStringLength,xName<br />   mov item.cchTextMax,eax ; sizeof xName<br /><br />   mov item.iImage,0<br />   invoke SendMessage,hListView,LVM_INSERTITEM,0,addr item<br />;   popad<br />ret<br />YourAddDir ENDP</code></pre>That's it! :grin:<br /><strong>Edit</strong>: Woops a PROC won't work here if item is a LOCAL. :stupid:</div>
+    <div class="meta">Posted on 2002-02-05 22:48:31 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-22995">
+    <div class="subject"><a href="#post-22995">movsb question</a></div>
+    <div class="body">the pushad and popad had i used just for debugging purposes. my code was crashing and at the time i didnt know which registers were the trouble makers so i just saved them all. thanks for the help and the token code.:)</div>
+    <div class="meta">Posted on 2002-02-05 23:50:21 by smurf</div>
+   </div>
+   <div class="post" id="post-22997">
+    <div class="subject"><a href="#post-22997">movsb question</a></div>
+    <div class="body">You might not have seen the token code before - I usually don't like opening my mouth too big without providing an example of some sort.  ;)  It just so happened that the code I came up with didn't work at all, so I clipped it and played with it some more until I felt it was working.  Granted I've never assembled the code above - I just think it'll work. :grin:  Mainly, I just was hoping to convey the idea of not moving the data, but transforming it into a usable form.</div>
+    <div class="meta">Posted on 2002-02-06 00:00:20 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

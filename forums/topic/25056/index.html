@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Eliminating Texture-Thrashing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25056" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25056">Eliminating Texture-Thrashing</a></p>
+   <div class="post" id="post-183502">
+    <div class="subject"><a href="#post-183502">Eliminating Texture-Thrashing</a></div>
+    <div class="body">Several years ago when I first started messing around with D3D code, a member of this forum tried to explain to me how it was possible to eliminate texture-thrashing and simultaneously pre-sort renderable geometry into opaque and translucent groups.<br />I&#39;d like to credit Jan for this idea.<br />At the time I didn&#39;t really grasp how this should be implemented.<br />I figured he was inferring that we should hijack certain api calls and redirect them to our own code.<br />That&#39;s certainly one possibility, but there&#39;s a thousand ways to skin a cat. The following thesis is certainly no slower than API hijacking and a lot easier to implement.<br /><br />Idea : Deferred Rendering<br />- Eliminates &#39;texture thrashing&#39;<br />- Reduces changes to the RenderStates<br /><br />A Renderable is something that we can draw.<br /><br />Our mission, if we choose to accept it, is to sort Renderables.<br />Primarily they are to be sorted into two categories (textured and untextured).<br />Secondly they are to be sorted into two subcategories (opaques and translucents).<br /><br />We wish to collect data for Renderables by providing<br />our own pseudo-versions of D3D&#39;s DrawWhatever api functions, <br />only actually performing rendering via our own pseudo-version<br />of the Present api.<br />Note that our pseudo-Render functions don&#39;t actually do any Rendering, they are simply sorting and collecting data normally associated with calls to D3D rendering functions.<br />Actual rendering doesn&#39;t happen until the user calls (our) Present method.<br /><br />I&#39;m only going to talk about Textured entities, you can assume that the handling of Untextured entities is very similar.<br /><br />We&#39;ll need to keep an eye on some of the render states,<br />especially alpha blending enable/disable (since we can<br />use that switch to determine in which Collection to store<br />the current Renderable).<br /><br />Each Renderable will require its own FVF data, as well as<br />any Parameters supplied in the original call.<br /><br />It might be astute to extend our existing Texture objects<br />as Managers for collections of Textured Renderables.<br /><br />Object Texture,TextureID,Primer<br />	RedefineMethod	Done<br />	DefineVariable	pName,Pointer,NULL<br />	DefineVariable	pTexture,Pointer,NULL<br />	DefineVariable	pRenderables_Opaque,Pointer,NULL<br />	DefineVariable	pRenderables_Translucent,Pointer,NULL<br />ObjectEnd<br /><br />When the user issues the call to Present the backbuffer,<br />we perform the ACTUAL rendering of our Texture groups in two passes.<br />First we render opaques, then we render translucents.<br />After that&#39;s been done, we flush the collections and<br />make a call to the ACTUAL Present api function.<br />Code can be added to the TextureManager class to perform such chores.<br />In fact, it might be best to write a new RenderManager class which<br />inherits from TextureManager.<br /><br />I would very much appreciate any input in regards to this proposal.<br /></div>
+    <div class="meta">Posted on 2006-07-13 12:35:22 by Homer</div>
+   </div>
+   <div class="post" id="post-183506">
+    <div class="subject"><a href="#post-183506">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">Hmmm, &quot;Jan&quot; - wasn&#39;t that one of Scali&#39;s accounts after he had been banned? :)</div>
+    <div class="meta">Posted on 2006-07-13 15:43:35 by f0dder</div>
+   </div>
+   <div class="post" id="post-183509">
+    <div class="subject"><a href="#post-183509">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">Heh, yeah, that&#39;s him.<br />Not a wonderful example of a human being perhaps, but quite switched on.<br />Credit where it&#39;s due.</div>
+    <div class="meta">Posted on 2006-07-13 17:27:44 by Homer</div>
+   </div>
+   <div class="post" id="post-184064">
+    <div class="subject"><a href="#post-184064">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">what about this simple code?<br />could be extended to use multitexture and jumptable if lot more advanced, with different trans/opaque and other settings<br />different VB&#39;s also<br />textureLUT, contains a bunch of texturehandles you usually use in settexture apicall<br /><pre><code><br />&nbsp; &nbsp; &nbsp; &nbsp; mov ebx,0<br />&nbsp; &nbsp; &nbsp; &nbsp; @@rl2:<br />&nbsp; &nbsp; &nbsp; &nbsp; mov eax,<br />&nbsp; &nbsp; &nbsp; &nbsp; m2m maxmeshes,<br />&nbsp; &nbsp; &nbsp;  m2m lengthof,<br />&nbsp; &nbsp; &nbsp; &nbsp; pcall lpd3dDevice.SetTexture, 0, eax<br />&nbsp; &nbsp; &nbsp; &nbsp; mov esi,0<br />&nbsp; &nbsp; &nbsp; &nbsp; @@rl1:<br />&nbsp; &nbsp; &nbsp; &nbsp; pcall lpd3dDevice.DrawPrimitive, D3DPT_TRIANGLESTRIP, esi,lengthof<br />&nbsp; &nbsp; &nbsp; &nbsp; add esi,lengthof<br />&nbsp; &nbsp; &nbsp; &nbsp; .IF esi&lt;maxmeshes<br />&nbsp; &nbsp; &nbsp; &nbsp; jmp @@rl1<br />&nbsp; &nbsp; &nbsp; &nbsp; .ENDIF<br />&nbsp; &nbsp; &nbsp; &nbsp;  add ebx,1<br />&nbsp; &nbsp; &nbsp; &nbsp; .IF ebx&lt;maxtextures<br />&nbsp; &nbsp; &nbsp; &nbsp; jmp @@rl2<br />&nbsp; &nbsp; &nbsp; &nbsp; .ENDIF <br /><br /><br /></code></pre></div>
+    <div class="meta">Posted on 2006-07-28 07:40:14 by daydreamer</div>
+   </div>
+   <div class="post" id="post-184067">
+    <div class="subject"><a href="#post-184067">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">Thats quite similar to the code I have implemented in the demo project at this time - its naive, and it does not attempt to pre-sort materials by alpha... however , it DOES provide rendering of all Instances of a given Mesh on a per-Material basis, which does ALMOST eliminate texture-thrashing in the general case.<br />If you neglect to pre-sort Materials, you are only fooling yourself.<br />My tutorial will cover pre-sorting in the very near future.<br /></div>
+    <div class="meta">Posted on 2006-07-28 08:05:03 by Homer</div>
+   </div>
+   <div class="post" id="post-184091">
+    <div class="subject"><a href="#post-184091">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body"><div class="quote"><br />Thats quite similar to the code I have implemented in the demo project at this time - its naive, and it does not attempt to pre-sort materials by alpha... however , it DOES provide rendering of all Instances of a given Mesh on a per-Material basis, which does ALMOST eliminate texture-thrashing in the general case.<br />If you neglect to pre-sort Materials, you are only fooling yourself.<br />My tutorial will cover pre-sorting in the very near future.<br /><br /></div><br />terrain where you decided priority with layer seafloor,sea,sand,grass,stone,snow, it doesnt need to be presorted anyway<br />wonder if not if too many different trianglestrips for one texture, it would be better to convert to trianglelist and a single draw trianglelist for each material, for smaller textures in the distance , merge them to a bigger one, and a single draw trianglelist for all distant objects/terrains for many textures, as far away everything can be shrinked into maxtexturesize<br />I think gpu works lot better with single apicalls that render many polys<br /><br />question on vertexbuffers, cant I have many different, instead of keep track of many different vertexes/different objects are kept in one single one? or its costly to switch to a new one?<br /><br /></div>
+    <div class="meta">Posted on 2006-07-28 15:55:57 by daydreamer</div>
+   </div>
+   <div class="post" id="post-184096">
+    <div class="subject"><a href="#post-184096">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">An Ordering Table (OT)&nbsp; provides best speed of sorting polygons by their average Z. Introduced in PlayStation1, you could easily sort ~30,000 (visible) poly, 60fps on the 30MHz RISC cpu. In PSX, there&#39;s no Z-buffer, and during rendering you actually put polygons&#39; data (variable-sized structures) into a big dump-array, and finally send data to the GPU out from this dump-array.&nbsp; <br />The basics of OT is having an array of linked-lists of polygons. Usually 2000 linked-lists. <br /><br />The idea on OT can be used in eliminating texture-trashing, too. <br /><br /><br />Here&#39;s an excerpt of a software 3D engine of mine, using OT:<br /><pre><code><br />U16 OT[2048];<br />U8* OT_Packets; // = malloc(200000);<br />U16 OT_NextPacket = 0;<br /><br />//=========[ structures ]============[<br />typedef struct{<br />	U16 nextPrimitive;<br />	U8	typePrimitive;<br />	U8	textureID;<br />	S16	x0;<br />	S16	y0;<br />	S16	x1;<br />	S16	y1;<br />	S16	x2;<br />	S16	y2;<br />}Primitive; // 16 bytes<br />//=====================[<br />typedef struct{<br />	Primitive P;<br />	U16	color;<br />	U16 padding;<br />}PrimFlat;<br /><br />typedef struct{<br />	Primitive P;<br />	U16 u0,v0;<br />	U16 u1,v1;<br />	U16 u2,v2;<br />	U8 lightness;<br />	U8 padding[3];<br />}PrimTextured;<br /><br />typedef struct{<br />	Primitive P;<br />	U8 R[3],G[3],B[3];<br />}PrimGourad;<br />//===================================/<br /><br />void Start_3D2_Scene(){<br />	if(OT_NextPacket==4)return;<br />	OT_NextPacket = 4;<br />	memset(OT,0,2048*2);<br />}<br /><br />void End_3D2_Scene(){<br />	long CurZ;<br />	U16 NextPacketIndex;<br />	Primitive* pPrim;<br />	if(OT_NextPacket==4)return; // no packets added<br />	for(CurZ=2048;CurZ--;){<br />		if(!(NextPacketIndex = OT))continue;<br />		do{<br />			pPrim = (Primitive*)&amp;OT_Packets;<br />			NextPacketIndex = pPrim-&gt;nextPrimitive;<br />			//----- draw the primitive ]-------------------[<br />			if(pPrim-&gt;typePrimitive==1){<br />				PolyTex2((PrimTextured*)pPrim,((PrimTextured*)pPrim)-&gt;lightness,OT_TextureSize);<br />			}else if(pPrim-&gt;typePrimitive==2){<br />				PolyTex2_NoClip((PrimTextured*)pPrim,((PrimTextured*)pPrim)-&gt;lightness,OT_TextureSize);<br />			}else if(pPrim-&gt;typePrimitive==3){<br />				PolyFlat((PrimFlat*)pPrim);<br />			}else if(pPrim-&gt;typePrimitive==4){<br />				PolyFlatAlpha((PrimFlat*)pPrim);<br />			}<br />			//---------------------------------------------/<br />		}while(NextPacketIndex);<br />	}<br />}<br /><br />::below is an excerpt from a DrawMesh() proc, it executes the following code for each visible polygon:<br /><br />//----[ set-up basic packet ]------------------------[<br />		CurrentZ = (a-&gt;z + b-&gt;z + c-&gt;z) / 4;<br />		if(CurrentZ&lt;0)CurrentZ=0;<br />		if(CurrentZ&gt;2047)CurrentZ=2047;<br />		CurPacket = (Primitive*) &amp;OT_Packets;<br />		CurPacket-&gt;textureID = CurTextureID;<br />		CurPacket-&gt;x0 = (S16)a-&gt;x;<br />		CurPacket-&gt;y0 = (S16)a-&gt;y;<br />		CurPacket-&gt;x1 = (S16)b-&gt;x;<br />		CurPacket-&gt;y1 = (S16)b-&gt;y;<br />		CurPacket-&gt;x2 = (S16)c-&gt;x;<br />		CurPacket-&gt;y2 = (S16)c-&gt;y;<br />		CurPacket-&gt;typePrimitive = 0;<br />		CurPacket-&gt;nextPrimitive = OT;<br />		//---------------------------------------------------/<br /><br />		if(f-&gt;flags &amp; FACE_TEXTURED){<br />			PrimTextured* CurTexPacket;<br />			CurPacket-&gt;typePrimitive = 1;<br />			CurTexPacket = (PrimTextured*)CurPacket;<br />			CurTexPacket-&gt;lightness = CachedNormalsZ;<br />			CurTexPacket-&gt;u0 = f-&gt;u0;<br />			CurTexPacket-&gt;v0 = f-&gt;v0;<br />			CurTexPacket-&gt;u1 = f-&gt;u1;<br />			CurTexPacket-&gt;v1 = f-&gt;v1;<br />			CurTexPacket-&gt;u2 = f-&gt;u2;<br />			CurTexPacket-&gt;v2 = f-&gt;v2;<br />			OT = OT_NextPacket;<br />			OT_NextPacket+= sizeof(PrimTextured);<br />			if(!PolygonNeedsClipping)CurPacket-&gt;typePrimitive=2;<br />		}else if(f-&gt;flags &amp; FACE_ALPHA){<br />			CurPacket-&gt;typePrimitive=4; // flat color, alpha<br />			((PrimFlat*)CurPacket)-&gt;color = LitTexels[(CachedNormalsZ&lt;&lt;8) + f-&gt;color];<br />			OT = OT_NextPacket;<br />			OT_NextPacket+= sizeof(PrimFlat);<br />		}else{<br />			CurPacket-&gt;typePrimitive=3; // flat color<br />			((PrimFlat*)CurPacket)-&gt;color = LitTexels[(CachedNormalsZ&lt;&lt;8) + f-&gt;color];<br />			OT = OT_NextPacket;<br />			OT_NextPacket+= sizeof(PrimFlat);<br />		}<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2006-07-28 19:07:08 by Ultrano</div>
+   </div>
+   <div class="post" id="post-184123">
+    <div class="subject"><a href="#post-184123">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">OT sounds nice if its made to sort texturewise also and use zbuffer instead<br />why not final output from 3dtransform proc, expands all small trianglestrips to trianglelist and perform a single settexture/drawprimiteTRIANGLELIST<br /><br />many smaller textures and downsized textures for distant rendering is used instead of some mip/map levels and merged into bigger textures, while UVcoordinates are changed accordingly<br />all objects behind a certain distance/certain size onscreen are rendered without texturechange, with help of a merged texture<br /><br />this can be done dynamically when init of game sense maxtexturesize/install of game<br /><br />an object which is a spaceship with a forcefield around it, could have a single texture with alphachannel and sorted all meshes to be rendered in the right order<br /></div>
+    <div class="meta">Posted on 2006-07-30 10:26:17 by daydreamer</div>
+   </div>
+   <div class="post" id="post-184125">
+    <div class="subject"><a href="#post-184125">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">Homers very textureswitching terraindemo on different hardware<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1934" target="_blank">benchmark1.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-07-30 11:10:39 by daydreamer</div>
+   </div>
+   <div class="post" id="post-184126">
+    <div class="subject"><a href="#post-184126">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">same cpu etc, newer gpu<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=1936" target="_blank">benchmark2.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-07-30 11:25:30 by daydreamer</div>
+   </div>
+   <div class="post" id="post-184201">
+    <div class="subject"><a href="#post-184201">Re: Eliminating Texture-Thrashing</a></div>
+    <div class="body">Ah yes, that was one of my very first d3d demos.<br />Theres 256 textures, but theres no texture thrashing.<br />Each texture is set once.<br /><br />There&#39;s a lot better ways to achieve that kind of blending, but that demo was designed to work on the most pathetic and featureless cards (which is what I had when I wrote it, and what I&#39;ve been forced back to recently).<br /><br />Generating those textures at runtime from four input textures and the heightmap - that was the interesting part.<br />I was pretty happy with it at the time :)<br /></div>
+    <div class="meta">Posted on 2006-08-02 03:51:25 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

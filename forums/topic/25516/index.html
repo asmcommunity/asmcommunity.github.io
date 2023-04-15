@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ReadFile and Hex values - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25516" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25516">ReadFile and Hex values</a></p>
+   <div class="post" id="post-186435">
+    <div class="subject"><a href="#post-186435">ReadFile and Hex values</a></div>
+    <div class="body">Hello there,<br /><br />I got a problem with a simple function supposed to read a text file and get its content into a buffer.<br />The file (.txt) must contains HEX values, but when I put something like &quot;60 84 33&quot; the ReadFile API function converts it to another Hex value, as the original values were ASCII values.<br /><br />But I want my function to take directly the HEX values in the .txt without modifying them.<br /><br />Is there an API function for this?<br /><br />How can I get the same value in the .txt and in my buffer WITHOUT using ASCII ? (i don&#39;t trust in ASCII... I want some good old hex val..)<br /><br />Thanks in advance</div>
+    <div class="meta">Posted on 2006-11-08 06:49:05 by marc_</div>
+   </div>
+   <div class="post" id="post-186436">
+    <div class="subject"><a href="#post-186436">Re: ReadFile and Hex values</a></div>
+    <div class="body">If you put &quot;60 84 33&quot; into a text file, it it treated as<br /><pre><code>&nbsp; BYTE 36h,30h,20h,38h,34h,20h,33h,33h</code></pre><br />so you have 2 options:<br /> 1. Convert the ASCII to hex bytes<br /> 2. Write the original file as binary<br /></div>
+    <div class="meta">Posted on 2006-11-08 07:46:07 by sinsi</div>
+   </div>
+   <div class="post" id="post-186449">
+    <div class="subject"><a href="#post-186449">Re: ReadFile and Hex values</a></div>
+    <div class="body">Ok, so that&#39;s what I was afraid of..<br /><br />No option in ReadFile that woud make the conversion for me..<br /><br />Do you know what&#39;s usually used to make this?<br />I thought Iczelion talked about it but couldn&#39;t find anything in his tuts.<br />Is there a famous function in asm to do it?<br />Or could you show me the way to find it?<br /><br />Thanks helping me,<br /><br />good night (midnight here in paris ^^)</div>
+    <div class="meta">Posted on 2006-11-08 16:49:56 by marc_</div>
+   </div>
+   <div class="post" id="post-186460">
+    <div class="subject"><a href="#post-186460">Re: ReadFile and Hex values</a></div>
+    <div class="body">You should treat each of the bytes in the file as a hex value. A hex value in a byte is made of two nibbles each of which is made of 4 bits. So you have a character which is 8 bits or 2 nibbles or a single hex value. For example, the character &#39;6&#39; while placed inside a text file will not be 0x06 while read from the file. When you read the file, you read the ASCII value of the character &#39;6&#39; which is 48+6 or 54. You can try this out by holding down the ALT key and pressing 0054 in your keypad.<br /><br />If you need to treat each character in the file as a HEX value, you should write a routine for it. Here is what you have to do:<br /><br />1) Take the read character and treat it as a byte.<br />2) Subtract 48 from the byte.<br />3) See if the resulting byte is greater than 9. If yes, this means that you have to convert the value to A..F in HEX and not a digit.<br />4) Subtract another 7 from the number if the previous conditional statement was true. This will give us for example &#39;A&#39;-55 = 65-55=10 which is the value of &#39;A&#39; in HEX. You can also make an effort to convert all characters to uppercase using AND 0xCF to be able to handle lowercase and uppercase letters.<br /><br />Below is the &quot;HexToDWORD&quot; function I have written in Delphi. I have tried breaking the dependence chains and avoided partial flag register stalls. The function works at 113 clock cycles on my PIII 800MHZ with a DWORD aligned buffer and stack pointer. The clock cycles which it takes to convert &#39;0&#39; in hex to DWORD is 74 which could be pretty faster if I had checked for the null-terminator at the second byte of the code.<br /><br /><br /><br /><pre><span style="font-size:2>Function HexToDWORD (Const InHex : PChar) : Cardinal; Assembler; Register;<br />asm<br />&nbsp; MOV&nbsp; &nbsp;  EBX , EAX<br />&nbsp; MOV&nbsp; &nbsp;  ECX , 00000008h<br />&nbsp; XOR&nbsp; &nbsp;  EAX , EAX<br />&nbsp; @@__HexToDWORDLoop:<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  EDX , DWORD PTR <br />&nbsp; &nbsp; AND&nbsp; &nbsp;  EDX , 000000FFh<br />&nbsp; &nbsp; JE&nbsp; &nbsp; &nbsp; @@__HexToDWORDEP<br />&nbsp; &nbsp; SUB&nbsp; &nbsp;  EDX , 00000030h<br />&nbsp; &nbsp; INC&nbsp; &nbsp;  EBX<br />&nbsp; &nbsp; CMP&nbsp; &nbsp;  EDX , 0000000Ah<br />&nbsp; &nbsp; JL&nbsp; &nbsp; &nbsp; @@__HexToDWORDNum<br />&nbsp; &nbsp; SUB&nbsp; &nbsp;  EDX , 07h<br />&nbsp; &nbsp; AND&nbsp; &nbsp;  EDX , 000000CFh<br />&nbsp; &nbsp; @@__HexToDWORDNum:<br />&nbsp; &nbsp; &nbsp; SHL&nbsp; &nbsp;  EAX , 04h<br />&nbsp; &nbsp; &nbsp; OR&nbsp; &nbsp; &nbsp; EAX , EDX<br />&nbsp; &nbsp; &nbsp; DEC&nbsp; &nbsp;  ECX<br />&nbsp; &nbsp; &nbsp; JNE&nbsp; &nbsp;  @@__HexToDWORDLoop<br />&nbsp; @@__HexToDWORDEP:<br />end;</span></pre><br /><br />The Register calling convention is used in the above function which is to transfer the first parameter to the function using the accumulator (EAX) and the get the result in the EAX too. Do not modify the above code because you might get a code which works slower even when the number of instructions is reduced. The MOV instruction used with the count register at the second line of the code is to break the dependence chain between the first and the third instruction.</div>
+    <div class="meta">Posted on 2006-11-09 07:47:20 by XCHG</div>
+   </div>
+  </div>
+ </body>
+</html>

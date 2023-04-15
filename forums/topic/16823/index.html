@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Get word from string - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16823" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=16823">Get word from string</a></p>
+   <div class="post" id="post-130516">
+    <div class="subject"><a href="#post-130516">Get word from string</a></div>
+    <div class="body">I have wrote an GetWord that will provide me an word depending on its id,<br />if some didnt understandmy english ill try to explain:<br />string = &quot;Win32 Asm is simple&quot;<br />GetWord,addr string,addr dest,1<br />dest = &quot;Asm&quot;<br />GetWord,addr string,addr dest,2<br />dest = &quot;is&quot;<br />...<br />the problem it is that my code is big and i think slow because of my not soo good asm expirience, but its working :), I hope any1 could help me optimizing it, or giving me another code.<br /><pre><code><br />GetWord proc src&#58;DWORD,dst&#58;DWORD,wordID&#58;DWORD<br />	invoke lstrlen,src<br />	mov ebx,eax<br />	inc ebx ; anti if src is zero lenght<br /><br />	xor ecx,ecx<br />	mov esi,src<br />	dec esi<br />	mov edi,dst<br /><br />	cmp wordID, 0<br />	jne _00<br />	inc esi<br />	jmp _01<br /><br />_00&#58;<br />		inc esi ; this loop provides the word in esi<br />		dec ebx<br />		jz _02<br />		cmp byte ptr &#91;esi&#93;,020h<br />		jne _00<br />		inc ecx<br />	cmp ecx, wordID<br />	jne _00<br /><br />_01&#58;<br />	mov al, byte ptr &#91;esi&#93; ; this copyes to edi and puts zero-terminated<br />	mov byte ptr &#91;edi&#93;, al<br />	inc esi<br />	inc edi<br /><br />	cmp byte ptr &#91;esi&#93;,020h<br />	je _02<br />	cmp byte ptr &#91;esi&#93;,00h<br />	jne _01<br /><br />_02&#58;<br /><br />	mov byte ptr &#91;edi&#93;,0<br />	ret<br />GetWord endp<br /></code></pre><br /><br />Thank you<br /><br />edit:<br />I have put another anti-crash right after lstrlen</div>
+    <div class="meta">Posted on 2004-01-13 10:55:34 by zabnik</div>
+   </div>
+   <div class="post" id="post-130524">
+    <div class="subject"><a href="#post-130524">Re: Get word from string</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by zabnik </em><br /><pre><code><br />	mov al, byte ptr &#91;esi&#93; ; this copyes to edi and puts zero-terminated<br />	mov byte ptr &#91;edi&#93;, al<br />	inc esi<br />	inc edi<br /></code></pre><br /></div><br />by taking a quick look, that whole sequence can be replaced by<br /><pre><code><br />movsb<br /></code></pre><br />the copied byte will <strong>not</strong> in al, but obviously you don't need that</div>
+    <div class="meta">Posted on 2004-01-13 13:46:47 by hartyl</div>
+   </div>
+   <div class="post" id="post-130577">
+    <div class="subject"><a href="#post-130577">Get word from string</a></div>
+    <div class="body">Here is a version using lodsb/stosb .. it's shorter (42 bytes including prologue/epilogue), but probably also slower :)<br /><br /><pre><code>GetWord proc uses esi edi src&#58;DWORD,dst&#58;DWORD,wordID&#58;DWORD<br /><br />    mov esi, src<br />    mov ecx, wordID<br /><br />  next_word&#58;<br />    mov edi, dst<br /><br />  skip_ws&#58;<br />    lodsb<br />    cmp al, 20h<br />    je skip_ws<br /><br />  copy_word&#58;<br />    stosb<br /><br />    test al, al<br />    jz done<br /><br />    lodsb<br /><br />    cmp al, 20h<br />    ja copy_word<br /><br />    dec esi<br /><br />    dec ecx<br />    jns next_word<br /><br />    xor eax, eax<br />    stosb<br /><br />  done&#58;<br />    ret<br /><br />GetWord endp</code></pre></div>
+    <div class="meta">Posted on 2004-01-14 04:13:44 by Jibz</div>
+   </div>
+   <div class="post" id="post-130601">
+    <div class="subject"><a href="#post-130601">Get word from string</a></div>
+    <div class="body">Slight change to <strong>Jibz</strong>'s algo:<pre><code>GetWord proc src&#58;DWORD,dst&#58;DWORD,wordID&#58;DWORD<br /><br />    mov edx, src<br /><br />  next_word&#58;<br />    mov ecx, dst<br /><br />  skip_ws&#58;<br />    mov al, &#91;edx&#93;<br />    inc edx<br />    cmp al, 20h<br />    je skip_ws<br /><br />  copy_word&#58;<br />    test al, al<br />    jz done<br /><br />    mov &#91;ecx&#93;, al<br />    inc ecx<br /><br />    mov al, &#91;edx&#93;<br />    inc edx<br /><br />    cmp al, 20h<br />    ja copy_word<br /><br />;   dec edx ; why copy delimiter?<br /><br />    dec wordID<br />    jns next_word<br /><br />  done&#58;<br />    mov byte ptr &#91;ecx&#93;, 0<br />    ret<br /><br />GetWord endp</code></pre></div>
+    <div class="meta">Posted on 2004-01-14 09:44:19 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-130641">
+    <div class="subject"><a href="#post-130641">Get word from string</a></div>
+    <div class="body">Nice changes!<br /><pre><code>;   dec edx ; why copy delimiter?</code></pre><br />To allow wordID to be greater than the number of words available. Try getting the second word from the two byte string 'A',0.</div>
+    <div class="meta">Posted on 2004-01-14 14:12:06 by Jibz</div>
+   </div>
+   <div class="post" id="post-130913">
+    <div class="subject"><a href="#post-130913">Get word from string</a></div>
+    <div class="body">So many smart people here, Thank you very much :alright:</div>
+    <div class="meta">Posted on 2004-01-17 15:25:08 by zabnik</div>
+   </div>
+   <div class="post" id="post-130919">
+    <div class="subject"><a href="#post-130919">Get word from string</a></div>
+    <div class="body"><pre><code>GetWord proc src&#58;DWORD,dst&#58;DWORD,wordID&#58;DWORD<br /><br />	mov edx, src<br />	mov ecx, dst<br />  skip_ws&#58;<br />	mov al, &#91;edx&#93;<br />	inc edx<br />  skip_ws2&#58;<br />	test al,al<br />	je done<br />	cmp al, 20h<br />	jbe skip_ws<br /><br />	dec wordID<br />	je copy_word<br />  skip_word&#58;<br />	mov al, &#91;edx&#93;<br />	inc edx<br />	cmp al, 20h<br />	jbe skip_ws2<br />	jmp skip_word<br /><br />  copy_word&#58;<br />	mov al, &#91;edx&#93;<br />	inc edx<br />	mov &#91;ecx&#93;, al<br />  done&#58;<br />	inc ecx<br />	cmp al, 20h<br />	ja copy_word<br />	mov byte ptr &#91;ecx-1&#93;, 0<br />	ret<br /><br />GetWord endp</code></pre>I played a little with a different method - not copying all the words until the correct one is reached.  Instead just skip the words, copying just the selected one.  I imagine it being faster, but I didn't test the reality of it.</div>
+    <div class="meta">Posted on 2004-01-17 17:09:25 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

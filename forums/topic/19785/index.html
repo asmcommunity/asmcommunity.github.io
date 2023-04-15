@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>SSE stack frame setup - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19785" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=19785">SSE stack frame setup</a></p>
+   <div class="post" id="post-152123">
+    <div class="subject"><a href="#post-152123">SSE stack frame setup</a></div>
+    <div class="body">Hi all,<br /><br />I'd like some advice on how to create a stack frame for SSE. It has to be 16-byte aligned, and I'd like to access most locals with a one-byte positive index. So my first attempt looks like this:<br /><div class="quote"><br />prologue:<br />    push ebp<br />    mov ebp, esp<br />    and ebp, 0xFFFFFFF0<br />    sub ebp, 0x110<br />	<br />epilogue:<br />    pop ebp<br /></div><br />I see all kinds of different approaches on various sites, so I'm a bit confused about what's actually the best approach. I think one of the problems is making this work for multiple calls. Although currently I'm using this for only one function, and it seems to work as expected, I'm curious what the 'right' way is to do this.<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2004-11-01 16:30:11 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-152125">
+    <div class="subject"><a href="#post-152125">SSE stack frame setup</a></div>
+    <div class="body">I found this site: <a target="_blank" href="http://www.udayton.edu/~cps/cps560/notes/hardware/mmx/Byte/art4.htm">A guide to using the Pentium's new multimedia instructions</a>, which seems very helpful, but I'm afraid the problem is more complicated. I don't know the frame size in advance.<br /><br />This is because it's for dynamically generated code, using <a target="_blank" href="http://softwire.sourceforge.net/">SoftWire</a>. Local variable are dynamically created when required. So I was thinking about using ebp + a positive byte-sized index, and when those are all used continue with a negative index. But that's problematic when other stack frames have to fit in...<br /><br />...I'm lost. :cry:</div>
+    <div class="meta">Posted on 2004-11-01 17:02:23 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-152226">
+    <div class="subject"><a href="#post-152226">Re: SSE stack frame setup</a></div>
+    <div class="body"><div class="quote"><br />    and ebp, 0xFFFFFFF0<br />    sub ebp, 0x110<br /></div><br />You mean, <strong>esp</strong> here, right?<br /><br />I'm curious what other methods exist.  One could be what I do usually, i.e. just a reordered version of your code.   And, the one in the linked article does not look much better for me to favor the code in the article.<br /><br />And, why would that cause any problem with multiple calls?  Do you mean you want to create a Pascal-like stack frame?</div>
+    <div class="meta">Posted on 2004-11-02 22:55:33 by Starless</div>
+   </div>
+   <div class="post" id="post-152230">
+    <div class="subject"><a href="#post-152230">SSE stack frame setup</a></div>
+    <div class="body">If you are going to go to all the trouble atleast use positive and negitive offsets. :P<br /><br />You want ESP to be lower numerically than EBP (or the lowest used address in the frame). Using positive and negitive offsets will gain you 16 slots on the stack, of course.<br /><br />08n -- <br /><br />070 -- greatest 16 byte slot<br />.<br />.<br />.<br />000 -- EBP<br />.<br />.<br />.<br />F80 -- least 16 byte slot<br /><br />F7n -- ESP<br /><br />In this scheme we don't know exactly what the address of EBP is because it is altered for alignment.  The AND'ing further lowers the address of EBP by up to 12 bytes and an extra 12 bytes is subtracted from ESP for this extreme instance.<br /><br />push ebp<br />lea ebp, [0 - (16*8 )]<br />sub esp, 16*16 + 12 ; assume not aligned<br />and ebp, 0-16<br /><br />To correct the stack ESP needs to be adjusted and then EBP pop'd.<br /><br />add esp, 16*16 + 12<br />pop ebp<br />ret<br /><br />To use less SSE slots just reduce the offset to ESP -- not the EBP offset -- &quot;16*16 + 12&quot; at both prologue and epilogue is all that needs to change.</div>
+    <div class="meta">Posted on 2004-11-03 00:03:25 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-152319">
+    <div class="subject"><a href="#post-152319">Re: SSE stack frame setup</a></div>
+    <div class="body"><div class="quote">You mean, <strong>esp</strong> here, right?</div><br />No, using ebp makes the encoding one byte shorter.<br /><div class="quote">And, why would that cause any problem with multiple calls?  Do you mean you want to create a Pascal-like stack frame?</div><br />Well I need esp to point to free space usable for the next function, not?</div>
+    <div class="meta">Posted on 2004-11-04 02:04:33 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-152320">
+    <div class="subject"><a href="#post-152320">SSE stack frame setup</a></div>
+    <div class="body"><div class="quote">To use less SSE slots just reduce the offset to ESP -- not the EBP offset -- &quot;16*16 + 12&quot; at both prologue and epilogue is all that needs to change.</div><br />And what if I need <em>more</em>? 8) I'm currently using more than 1024 bytes of stack space for local variables (GP, MMX and SSE) in one of my processing pipelines. The best solution I found so far is to just reserve enough space and generate an error when it's exceeded. Unfortunately, because this code is generated dynamically there is absolutely no guarantee that I have reserved enough. Would it be useful to adjust esp when I'm allocating more variables than expected? I think this would cause serious problems when esp is adjusted inside a loop...<br /><br />...it might be possible to adjust the instructions in the epilogue. Let me see if that works. :idea:</div>
+    <div class="meta">Posted on 2004-11-04 02:14:26 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-152344">
+    <div class="subject"><a href="#post-152344">SSE stack frame setup</a></div>
+    <div class="body">Well, in windows you have to touch every page of stack to ensure its commited and grab as much as you want until something blows up! :)<br /><br />As for accessing multiple sets of temp SSE slots, maybe try moving EBP around.  Once you know it is aligned it could just be advanced to a new set of temp slots -- assuming no critical loops need more than 16.  One instruction sure beats putting everything in separate frames.<br /><br />Basically, a 16-slot sliding window is the effect I'm trying to explain.  Inside processor intensive loops the window should encompass all used temp SSE slots.</div>
+    <div class="meta">Posted on 2004-11-04 09:59:15 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-152471">
+    <div class="subject"><a href="#post-152471">SSE stack frame setup</a></div>
+    <div class="body">I think I got it working now:<br /><pre><code><br />prologue&#58;<br />    push ebp<br />    mov ebp, esp<br />    sub ebp, stackSize - 128<br />    lea esp, dword ptr &#91;ebp-128-12&#93;<br />    and ebp, 0xFFFFFFF0<br /><br />epilogue&#58;<br />    add esp, stackSize + 12<br />    pop ebp<br /></code></pre><br />This code is dynamically generated. At the moment when the prologue is encoded, the stack size is unknown, but it's quite easy to keep a pointer to this instruction and update it when more local variables are required. esp always points to free stack space. Subtracting 12 is done to keep it out of the aligned frame. Storing variables starts at ebp - 128 and goes up, to ensure best use of byte-sized offsets, and prefetch the next cache lines easily.<br /><br />This really seems like the most compact way to do this. Thanks all for the ideas!</div>
+    <div class="meta">Posted on 2004-11-06 18:18:06 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-152497">
+    <div class="subject"><a href="#post-152497">SSE stack frame setup</a></div>
+    <div class="body">I'm not there yet... :cry:<br /><br />The problem now is function arguments. I can access them with esp + offset but this offset is not known before the whole function is generated (because the frame size is unknown). Just like the instruction in the prologue I could adjust it every time it's known that the frame has to grow, but since there can be many arguments and many instructions accessing them, this is much harder to manage.<br /><br />So I'm trying to avoid this. Obviously, function arguments can be read easily before the prologue. Or in other words, if I can grab esp at that point and store it somewhere it can be used later for reading function arguments. So my current idea is to store that pointer as the very first local variable. Dynamic register allocation will make sure that this memory location is actually not used often. 8)<br /><br />This may sound wacked but it might actually work. If anyone got better ideas, or just some more wacked inspiration, let me know!</div>
+    <div class="meta">Posted on 2004-11-07 09:21:09 by C0D1F1ED</div>
+   </div>
+   <div class="post" id="post-152499">
+    <div class="subject"><a href="#post-152499">SSE stack frame setup</a></div>
+    <div class="body">The idea that comes to my mind first is to copy the locals relitive to ESP and then add this size to the frame size.  My thinking is anything is better than two dependant instructions (that is if I am understanding you correctly).<br /><br />Are you suggesting function parameters could be accessed like so:<br /><br />mov edx,  ; get old ESP<br />mov eax, [4*-4] ; get fourth parameter<br />:?:</div>
+    <div class="meta">Posted on 2004-11-07 09:51:24 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-152540">
+    <div class="subject"><a href="#post-152540">SSE stack frame setup</a></div>
+    <div class="body">There's a best and a worst-case scenario. In the best case, the original esp just gets copied to a free register, and this register is used whenever a function argument has to be read. In the worst case, this register has to be written back to memory (because the register allocator decides it is more useful for other variables), and it has to be read back when a function argument has to be accessed.<br /><br />Anyway I think this is close to ideal given the restrictions I'm working with. For short functions where performance depends on every instruction, it would only take one extra mov operation, and take on of the six available general-purpose registers. In longer functions, where instruction count doesn't matter that much but registers are precious it avoids that we only have five general-purpose registers left, and it still minimizes the number of dependent read operations (since most function arguments are accessed closely together).<br /><br />Your idea of copying it to the new stack top sounds like a good solution too. Maybe it's simpler to implement than what I'm trying to do now...<br /><br />Thanks bitRAKE!</div>
+    <div class="meta">Posted on 2004-11-08 03:31:28 by C0D1F1ED</div>
+   </div>
+  </div>
+ </body>
+</html>

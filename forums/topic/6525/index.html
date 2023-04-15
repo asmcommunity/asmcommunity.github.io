@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>have trouble to define offset. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6525" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6525">have trouble to define offset.</a></p>
+   <div class="post" id="post-47107">
+    <div class="subject"><a href="#post-47107">have trouble to define offset.</a></div>
+    <div class="body"><pre><code><br />.data<br />ptr_to_str	dd offset string<br />string		db &quot;qwerty&quot;, 0<br /></code></pre><br />assembles to:<br /><pre><code><br />.data&#58;00402000                 dd &#91;COLOR=blue&#93;offset string&#91;/COLOR&#93;<br />.data&#58;00402004   string        db 'qwerty', 0<br /></code></pre><br />no problems here.<br /><br />BUT:<br /><pre><code><br />.data<br />ptr_to_str	dd 0		; place for pointer<br />string		db &quot;qwerty&quot;, 0<br /><br />off = &#40;$ - ptr_to_str&#41;<br />ORG &#40;$ - off&#41;			; location pointer to ptr_to_str<br />dd offset string		; try define string address<br />ORG &#40;$ + off - 4&#41;		; location pointer to previous state<br /></code></pre><br />assembles to:<br /><pre><code><br />.data&#58;00402000                 dd &#91;COLOR=red&#93;0&#91;/COLOR&#93; <br />.data&#58;00402004   string        db 'qwerty', 0<br /></code></pre><br />I know that current location pointer is used in offset calculation.<br />Since pointer is changed, offset fails. Clear.<br />But i need some way to do this:<br />I have some fixed address that i know (ptr_to_str).<br />Somewhere in listing i use macro that defines some string (var/structure).<br />At this point i want return current location pointer to known address (ptr_to_str) and write there offset of new defined string (var/structure). Than restore current location pointer and assembling goes farther.<br /><br />Don't ask me why i need to do such thing. It's difficult to explain.<br />Simply assume i need to make it work whis way.<br />Please any suggestions.</div>
+    <div class="meta">Posted on 2002-07-11 06:17:38 by Four-F</div>
+   </div>
+   <div class="post" id="post-47117">
+    <div class="subject"><a href="#post-47117">have trouble to define offset.</a></div>
+    <div class="body">Try:<br /><br /><pre><code><br />_foo dd	offset @foo<br />@foo&#58;<br />string		db &quot;qwerty&quot;, 0<br /></code></pre><br /><br />Now you are telling it to use the address of @foo a label, not a data type.<br /><br />or try:<br /><pre><code><br />_foo dd	offset @foo<br />@foo     label     dword<br />string		db &quot;qwerty&quot;, 0<br /></code></pre></div>
+    <div class="meta">Posted on 2002-07-11 08:35:30 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-47120">
+    <div class="subject"><a href="#post-47120">have trouble to define offset.</a></div>
+    <div class="body">No, no, no. It's completely not what i want. Sorry.<br />I try to explain it better.<br /><br />My example above is over-simplify.<br />I define my own data segment.<br />The first X dwords are placement for pointers to structures.<br />These structures will be defined later by expanding some macro.<br /><pre><code><br />MyOwnSegment SEGMENT<br />  MyMacro MACRO<br />    structure STRUCTURE &lt;,,,&gt;<br />  ENDM<br />  ; here i need to place offset to defined structure<br />  ; in place of pointer01 <br />MyOwnSegment ENDS<br /></code></pre><br />The macro can be placed anywhere and arbitrary number of times.<br />Between structures can be other definitions.<br />As i don't know how many times my macro will be placed in code,<br />it's impossible use label stuff.<br />The X is known, say 32, and i could define 32 pointers:<br /><pre><code><br />MyOwnSegment SEGMENT<br />  pointer01 dd offset structure01<br />  pointer02 dd offset structure02<br />  ...<br />  pointer32 dd offset structure32<br />MyOwnSegment ENDS<br /></code></pre><br />But macro that defines structures can be used, say, only 4 times.<br />I don't know how many.<br />So, first 4 offsets will be valid, but there is no structure05, structure06...<br /><br />Hope my problem is more clear now.</div>
+    <div class="meta">Posted on 2002-07-11 09:29:14 by Four-F</div>
+   </div>
+   <div class="post" id="post-47123">
+    <div class="subject"><a href="#post-47123">have trouble to define offset.</a></div>
+    <div class="body">How about including some info in the macro as to which segment it should place the structure definition e.g.<br /><pre><code><br /> MyMacro MACRO<br />   MyOwnSegment<br />   structure STRUCTURE &lt;,,,&gt;<br />  .code<br /> ENDM<br /><br />MyOwnSegment SEGMENT<br />  ; here i need to place offset to defined structure<br />  ; in place of pointer01 <br />MyOwnSegment ENDS<br /></code></pre><br /><br />I'm not sure if it'll work but it seems reasonable to me.  you may want to add an argument to the macro for the structure name?</div>
+    <div class="meta">Posted on 2002-07-11 09:45:40 by MArtial_Code</div>
+   </div>
+   <div class="post" id="post-47129">
+    <div class="subject"><a href="#post-47129">have trouble to define offset.</a></div>
+    <div class="body">Four-F, I too have struggled with such &quot;org&quot; redefines some time ago. I cannot remember all pitfalls but I know I have given up at last and found a solution less elegant but working. IMO this stuff is partly compiler dependant and you shouldnt rely on masm behave totally identical in different versions.<br /><br />But for your example I suggest trying:<br /><br /><pre><code><br />.data<br />ptr_to_str&#58;                               ;or ptr_to_str label dword instead<br />       org $ + 4 <br />string		db &quot;qwerty&quot;, 0<br /><br />off = &#40;$ - ptr_to_str&#41;<br />ORG &#40;$ - off&#41;			; location pointer to ptr_to_str<br />dd offset string		; try define string address<br />ORG &#40;$ + off - 4&#41;		; location pointer to previous state<br /></code></pre><br /><br />Just avoid duplicate definitions for the same address. Its a guess, I havent tried it out.<br /><br />japheth</div>
+    <div class="meta">Posted on 2002-07-11 10:32:10 by japheth</div>
+   </div>
+   <div class="post" id="post-47134">
+    <div class="subject"><a href="#post-47134">have trouble to define offset.</a></div>
+    <div class="body"><pre><code><br />.data<br />ptr_to_str&#58;<br />       org $ + 4<br />       &#91;COLOR=crimson&#93;; &lt;- here goes arbitrary number of data.&#91;/COLOR&#93; <br />       &#91;COLOR=crimson&#93;; so, &#40;org $ + 4&#41; doesn't work&#91;/COLOR&#93;<br />string		db &quot;qwerty&quot;, 0<br /></code></pre><br /><br />Thanks all!<br /><br />Have found some solution. I like it not much, but hope it will work.<br />I can't define virtual offset but i can define offset from begining of the segment.<br /><br />Something like this:<br /><pre><code><br />MyOwnSegment SEGMENT<br />  MyMacro MACRO<br />    structure STRUCTURE &lt;,,,&gt;<br />  ENDM<br /><br />  NUM_STRUCTURES_DEFINED = NUM_STRUCTURES_DEFINED + 1<br /><br />  ; displace location pointer to begining of pointers array<br />  off = &#40;$ - &#40;pointer01 + 4*&#40;NUM_STRUCTURES_DEFINED-1&#41;&#41;&#41;<br />  ORG $ - off<br />  ; write RVA of structure to appropriate pointer<br />  dd off-sizeof STRUCTURE<br />  ; restore location pointer<br />  ORG &#40;$ + off - 4&#41;<br /><br />MyOwnSegment ENDS<br /></code></pre><br /><br /><strong>dd off-sizeof STRUCTURE</strong> defines RVA (relative virtual address)<br />from beginning of MyOwnSegment.<br />Since VA (virtual address) of MyOwnSegment will be known at run time,<br />and array of pointers is always at the beginning of MyOwnSegment,<br />i can simply calculate VA to defined structure.<br />Hope this solves my main problem.<br />But since project is in its very first stage, things may change.<br />So, if you have other solution, please, throw it here. Thanx.</div>
+    <div class="meta">Posted on 2002-07-11 11:34:36 by Four-F</div>
+   </div>
+   <div class="post" id="post-47139">
+    <div class="subject"><a href="#post-47139">have trouble to define offset.</a></div>
+    <div class="body"><strong>Four-F</strong>, I have done the same thing by using two segments:<pre><code>MyStructure MACRO vars&#58;VARARG<br />    LOCAL _struct<br /><br />    SpecialOne$A SEGMENT<br />        dd OFFSET _struct<br />    SpecialOne$A ENDS<br /><br /><br />    SpecialOne$B SEGMENT<br />        _struct MyStruct &lt;vars&amp;&gt;<br />    SpecialOne$B ENDS<br />ENDM</code></pre>The linker will combine the segments by the same name and order them by part after <strong>$</strong>.  I think this is what you are after?  I despise the use of ORG - it will give you nothing but problems, IMO.  This is because MASM wasn't designed to use it this way.<br /><br />Here is an example:<pre><code>MyStructure MACRO vars&#58;VARARG<br />    LOCAL _struct<br /><br />    SpecialOne$A SEGMENT<br />        dd OFFSET _struct<br />    SpecialOne$A ENDS<br /><br /><br />    SpecialOne$B SEGMENT<br />        _struct db vars&amp;<br />    SpecialOne$B ENDS<br />ENDM<br /><br /><br />MyStructure &quot;Hello&quot;,0,&quot;World&quot;,0,0<br />MyStructure &quot;ASM&quot;,0,&quot;is&quot;,0,&quot;the&quot;,0,&quot;BEST!!&quot;,0,0</code></pre>This will create two pointers in the $A segment and add the two strings to the $B segment.  In the object file they will appear in one segment with $A first, followed by $B.  Elegant solution, imo. :)<br /><br />I use the same method to order the CONST data in my proggies - there are string, fpu, and mmx coonstants and they are grouped together and placed in one segment.  Also, I don't use the simple segment definitions: .code, .data, .data?  They don't play well with jumping in and out of multiple segments - you don't have to keep saving what segment the parser was in - it's saved automatically by MASM.<br /><br />Something I starting doing recently, is creating a segment partition for COM object pointers - to ensure that I release everything before the program exits.  I've been using this with DX8.  Maybe this is redundant.  I'll see how it works in time.</div>
+    <div class="meta">Posted on 2002-07-11 12:07:53 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47212">
+    <div class="subject"><a href="#post-47212">have trouble to define offset.</a></div>
+    <div class="body">Thank you, bitRAKE!<br />Seems to be nice solution.<br />I'll play with it.</div>
+    <div class="meta">Posted on 2002-07-12 04:42:02 by Four-F</div>
+   </div>
+   <div class="post" id="post-47229">
+    <div class="subject"><a href="#post-47229">have trouble to define offset.</a></div>
+    <div class="body">Yeah! Works exactly i wanted, and simplifies many other things.<br />I looked up all my masm docs and found nothing about this trick.<br />Undoc trick? bitRAKE, how did you know about it?</div>
+    <div class="meta">Posted on 2002-07-12 07:53:34 by Four-F</div>
+   </div>
+   <div class="post" id="post-47362">
+    <div class="subject"><a href="#post-47362">have trouble to define offset.</a></div>
+    <div class="body">four-f, the &quot;segment$order&quot; is linker-, not masm-specific. It's documented<br />somewhere in MSDN.</div>
+    <div class="meta">Posted on 2002-07-13 06:50:30 by f0dder</div>
+   </div>
+   <div class="post" id="post-47382">
+    <div class="subject"><a href="#post-47382">have trouble to define offset.</a></div>
+    <div class="body">There is a couple of sentences somewhere like <strong>f0dder</strong> said, but I really learned by looking at some asm output from VC++.  You know that damn M$ doesn't want to confuse the C++ progragrammers by explaining too much about what is really going on.  I'm glad to have helped.<br /><br />Maybe you can see some other neat tricks that can be done with this?  Note that the segment names can be constructed by a macro.  So, we now have the ability to place code/data in the executable in a different location after it has been assembled.  For example, say we place some code in segment Special$mmm then we decide we need some code before this piece of code.  We create segment Special$fmm and place the code in it.  Then we need some code between these two segments.  We create segment Special$hmm and place some code in it.<br /><br />Granted this is rather extreme. :grin:</div>
+    <div class="meta">Posted on 2002-07-13 09:57:07 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47505">
+    <div class="subject"><a href="#post-47505">have trouble to define offset.</a></div>
+    <div class="body">bitrake, I found out about the stuff while trying to create &quot;manual&quot; import libraries with nasm... I couldn't get the the dependency stuff 100% working, though :/<br /><br />You know, if I only use one function from a DLL I don't want to import everything from that DLL. Also if I use no functions from a DLL, I don't want to include the &quot;mainthunk&quot; (DLL-name, causing the DLL to be imported) either... but of course the &quot;mainthunk&quot; must be included if I include any function from a DLL... and must of course only be included once. Argh :)<br /><br />Unfortunately I couldn't make the pieces all fit, and had other things to spend my time on, so my &quot;manual import libraries for namesum-rather-than-plainascii import of functions&quot; :P was never completed.<br /><br />It would probably be better to have the tool generating a ar-lib of ms-coff files (ie, standard win32 library format) instead of relying on nasm for backend anyway... just can't be bothered to pick up the project again right now :)</div>
+    <div class="meta">Posted on 2002-07-14 11:24:49 by f0dder</div>
+   </div>
+   <div class="post" id="post-47512">
+    <div class="subject"><a href="#post-47512">have trouble to define offset.</a></div>
+    <div class="body"><strong>f0dder</strong>, hopefully, better tools come along that<br />make that kind of think a piece of cake. ;)</div>
+    <div class="meta">Posted on 2002-07-14 12:09:47 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47513">
+    <div class="subject"><a href="#post-47513">have trouble to define offset.</a></div>
+    <div class="body">hopefully... but it's still a dependency hell ;)</div>
+    <div class="meta">Posted on 2002-07-14 12:13:18 by f0dder</div>
+   </div>
+   <div class="post" id="post-47525">
+    <div class="subject"><a href="#post-47525">have trouble to define offset.</a></div>
+    <div class="body">We are all dependent on many things.  I stand my ground and ensure my dependencies remain around.  For it always is co-dependency.</div>
+    <div class="meta">Posted on 2002-07-14 13:41:48 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47541">
+    <div class="subject"><a href="#post-47541">have trouble to define offset.</a></div>
+    <div class="body">real-life yes... don't ever depend on people who don't depend on you. You'll learn that rather quickly, although learning who depends on you is a longer process..</div>
+    <div class="meta">Posted on 2002-07-14 15:27:29 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

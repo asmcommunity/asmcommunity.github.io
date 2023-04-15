@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>BSTR vs LPSTR - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28386" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28386">BSTR vs LPSTR</a></p>
+   <div class="post" id="post-200871">
+    <div class="subject"><a href="#post-200871">BSTR vs LPSTR</a></div>
+    <div class="body">A BSTR and a lpstr are quite different.
+
+lpstr is a dword pointer to an ASCII string. The memory holding that string may be assigned as convienient, check the documentation every time it's used.
+
+A BSTR is a dword pointer to a UNICODE string. Immediately preceeding the first character is length information, but don't look for it youself (use the API's to check length to remain compatable in the future). The memory holding the BSTR string MUST be assigned thru the provided API's. There are well defined rules as to what code 'owns' the BSTR, and hence is responsible to free the memory (with another API of course).
+
+Anything else?   ;-)</div>
+    <div class="meta">Posted on 2001-06-13 07:45:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-200872">
+    <div class="subject"><a href="#post-200872">BSTR vs LPSTR</a></div>
+    <div class="body">Ernie, thanks a lot! 
+Could you give me a little example how to convert LPSTR to BSTR? 
+Thanks again!</div>
+    <div class="meta">Posted on 2001-06-13 08:32:00 by vkim</div>
+   </div>
+   <div class="post" id="post-200873">
+    <div class="subject"><a href="#post-200873">BSTR vs LPSTR</a></div>
+    <div class="body">To create a BSTR from a lpstr, use the SysAllocString function. 
+
+I definately reccomend you try reading this.. Lots of good solid basics from MS on the care and feeding of BSTRs. Especially check the 8 rules given there.</div>
+    <div class="meta">Posted on 2001-06-14 07:30:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-200874">
+    <div class="subject"><a href="#post-200874">BSTR vs LPSTR</a></div>
+    <div class="body">Fortunately there is a full 32 bit version of BSTR that does not need
+UNICODE with all of its associated problems, you can allocate,
+deallocate, resize the ANSI form of BSTR and you can read and write
+zero terminated strings to it as well.
+
+        invoke SysAllocStringByteLen,0,ln
+        mov strhandle, eax
+
+        invoke SysFreeString,strhandle
+
+We may have to suffer UNICODE at some stage but it looks like it will
+be a long time until we are stuck with it since the rest of the computer
+world does not seem interested in promoting another Microsoft definition
+of how the world should be.
+
+UNICODE is useful in languages that have different character sets that are
+larger that 256 characters but unless you write in chinese BIG 5
+or similar, its is just another imposition to make Microsoft's job of
+standardising Windows around the world a bit easier.
+
+With a thumb in each ear, PFFFFFTTTTTTTTTTTTTTTT !
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-06-14 11:57:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-200875">
+    <div class="subject"><a href="#post-200875">BSTR vs LPSTR</a></div>
+    <div class="body">hutch: If one is simply using BSTR's within one's own application, the 'ASCII' BSTR is fine. However, it just ain't compatable with most of it's uses, notably as the COM string standard. ASCII BSTR's are a holdover from the bad days of 16 bit COM, they died with Windows for Workgroups, may they rest in peace.
+
+Being a fellow english-only speaker, I fully respect the opinion that the rest of the world should learn english to understand me. However, until time such a thing happens, UNICODE is an acceptable solution.
+
+Besides, it not only makes Microsoft's apps easily internationalizeable (that's a micro-speak word if ever I saw one), but lends the same grace to your own efforts.</div>
+    <div class="meta">Posted on 2001-06-14 23:19:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-200876">
+    <div class="subject"><a href="#post-200876">BSTR vs LPSTR</a></div>
+    <div class="body">hutch-- & Ernie, thanks!
+I converted ANSI string to UNICODE one with this way:
+<pre><code>
+invoke MultiByteToWideChar, CP_ACP, MB_COMPOSITE, addr szANSI, 7, addr szUNICODE, 19
+</code></pre>
+And then got bstr:
+<pre><code>
+invoke SysAllocString, addr szUNICODE
+mov pBSTR, eax
+</code></pre>
+It works but I can't get month name using VarMonthName function (I use it in order to understand how to work with BSTR & OLE Automation):
+<pre><code>
+invoke VarMonthName, 1, 0, 0, pBSTR
+</code></pre>
+What must I do?</div>
+    <div class="meta">Posted on 2001-06-15 00:27:00 by vkim</div>
+   </div>
+   <div class="post" id="post-200877">
+    <div class="subject"><a href="#post-200877">BSTR vs LPSTR</a></div>
+    <div class="body">While I'ver never personally used this API, that's never kept me from having something to say about it...
+
+OK, needs 4 params. First three are ints and ulongs, all DWORDS to ASM. The 4th param is the interesting part. MSDN says:
+
+pbstrOut:  Points to the formatted string that represents the variant. 
+
+Hrmmm... still kinda obscure. Next a search of my C includes turned this goodie up in OLEAUTO.H:
+
+WINOLEAUTAPI VarMonthName(int iMonth, int fAbbrev, ULONG dwFlags, BSTR *pbstrOut);
+
+OK, now we can see what that last param is... let me get there in steps.
+
+A BSTR is a pointer to a unicode string. It is NOT a string. It's a pointer to a string. BTW, it may be NULL. That can be useful when creating a BSTR.
+
+Next step: in C, "BSTR *pbstrOut" means a pointer to a BSTR, actually here a pointer to a pointer to a string. WHY another level of indirection? So the function can change the BSTR.
+
+Say you were just to pass the BSTR itself with "invoke SomeFunct, MyBSTR"  OK, now SomeFunct has the address of your string. It knows WHAT the string is, but cannot change it; OK, it can overwrite it, but needs keep the length the same. Not very usefull.
+
+Instead, if you do this:
+
+invoke OtherFunct, ADDR pMyBstr
+
+Now you have given the function full access to your BSTR. Why? It can use the address of where the BSTR (the pointer) you passed in to get to the string itself, but more importaintly it can free this string and create a whole new string, then change your BSTR (a pointer) to point to the new one.
+
+In fact, in certain cases, a BSTR returned by an API to you like so MUST be freed by you as you now own it. There are clear rules as to 'who' owns a BSTR, definately go back and check that link I had, see the section "8 rules of BSTR's". Print em out, sleep with em. They are subtle, and breaking those rules leads to resource leaks and to hard crashes.
+
+
+SO.... to sum this up, you must do:
+
+invoke VarMonthName, 1, 0, 0, ADDR pBSTR</div>
+    <div class="meta">Posted on 2001-06-15 21:52:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

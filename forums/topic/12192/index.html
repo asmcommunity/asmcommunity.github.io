@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Return address problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12192" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12192">Return address problem</a></p>
+   <div class="post" id="post-93663">
+    <div class="subject"><a href="#post-93663">Return address problem</a></div>
+    <div class="body">Hi<br /><br />This is the code I have problem with.<br /><pre><code>invoke FindRap,lpTemp<br /><br />FindRap proc FilePointer&#58;dword <br />	LOCAL lpFileAttr&#58;dword<br />	.<br />	.<br />	.<br />	invoke FindFirstFile,addr lpRapFile,addr lpFileAttr<br />	.if eax==INVALID_HANDLE_VALUE<br />		mov eax,FALSE <br />	.else<br />		invoke FindClose,eax<br />		lea eax,lpFileAttr<br />		assume eax&#58;ptr WIN32_FIND_DATA <br />		invoke MessageBox,0,addr &#91;eax&#93;.cFileName,0,MB_OK<br />		mov eax,TRUE  <br />	.endif<br />	ret<br />FindRap endp</code></pre><br />When I call FindRap process the return address is stored on the stack at esp=6bed78h. Executing the FindRap process is correct. The messagebox shows the correct file name. However, when returning from the FindRap process the returnaddress at esp=6bed78h is changed. It is the call to FindFirstFile function that overwrites the returnaddress. How do I solve this problem?<br /><br />Regards</div>
+    <div class="meta">Posted on 2003-04-06 11:05:46 by minor28</div>
+   </div>
+   <div class="post" id="post-93669">
+    <div class="subject"><a href="#post-93669">Re: Return address problem</a></div>
+    <div class="body"><div class="quote"><br />Hi<br /><br />This is the code I have problem with.<br /><pre><code>invoke FindRap,lpTemp<br /><br />FindRap proc FilePointer&#58;dword <br />	LOCAL lpFileAttr&#58;dword<br />	.<br />	.<br />	.<br />	invoke FindFirstFile,addr lpRapFile,addr lpFileAttr<br />	.if eax==INVALID_HANDLE_VALUE<br />		mov eax,FALSE <br />	.else<br />		invoke FindClose,eax<br />		lea eax,lpFileAttr<br />		assume eax&#58;ptr WIN32_FIND_DATA <br />		invoke MessageBox,0,addr &#91;eax&#93;.cFileName,0,MB_OK<br />		mov eax,TRUE  <br />	.endif<br />	ret<br />FindRap endp</code></pre><br />When I call FindRap process the return address is stored on the stack at esp=6bed78h. Executing the FindRap process is correct. The messagebox shows the correct file name. However, when returning from the FindRap process the returnaddress at esp=6bed78h is changed. It is the call to FindFirstFile function that overwrites the returnaddress. How do I solve this problem?<br /><br />Regards </div><br /><br /><br />I'm just a newbie so dont take my advices to serious :tongue:  <br /><br />u can mov ,esp and after calling mov esp,</div>
+    <div class="meta">Posted on 2003-04-06 11:35:32 by AceEmbler</div>
+   </div>
+   <div class="post" id="post-93673">
+    <div class="subject"><a href="#post-93673">Return address problem</a></div>
+    <div class="body">Remove the &quot;addr&quot;, at least if lpFileAddr contains a pointer. I assume this because it's DWORD size. If you want to store the returned data in lpFileAttr, you need to make it &quot;local lpFileAttr:LPWIN32_FIND_DATA&quot;<br /><br /><pre><code><br />invoke FindFirstFile,addr lpRapFile,lpFileAttr<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-06 12:28:12 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-93688">
+    <div class="subject"><a href="#post-93688">Return address problem</a></div>
+    <div class="body">The purpose of the messagebox is to confirm the correctness of the code in the FindRap process. The code is correct apart from the return address from the process.<br /><br />It is the FindFirstFile that overwrites the return address. It is vanished as you can see below.<br /><pre><code>invoke FindRap,lpTemp<br />;Here is return address &#91;color=green&#93;011819E9h&#91;/color&#93;<br />.if eax==TRUE <br /><br />FindRap proc FilePointer&#58;dword <br />	LOCAL lpFileAttr&#58;dword<br />	;Here at address 011819E9h &#91;color=red&#93;ESP=006BED78h&#91;/color&#93; <br />	;point to returnaddress &#91;color=green&#93;011819E9h&#91;/color&#93;<br />	push ebp <br />	mov ebp,esp<br />	add esp,0FFFFFFFCh<br />	.<br />	.<br />	.         <br />	lea eax,lpFileAttr<br />	;Here at address 0118173Dh ESP=006BED70h and <br />	;&#91;color=red&#93;006BED78h&#91;/color&#93;=&#91;color=green&#93;011819E9h&#91;/color&#93;<br />	push eax  <br />	push lpRapFile<br />	;Here befor call at address 01181743h ESP=006BED68h and <br />	;&#91;color=red&#93;006BED78h&#91;/color&#93;=&#91;color=blue&#93;011819E9h&#91;/color&#93;<br />	call FindFirstFile <br />	;Here after call at address 01181748h ESP=006BED70h and <br />	;&#91;color=red&#93;006BED78h&#91;/color&#93;=&#91;color=blue&#93;01C2CD2Eh&#91;/color&#93;<br />	.if eax==INVALID_HANDLE_VALUE <br />		mov eax,FALSE <br />	.else<br />		invoke FindClose,eax<br />		lea eax,lpFileAttr<br />		assume eax&#58;ptr WIN32_FIND_DATA <br />		invoke MessageBox,0,addr &#91;eax&#93;.cFileName,0,MB_OK<br />		mov eax,TRUE  <br />	.endif<br />	leave<br />	;Here at address 01181772h &#40;ret&#41; &#91;color=red&#93;ESP=006BED78h&#91;/color&#93; and <br />	;&#91;color=red&#93;006BED78h&#91;/color&#93;=&#91;color=blue&#93;01C2CD2Eh&#91;/color&#93;<br />	ret 4 <br />FindRap endp<br /><br />01C2CD2E   ??? ;Here wrong return address</code></pre><br /><br />Any id?a how to solve this?<br /><br />Regards</div>
+    <div class="meta">Posted on 2003-04-06 13:54:22 by minor28</div>
+   </div>
+   <div class="post" id="post-93707">
+    <div class="subject"><a href="#post-93707">Return address problem</a></div>
+    <div class="body">Try to substitute:<br /><br />LOCAL lpFileAttr:dword<br /><br />with<br /><br /><strong>LOCAL lpFileAttr [80]:dword</strong><br /><br />and clear eax usage after invoke MessageBox<br />with assume eax:nothing<br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-04-06 17:20:35 by lingo12</div>
+   </div>
+   <div class="post" id="post-93923">
+    <div class="subject"><a href="#post-93923">Return address problem</a></div>
+    <div class="body">Yes lingo12,<br /><br />You were right. It is obvious when one know. Of cource you have to reserve enough local space for the WIN32_FIND_DATA structure. I had only reserved one dword.<br /><br />Thanks for your help.<br /><br />Regards</div>
+    <div class="meta">Posted on 2003-04-07 10:49:25 by minor28</div>
+   </div>
+   <div class="post" id="post-93945">
+    <div class="subject"><a href="#post-93945">Return address problem</a></div>
+    <div class="body">That's exactly what I said :confused: <br /><br />Oh well, as long as you get it now...</div>
+    <div class="meta">Posted on 2003-04-07 11:45:32 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-93958">
+    <div class="subject"><a href="#post-93958">Return address problem</a></div>
+    <div class="body">minor, use<br />LOCAL finddata:WIN32_FIND_DATA<br />--- and dont call it lpFileAttr. It's more than just file attributes :)</div>
+    <div class="meta">Posted on 2003-04-07 12:26:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-94023">
+    <div class="subject"><a href="#post-94023">Return address problem</a></div>
+    <div class="body">Hi  f0dder,<br /> <br />It's done now. <br /><br />Regards</div>
+    <div class="meta">Posted on 2003-04-07 16:55:58 by minor28</div>
+   </div>
+  </div>
+ </body>
+</html>

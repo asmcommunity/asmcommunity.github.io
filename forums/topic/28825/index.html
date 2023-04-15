@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>IContextMenu - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28825" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28825">IContextMenu</a></p>
+   <div class="post" id="post-203653">
+    <div class="subject"><a href="#post-203653">IContextMenu</a></div>
+    <div class="body">I&#039;ve been struggling with creating a COM server for IContextMenu for the last couple of days and have hit an impasse. Explorer should call IShellExtInit:Initialize directly after the QueryInterface however it is not being called. Debugging this is very difficult since the error is generated inside explorer though the error is somewhere in my implementation of the interface. I have attached my source etc... if anyone has an idea why it&#039;s not working I would appreciate the input.<br /><br />Note: GoAsm syntax</div>
+    <div class="meta">Posted on 2007-11-18 11:14:27 by donkey</div>
+   </div>
+   <div class="post" id="post-203662">
+    <div class="subject"><a href="#post-203662">Re: IContextMenu</a></div>
+    <div class="body">Well, here&#039;s the final version of the IContextMenu example, I&#039;ll be testing it over the next few days then posting it on the website next weekend. Everything seems to work fine, it will do the following...<br /><br />Register and unregister a Shell extension using DllRegisterServer/DllUnregisterServer<br />Create a class object<br />Create an instance of IShellExtInit and initialize the extension<br />Send Explorer a pointer to an instance of IContextMenu<br />Add to the context menu for EXE and DLL files<br />Extract the selected filename using the IDataObject interface and DragQueryFile<br />Display the filename<br /><br />From this point you can do whatever you like with the file, I have simply displayed the name for the purpose of the demo. The demo can be downloaded from the GoAsm board...<br /><br />http://www.masm32.com/board/index.php?topic=8194.msg59770#msg59770<br /><br />Donkey</div>
+    <div class="meta">Posted on 2007-11-18 16:23:54 by donkey</div>
+   </div>
+   <div class="post" id="post-203666">
+    <div class="subject"><a href="#post-203666">Re: IContextMenu</a></div>
+    <div class="body">Now that&#039;s a miracle - I&#039;m learning COM at the moment, so your app was very helpful in explaining/verifying a few problems I had.<br />(And yes - the context menu seems to work flawlessly  ^^ )<br /><br />Two things I&#039;d like to ask/mention:<br />1. You&#039;re registering the handles in &quot;Classes_Root&quot;, while Platform SDK states that registry writes should be done in either HKLM, HKCU, or impersonated user&#039;s key. Is there any particular reason for that?<br />2. You&#039;re returning S_OK in a call to IClassFactory::LockServer, but you&#039;re actually not locking the class. This may lead to the library being unloaded prematurely. You should either return 80004005h (E_FAIL), or actually suport locking, which is simply maintaing one additional reference counter and taking this counter into consideration in DllCanUloadNow :)<br /><br /><br />Anyway, thank you for sharing ^^</div>
+    <div class="meta">Posted on 2007-11-18 21:53:09 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-203667">
+    <div class="subject"><a href="#post-203667">Re: IContextMenu</a></div>
+    <div class="body">Hi ti_mo_n,<br /><br />HKEY_CLASSES_ROOT was chosen because it is the key suggested on MSDN&#039;s tutorial<br /><br />http://msdn2.microsoft.com/en-us/library/bb776881.aspx<br /><br />For LockServer (and GetCommandString etc..), I have not implemented all of the interfaces yet, I still have a couple I will work on next time I get a couple of days off work. That said I don&#039;t believe it is necessary in this application as Explorer will reload the DLL as needed, it may however serve to speed up the GUI fractionally.<br /><br /><div class="quote">Notes to Callers<br />Most clients do not need to call this function. It is provided only for those clients that require special performance in creating multiple instances of their objects.</div><br /><br />Donkey</div>
+    <div class="meta">Posted on 2007-11-18 22:20:58 by donkey</div>
+   </div>
+   <div class="post" id="post-203676">
+    <div class="subject"><a href="#post-203676">Re: IContextMenu</a></div>
+    <div class="body">Yes, it&#039;s true that clients usually DON&#039;T call this function, but I think (and unfortunately I can&#039;t verify that, because I could not find any clarification for that) that if a method is not implemented, it should return E_FAIL, or S_FAIL, because S_OK means, that the function processed successfully, and a client which actually USES the function, might behave incorrectly. But the truth is that I don&#039;t even know which error (S_FAIL or E_FAIL - they have different codes) should be returned, because there is an inconsistency in COM errors: some function return S* errors, some functions return E* errors, and some functions return E* errors and S_OK for no error o_O So that&#039;s why I just implemeted LockServer for the sake of sanity and I can happily return S_OK :P And it&#039;s very easy to implement: It requires an addiional reference counter, or &#039;lock counter&#039;. LockServer(TRUE) increases that counter, LockServer(FALSE) decreases it. DllCanUnloadNow returns TRUE if and only if BOTH the normal reference counter (the one controlled by QueryInterface/AddRef/Release) is 0 AND lock counter is 0. So it was just a few lines to add and now I can feel much better :P<br /><br />About HKEY_CLASSES_ROOT:<br /><div class="quote">To change the settings for the interactive user, store the changes under HKEY_CURRENT_USER\Software\Classes rather than HKEY_CLASSES_ROOT.<br /><br />To change the default settings, store the changes under HKEY_LOCAL_MACHINE\Software\Classes. If you write keys to a key under HKEY_CLASSES_ROOT, the system stores the information under HKEY_LOCAL_MACHINE\Software\Classes. If you write values to a key under HKEY_CLASSES_ROOT, and the key already exists under HKEY_CURRENT_USER\Software\Classes, the system will store the information there instead of under HKEY_LOCAL_MACHINE\Software\Classes.</div><br />http://msdn2.microsoft.com/en-us/library/ms724475.aspx<br /><br />It&#039;s true that I may have misinterpreted it ^^&#039; It just says that it&#039;s not guaranteed where the value will actually be stored.</div>
+    <div class="meta">Posted on 2007-11-19 08:24:14 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-203679">
+    <div class="subject"><a href="#post-203679">Re: IContextMenu</a></div>
+    <div class="body">Hi ti_mo_n,<br /><br />I will make the change to lockserver, you have convinced me that the msdn example I took it from was wrong. For the registry key I will keep it the same because as I understand it the OS will actually place the key where it belongs, I am more worried about W98+ compatibility than following esoteric Win v5+ guidelines when there is no obvious impairment to functionality.<br /><br />Donkey<br /><br />New upload to my website, LockServer now returns E_FAIL, thanks ti_mo_n&nbsp; :thumbsup:</div>
+    <div class="meta">Posted on 2007-11-19 20:43:08 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

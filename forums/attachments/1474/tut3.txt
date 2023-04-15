@@ -1,0 +1,711 @@
+<!doctype html public "-//w3c//dtd html 4.0 transitional//en">
+<html>
+<head>
+   <meta http-equiv="Content-Type" content="text/html; charset=windows-1250">
+   <meta name="GENERATOR" content="Mozilla/4.7 [en] (Win98; I) [Netscape]">
+   <title>Iczelionův Win32 ASM tutorial 3: Jednoduché okno</title>
+</head>
+<body text="#C0C0C0" bgcolor="#000000" link="#00FFFF" vlink="#FF34D0" alink="#98FF98">
+
+<center>
+<h1>
+<font face="Arial"><font color="#999900">Tutorial 3: Jednoduché okno</font></font></h1></center>
+<font size=-1>V tomto tutoriálu postavíme Windows program, které zobrazí plně funkční okno na ploše.
+</font>
+<br><font size=-1>Stáhněte si kód z: <a href="files/tut03.zip">here</a></font>
+<h3>
+<font color="#FF9800"><font size=+0>Theory:</font></font></h3>
+<font size=-1>Programy ve Windows se hutně spoléhají na API funkce pro jejich GUI (grafické rozhraní).
+To má výhody jak pro uživatele, tak pro programátory. Pro uživatele tu výhodu,
+že se nemusí učit zacházet s GUI každého programu zvlášť, GUI
+programů pod Windows je podobné pro každý program. Pro programátory tu, že GUI kódy 
+jsou již hotové, otestované a připravené k používání. Nevýhodou pro programátory
+jsou však zvýšené nároky na komplexnost jejich znalostí.
+Abychom mohli vytvořit nebo manipulovat s jakýmkoliv GUI objektem,
+jako jsou okna, menu nebo ikony, musíme dodržovat určitý striktní postup.
+Ale toto může být překonáno modulárním programováním nebo paradigmatem OOP (objektově orientované programování).</font>
+<br><font size=-1>Nyní načrtnu kroky potřebné k vytvoření okna na ploše:
+</font>
+<ol>
+<li>
+<font size=-1>Získat handle instance našeho programu. (vyžadováno)</font></li>
+
+<li>
+<font size=-1>Získat obsah příkazové řádky (není vyžadováno, pokud nepotřebujeme zpracovávat příkazovou řádku)
+</font></li>
+
+<li>
+<font size=-1>Registrovat třídu okna (vyžadováno, pokud neužíváte předdefinované typy okna,
+jako např.. MessageBox nebo dialog box)</font></li>
+
+<li>
+<font size=-1>Vytvořit okno (vyžadováno)</font></li>
+
+<li>
+<font size=-1>Ukázat okno na ploše (vyžadováno, ledaže nechcete, aby se okno hned objevilo)
+</font></li>
+
+<li>
+<font size=-1>Obnovit klientskou oblast okna</font></li>
+
+<li>
+<font size=-1>Vstoupit do nekonečné smyčky, kontrolujíc zprávy od Windows.</font></li>
+
+<li>
+<font size=-1>Jestliže zprávy dorazí, jsou zpracovány specializovanou funkcí
+, která je zodpovědná za okno.</font></li>
+
+<li>
+<font size=-1>Ukončit program jestliže uživatel zavře okno</font></li>
+</ol>
+<font size=-1>Jak jste si jistě všimli, struktura programu ve Windows je dosti
+komplexní ve srovnání s programem v DOSu. Ale svět Windows je podstatně odlišný
+od světa DOSu. Programy pod Windows musejí být schopny v míru spoluexistovat.
+Musí proto dodržovat přísnější pravidla. Vy, jakožto programátor musíte také
+být přísnější na svůj programovací styl a návyky.</font>
+<h3>
+<font color="#CC0000"><font size=+0>Obsah:</font></font></h3>
+<font size=-1>Pod námi je kód našeho jednoduchého okna. Předtím, než se však vrhneme
+na detaily Win32 ASM programování, doporučím některé body, které vám programování ulehčí.
+</font>
+<ul>
+<li>
+<font size=-1>Měli by jste všechny konstanty, struktury a funkční
+prototypy vložit do hlavičkového souboru a zahrnout ho na začátek .asm
+souboru. Ušetří vám to mnoho snahy a psaní. Momentálně nejúplnějším hlavičkovým souborem
+pro MASM je hutchův windows.inc, který si můžete stáhnout z jeho nebo mojich stránek.
+Můžete si také definovat vlastní konstanty a struktury
+, ale měli by jste je oddělit do jiného hlavičkového souboru.</font></li>
+
+<li>
+<font size=-1>Používejte<font color="#FFFF68"> includelib</font> direktivu
+určující používané importní knihovny. Když např. váš program volá MessageBox,
+měli by jste vložit řádek:</font></li>
+
+<ul><font color="#FF9800"><font size=-1>includelib user32.lib</font></font></ul>
+<font size=-1>na začátek vašeho .asm souboru. Ten říká
+MASM, že váš program využije funkci z té knihovny.
+Jestliže voláte funkce z více než jedné knihovny, prostě přidejte další includelib
+pro další knihovnu. Užíváním includelib direktivy se již nemusíte starat
+o importní knihovny v průběhu linkování. Můžete použít /LIBPATH linker přepínač,
+aby jste sdělili linkeru, kde knihovny jsou.</font>
+<li>
+<font size=-1>Když deklarujete prototypy, struktury nebo konstanty
+ve svém hlavičkové souboru, snažte se držet původních jmen užívaných v hlavičkových souborech Windows,
+včetně velkých a malých písmen. Ušetří vám to spoustu bolestí hlavy při hledání nějaké položky 
+ve Win32 API referencích.</font></li>
+
+<li>
+<font size=-1>Používejte makefile k automatizaci v procesu kompilace. To vám ušetří mnoho
+psaní.</font></li>
+</ul>
+<b><font size=-1>.386</font></b>
+<br><b><font size=-1>.model flat,stdcall</font></b>
+<br><b><font size=-1>option casemap:none</font></b>
+<br><b><font size=-1>include \masm32\include\windows.inc</font></b>
+<br><b><font size=-1>include \masm32\include\user32.inc</font></b>
+<br><b><font size=-1>includelib \masm32\lib\user32.lib&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+<font color="#009900">; volání k funkcím v user32.lib a kernel32.lib</font></font></b>
+<br><b><font size=-1>include \masm32\include\kernel32.inc</font></b>
+<br><b><font size=-1>includelib \masm32\lib\kernel32.lib</font></b>
+<p><b><font size=-1>WinMain proto :DWORD,:DWORD,:DWORD,:DWORD</font></b>
+<p><b><font size=-1>.DATA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#009900">&nbsp;&nbsp;
+; inicializovaná data</font></font></b>
+<br><b><font size=-1>ClassName db "SimpleWinClass",0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#009900">&nbsp;
+; jméno naší třídy okna(window class)</font></font></b>
+<br><b><font size=-1>AppName db "Naše první okno",0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#009900">
+; jméno našeho okna</font></font></b>
+<p><b><font size=-1>.DATA?&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<font color="#009900">&nbsp;
+; neinicializovaná data</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">hInstance HINSTANCE ?&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</font><font color="#009900">; handle instance našeho programu</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>CommandLine LPSTR ?</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">.CODE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;&nbsp;&nbsp;
+; tady začíná náš kód</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>start:</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">invoke GetModuleHandle, NULL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;&nbsp;
+; získej handle instance našeho programu.</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</font><font color="#009900">; pod Win32, hmodule==hinstance mov hInstance,eax</font></font></b>
+<br><b><font color="#FFFFFF"><font size=-1>mov hInstance,eax</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">invoke GetCommandLine&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;&nbsp;
+; Získej obsah příkazové řádky. Nemusíte tuto funkci volat, jestliže</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</font><font color="#009900">; příkazovou řádku zpracovávat nechcete.
+</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>mov CommandLine,eax</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">invoke WinMain, hInstance,NULL,CommandLine,
+SW_SHOWDEFAULT&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;
+; volej hlavní funkci</font></font></b>
+<br>
+  <b><font size=-1><font color="#CCCCCC">invoke ExitProcess, eax&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;&nbsp;&nbsp; 
+  ; ukonči program. Exit kód je vrácen v eax od WinMain.</font></font></b> 
+<p><b><font color="#CCCCCC"><font size=-1>WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; LOCAL wc:WNDCLASSEX&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">
+; vytvoříme lokální proměnné v zásobníku</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; LOCAL msg:MSG</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; LOCAL hwnd:HWND</font></font></b>
+<p><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.cbSize,SIZEOF WNDCLASSEX&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">
+; naplníme hodnoty členů struktury wc</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.style, CS_HREDRAW or CS_VREDRAW</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.lpfnWndProc, OFFSET WndProc</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.cbClsExtra,NULL</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.cbWndExtra,NULL</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; push&nbsp;
+hInstance</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; pop&nbsp;&nbsp;
+wc.hInstance</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hbrBackground,COLOR_WINDOW+1</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.lpszMenuName,NULL</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.lpszClassName,OFFSET ClassName</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; invoke LoadIcon,NULL,IDI_APPLICATION</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hIcon,eax</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hIconSm,eax</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; invoke LoadCursor,NULL,IDC_ARROW</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hCursor,eax</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; invoke RegisterClassEx,
+addr wc&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">
+; registrujeme naší třídu okna</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; invoke CreateWindowEx,NULL,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ADDR ClassName,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ADDR AppName,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+WS_OVERLAPPEDWINDOW,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NULL,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NULL,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+hInst,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NULL</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+hwnd,eax</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; invoke ShowWindow,
+hwnd,CmdShow&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;&nbsp;&nbsp;
+; zobrazí naše okno na ploše</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; invoke UpdateWindow,
+hwnd&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">
+; obnoví klientskou oblast</font></font></b>
+<p><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; .WHILE TRUE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">
+; vstoupíme do smyčky zpráv</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke GetMessage, ADDR msg,NULL,0,0</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+.BREAK .IF (!eax)</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke TranslateMessage, ADDR msg</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke DispatchMessage, ADDR msg</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; .ENDW</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;&nbsp;&nbsp;
+eax,msg.wParam&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;&nbsp;&nbsp;
+; vrátí exitový kód v eax</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; ret</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>WinMain endp</font></font></b>
+<p><b><font color="#CCCCCC"><font size=-1>WndProc proc hWnd:HWND, uMsg:UINT,
+wParam:WPARAM, lParam:LPARAM</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp; .IF uMsg==WM_DESTROY&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+</font><font color="#009900">; jestli uživatel zavře naše okno</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke PostQuitMessage,NULL&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;
+; ukončím aplikaci</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; .ELSE</font></font></b>
+<br><b><font size=-1><font color="#CCCCCC">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke DefWindowProc,hWnd,uMsg,wParam,lParam&nbsp;&nbsp;&nbsp;</font><font color="#009900">&nbsp;
+; standardní(Default) zpracování zpráv</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ret</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; .ENDIF</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; xor eax,eax</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp;&nbsp; ret</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>WndProc endp</font></font></b>
+<p><b><font color="#CCCCCC"><font size=-1>end start</font></font></b>
+<h3>
+Analýza:</h3>
+<font color="#C0C0C0"><font size=-1>Možná jste docela překvapeni, že jednoduché okno
+vyžaduje tolik kódování. Ale většina toho kódu jsou vlastně jen šablony,
+které můžete kopírovat z jednoho zdrojového kódu do druhého.
+Nebo pokud chcete, můžete část kódu zkompilovat do knihovny a využívat ji na začátku a konci svých programů
+jako prolog a epilog.
+Kód můžete psát pouze ve WinMain funkci.
+Ve skutečnosti tohle dělají C compilátory. Nechají vás psát kód WinMain funkce
+aniž by jste se museli starat o další detaily.
+Jediný háček je v tom, že musíte mít funkci pojmenovanou WinMain, jinak C kompilátory
+nebudou schopny kombinovat váš kód s se svým úvodním(prologue) a konečným(prologue) kódem.
+V assembleru takové omezení nemáte. Můžete použít libovolné jméno namísto WinMain nebo nakonec
+nemusíte použít žádnou hlavní funkci.
+</font></font>
+<br><font color="#C0C0C0"><font size=-1>Připravte se. Tohle bude dlouhý, předlouhý tutorial.
+Rozeberme program k smrti :)!</font></font>
+<ul><b><font color="#999900"><font size=-1>.386</font></font></b>
+<br><b><font color="#999900"><font size=-1>.model flat,stdcall</font></font></b>
+<br><b><font color="#999900"><font size=-1>option casemap:none</font></font></b>
+<p><b><font color="#999900"><font size=-1>WinMain proto :DWORD,:DWORD,:DWORD,:DWORD</font></font></b>
+<p><b><font color="#999900"><font size=-1>include \masm32\include\windows.inc</font></font></b>
+<br><b><font color="#999900"><font size=-1>include \masm32\include\user32.inc</font></font></b>
+<br><b><font color="#999900"><font size=-1>include \masm32\include\kernel32.inc</font></font></b>
+<br><b><font color="#999900"><font size=-1>includelib \masm32\lib\user32.lib</font></font></b>
+<br><b><font color="#999900"><font size=-1>includelib \masm32\lib\kernel32.lib</font></font></b></ul>
+<font color="#CCCCCC"><font size=-1>První tři řádky jsou "nutnosti".
+.386 říká MASM, že máme v úmyslu užívat 80386 instrukční sadu v našem programu.
+.model flat,stdcall říká MASM, že užíváme flat paměťový model.
+Taktéž použijeme stdcall konvenci jako základní v našem programu.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Následuje prototyp funkce WinMain.
+Poněvadž budeme volat WinMain později, musíme její prototyp definovat dříve
+než použijeme invoke.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Musím zahrnout windows.inc 
+na začátku kódu. Obsahuje důležité struktury a konstanty.
+ Hlavičkový soubor windows.inc je pouhý textový soubor.
+Otevřete ho libovolným textovým editorem. Prosím uvědomte si,
+že windows.inc neobsahuje ještě všechny strukutry a konstanty.
+Spolu s Hutchem na tom pracujeme. Sami si můžete přidat další položky,
+jesliže tam nejsou.</font></font>
+<br><font color="#CCCCCC"><font size=-1>Náš program volá API funkce,
+které přebývají v user32.dll (CreateWindowEx, RegisterWindowClassEx, např.)
+a kernel32.dll (ExitProcess), takže musíme spojit náš program s těmito knihovnami.
+Další otázka: Jak mám poznat, která knihovna by měla být slinkována s mým programem ?
+Odpověď: Musíte vědět, kde volané API funkce přebývají.
+Když např. zavoláte API funkci v gdi32.dll, musíte linkovat s gdi32.lib.</font></font>
+<br><font color="#CCCCCC"><font size=-1>To je přístup MASM. Přístup TASM
+je mnohem jednodušší: nalinkujte jen jeden jediný soubor: import32.lib.</font></font>
+<ul><b><font color="#999900"><font size=-1>.DATA</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; ClassName
+db "SimpleWinClass",0</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; AppName&nbsp;
+db "Naše první okno",0</font></font></b>
+<p><b><font color="#999900"><font size=-1>.DATA?</font></font></b>
+<br><b><font color="#999900"><font size=-1>hInstance HINSTANCE ?</font></font></b>
+<br><b><font color="#999900"><font size=-1>CommandLine LPSTR ?</font></font></b></ul>
+<font color="#CCCCCC"><font size=-1>Další jsou datové sekce.</font></font>
+<br><font color="#CCCCCC"><font size=-1>V .DATA deklarujeme dva nulou ukončené řetězce,
+(ASCIIZ řetězce): ClassName, což je jméno třídy našeho okna a AppName, což je jméno našeho okna.
+Všimněte si, že tyto proměnné jsou inicializovány.</font></font>
+<br><font color="#CCCCCC"><font size=-1>V .DATA?, deklarujeme dvě proměnné:
+hInstance (handle instance našeho programu) a CommandLine (příkazová řádka našeho programu).
+Neznámé data typy, HINSTANCE a LPSTR jsou ve skutečnosti jen jiná jména pro DWORD.
+Můžete si je vyhledat ve windows.inc. Všimněte si také, že proměnné v .DATA? sekci nejsou inicializována,
+což znamená, že neobsahují žádnou konkrétní hodnotu při startu, ale chceme pro ně zatím rezervovat místo pro další použití.
+</font></font>
+<ul><b><font color="#999900"><font size=-1>.CODE</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;start:</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; invoke
+GetModuleHandle, NULL</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;&nbsp;
+hInstance,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; invoke
+GetCommandLine</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;&nbsp;
+CommandLine,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; invoke
+WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; invoke
+ExitProcess,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp; .....</font></font></b>
+<br><b><font color="#999900"><font size=-1>end start</font></font></b></ul>
+<font color="#CCCCCC"><font size=-1>.CODE obsahuje všechny naše instrukce.
+Kód musí být mezi &lt;starting label>: a end &lt;starting
+label>. Název labelu není důležitý. Můžete si ho pojmenovat jak chcete, jen musí být jedinečný
+a neporušovat konvenci pojmenování MASM.</font></font>
+<br><font color="#CCCCCC"><font size=-1>Naší první instrukcí je volání funkce
+GetModuleHandle pro získání handelu instance našeho programu. Pod
+Win32, handle instance a handle modulu jsou jedno a to samé. 
+Můžete brát handle instance jako ID našeho programu. Je užíván jako parametr
+několika API funkcemi, které musíme volat, takže je obecně dobrým nápadem získat ho na začátku programu.
+</font></font>
+<br><b><font color="#009900"><font size=-1>Poznámka: Ve skutečnosti je pod Win32
+handle instance lineární adresou našeho programu v paměti.</font></font></b>
+<br><font color="#CCCCCC"><font size=-1>Při návratu z Win32 funkce,
+je návratová hodnota, pokud je tedy nějaká, uložena v registru eax.
+Všechny případné ostatní hodnoty jsou vráceny přes proměnné předané v seznamu parametrů, který definujete pro volání.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Win32 funkce si téměř vždy uchovají segmentové registry,
+a ebx, edi, esi a ebp registry. Naproti tomu jsou ecx a edx pomocné registry 
+a jsou vždy nedefinovány při návratu z Win32 funkce.</font></font>
+<br><b><font color="#009900"><font size=-1>Poznámka: Neočekávejte, že registry
+eax, ecx, edx budou obsahovat stejné hodnoty po návratu z API funkcí.</font></font></b>
+<br><font color="#CCCCCC"><font size=-1>Závěr je tento: Když voláte
+API funkci, čekejte návratovou hodnotu v eax. Jestliže jakákoliv vaše funkce bude volána Windows,
+musíte také hrát podle pravidel. Uchovejte a poté před návratem obnovte hodnoty segmentových registrů,
+ebx, edi, esi and ebp, jinak váš program rychle spadne, to vše platí i pro vaši proceduru okna a callback funkce.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Volání GetCommandLine funkce není nutné,
+jestliže váš program nebude pracovat s příkazovou řádkou. V tomto případě jsem to jen ukázal pro případ,
+že by jste to někdy potřebovali.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Další je volání WinMain. Zde přijímá
+čtyři parametry. Handle instance programu, handle instance předchozí instance našeho programu,
+příkazovou řádku a stav okna při prvním spuštění.
+Pod  Win32 neexistuje žádná předchozí instance. Každý program je ve svém adresovém prostoru,
+takže hodnota hPrevInst je vždy 0. To je ještě pozůstatek z dob Win16, kdy všechny instance programu
+běžely ve stejném adresovém prostoru a instance chtěli znát, jestli jsou první instancí.
+Pod win16, jesliže hPrevInst byla NULL, pak byla tato instance první.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Poznámka: Nemusíte deklarovat
+jméno hlavní funkce jako WinMain. Ve skutečnosti máte uplnou svobodu v tomto smyslu.
+Nemusíte dokonce ani použít podobnou funkci jako WinMain a můžete zkopírovat kód uvnitř WinMain za 
+GetCommandLine a program i tak poběží korektně.</font></font>
+<br><font color="#CCCCCC"><font size=-1>Při návratu z WinMain je eax naplněn únikovým(exitovým) kódem,
+který předáme jako parametr funkci ExitProcess, která ukončí aplikaci.
+</font></font>
+<p><b><font color="#999900"><font size=-1>WinMain proc Inst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Řádek výše je deklarace funkce WinMain.
+Všimněte si párů parametr:typ, které následují po PROC direktivě. To jsou parametry, které WinMain obdrží od volajícího.
+Můžete se odkazovat na tyto parametry jménem na místo manipulace se zásobníkem. K tomu ještě MASM vygeneruje
+prologue a epilogue kód, takže se nemusíme zabývat balancováním zásobníku při vstupu a ukončení funkce.
+</font></font>
+<p><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; LOCAL wc:WNDCLASSEX</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; LOCAL msg:MSG</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; LOCAL hwnd:HWND</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>LOCAL direktiva alokuje pamět ze zásobníku pro lokální proměnné
+použité ve funkci. Svazek LOCAL direktiv musí být hned pod PROC direktivou.
+Za LOCAL direktivou hned následuje &lt;jméno lokální proměnné>:&lt;typ proměěné
+>. Takže LOCAL wc:WNDCLASSEX říká MASM, aby alokoval pamět ze zásobníku o velikosti WNDCLASSEX struktury
+pro proměnnou jménem wc. Můžeme se na tuto proměnnou odkazovat bez jakýchkoliv obtíží s manipulací se zásobníkem.
+To je vskutku Boží dar, řekl bych. Nevýhodu je, že lokální proměnné nemůžeme použít vně funkce, protože
+jsou tvořeny a budou zničeny automaticky, když se funkce vrací k volajícímu. Další nevýhodou je, že
+nemůžete inicializovat lokální proměnné automaticky, protože jsou vlastně jen dynamicky alokovanou částí paměti zásobníku
+při vstupu do funkce.
+Musíte jim ručně přiřadit požadované hodnoty až po LOCAL direktivách.</font></font>
+<p><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.cbSize,SIZEOF WNDCLASSEX</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.style, CS_HREDRAW or CS_VREDRAW</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.lpfnWndProc, OFFSET WndProc</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.cbClsExtra,NULL</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.cbWndExtra,NULL</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; push&nbsp;
+hInstance</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; pop&nbsp;&nbsp;
+wc.hInstance</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hbrBackground,COLOR_WINDOW+1</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.lpszMenuName,NULL</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.lpszClassName,OFFSET ClassName</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; invoke LoadIcon,NULL,IDI_APPLICATION</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hIcon,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hIconSm,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; invoke LoadCursor,NULL,IDC_ARROW</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; mov&nbsp;&nbsp;
+wc.hCursor,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; invoke RegisterClassEx,
+addr wc</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Ony řádky nad námi jsou koncepčně jednoduché.
+Konceptem těchto řádků je &nbsp; <i>třída okno (window class)</i>.
+Window class není nic jiného víc než plánem nebo specifikací okna.
+Definuje několik důležitých charakteristik okna jako jsou jeho ikona,
+kursor, funkci odpovědnou za okno, jeho barvu apod. Vytvoříte okno z třídy Okno (window class).
+To je objektově orientovaný koncept. Jestliže chcete vytvořit další okno se stejnými vlastnostmi,
+je rozumné uložit všechny tyto vlastnosti na jedno místo a v případě potřeby ho využít.
+Tímto lze ušetřit dost paměti a vyhnout se tím zbytečným zdvojováním informací.
+Uvědomte si, že Windows bylo designováno v minulosti, kde paměťové čipy byly cenově nepřístupné
+a většina počítačů měla 1 MB paměti.
+Windows musejí být velice efektivní v použítí paměťových zdrojů.
+Pointa je tato: Jestliže si definujete vlastní okno, musíte vyplnit požadované vlastnosti
+vašeho okna ve WNDCLASS nebo WNDCLASSEX struktuře a zavolat funkci RegisterClass nebo RegisterClassEx
+předtím, než budete moci vaše okno vytvořit. Musíte registrovat třídu Okno jednou pro každý typ okna,
+ze kterého chcete tvořit okno.</font></font>
+<br><font color="#CCCCCC"><font size=-1>Windows má několik předdefinovaných
+tříd Okno, jako jsou buttony a editboxy. Pro tyto okna (nebo jiný název controls),
+nemusíte registrovat další třídu Okno, pouze zavoláte CreateWindowEx s předdefinovaným názvem třídy.
+</font></font>
+<br><font color="#CCCCCC"><font size=-1>Jednoduše nejdůležitějším členem 
+WNDCLASSEX struktury je lpfnWndProc. lpfn značí long pointer to function (daleký ukazatel na funkci).
+Pod Win32 již nejsou žádné "near" - blízké nebo "far" - daleké ukazatele, jednoduše kvůli
+FLAT paměťovému modelu. Ale znovu to je pouze pozůstak z dob Win16.
+Každá třída Okno musí být asociována s funkcí, která se nazývá window procedure (procedura okna).
+Tato procedura je zodpovědná za práci se zprávami všech oken vytvořených z asociované třídy Okno.
+Windows posílá zprávy proceduře okna, aby ji upozornil na důležité události, které se týkají oken,
+za které je procedura odpovědná, jako je uživatelův vstup z klávesnice nebo myši.
+Je jen na proceduře okna, aby inteligentně reagovala na každou událost, kterou obdrží ke každému oknu.
+Většinu svého času budete trávit psaním kódu na obsluhování událostí v proceduře okna. </font></font>
+<br><font color="#CCCCCC"><font size=-1>Popíšu každý člen WNDCLASSEX:
+</font></font>
+<p><b><font color="#CCCCCC"><font size=-1>WNDCLASSEX STRUCT DWORD</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; cbSize&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; style&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; lpfnWndProc&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; cbClsExtra&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; cbWndExtra&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; hInstance&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; hIcon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; hCursor&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; hbrBackground&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; lpszMenuName&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; lpszClassName&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp; hIconSm&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+DWORD&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ?</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>WNDCLASSEX ENDS</font></font></b>
+<p><font size=-1><b><font color="#FFFF00">cbSize: </font></b><font color="#CCCCCC">Velikost
+WNDCLASSEX struktury v bytech. Můžeme použít operátor SIZEOF pro její získání.
+</font></font>
+<br><font size=-1><b><font color="#FFFF00">style: </font></b><font color="#CCCCCC">Styl
+oken vytvořených z tého třídy. Můžete kombinovat několik stylů pomocí "or" operátoru.</font></font>
+<br><font size=-1><b><font color="#FFFF00">lpfnWndProc:</font></b><font color="#CCCCCC">
+Adresa procedury okna, která je zodpovědná za okna vytvořené z této třídy.</font></font>
+<br><font size=-1><b><font color="#FFFF00">cbClsExtra:</font></b><font color="#CCCCCC">
+Specifikuje počet extra bytů k alokaci pro další window-class strukturu.
+Operační systém inicializuje tyto byty nulou. Zde můžete uložit data specifická pro třídu Okno.
+</font></font>
+<br><font size=-1><b><font color="#FFFF00">cbWndExtra: </font></b><font color="#CCCCCC">Specifikuje
+počet extra bytů k alokaci další instance okna. Operační systém inicializuje tyto byty nulou.
+Jestliže aplikace používá WNDCLASS strukturu k registraci dialog boxu vytvořeného pomocí CLASS
+direktivy v resource souboru, musí nastavit tento člen na DLGWINDOWEXTRA.</font></font>
+<br><font size=-1><b><font color="#FFFF00">hInstance:</font></b><font color="#CCCCCC">
+Handle instance modulu.</font></font>
+<br><font size=-1><b><font color="#FFFF00">hIcon:</font></b><font color="#CCCCCC">
+Handle k ikoně. Dostaneme ho funkcí LoadIcon.</font></font>
+<br><font size=-1><b><font color="#FFFF00">hCursor:</font></b><font color="#CCCCCC">
+Handle ke kurzoru. Dostaneme ho funkcí LoadCursor.</font></font>
+<br><font size=-1><b><font color="#FFFF00">hbrBackground:</font></b><font color="#CCCCCC">
+Barva pozadí oken vytvořených z třídy.</font></font>
+<br><font size=-1><b><font color="#FFFF00">lpszMenuName:</font></b><font color="#CCCCCC">
+Nastavený handle k menu pro okna vytvořená z třídy.</font></font>
+<br><font size=-1><b><font color="#FFFF00">lpszClassName:</font></b><font color="#CCCCCC">
+Jméno této třídy.</font></font>
+<br><font size=-1><b><font color="#FFFF00">hIconSm:</font></b><font color="#CCCCCC">
+Handle k malé ikonce, která je spojena s třídou. Jestliže je tento člen NULL,
+systém prohledá zdroje ikony specifikované členem hIcon pro ikonu odpovídající velikosti.
+</font></font>
+<p><b><font size=-1><font color="#006600">&nbsp;&nbsp;&nbsp;</font><font color="#999900">
+invoke CreateWindowEx, NULL,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ADDR ClassName,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ADDR AppName,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+WS_OVERLAPPEDWINDOW,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+CW_USEDEFAULT,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NULL,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NULL,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+hInst,\</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+NULL</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Po registraci třídy Okno, můžeme volat CreateWindowEx pro vytvoření
+našeho okna založené na naší třídě. Všimněte si, že tahle funkce má 12 parametrů.</font></font>
+<p><b><font color="#CCCCCC"><font size=-1>CreateWindowExA proto dwExStyle:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; lpClassName:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; lpWindowName:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; dwStyle:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; X:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; Y:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; nWidth:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; nHeight:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; hWndParent:DWORD
+,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; hMenu:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; hInstance:DWORD,\</font></font></b>
+<br><b><font color="#CCCCCC"><font size=-1>&nbsp;&nbsp; lpParam:DWORD</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Pojďme si prohlédnout detaily každého parametru:
+</font></font>
+<br><font size=-1><b><font color="#999900">dwExStyle:</font></b><font color="#CCCCCC">
+Extra styl okna. Tohle je nový parametr, který byl přidán ke starému CreateWindow.
+Zde můžete vložit nové styly pro Windows 95 &amp; NT. 
+Běžné styly můžete specifikovat v dwStyle, ale jestli chcete nějaké speciální efekty, musíte je specifikovat zde.
+V případě, že extra styl nechcete, použijte NULL.
+</font></font>
+<br><font size=-1><b><font color="#999900">lpClassName: </font></b><font color="#CCCCCC">(Vyžadováno).
+Adresa ASCIIZ řetězce obsahujícího jméno třídy okna, které chcete použít jako šablonu pro toto okno.
+Třída může být vaše vlastní registrovaná nebo předdefinovaná.
+Jak řečeno výše, každé okno, které vytvoříte musí být založeno na třídě Okno.</font></font>
+<br><font size=-1><b><font color="#999900">lpWindowName: </font></b><font color="#CCCCCC">Adresa
+ASCIIZ řetězce obsahujícího jméno okna. Bude zobrazeno v titulku okna.
+Jestliže je tento parametr NULL, pak bude titulek prázdný.
+</font></font>
+<br><font size=-1><b><font color="#999900">dwStyle:&nbsp;</font></b><font color="#CCCCCC">
+Styly okna. Zde můžete určit vzhled okna. Předáním
+NULL&nbsp; je v pořádku, ale okno nebude mít system menu box, žádné tlačítka pro minimalizaci a maximalitaci,
+a žádné tlačítko pro zavření. Okno pak vlastně nebude k použítí :). Potřebovali by jste Alt+F4 na zavření.
+Nejběžnější styl okna je WS_OVERLAPPEDWINDOW. Styl okna je vlastně pouze stav jednoho bitu. Proto můžete jednotlivé
+styly kombinovat logickým operátorem "or" pro požadovaný vzhled. WS_OVERLAPPEDWINDOW styl
+je ve skutečnosti kombinací nejběžnějších stylů.</font></font>
+<br><font size=-1><b><font color="#999900">X,Y:</font></b><font color="#CCCCCC">
+Souřadnice horního levého rohu okna. Normálně by tyto hodnoty měly být CW_USEDEFAULT,
+tj. Windows si rozhodnou, kam okno umístí na plochu.</font></font>
+<br><font size=-1><b><font color="#999900">nWidth, nHeight: </font></b><font color="#CCCCCC">
+Šířka a výška okna v pixelech. Můžete také použít CW_USEDEFAULT a nechat tím Windows vybrat vhodnou šířku
+a výšku za vás.</font></font>
+<br><font size=-1><b><font color="#999900">hWndParent: </font></b><font color="#CCCCCC">
+Handle k (parent) rodičovskému oknu našeho okna (pokud existuje). Tento parametr říká
+Windows, zda-li je toto okno potomkem-child (podřízené) nějaké jiného okna
+a pakliže ano, které okno je rodičovské. Toto ale není vztah rodič-potomek
+v MDI (multiple document interface). Podřízená okna nejsou
+vázána ke klientské oblasti okna rodičovského. Tento vztah je čistě pro interní potřeby
+Windows. Jestliže je rodičovské okno zavřeno, všechna podřízená okna budou také zavřena.
+Opravdu je to tak snadné. Protože je ale v našem příkladu jen jedno okno, použijeme NULL.
+</font></font>
+<br><font size=-1><b><font color="#999900">hMenu:</font></b><font color="#CCCCCC">
+Handle k menu okna. NULL pokud použijeme základní menu třídy.
+Podívejte se zpět na člena WNDCLASSEX struktury, lpszMenuName. lpszMenuName
+specifikuje *standardní* menu pro třídu okna. Každé okno vytvořené z této třídy
+bude mít standardně stejné menu. Pokud menu "nepřepíšete" pro konkrétní okno
+díky jeho hMenu parametru. hMenu je ve skutečnosti parametr pro dva účely.
+V případě, že okno, které chcete vytvořit je předdefinovaného typu (tzv. control), nemůže vlastnit menu.
+hMenu je pak použito jako ID controlu. Windows může rozhodnout, zda-li je
+hMenu skutečně handle k menu nebo právě jen ID tím, že se podívá na lpClassName
+parametr. Jestliže je jím jméno předdefinované třídy okna, pak je hMenu pouze ID.
+Pokud ne, pak je to handle k menu okna.</font></font>
+<br><font size=-1><b><font color="#999900">hInstance:</font></b><font color="#CCCCCC">
+Handle instance programu vytvářejícího okno.</font></font>
+<br><font size=-1><b><font color="#999900">lpParam: </font></b><font color="#CCCCCC">
+Volitelný ukazatel na datovou strukturu předávaný oknu. Ten užívá MDI okno
+pro předání CLIENTCREATESTRUCT dat. Za normálních okolností je NULL,
+což znamená, že přes CreateWindow() nepředáváme žádná data. Okno může získat
+hodnotu tohoto parametru voláním funkce GetWindowLong.</font></font>
+<p><b><font size=-1><font color="#006600">&nbsp;</font><font color="#999900">&nbsp;&nbsp;
+mov&nbsp;&nbsp; hwnd,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; invoke ShowWindow,
+hwnd,CmdShow</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; invoke UpdateWindow,
+hwnd</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Při úspěšném návratu z CreateWindowEx
+je handle k oknu vrácen v registru eax. Tuto hodnotu si musíme uchovat pro pozdější použití.
+Okno, které jsme právě vytvořili není automaticky zobrazeno. K tomu musíme
+zavolat ShowWindow s handelem okna a požadovaným stavem zobrazení.
+Potom zavoláme UpdateWindow, abychom přebarvili klientskou oblast okna. Tato funkce
+je užitečná, když chcete aktualizovat obsah klientské oblasti. Můžete ale tuto funkci vynechat.
+<p><b><font size=-1><font color="#006600">&nbsp;</font><font color="#999900">&nbsp;&nbsp;
+.WHILE TRUE</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke GetMessage, ADDR msg,NULL,0,0</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+.BREAK .IF (!eax)</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke TranslateMessage, ADDR msg</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke DispatchMessage, ADDR msg</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp; .ENDW</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Naše okno je již vidět na obrazovce.
+Ale nemůže ještě registrovat vstupy uživatele ze světa. Takže musíme nějak zařídit,
+aby naše okno mohlo zpracovávat události, které se ho týkají. To učiníme pomocí tzv. smyčky zpráv
+(message loop). Pro každý modul je pouze jedna smyčka zpráv. Tato smyčka opakovaně
+kontroluje zprávy od Windows pomocí GetMessage. GetMessage předává ukazatel 
+na MSG structure Windowsům. Tato MSG struktura bude naplněna informacemi
+o zprávě, kterou chce Windows poslat oknu v modulu.
+GetMessage funkce se nevrátí, dokud ještě existují zprávy pro okno.
+Během této doby může Windows předat kontrolu jiným programům.
+Tohle je právě to co vytváří spolupracující víceúlohové schéma platformy Win16.
+GetMessage vrací FALSE když obdrží zprávu WM_QUIT, která ve smyčce zpráv preruší smyčku
+a tím se program ukončí.</font></font>
+<br><font color="#CCCCCC"><font size=-1>TranslateMessage je funkce,
+která bere čistý vstup z klávesnice a generuje novou zprávu (WM_CHAR), která je vložena
+do fronty zpráv. Zpráva WM_CHAR obsahuje ASCII hodnotu zmáčknuté klávesy,
+s čímž se pracuje snadněji než s čistými scan kody kláves.
+Můžete tuto funkci vynechat, pokud nechcete zpracovávat stisky kláves.</font></font>
+<br><font color="#CCCCCC"><font size=-1>DispatchMessage posílá data zprávy proceduře okna,
+která je zodpovědná za zprávy určitého okna.
+is for.</font></font>
+<p><b><font size=-1><font color="#006600">&nbsp;&nbsp;&nbsp;</font><font color="#999900">
+mov&nbsp;&nbsp;&nbsp;&nbsp; eax,msg.wParam</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; ret</font></font></b>
+<br><b><font color="#999900"><font size=-1>WinMain endp</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Jestliže se smyčka zpráv přeruší,
+exitový kód je uložen ve wParam členu MSG struktury. Můžete tento kód uložit do eax a vrátit ho Windows.
+V současnosti ho sice Windwos již nevyužívá, ale pro jistotu je lepší hrát podle pravidel.
+</font></font>
+<p><b><font color="#999900"><font size=-1>WndProc proc hWnd:HWND, uMsg:UINT,
+wParam:WPARAM, lParam:LPARAM</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Tohle je naše procedure okna.
+Nemusíte jí pojmenovat WndProc. První parametr hWnd je handle okna, pro které je zpráva určena.
+uMsg je zpráva.
+Všimněte si, že uMsg není MSG struktura. Je to opravdu jen člen. Windows
+definují stovky zpráv, jejichž většinu vaše programy nebudou zajímat.
+Windows pošlou vhodnout zprávu oknu v případě, že stane něco, co má s oknem spojitost.
+Procedura okna pak zprávu přijme a inteligentně na ni reaguje.
+wParam a lParam jsou parametry navíc, které užívají některé zprávy.
+Některé zprávy ještě posílají určitá související data. Tyto data jsou předávány proceduře okna právě pomocí
+lParam and wParam.</font></font>
+<p><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; .IF uMsg==WM_DESTROY</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke PostQuitMessage,NULL</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; .ELSE</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+invoke DefWindowProc,hWnd,uMsg,wParam,lParam</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ret</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; .ENDIF</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; xor eax,eax</font></font></b>
+<br><b><font color="#999900"><font size=-1>&nbsp;&nbsp;&nbsp; ret</font></font></b>
+<br><b><font color="#999900"><font size=-1>WndProc endp</font></font></b>
+<p><font color="#CCCCCC"><font size=-1>Teď přichází klíčová část. Zde je místo,
+kde přebývá většina inteligence vašeho programu.
+Kód, který reaguje na každou zprávu Windows je v proceduře okna.
+Musíte ověřit, jestli zpráva od Windows je ta, která vás zajímá.
+Jestliže ano, dělejte cokoliv jako reakci na tu zprávu a pak se vraťte s nulou v eax.
+Pakliže vás zpráva nezajímá, MUSÍTE zavolat&nbsp; DefWindowProc a předat všechny parametry,
+které jste obdržely standardnímu(default) zpracování. DefWindowProc
+je právě API funkce, která zpracovává zprávy, které vás nezajímají</font></font>
+<br><font color="#CCCCCC"><font size=-1>Jediná zpráva, na kterou MUSÍTE odpovědět,
+je WM_DESTROY. Tuto zprávu obdrží procedura okna, když bylo okno zavřeno.
+V době, kdy procedura okna tuto zprávu obdrží již bylo vaše okno odstraněno z obrazovky.
+Je to jen upozornění, že vaše okno bylo zavřeno a že by jste se měli připravit na návrat do Windows.
+Jako odpověď můžete provést úklid před návratem do Windows.
+Nemáte jinou možnost, než končit když dojde na tuto zprávu.
+Jestliže chcete mít příležitost zastavit uživatele od zavření okna,
+měli by jste zpracovat WM_CLOSE zprávu. Nyní zpět k WM_DESTROY,
+po vykonání úklidových prací musíte volat PostQuitMessage, která pošle
+WM_QUIT zprávu zpět vašemu modulu. WM_QUIT donutí GetMessage k návratu s nulou v eax,
+což má následek přerušení smyčky zpráv a návrat do Windows.
+Zprávu WM_DESTROY můžete poslat vaší vlastní proceduře okna voláním DestroyWindow funkce.</font></font>
+<p>
+<hr WIDTH="100%">
+<center><b><font color="#009900"><font size=-1>[<a href="http://win32asm.cjb.net">Iczelion's
+Win32 Assembly HomePage</a>]</font></font></b>
+<font size="2"> <br><i> Překlad Shaldan 2006, fx.s@seznam.cz - při četbě a využívání nových poznatků z četby opravdu za nic neručím :)) </i></font>
+</center>
+
+</body>
+</html>

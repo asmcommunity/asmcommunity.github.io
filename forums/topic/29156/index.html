@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>LOCAL variables in masm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29156" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29156">LOCAL variables in masm</a></p>
+   <div class="post" id="post-205930">
+    <div class="subject"><a href="#post-205930">LOCAL variables in masm</a></div>
+    <div class="body">Hi everyone.&nbsp; I&#039;ve come across some odd behaviour when attempting to use local variables using masm.&nbsp; I&#039;ve no doubt that the solution is trivial and I&#039;ve just misunderstood some basic principle, but I&#039;ve played with this all morning and can&#039;t seem to figure it out.<br /><br />I&#039;m attempting to change the access of a certain page in memory.&nbsp; When I use the following code, VirtualProtect fails and GetLastError reports ERROR_NOACCESS:<br /><br /><pre><code><br />xormem proc pMemory:DWORD, nSize:DWORD, nByte:BYTE<br />	LOCAL pOldProtect:DWORD<br />	push pOldProtect			;&lt;-- Points to the RETN of the previous function (the last instruction prior to the xormem function)<br />	push PAGE_EXECUTE_READWRITE<br />	push nSize<br />	push pMemory<br />	call VirtualProtect<br />	...<br />	...<br />	...<br />xormem endp<br /></code></pre><br /><br />OllyDbg showed that the pOldProtect variable  points to the end of the procedure that precedes my xormem function.&nbsp; When I insert a dummy dword local variable (as shown below), the VirtualProtect call succeeds and the old protection variable is stored where it should be.<br /><br /><pre><code><br />xormem proc pMemory:DWORD, nSize:DWORD, nByte:BYTE<br />	LOCAL pDummy:DWORD<br />	LOCAL pOldProtect:DWORD<br />	push pOldProtect			;&lt;-- Points to the stack (where it should)<br />	push PAGE_EXECUTE_READWRITE<br />	push nSize<br />	push pMemory<br />	call VirtualProtect<br />	...<br />	...<br />	...<br />xormem endp<br /></code></pre><br /><br />Questions:<br /><br /> - Does this have anything to do with alignment?&nbsp; I&#039;m aware that some code requires dword alignment and one of the parameters I&#039;m passing to the procedure is BYTE.<br /> - Why does the second example succeed whereas the first one fails?<br /><br />Any help would be greatly appreciated,<br /><br />Tim</div>
+    <div class="meta">Posted on 2008-09-18 22:08:39 by Timbo</div>
+   </div>
+   <div class="post" id="post-205931">
+    <div class="subject"><a href="#post-205931">Re: LOCAL variables in masm</a></div>
+    <div class="body">Shouldn&#039;t that be<br /><pre><code>push ADDR pOldProtect</code></pre><br />since it is a pointer to a dword whereas your code pushes the dword, which could be anything.</div>
+    <div class="meta">Posted on 2008-09-18 22:24:06 by sinsi</div>
+   </div>
+   <div class="post" id="post-205932">
+    <div class="subject"><a href="#post-205932">Re: LOCAL variables in masm</a></div>
+    <div class="body">Thanks for the reply.<br /><br /><div class="quote"><br />Shouldn&#039;t that be<br /><pre><code>push ADDR pOldProtect</code></pre><br />since it is a pointer to a dword whereas your code pushes the dword, which could be anything.<br /></div><br /><br />When I add the ADDR keyword, I receive the following error when assembling:<br /><br />error A2008: syntax error : ADDR<br /><br />As I mentioned in my original post, the second code sample I provided works perfectly (and with out the addition of the ADDR keyword).&nbsp; I&#039;d just like to know why I need the dummy local variable for the call to VirtualProtect to succeed.</div>
+    <div class="meta">Posted on 2008-09-18 22:30:12 by Timbo</div>
+   </div>
+   <div class="post" id="post-205934">
+    <div class="subject"><a href="#post-205934">Re: LOCAL variables in masm</a></div>
+    <div class="body">Sorry, ADDR works with INVOKE. If you&#039;re pushing manually you need<br /><pre><code>&nbsp; lea eax,pOldProtect ; LEA EAX,<br />&nbsp; push eax</code></pre><br /></div>
+    <div class="meta">Posted on 2008-09-18 23:20:02 by sinsi</div>
+   </div>
+   <div class="post" id="post-205935">
+    <div class="subject"><a href="#post-205935">Re: LOCAL variables in masm</a></div>
+    <div class="body">Thanks sinsi, worked like a charm.<br /><br />As a test I used the INVOKE syntax and examined the disassembly using ollydbg, which revealed the <strong>lea eax, </strong> and the <strong>push eax</strong> instructions.&nbsp; I should&#039;ve done that in the first place and saved myself the hassle!</div>
+    <div class="meta">Posted on 2008-09-18 23:41:33 by Timbo</div>
+   </div>
+   <div class="post" id="post-205936">
+    <div class="subject"><a href="#post-205936">Re: LOCAL variables in masm</a></div>
+    <div class="body">Any time a function needs the address of a local variable you need to do the lea/push thing - that&#039;s what invoke does for you (as long as the proto definition is OK).<br /></div>
+    <div class="meta">Posted on 2008-09-19 00:04:59 by sinsi</div>
+   </div>
+   <div class="post" id="post-205937">
+    <div class="subject"><a href="#post-205937">Re: LOCAL variables in masm</a></div>
+    <div class="body">Yup. Otherwise you&#039;re pushing the value of the variable, not its address. And you can&#039;t use &quot;addr&quot; because you can&#039;t know the address of the variable at compile-time.</div>
+    <div class="meta">Posted on 2008-09-19 03:21:15 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-205940">
+    <div class="subject"><a href="#post-205940">Re: LOCAL variables in masm</a></div>
+    <div class="body">It would be nice if the assembler said &quot;oh, you used addr apon a Local variable, I&#039;ll just write the LEA code for you&quot;.<br /></div>
+    <div class="meta">Posted on 2008-09-19 04:19:51 by Homer</div>
+   </div>
+   <div class="post" id="post-205941">
+    <div class="subject"><a href="#post-205941">Re: LOCAL variables in masm</a></div>
+    <div class="body">HLLs do that for you ;)</div>
+    <div class="meta">Posted on 2008-09-19 06:56:07 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-205946">
+    <div class="subject"><a href="#post-205946">Re: LOCAL variables in masm</a></div>
+    <div class="body">My code is now working (thanks to all the replies!) but I&#039;m still curious as to why the second example works whereas the first one fails.&nbsp; Any ideas?</div>
+    <div class="meta">Posted on 2008-09-19 07:11:54 by Timbo</div>
+   </div>
+   <div class="post" id="post-205947">
+    <div class="subject"><a href="#post-205947">Re: LOCAL variables in masm</a></div>
+    <div class="body">Of course. You are supposed to pass the address of the memory as a parameter to the function, yet you pass the data instead. <br /><br />lea eax,  means the same as eax = value of ebp - 4<br />What you did was push the data in  to the stack</div>
+    <div class="meta">Posted on 2008-09-19 07:29:17 by roticv</div>
+   </div>
+  </div>
+ </body>
+</html>

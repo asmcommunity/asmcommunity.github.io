@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Interface Casting - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26788" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26788">Interface Casting</a></p>
+   <div class="post" id="post-193008">
+    <div class="subject"><a href="#post-193008">Interface Casting</a></div>
+    <div class="body">Whatzup? (I'm in one of <em>those</em> moods)
+
+*ppvObject = static_cast<IDocHostUIHandler*>(pMyVar)
+
+Is this what the pObjectBase macro does? If so I might
+be able to reduce my Browser code to just under 50GB ;)
+
+I'm trying now to use the CoLib macros instead of plain
+code. That way, updates to the Lib will improve my code
+automatically.
+
+Xtreme 
+
+This message was edited by Xtreme, on 2/6/2001 8:44:15 AM</div>
+    <div class="meta">Posted on 2001-02-06 03:30:00 by Xtreme</div>
+   </div>
+   <div class="post" id="post-193009">
+    <div class="subject"><a href="#post-193009">Interface Casting</a></div>
+    <div class="body">Well, no, that's not what it does. Let me explain...
+
+A CoLib 'object' that supports 3 distinct interfaces (ie, Interface 2 does not inheret from Interface 1) has a binary layout like so:
+
+<pre><code>
+Base address:     {several dwords of private object info}
+Data address:     {whatever custom private data you define it to have}
+Interface cast 0: {pointer to an interface table | pointer to MY Base address}
+Interface cast 1: {pointer to an interface table | pointer to MY Base address}
+Interface cast 2: {pointer to an interface table | pointer to MY Base address}
+Interface cast 3: {pointer to an interface table | pointer to MY Base address}
+</code></pre>
+
+(Ignore Interface Cast 0 for now, it's just used for aggregation, which we can ignore for now)
+
+When you create a CoLib object, the THIS you get actually points to one of the interface casts. Why? When we Queryinterface an object for an interface, we get back a pointer to our object, and if we look at what that pointer points to, it holds another pointer to a table of function pointers. This function table (vtable) is defined at compile time, and it's located in the servers .data segment. That's how we call COM objects, nothing new.
+
+OK, so we can change the THIS a client has, and the client can access a different interface.
+
+I mean that. THIS changes depending on which interface we have. This is a case where 'cast' is not just a change in type definition, but also a change in value.
+
+Now some practable points. When the server code is called, it is passed THIS. But since THIS changes, we need some method to take all these various THIS's and still walk to any part of the object structure. This is an implimentation detail, it's outside the COM contract, so we can do it any way we wish.
+
+I saw a clear choice between two methods. I chose to follow each pointer to the interface table with a pointer to the Base address of the object, ie, the lowest dword it uses. This is a pointer to the private standard data area. 
+
+Now, this data structure is always the same size (it's fully defined at compile time). The custom data area following does change, but the size of it is defined in the 'class' definition (ClassItem), so we can use these facts to point to any item inside our object if we are passed any arbitrary Interface case (address).
+
+The other method I concidered was to begin the interface cast list with a NULL, and drop the base pointers. This would lead to a smaller object, but to cast it one would have to walk up the casts till that null was found. So I made the slightly larger object because it would be somewhat faster.
+
+THIS is assigned is in AllocObject, this procedure always returns Interface case #1, which is ALWAYS there, and always an IUnknown interface. THIS only place where we can change THIS is in QueryInterface. QI looks to the InterfaceMap to determine the order of interfaces.
+
+
+So....  finally, back to pObjectBase (did you think I forgot?). This macro is used, mostly internally to CoLib functions, to take a THIS and get the base address of the object. Usually, all you will use is the pObjectData macro, which returns the custom data for the object, this is the data your interface methods will be working with.
+
+Ugh, confusing?  I hope I cleared somethigs up.
+
+Ernie</div>
+    <div class="meta">Posted on 2001-02-06 10:52:00 by Ernie</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>convert C code to asm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22760" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22760">convert C code to asm</a></p>
+   <div class="post" id="post-170433">
+    <div class="subject"><a href="#post-170433">convert C code to asm</a></div>
+    <div class="body">Hello everybody,<br /><br />Anybody willing to give me some pointers on converting the following to ASM especially the lines highlighted in green like why prefix the <em>PStoreCreateInstance</em> function with the letter &#39;t&#39;?<br /><br /><br /><br /><strong>void EnumPStorage(BOOL Save){<br />typedef HRESULT (WINAPI *tPStoreCreateInstance)(IPStore **, DWORD, DWORD, DWORD);<br />HMODULE hpsDLL; <br />hpsDLL = LoadLibrary(&quot;pstorec.dll&quot;);<br /><br />tPStoreCreateInstance pPStoreCreateInstance;<br />pPStoreCreateInstance = (tPStoreCreateInstance)GetProcAddress(hpsDLL, &quot;PStoreCreateInstance&quot;);<br /><br />IPStorePtr PStore; <br />HRESULT hRes = pPStoreCreateInstance(&amp;PStore, 0, 0, 0); <br /><br />IEnumPStoreTypesPtr EnumPStoreTypes;<br />hRes = PStore-&gt;EnumTypes(0, 0, &amp;EnumPStoreTypes);<br /><br />if (!FAILED(hRes))<br />{<br />	<br />GUID TypeGUID;<br />char szItemName[1024];&nbsp; &nbsp; &nbsp;  <br />char szItemData[1024];<br />char szResName[1024];<br />char szResData[1024];<br />char szItemGUID[50];<br /><br />while(EnumPStoreTypes-&gt;raw_Next(1,&amp;TypeGUID,0) == S_OK);{&nbsp; &nbsp; &nbsp; <br />	&nbsp;  wsprintf(szItemGUID,&quot;%x&quot;,TypeGUID);</span><br /><br />	&nbsp; IEnumPStoreTypesPtr EnumSubTypes;<br />&nbsp; &nbsp; &nbsp; hRes = PStore-&gt;EnumSubtypes(0, &amp;TypeGUID, 0, &amp;EnumSubTypes);<br />	&nbsp; <br />	&nbsp; GUID subTypeGUID;<br />	&nbsp; while(EnumSubTypes-&gt;raw_Next(1,&amp;subTypeGUID,0) == S_OK){<br /><br />		&nbsp; IEnumPStoreItemsPtr spEnumItems;<br />		&nbsp; HRESULT hRes = PStore-&gt;EnumItems(0, &amp;TypeGUID, &amp;subTypeGUID, 0, &amp;spEnumItems);<br /><br />		&nbsp; LPWSTR itemName;<br />		&nbsp; while(spEnumItems-&gt;raw_Next(1,&amp;itemName,0) == S_OK){&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  <br />			 wsprintf(szItemName,&quot;%ws&quot;,itemName);			 <br />				char checkingdata[1024];<br />			&nbsp; unsigned long psDataLen = 0;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; unsigned char *psData = NULL;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; _PST_PROMPTINFO *pstiinfo = NULL;<br />			&nbsp; hRes = PStore-&gt;ReadItem(0,&amp;TypeGUID,&amp;subTypeGUID,itemName,&amp;psDataLen,&amp;psData,pstiinfo,0);</strong><br /><br /><br />Btw, this proc is used to list items in Protected Storage System Provider key.&nbsp; Any help or suggestions much appreciated.<br /><br />best regards,<br /><br />czDrillard<br /></div>
+    <div class="meta">Posted on 2006-03-12 18:42:12 by czDrillard</div>
+   </div>
+   <div class="post" id="post-170434">
+    <div class="subject"><a href="#post-170434">Re: convert C code to asm</a></div>
+    <div class="body">Easiest way to convert that code to asm is compile the C code (make sure your compiler is set to release mode instead of debug mode).<br /><br />Now you go and download a debugger OllyDbg would probably work fine and what the decompiler will do is read the EXE and spit out the ASM for it.</div>
+    <div class="meta">Posted on 2006-03-12 19:13:39 by r22</div>
+   </div>
+   <div class="post" id="post-170436">
+    <div class="subject"><a href="#post-170436">Re: convert C code to asm</a></div>
+    <div class="body">Thanks r22, I always use VC6 to compile my asm code and naturally I used it to compile this c code.&nbsp; I want to re-write this in MASM.&nbsp; <br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2006-03-12 23:30:40 by czDrillard</div>
+   </div>
+   <div class="post" id="post-170437">
+    <div class="subject"><a href="#post-170437">Re: convert C code to asm</a></div>
+    <div class="body">r22, I cannot agree with your suggestion that it&#39;s easiest to reverse-engineer a compiled binary, especially where COM interfaces are involved.<br /><br />Here&#39;s a QUICK translation using OA32-style calling convention.<br />It may not be bugfree, and it&#39;s certainly not optimal.<br />I merely wanted to show you how to perform those interface calls using the ICALL macro.. of course it assumes that you&#39;ve created &quot;interface definitions&quot; for the interfaces involved, but note its even EASIER to translate those than it is to translate the code that uses them.. it takes seconds to translate each one, and requires NO knowledge of the inner workings of the interface.<br /><br /><br /><pre><code><br />IPStore proto&nbsp; :DWORD, :DWORD, :DWORD ;returns ptr tPStoreCreateInstance<br /><br />EnumPStorage proc bSave:BOOL<br />LOCAL hpsDLL:HANDLE<br />LOCAL pPStoreCreateInstance:tPStoreCreateInstance<br />LOCAL PStore:IPStorePtr<br />LOCAL hRes:HANDLE<br />LOCAL EnumPStoreTypes:IEnumPStoreTypesPtr<br />LOCAL EnumSubTypes:IEnumPStoreTypesPtr<br />LOCAL spEnumItems:IEnumPStoreItemsPtr<br />LOCAL itemName:ptr WORD	;ptr to widestring<br />LOCAL TypeGUID:GUID<br />LOCAL subTypeGUID:GUID<br />LOCAL szItemName[1024]:BYTE&nbsp; &nbsp; &nbsp; <br />LOCAL szItemData[1024]:BYTE <br />LOCAL szResName[1024]:BYTE <br />LOCAL szResData[1024]:BYTE <br />LOCAL szItemGUID[50]:BYTE <br />LOCAL checkingdata[1024]:BYTE<br />LOCAL psDataLen<br />LOCAL psData<br />LOCAL pstiinfo<br /><br />.data<br />szpstorecdll db &quot;pstorec.dll&quot;,0<br />szPStoreCreateInstance db &quot;PStoreCreateInstance&quot;,0<br /><br />.code<br />mov hpsDLL,$invoke (LoadLibrary,addr szpstorecdll)<br />mov pPStoreCreateInstance ,$invoke (GetProcAddress,hpsDLL, addr szPStoreCreateInstance)<br />;mov hRes, $invoke (pPStoreCreateInstance,addr PStore, 0, 0, 0)<br />push 0<br />push 0<br />push 0<br />lea eax,PStore<br />push eax<br />call pPStoreCreateInstance<br />mov hRes,eax<br /><br />mov hRes,$ICall (PStore::IPStorePtr.EnumTypes,0, 0, addr EnumPStoreTypes)<br />.if !FAILED(hRes)<br />.repeat<br />	ICall EnumPStoreTypes::IEnumPStoreTypesPtr.raw_Next,1,addr TypeGUID,0<br />	.break .if eax != S_OK<br />	<br />	.data<br />	szfmt db &quot;%x&quot;,0<br />	szfmtw db &quot;%ws&quot;,0<br />	.code<br />&nbsp; &nbsp; invoke wsprintf,addr szItemGUID,addr szfmt,addr TypeGUID<br />&nbsp; &nbsp; mov hRes,$ICall (PStore::IPStorePtr.EnumSubtypes,0, addr TypeGUID, 0, addr EnumSubTypes)<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; .repeat<br />&nbsp; &nbsp; 	ICall EnumSubTypes::IEnumPStoreTypesPtr.raw_Next,1,addr subTypeGUID,0<br />&nbsp; &nbsp; 	.break .if eax != S_OK<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; mov hRes, $ICall (PStore::IPStorePtr.EnumItems,0, addr TypeGUID, addr subTypeGUID, 0, addr spEnumItems)<br />&nbsp; &nbsp; &nbsp; &nbsp; .repeat<br />&nbsp; &nbsp; &nbsp; &nbsp; 	ICall spEnumItems::IEnumPStoreTypesPtr.raw_Next,1,addr itemName,0<br />&nbsp; &nbsp; &nbsp; &nbsp; 	.break .if eax != S_OK<br />&nbsp; &nbsp; &nbsp; &nbsp; 	<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 	invoke wsprintf,addr szItemName,addr szfmtw,itemName<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov psDataLen , 0<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov psData , NULL<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov pstiinfo , NULL<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov hRes, $ICall (PStore::IPStorePtr.ReadItem,0,addr TypeGUID,&amp;subTypeGUID,itemName,addr psDataLen,addr psData,pstiinfo,0)<br />&nbsp; &nbsp; &nbsp; &nbsp; .until 0<br />	.until 0<br />.until 0<br />.endif<br />ret<br />EnumPStorage endp<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2006-03-13 00:03:27 by Homer</div>
+   </div>
+   <div class="post" id="post-170438">
+    <div class="subject"><a href="#post-170438">Re: convert C code to asm</a></div>
+    <div class="body">Wow!! Thanks EvilHomer2k&nbsp; where can I find more about ICALL macro?<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2006-03-13 00:24:01 by czDrillard</div>
+   </div>
+   <div class="post" id="post-178342">
+    <div class="subject"><a href="#post-178342">Re: convert C code to asm</a></div>
+    <div class="body">The ICall macro is part of the ObjAsm32 oopasm support package.. which contains everything you need to code object-oriented masm sources.. whether you just want your asm code modules to be reusable in different projects, or whether you want to interact with existing COM / C++ interfaces, this is for you.<br /><br />ICall is a macro for making &quot;Interface Calls&quot; - ie, calling Methods of C++ interfaces.<br />It was (I believe) developed from the earlier and more well-known MCALL macro.<br /><br />So, you have a choice. You can use MCall and the older style of interface definition, or you can use ICall and have the further option of the extended support of OA32&#39;s army of buildtime, runtime and debug support macros.<br /><br />I&#39;m certainly willing to help you get started using OA32, if you choose that path.<br /><br />You probably noticed already that ICall uses a syntax very similar to C++, this was not an accident ;)<br /><br />ICall (ptr to interface object instance) :: (interface name) . (methodname)[,params]<br /><br />The other calling macros in OA32 use the same syntax..<br />OCall is used to call Methods of OA32 class objects, and is what I use most of the time.. but if I want to (for example) call a method of a DirectX interface, I have to use ICall, like you.<br /><br />Here&#39;s an example line of code from one of my masm projects:<br />OCall pFile::DiskStream.BinWrite, pData, dwSize<br /><br />Here&#39;s another:<br />OCall pPlayer1::PlayerObject.TakeDamage, fAmountOfDamage<br /></div>
+    <div class="meta">Posted on 2006-03-14 00:22:00 by Homer</div>
+   </div>
+   <div class="post" id="post-178397">
+    <div class="subject"><a href="#post-178397">Re: convert C code to asm</a></div>
+    <div class="body">Thanks very kindly for your offer Homer.&nbsp; I feel I must study up more on com before I go any farther.<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2006-03-15 08:34:41 by czDrillard</div>
+   </div>
+   <div class="post" id="post-178421">
+    <div class="subject"><a href="#post-178421">Re: convert C code to asm</a></div>
+    <div class="body">Actually, compiling the C code is a good piece of advice, although you should use the asm listing output mode. Also, use the compiler flag to optimize for size rather than speed, makes the code easier to follow.<br /><br />But okay, for COM code... if you want the assembly to be readable, do it by hand, declare the necessary interfaces, etc. (in other words: why bother, when you can just compile the .c/.cpp module and link to it from assembly ;))</div>
+    <div class="meta">Posted on 2006-03-16 06:52:26 by f0dder</div>
+   </div>
+   <div class="post" id="post-178425">
+    <div class="subject"><a href="#post-178425">Re: convert C code to asm</a></div>
+    <div class="body">Hello f0dder,<br /><br /><div class="quote">you can just compile the .c/.cpp module and link to it from assembly</div><br />I have been compiling the code to produce the exe.&nbsp; Then when I click a button in the main program CreateProcess runs the exe.&nbsp; Is this what you mean?&nbsp; or is there an analogous method to&nbsp; the&nbsp; <em>_asm </em> instruction available in c.&nbsp; Something like <em>_c</em> which can be inserted in asm code?<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2006-03-16 08:17:38 by czDrillard</div>
+   </div>
+   <div class="post" id="post-178426">
+    <div class="subject"><a href="#post-178426">Re: convert C code to asm</a></div>
+    <div class="body">I went the convert PStore.h &gt; .inc route, still working through it.<br /><br />Hopefully, have a MASM PStore browser w/ editing app shortly.<br /><br />The other moderators at MASMforum and I thought that having passwords hidden from users was borderline asking for trouble.&nbsp; So knowing what&#39;s in PStores, helps keep us out of trouble.<br /><br />czDrillard had posted a utility that browsed the PStores.&nbsp; And when I found out what was in there, I knew we needed a MASM version with posted code.&nbsp; <br /><br />czDrillard,&nbsp; Good Luck with your conversion.&nbsp; I work full time, plus with consulting and I don&#39;t have as much time as you do to get it pushed out.<br /><br />Regards,&nbsp; P1&nbsp; 8)</div>
+    <div class="meta">Posted on 2006-03-16 12:28:08 by P1</div>
+   </div>
+   <div class="post" id="post-178429">
+    <div class="subject"><a href="#post-178429">Re: convert C code to asm</a></div>
+    <div class="body">czDrillard,<br />&nbsp; &nbsp;  The following link might help you a little. There is is an example of a program converted from C to MASM.&nbsp; Ratch<br /><br /> http://www.asmcommunity.net/board/index.php?topic=21772.0</div>
+    <div class="meta">Posted on 2006-03-16 16:39:20 by Ratch</div>
+   </div>
+   <div class="post" id="post-178430">
+    <div class="subject"><a href="#post-178430">Re: convert C code to asm</a></div>
+    <div class="body">Ratch I would like to see that code conversion but nothing is there.&nbsp; Are you refering to Reply #7 September 18, 2005?&nbsp; Link must have been deleted :sad:<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2006-03-16 19:08:44 by czDrillard</div>
+   </div>
+   <div class="post" id="post-178431">
+    <div class="subject"><a href="#post-178431">Re: convert C code to asm</a></div>
+    <div class="body">czDrillard,<br /><br /><div class="quote">Ratch I would like to see that code conversion but nothing is there. Are you refering to Reply #7 September 18, 2005? Link must have been deleted <br /></div><br /><br />I checked the link for <a target="_blank" href="http://www.asmcommunity.net/board/index.php?action=dlattach;topic=21772.0;attach=966">BLOKOUT.ZIP </a>before I posted the first time and again just now.&nbsp; I had no trouble downloading that file within the link.&nbsp; I don&#39;t know why you are having probs.&nbsp; Ratch<br /><br /><span style="font-size:8pt><em>Edited by SpooK: Added direct link to BLOKOUT.ZIP, fixed double spacing.</em></span></div>
+    <div class="meta">Posted on 2006-03-16 20:08:00 by Ratch</div>
+   </div>
+   <div class="post" id="post-178438">
+    <div class="subject"><a href="#post-178438">Re: convert C code to asm</a></div>
+    <div class="body">Thanks kindly, Ratch,&nbsp; got it now :)<br /><br />best regards,<br /><br />czDrillard</div>
+    <div class="meta">Posted on 2006-03-17 08:29:34 by czDrillard</div>
+   </div>
+   <div class="post" id="post-178440">
+    <div class="subject"><a href="#post-178440">Re: convert C code to asm</a></div>
+    <div class="body">czDrillard,<br /><br />&nbsp; &nbsp;  Good!&nbsp; If you have any questions, just ask.&nbsp; Ratch</div>
+    <div class="meta">Posted on 2006-03-17 11:11:20 by Ratch</div>
+   </div>
+   <div class="post" id="post-178464">
+    <div class="subject"><a href="#post-178464">Re: convert C code to asm</a></div>
+    <div class="body"><div class="quote"><br />Hello f0dder,<br /><br /><div class="quote">you can just compile the .c/.cpp module and link to it from assembly</div><br />I have been compiling the code to produce the exe.&nbsp; Then when I click a button in the main program CreateProcess runs the exe.&nbsp; Is this what you mean?&nbsp; or is there an analogous method to&nbsp; the&nbsp; <em>_asm </em> instruction available in c.&nbsp; Something like <em>_c</em> which can be inserted in asm code?<br /></div><br /><br />No, I meant compiling C/C++ code and linking with your assembly code... just like when you use a windows API function and link with an import library.<br /></div>
+    <div class="meta">Posted on 2006-03-18 11:03:35 by f0dder</div>
+   </div>
+   <div class="post" id="post-178485">
+    <div class="subject"><a href="#post-178485">Re: convert C code to asm</a></div>
+    <div class="body">Thanks f0dder.<br /><br />best regards,<br /><br />czDrillard </div>
+    <div class="meta">Posted on 2006-03-19 10:52:59 by czDrillard</div>
+   </div>
+   <div class="post" id="post-178519">
+    <div class="subject"><a href="#post-178519">Re: convert C code to asm</a></div>
+    <div class="body">If you need some help in linking C/Assembly, there should be some threads around here showing how it&#39;s done (iirc it&#39;s linked from the FAQ) - I unfortunately can&#39;t whip up an example right now as it&#39;s 3-6 weeks until I get ADSL at home, and I don&#39;t really have the option of transferrings files to/from the public internet PCs I use :(</div>
+    <div class="meta">Posted on 2006-03-21 08:07:30 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

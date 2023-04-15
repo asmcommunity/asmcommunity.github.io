@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>what is the purpose of &quot;use&quot; in proc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25288" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25288">what is the purpose of &quot;use&quot; in proc</a></p>
+   <div class="post" id="post-184976">
+    <div class="subject"><a href="#post-184976">what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">what is the purpose of &quot;use&quot; in pocedure/function?<br />how can i declare LOCAL byte array of size 1024 with null balues(szbuff db 1024 dup(0)) in my proc<br />i.e LOCAL szByte:BYTE????<br /></div>
+    <div class="meta">Posted on 2006-09-01 01:51:28 by AssemblyBeginner</div>
+   </div>
+   <div class="post" id="post-184981">
+    <div class="subject"><a href="#post-184981">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">I have never used the &quot;Use&quot; keyword in my assembly programs but i have certainly seen a lot of examples that have. I *think* when for example declaring &quot;Use EDX, EBX&quot; the assembler would automatically push those two registers onto the stack when it assembles the procedure and pops them off of the stack before the RET or the RETF instructions.<br /><br />To allocate space in the stack for local procedures or functions, you have create a stack frame. At the beginning of your procedure, push the base pointer (BP/EBP) onto the stack and then move the stack pointer (SP/ESP) to the base pointer (BP/EBP) and then subtract the value of the stack pointer (SP/ESP) by the number of bytes you want to allocate locally. The example below is written is a 16bit code which allocated N bytes of space in a procedure where N is indicated by the AX register.<br /><br /><pre><span style="font-size:2>Allocator PROC<br />&nbsp; PUSH&nbsp; &nbsp; BP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Push the base pointer onto the stack<br />&nbsp; MOV&nbsp; &nbsp;  BP , SP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Move the stack pointer to the base pointer<br />&nbsp; SUB&nbsp; &nbsp;  SP , AX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Allocate N bytes of space (N=AX)<br />&nbsp; ; Rest of the code goes here<br />&nbsp; ADD&nbsp; &nbsp;  SP , AX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Return N bytes of space to the caller (N=AX)<br />&nbsp; POP&nbsp; &nbsp;  BP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Restore the base pointer<br />&nbsp; RET&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Return to the calling procedure (near)<br />Allocator ENDP</span></pre><br /><br /></div>
+    <div class="meta">Posted on 2006-09-01 05:00:08 by XCHG</div>
+   </div>
+   <div class="post" id="post-184983">
+    <div class="subject"><a href="#post-184983">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">First, it&#39;s &quot;uses&quot; and not &quot;use&quot;. The purpose is indeed to save registers, and you use :) it when you overwrite ESI, EDI or EBX in your proc (since those have to be preserved according to the Intel ABI).<br /><br />The advantage of &quot;uses&quot; versus manual push/pop is that MASM will, by default, add pushing and popping code for you. The pretty smart thing is that pop code won&#39;t just be added at the proc end - it will be added where you use the &quot;ret&quot; instruction. (Yes, &quot;RET&quot; is thus a macro, you need &quot;RETN&quot; if you want the raw instruction).<br /><br />Thus, you can have multiple procedure exit points without too much hassle.<br /><br />As for your array thing, try the following. Note that local variables will NOT automatically be zeroed, but will have &quot;whatever value happens to be on the stack&quot; - so you need to do the zeroing yourself, if it&#39;s necessary.<br /><pre><code><br />hellohello PROC<br />&nbsp; local buf[1024]:byte<br />hellohello ENDP<br /></code></pre><br /><br /></div>
+    <div class="meta">Posted on 2006-09-01 05:14:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-184988">
+    <div class="subject"><a href="#post-184988">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">thks f0dder and xchg(once again g8t)</div>
+    <div class="meta">Posted on 2006-09-01 11:29:14 by AssemblyBeginner</div>
+   </div>
+   <div class="post" id="post-185545">
+    <div class="subject"><a href="#post-185545">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">f0dder:&nbsp; Sorry to piggyback on this thread, but it&#39;s kind of relevant.&nbsp; Where can I find the macro declarations for USES and RET in masm32?&nbsp; Or are they handled internally?</div>
+    <div class="meta">Posted on 2006-09-26 06:14:13 by Timbo</div>
+   </div>
+   <div class="post" id="post-185546">
+    <div class="subject"><a href="#post-185546">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">another good thing about USES is that it allows you to RET even after you left something on stack.<br /><br /><pre><code>a PROC<br />push&nbsp; ebx<br />...<br />push 1234<br />jmp return<br />...<br />return:<br />pop ebx<br />RET<br />a ENDP<br /></code></pre><br />is<br /><pre><code><br />a:<br />push ebp<br />mov ebp, esp<br />push ebx<br />...<br />push 1234<br />jmp return<br />...<br />return:<br />pop ebx<br />mov esp, ebp<br />pop ebp</code></pre><br />and this code crashes<br /><br />but with uses:<br /><pre><code>a PROC USES ebx<br />...<br />push 1234<br />jmp return<br />...<br />return:<br />RET<br />a ENDP</code></pre><br />code becomes:<br /><pre><code>push ebp<br />push ebx<br />mov ebp, esp<br />...<br />push 1234<br />jmp return<br />...<br />return:<br />mov esp, ebp<br />pop ebx<br />pop ebp</code></pre><br />this code works allright<br /><br />that means, that in second case you don&#39;t have to pop things you pushed from stack.<br /><br />sorry if this code doesn&#39;t work, i am not MASM programmer</div>
+    <div class="meta">Posted on 2006-09-26 06:34:24 by vid</div>
+   </div>
+   <div class="post" id="post-185547">
+    <div class="subject"><a href="#post-185547">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body"><strong>Timbo:</strong> it is handled internally. If you want a &quot;direct&quot; ret, use &quot;retn&quot; instead.</div>
+    <div class="meta">Posted on 2006-09-26 07:08:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-185548">
+    <div class="subject"><a href="#post-185548">Re: what is the purpose of &quot;use&quot; in proc</a></div>
+    <div class="body">Thanks.&nbsp; I thought it might be.&nbsp; I always thought it was a little odd that all my RET instructions *magically* appeared as RETN in ollydbg, but now I get it.</div>
+    <div class="meta">Posted on 2006-09-26 07:28:14 by Timbo</div>
+   </div>
+  </div>
+ </body>
+</html>

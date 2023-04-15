@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bitmap unloadable, when attaching data to the end of a pe file.... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26671" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26671">Bitmap unloadable, when attaching data to the end of a pe file....</a></p>
+   <div class="post" id="post-192532">
+    <div class="subject"><a href="#post-192532">Bitmap unloadable, when attaching data to the end of a pe file....</a></div>
+    <div class="body">i wrote a little proggie with a bitmap inteface (bitmap is stored as Recource) and it worked fine till i added a function that loads some data at the end of the file before the main window (a dialog) is diplayed....
+but now the bitmap disapears....
+if i don't use the code that read the data everything works fine even if i write something at the end of the file...
+
+--- Code ---
+
+Bitmap:
+
+	invoke BeginPaint,Dlg, addr ps
+	mov hdc,eax
+	invoke LoadBitmap,hInstance,addr logname
+	mov bitm,eax
+	invoke CreateCompatibleDC,hdc
+	mov hdcmem,eax
+	invoke SelectObject,hdcmem,bitm
+	invoke GetMapMode,hdc
+	invoke SetMapMode,hdcmem,eax
+	invoke GetObject,bitm, sizeof BITMAP, addr bm
+	push bm.bmWidth
+	pop pt.x
+	push bm.bmHeight
+	pop pt.y
+	invoke DPtoLP,hdc,addr pt,1
+	mov ptorg.x,0
+	mov ptorg.y,0
+	invoke DPtoLP,hdcmem,addr ptorg,1
+	invoke BitBlt ,hdc,0,0,pt.x,pt.y,hdcmem,ptorg.x,ptorg.y,SRCCOPY
+	invoke DeleteDC ,hdcmem
+
+	invoke EndPaint,hdc, addr ps
+	invoke DeleteObject,bitm
+
+loading data:
+
+
+invoke GetModuleFileName,0,offset buff,512
+	
+	invoke CreateFileA,offset buff, GENERIC_READ, FILE_SHARE_WRITE	+ FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0
+	mov hSelf,eax
+		
+	invoke SetFilePointer,hSelf,-4,0,FILE_END
+	invoke ReadFile,hSelf,addr datastart,4,offset bread,0
+	
+	invoke GetFileSize,hSelf,0
+	
+	sub eax,datastart
+	mov datasize,eax
+	
+	invoke VirtualAlloc, NULL, datasize, MEM_COMMIT, PAGE_READWRITE
+	mov databuff,eax
+	
+	invoke SetFilePointer,hSelf,datastart,0,FILE_BEGIN
+	invoke ReadFile,hSelf,databuff,datasize,offset bread,0
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,8
+	mov eax,dword ptr
+	add eax,databuff
+	mov szFileToPatch,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,12
+	mov eax,dword ptr
+	add eax,databuff
+	mov szBackupFile,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,16
+	mov eax,dword ptr
+	mov orgsize,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,20
+	mov eax,dword ptr
+	mov chg,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,24
+	mov eax,dword ptr
+	add eax,databuff
+	mov off,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,28
+	mov eax,dword ptr
+	add eax,databuff
+	mov old,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,32
+	mov eax,dword ptr
+	add eax,databuff
+	mov new,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,36
+	mov eax,dword ptr
+	add eax,databuff
+	mov ComText,eax
+	
+	mov eax,dword ptr
+	add eax,datasize
+	sub eax,40
+	mov eax,dword ptr
+	add eax,databuff
+	mov WinTitel,eax
+	
+	invoke CloseHandle,hSelf</div>
+    <div class="meta">Posted on 2001-01-23 13:08:00 by theNOP</div>
+   </div>
+   <div class="post" id="post-192533">
+    <div class="subject"><a href="#post-192533">Bitmap unloadable, when attaching data to the end of a pe file....</a></div>
+    <div class="body">how did you include the binary data into the exe file?
+
+Win95 resource functions (LoadBitmap, LoadIcon,...) have
+a bug, if you include more than 64K binary resources into
+the exe - they will fail.
+
+beaster.</div>
+    <div class="meta">Posted on 2001-01-23 13:55:00 by beaster</div>
+   </div>
+   <div class="post" id="post-192534">
+    <div class="subject"><a href="#post-192534">Bitmap unloadable, when attaching data to the end of a pe file....</a></div>
+    <div class="body">as resource...
+but i don't think this could be the reason, because the bitmap worked without a problem, before I added the routine...</div>
+    <div class="meta">Posted on 2001-01-23 14:18:00 by theNOP </div>
+   </div>
+   <div class="post" id="post-192535">
+    <div class="subject"><a href="#post-192535">Bitmap unloadable, when attaching data to the end of a pe file....</a></div>
+    <div class="body">i dont know why your routine isn't working, my guess is it would be something to do with the change in size of the PE file. This is because the format is not really designed to have extra data attached to the end of the file. A easy way to get around this, is to create a new section inside the file using masm, and write the new data to that. You will then have direct access to the info via mem access.</div>
+    <div class="meta">Posted on 2001-01-24 02:43:00 by wEeD </div>
+   </div>
+   <div class="post" id="post-192536">
+    <div class="subject"><a href="#post-192536">Bitmap unloadable, when attaching data to the end of a pe file....</a></div>
+    <div class="body">'k i'll try this thanks for your help...</div>
+    <div class="meta">Posted on 2001-01-24 10:23:00 by theNOP </div>
+   </div>
+   <div class="post" id="post-192537">
+    <div class="subject"><a href="#post-192537">Bitmap unloadable, when attaching data to the end of a pe file....</a></div>
+    <div class="body">while playing around al little bit with the code i found out that i has to do something with the ReadFile function...
+if I exclude it (an do some fixing) everything works fine...
+any one got an idear how this is possible ??</div>
+    <div class="meta">Posted on 2001-01-24 11:27:00 by theNOP </div>
+   </div>
+  </div>
+ </body>
+</html>

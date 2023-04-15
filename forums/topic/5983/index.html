@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>INPUT_RECORD conversion from C to ASM - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5983" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5983">INPUT_RECORD conversion from C to ASM</a></p>
+   <div class="post" id="post-42867">
+    <div class="subject"><a href="#post-42867">INPUT_RECORD conversion from C to ASM</a></div>
+    <div class="body">Hi,<br /><br />I'm trying to convert some structures from C -&gt; ASM but I don't know If I got it right...Here's the C Code<pre><code>&#91;size=9&#93;&#58;&#58;INPUT_RECORD&#58;&#58;<br /><br />typedef struct _INPUT_RECORD &#123; <br />  WORD EventType; <br />  union &#123; <br />      KEY_EVENT_RECORD KeyEvent; <br />      MOUSE_EVENT_RECORD MouseEvent; <br />      WINDOW_BUFFER_SIZE_RECORD WindowBufferSizeEvent; <br />      MENU_EVENT_RECORD MenuEvent; <br />      FOCUS_EVENT_RECORD FocusEvent; <br />  &#125; Event; <br />&#125; INPUT_RECORD;<br /><br />typedef struct _KEY_EVENT_RECORD &#123; <br />  BOOL bKeyDown; <br />  WORD wRepeatCount; <br />  WORD wVirtualKeyCode; <br />  WORD wVirtualScanCode; <br />  union &#123; <br />      WCHAR UnicodeChar; <br />      CHAR  AsciiChar; <br />  &#125; uChar; <br />  DWORD dwControlKeyState; <br />&#125; KEY_EVENT_RECORD; <br /><br />typedef struct _COORD &#123; <br />  SHORT X; <br />  SHORT Y; <br />&#125; COORD;<br /><br />typedef struct _MOUSE_EVENT_RECORD &#123; <br />  COORD dwMousePosition; <br />  DWORD dwButtonState; <br />  DWORD dwControlKeyState; <br />  DWORD dwEventFlags; <br />&#125; MOUSE_EVENT_RECORD;<br /><br />typedef struct _WINDOW_BUFFER_SIZE_RECORD &#123;<br />  COORD dwSize; <br />&#125; WINDOW_BUFFER_SIZE_RECORD;<br /><br />typedef struct _MENU_EVENT_RECORD &#123; <br />  UINT dwCommandId; <br />&#125; MENU_EVENT_RECORD, *PMENU_EVENT_RECORD;<br /><br />typedef struct _FOCUS_EVENT_RECORD &#123; <br />  BOOL bSetFocus; <br />&#125; FOCUS_EVENT_RECORD;&#91;/size&#93;</code></pre>Here's My ASM translation.<br /><pre><code>&#91;size=9&#93;INPUT_RECORD STRUCT<br />    EventType                       DW ?<br />    UNION Event<br />        STRUCT KeyEvent<br />            bKeyDown                DD ?<br />            wRepeatCount            DW ?<br />            wVirtualKeyCode         DW ?<br />            wVirtualScanCode        DW ?<br />            UNION uChar<br />                UnicodeChar         DW ?<br />                AsciiChar           DB ?<br />            ENDS<br />            dwControlKeyState       DD ?<br />        ENDS<br />        STRUCT MouseEvent<br />            STRUCT dwMousePosition<br />                x                   DW ?<br />                y                   DW ?<br />            ENDS<br />            dwButtonState           DD ?<br />            dwControlKeyState       DD ?<br />            dwEventFlags            DD ?<br />        ENDS<br />        STRUCT WindowBufferSizeEvent<br />            STRUCT dwSize<br />                x                   DW ?<br />                y                   DW ?<br />            ENDS<br />        ENDS<br />        STRUCT MenuEvent<br />            dwCommandId             DD ?<br />        ENDS<br />        STRUCT FocusEvent<br />            bSetFocus               DD ?<br />        ENDS<br />    ENDS<br />INPUT_RECORD ENDS<br />&#91;/size&#93;</code></pre>I tried plugging this into an API but I get wierd results in ASM. I tried coding a C version but the C version was working fine. I don't know where I went wrong. Eveything seems perfect to me... Thanks!</div>
+    <div class="meta">Posted on 2002-06-12 09:48:46 by stryker</div>
+   </div>
+   <div class="post" id="post-42871">
+    <div class="subject"><a href="#post-42871">INPUT_RECORD conversion from C to ASM</a></div>
+    <div class="body">hi stryker,<br /><br />the first structure is the only structure you need to convert the others are already converted in the windows.inc.<br /><pre><code>INPUT_RECORD STRUCT<br />  EventType WORD ?<br />    union  <br />      KeyEvent KEY_EVENT_RECORD <br />      MouseEvent            MOUSE_EVENT_RECORD        &lt;&gt;<br />      WindowBufferSizeEvent WINDOW_BUFFER_SIZE_RECORD &lt;&gt;<br />      MenuEvent             MENU_EVENT_RECORD         &lt;&gt;<br />      FocusEvent            FOCUS_EVENT_RECORD        &lt;&gt;<br />    ends <br />INPUT_RECORD ENDS</code></pre></div>
+    <div class="meta">Posted on 2002-06-12 10:03:25 by smurf</div>
+   </div>
+   <div class="post" id="post-42872">
+    <div class="subject"><a href="#post-42872">INPUT_RECORD conversion from C to ASM</a></div>
+    <div class="body">I tried that too but still get weird results...I'll see what I can do... Probably some logic bugs...I thought it was the structure. Thanks!!!</div>
+    <div class="meta">Posted on 2002-06-12 10:08:59 by stryker</div>
+   </div>
+   <div class="post" id="post-42883">
+    <div class="subject"><a href="#post-42883">INPUT_RECORD conversion from C to ASM</a></div>
+    <div class="body">Yay! I've solved my problem...The problem was, I was using it like this InputInfo.Event.KeyEvent.bKeyDown to get the boolean data.....I guess this doesn't work, so I disasm it and got the stack location of the INPUT_RECORD structure then I retrieve the data through base indexing... :alright:</div>
+    <div class="meta">Posted on 2002-06-12 11:22:02 by stryker</div>
+   </div>
+   <div class="post" id="post-42889">
+    <div class="subject"><a href="#post-42889">INPUT_RECORD conversion from C to ASM</a></div>
+    <div class="body">You'd have to have a conditional:<pre><code>; if keyboard event<br />    ; do stuff with keyboard structure InputInfo.KeyEvent.bKeyDown<br /><br />; if ? event<br />    ; do stuff with InputInfo.?.?</code></pre>You have to test EventType at run-time.</div>
+    <div class="meta">Posted on 2002-06-12 11:58:53 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

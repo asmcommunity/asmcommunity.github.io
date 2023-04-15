@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Alphablend/TransparentBlt replacements for usage in Win9x to XP - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25804" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25804">Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></p>
+   <div class="post" id="post-188239">
+    <div class="subject"><a href="#post-188239">Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">Hi guys<br /><br />i?m trying to make a replacement for alphablend and transparentblt for usage in win95, win98 OSes.<br /><br />I found this article explaining the technique.<br /><br />http://www.ddj.com/dept/windows/184416353?pgno=21<br /><br />But.. it simply does not works :(<br /><br />The replacements are necessary, because for what i heard so far, the blending functions have memory leaks in all windows versions.<br /><br />Note: The AlphaBlend function inside msimg32 dll is exactly the same one as GdiAlphaBlend from gdi32.dll (except for the error codes that seems to be inside the msimg32.dll), but someone knows if GdiAlphaBlend&nbsp; works under win95, 98 and NT4 ?<br /><br /><br />Best Regards,<br /><br />Guga</div>
+    <div class="meta">Posted on 2007-02-25 17:29:42 by Beyond2000!</div>
+   </div>
+   <div class="post" id="post-188244">
+    <div class="subject"><a href="#post-188244">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">I remember answering this question here. Please use the search function. Additionally, Microsoft explains it very decently and provides working C source code as well:<br /><pre><code>bool TransparentBltU(<br />HDC dcDest, // handle to Dest DC<br />int nXOriginDest, // x-coord of destination upper-left corner<br />int nYOriginDest, // y-coord of destination upper-left corner<br />int nWidthDest, // width of destination rectangle<br />int nHeightDest, // height of destination rectangle<br />HDC dcSrc, // handle to source DC<br />int nXOriginSrc, // x-coord of source upper-left corner<br />int nYOriginSrc, // y-coord of source upper-left corner<br />int nWidthSrc, // width of source rectangle<br />int nHeightSrc, // height of source rectangle<br />UINT crTransparent // color to make transparent<br />)<br />{<br />if (nWidthDest &lt; 1) return false;<br />if (nWidthSrc &lt; 1) return false;<br />if (nHeightDest &lt; 1) return false;<br />if (nHeightSrc &lt; 1) return false;<br /><br />HDC dc = CreateCompatibleDC(NULL);<br />HBITMAP bitmap = CreateBitmap(nWidthSrc, nHeightSrc, 1,<br />GetDeviceCaps(dc, BITSPIXEL), NULL);<br /><br />if (bitmap == NULL)<br />return false;<br /><br />HBITMAP oldBitmap = (HBITMAP)SelectObject(dc, bitmap);<br /><br />if (!BitBlt(dc, 0, 0, nWidthSrc, nHeightSrc, dcSrc,<br />nXOriginSrc, nYOriginSrc, SRCCOPY))<br />return false;<br /><br />HDC maskDC = CreateCompatibleDC(NULL);<br />HBITMAP maskBitmap = CreateBitmap(nWidthSrc,<br />nHeightSrc, 1, 1, NULL);<br /><br />if (maskBitmap == NULL)<br />return false;<br /><br />HBITMAP oldMask = (HBITMAP)SelectObject(maskDC,<br />maskBitmap);<br /><br />SetBkColor(maskDC, RGB(0,0,0));<br />SetTextColor(maskDC, RGB(255,255,255));<br />if (!BitBlt(maskDC, 0,0,nWidthSrc,nHeightSrc,NULL,<br />0,0,BLACKNESS))<br />return false;<br /><br />SetBkColor(dc, crTransparent);<br />BitBlt(maskDC, 0,0,nWidthSrc,nHeightSrc,dc,0,0,SRCINVERT);<br /><br />SetBkColor(dc, RGB(0,0,0));<br />SetTextColor(dc, RGB(255,255,255));<br />BitBlt(dc, 0,0,nWidthSrc,nHeightSrc,maskDC,0,0,SRCAND);<br /><br />HDC newMaskDC = CreateCompatibleDC(NULL);<br />HBITMAP newMask;<br />newMask = CreateBitmap(nWidthDest, nHeightDest, 1,<br />GetDeviceCaps(newMaskDC, BITSPIXEL), NULL);<br /><br />if (newMask == NULL)<br />{<br />SelectObject(dc, oldBitmap);<br />DeleteDC(dc);<br />SelectObject(maskDC, oldMask);<br />DeleteDC(maskDC);<br />DeleteDC(newMaskDC);<br />return false;<br />}<br /><br />SetStretchBltMode(newMaskDC, COLORONCOLOR);<br />HBITMAP oldNewMask = (HBITMAP) SelectObject(newMaskDC,<br />newMask);<br />StretchBlt(newMaskDC, 0, 0, nWidthDest, nHeightDest,<br />maskDC, 0, 0, nWidthSrc, nHeightSrc, SRCCOPY);<br /><br />SelectObject(maskDC, oldMask);<br />DeleteDC(maskDC);<br /><br />HDC newImageDC = CreateCompatibleDC(NULL);<br />HBITMAP newImage = CreateBitmap(nWidthDest, nHeightDest,<br />1, GetDeviceCaps(newMaskDC, BITSPIXEL), NULL);<br /><br />if (newImage == NULL)<br />{<br />SelectObject(dc, oldBitmap);<br />DeleteDC(dc);<br />DeleteDC(newMaskDC);<br />return false;<br />}<br /><br />HBITMAP oldNewImage = (HBITMAP)SelectObject(newImageDC,<br />newImage);<br />StretchBlt(newImageDC, 0, 0, nWidthDest, nHeightDest,<br />dc, 0, 0, nWidthSrc, nHeightSrc, SRCCOPY);<br /><br />SelectObject(dc, oldBitmap);<br />DeleteDC(dc);<br /><br />BitBlt( dcDest, nXOriginDest, nYOriginDest, nWidthDest,<br />nHeightDest, newMaskDC, 0, 0, SRCAND);<br /><br />BitBlt( dcDest, nXOriginDest, nYOriginDest, nWidthDest,<br />nHeightDest, newImageDC, 0, 0, SRCPAINT);<br /><br />newImage = (HBITMAP)SelectObject(newImageDC, oldNewImage);<br />DeleteObject(newImage) ;<br />DeleteDC(newImageDC);<br />newMask = (HBITMAP)SelectObject(newMaskDC, oldNewMask);<br />DeleteObject(newMask) ;<br />DeleteDC(newMaskDC);<br />DeleteDC(dc) ;<br />DeleteObject(bitmap) ;<br /><br />return true;<br />}</code></pre><br /><br />Know that the bug is said to occur only on Win9x, so first check which OS your app runs on.</div>
+    <div class="meta">Posted on 2007-02-26 11:52:00 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-188245">
+    <div class="subject"><a href="#post-188245">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">Why not simply use sDraw? </div>
+    <div class="meta">Posted on 2007-02-26 12:25:04 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188246">
+    <div class="subject"><a href="#post-188246">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">sDraw rocks&nbsp;  :thumbsup:<br /><br />I hope you keep updating and releasing to the public Ultrano</div>
+    <div class="meta">Posted on 2007-02-26 12:46:11 by mango</div>
+   </div>
+   <div class="post" id="post-188260">
+    <div class="subject"><a href="#post-188260">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">Hi Ultrano<br /><br />what is SDraw ?<br /><br />Is it a library of yours ? If it is, do u have any link ?<br /><br />Best Regards,<br /><br />Guga</div>
+    <div class="meta">Posted on 2007-02-28 13:35:53 by Beyond2000!</div>
+   </div>
+   <div class="post" id="post-188261">
+    <div class="subject"><a href="#post-188261">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">Yes, it&#39;s here: http://www.asmcommunity.net/board/index.php?topic=24967.0<br /><br />mango: I hadn&#39;t planned any updates, but yesterday I finally decided to finally solve/create some graphical &quot;algo&quot; that&#39;s been keeping me in awe for years - and in the process sDraw obtained drawing of 1) Bresenham lines, 2) B-splines , and both drawable via custom &quot;shaders&quot;&nbsp; :<br /><img src="http://img404.imageshack.us/img404/7074/cablesat1.jpg" /><br />(the cables are animated like rubber-rope)<br />I&#39;ll also be adding some text-drawing features, and easy GDI interworking. Though, don&#39;t hold your breath - I was just given some important projects to work on, and it&#39;ll be days before I can come back to it ^^&quot;. </div>
+    <div class="meta">Posted on 2007-02-28 15:51:09 by Ultrano</div>
+   </div>
+   <div class="post" id="post-188317">
+    <div class="subject"><a href="#post-188317">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">Wow&nbsp; :shock: :shock: :shock:<br /><br />Impressive work, ultrano.<br /><br />Congratulations<br /><br /><br />Best Regards,<br /><br />Guga</div>
+    <div class="meta">Posted on 2007-03-05 00:29:43 by Beyond2000!</div>
+   </div>
+   <div class="post" id="post-188318">
+    <div class="subject"><a href="#post-188318">Re: Alphablend/TransparentBlt replacements for usage in Win9x to XP</a></div>
+    <div class="body">Thanks ^_^</div>
+    <div class="meta">Posted on 2007-03-05 02:32:15 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

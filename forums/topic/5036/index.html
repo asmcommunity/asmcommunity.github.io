@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Unroll loops is useless - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5036" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=5036">Unroll loops is useless</a></p>
+   <div class="post" id="post-35398">
+    <div class="subject"><a href="#post-35398">Unroll loops is useless</a></div>
+    <div class="body">Sometimes it looks useless to unroll a loop... why is that?<br />Besides what other optimizations for memory to memory (video)data move do you suggest?<br /><br />For example we have to do this whole screen move 2 times in HE (once for the terrain data and  clear screen and second for final backbuffer to video send) each of this memory transfers takes approx 10ms on my old P2/400 so it limits our max framerate to approx 50fps. <br /><br />Durnig game other things reduce it even more but they are distributed in different routines while this is just one simple routine...<br /><br />So we try to unroll .... but get no improvement what so ever :(<br /><br />We have to move line by line because sometimes there is a gap between lines (called Pitch) but to keep things simple i removed that from code samples<br /><br />Here is the sample code:<br /><br /><pre><code><br />.data?<br /><br />;---------------------------------------------------<br />; test on this data buffers<br />; they represent one 800x600 screen<br />; at 16 bits per pixel<br />;---------------------------------------------------<br />	src_vector	dd	800*600 dup &#40;?&#41;<br />	dest_vector	dd	800*600 dup &#40;?&#41;<br />.code<br />align 4<br />;===========================================<br />; the non unrolled stuff looks like the fastest?<br />;===========================================<br />blit_manually_lines PROC<br />	mov	esi,offset src_vector<br />	mov	edi,offset dest_vector<br />	mov	edx,600 ;lines<br /><br />bucla_y_blit_sys&#58;<br />	mov	ecx,400 ; 800/2<br /><br />	rep	movsd<br /><br />	dec	edx<br />	jnz	bucla_y_blit_sys<br />ret<br />ENDP<br /><br />align 4<br />;===========================================<br />; now the unrolled version, the same speed?<br />;===========================================<br /><br />blit_manually_unrolled1 PROC<br /><br /><br />	mov	esi,offset src_vector<br />	mov	edi,offset dest_vector<br /><br />	mov	ecx,600		;lines<br /><br />@@loop_y_unroll_1&#58;<br /><br />	push	ecx<br /><br />	mov	ecx,&#40;800/8&#41;	;columns<br /><br />@@loop_x_unroll_1&#58;<br /><br />;--------------------------------<br />; read in 8 pixels from source<br />;--------------------------------<br />	mov	eax,&#91;esi&#93;<br />	mov	ebx,&#91;esi+4&#93;<br />	mov	edx,&#91;esi+8&#93;<br />	mov	ebp,&#91;esi+12&#93;<br /><br />;------------------------------------<br />; write 8 pixels to destination<br />;------------------------------------<br />	mov	&#91;edi&#93;,eax<br />	mov	&#91;edi+4&#93;,ebx<br />	mov	&#91;edi+8&#93;,edx<br />	mov	&#91;edi+12&#93;,ebp<br /><br />;--------------------------------------<br />; next pixels address<br />;--------------------------------------<br />	add	esi,16<br />	add	edi,16<br /><br />	dec	ecx<br />	jnz	@@loop_x_unroll_1<br /><br />	pop	ecx<br /><br />	dec	ecx<br />	jnz	@@loop_y_unroll_1<br /><br />ret<br /><br />ENDP<br /><br /> </code></pre><br /><br />What do you think?<br /><br />Anything elese we can do to improve those big time spending routines?<br /><br />What is the fastest way to move memory on P2 and better machines (no P1)<br /><br />PS we try MMX and the same... no improvements whatsoever...</div>
+    <div class="meta">Posted on 2002-04-28 07:59:20 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-35401">
+    <div class="subject"><a href="#post-35401">Unroll loops is useless</a></div>
+    <div class="body">I think you would find that when doing very many iterations that unrolled loops perform better, although with the current speed of processors this is debateable.  Here's some pseudocode to help visualize<br /><br /><br />@:<br />Do_stuff_here<br />Decrement the counter<br />Is the counter at 0?<br />No-so jump backward<br />Yes-so proceed forward<br />;<br />;   ^ Normal tightly rolled loop<br /><br /><br />@<br />Do_stuff_here<br />Do_stuff_here<br />Do_stuff_here<br />Do_stuff_here<br />Decrement the counter by 4<br />Is the counter at 0?<br />No-so jump backward<br />Yes-so proceed forward<br />;<br />;   ^ Loop unrolled by a factor of 4.<br />;      Counter decrementing and<br />;      testing are only carried out<br />;      every 4 iterations, thus saving<br />;      a bit of time.<br /><br /><br />So I bet if you were to take your rolled loop, and unrolled loop, and set the counters to say, 0FFFFFFFFh , you would eventually see the unrolled loop come out as the winner.</div>
+    <div class="meta">Posted on 2002-04-28 08:31:40 by iblis</div>
+   </div>
+   <div class="post" id="post-35402">
+    <div class="subject"><a href="#post-35402">Unroll loops is useless</a></div>
+    <div class="body">Unfortunately, there is great difference between what is best on each processor.  Looking at the results in <a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=24417.msg22260">( this thread )</a>, it appears that a MMX/FPU loop is the fastest on the P2, but not by much over REP MOVSD.</div>
+    <div class="meta">Posted on 2002-04-28 09:31:06 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-35413">
+    <div class="subject"><a href="#post-35413">Unroll loops is useless</a></div>
+    <div class="body">I had a bit of a look at this a while back, and I found (after some research) that the P6 architecture special cases &quot;rep movsd&quot;  when the data size to be moved is equal to or greater than the L2 cache.<br /><br />When ecx is lower, rep movsd is bested by a &quot;mov eax,  / mov , eax&quot; pair.<br /><br />But using an MMX register was consistantly as high as the special cased &quot;rep movsd&quot; even when lower amounts of data were transfered.<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-04-28 11:26:32 by Mirno</div>
+   </div>
+   <div class="post" id="post-35414">
+    <div class="subject"><a href="#post-35414">Unroll loops is useless</a></div>
+    <div class="body">The ammount of data we transfer is allways the same:<br />800x600x2bytes=960.000 bytes and it takes 10ms.<br /><br />this could be even greater if we switch to higher resolutions (ie 1024x768 etc) i guess no CPU has 2M of cache nowdays anyway...<br /><br />so even at 800x600 its greater than my L2 cache=512k but L2 is not going to help much there when we are going to write into the video memory...though it will help other cases and the reads...<br /><br />So u guys think we should use only &quot;rep movsd&quot; ?</div>
+    <div class="meta">Posted on 2002-04-28 11:33:13 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-35462">
+    <div class="subject"><a href="#post-35462">Unroll loops is useless</a></div>
+    <div class="body">Afternoon, BogdanOntanu.<br /><br />Another idea would be to break the loops up into L1-sized-chucks (32kb on a P2?). Cache-misses would be a major cause of the slow code.<br /><br />Just have another loop around what you've already got; have the inner loops process ~30kb maximum at a time.<br /><br />960,000 bytes / 30,000 bytes (leaving 2768 bytes in L1 for code) == 30 outer loops.<br /><br />I'm definitely no optimizer guru and not very knowledgable about this, so maybe someone else can shed some light on this idea?<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2002-04-28 17:42:41 by Scronty</div>
+   </div>
+   <div class="post" id="post-35464">
+    <div class="subject"><a href="#post-35464">Unroll loops is useless</a></div>
+    <div class="body">Correct me if I'm wrong but the L1 cache on the P2 is 16k data + 16k code.<br />(Would that mean that setting the data sizes to 16,384 bytes / loop prevent L1 cache misses or do you need to step that down somewhat?)</div>
+    <div class="meta">Posted on 2002-04-28 18:11:48 by grv575</div>
+   </div>
+   <div class="post" id="post-35560">
+    <div class="subject"><a href="#post-35560">Unroll loops is useless</a></div>
+    <div class="body">Bogdan,<br /><br />It was my experience some time ago when I did everything with integer code to try and improve on REP MOVSD and none were faster. I then tried unrolled loops with MOVQ and it was still slower but not by much.<br /><br />Allowing that you have done all the other things like ensuring the source and target memory is aligned properly, I think the only chance you have is to try something like what Scronty has suggested to see if you get some speed increase that way.<br /><br />I think BitRAKE did a very fast PIII or PIV version but it would only run on a PIII or later so it is not bery useful with general purpose stuff.<br /><br />With normal stuff, I think the memory access speed is becoming a major factor in transfer speed but there may be a trick with cache access that will make it go faster.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-04-29 07:40:30 by hutch--</div>
+   </div>
+   <div class="post" id="post-35705">
+    <div class="subject"><a href="#post-35705">Well</a></div>
+    <div class="body">Hi Hutch<br /><br />yes that was my testing results also, REP MOVSD looks like the fastest and sure is the smallest ;)<br /><br />memory align, hmm that was not taken care of ... but i was thinking that on P2 and greater CPUs this does not matter anymore... am i wrong?<br /><br />Besides on the other thread mentioned here the memory blocks thansfered were pretty small (64bytes sometimes  times LOL) <br /><br />WWhat we need is to fast transfer 1-2M or more data and at a sustained rate (more than 30-50 times per second that is)<br /><br />Thx all</div>
+    <div class="meta">Posted on 2002-04-30 01:24:12 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-35706">
+    <div class="subject"><a href="#post-35706">Unroll loops is useless</a></div>
+    <div class="body">Bogdan,<br /><br />On anything from PII up memory alignment is important to prevent double grabs at the location if its not aligned. With the block transfer you have in mind, it should be easy enough to organise and from memory, its worth aligning it at 16 bytes if you can do it.<br /><br />The technical data I have seen is that REP MOVSD on aligned data over 64 bytes in size is very hard to beat and my own testing showed that. Perhaps a dedicated MOVQ algo that was unrolled may get up to pace but I would be tempted to try the cache suggestion that Scronty made as it may solve one problem in transfer speed.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-04-30 01:40:31 by hutch--</div>
+   </div>
+   <div class="post" id="post-35727">
+    <div class="subject"><a href="#post-35727">Unroll loops is useless</a></div>
+    <div class="body">Bogdan, to solve any alignment problems, use VirtualAlloc for your<br />screen buffer, you'll get 4k aligned memory. Test &quot;rep movsd&quot;, a<br />MMX xfer routine, and one of those fancy things using prefetch.<br /><br />I'm interested in hearing how much time can be saved here, I didn't<br />really think a systemmem-&gt;gfxmem copy was too bad these days?</div>
+    <div class="meta">Posted on 2002-04-30 04:28:27 by f0dder</div>
+   </div>
+   <div class="post" id="post-35735">
+    <div class="subject"><a href="#post-35735">Unroll loops is useless</a></div>
+    <div class="body">Nowadays (read: 3 years ago) system-&gt;video ram copy bandwidth of 300 MB/s are very normal. So anything less (in the order of 70/90 MB/s) make me think that the driver doesn't enable UCWC (uncached write-combining), or just that the processor doesn't support it (old Pentiums).<br /><br />About alignment, the famous 16 bytes that pop up every time are relative to the 486, although a lot of people still use that value, modern CPU's have 32, 64, 128 bytes cachelines. E.g. the Pentium has 32, the K7 64, etc..<br /><br />I suggest first to profile a pure memory fill (i.e. the equivalent of stosd), e.g. clear the screen. So at least you're sure about how much bandwidth you have with the video card.<br />Then check the UCWC of above. Under Dos you can use an utility called FASTVID to enable UCWC.. and some BIOSes have that option directly available.<br /><br />One question Bog: what video card are you testing this on? Because, to make you an example, the old Riva TNT is extremely poor in bandwidth, while the ATI Rage Pro reachs with no effort the 300 MB/s AGP barrier. Both are quite old and cheap cards, so..<br /><br />---<br />Ciao,<br />Maverick</div>
+    <div class="meta">Posted on 2002-04-30 04:57:07 by Maverick</div>
+   </div>
+   <div class="post" id="post-35823">
+    <div class="subject"><a href="#post-35823">Unroll loops is useless</a></div>
+    <div class="body">this might be a bad solution but could it be passed compressed and then be decompressed? maybe that saves time?</div>
+    <div class="meta">Posted on 2002-04-30 15:05:02 by Hiroshimator</div>
+   </div>
+   <div class="post" id="post-36249">
+    <div class="subject"><a href="#post-36249">Unroll loops is useless</a></div>
+    <div class="body"><a target="_blank" href="http://www.sgi.com/developers/technology/irix/resources/asc_cpu.html">http://www.sgi.com/developers/technology/irix/resources/asc_cpu.html</a> seemed interesting to me as well, it was written for P3, but I think you can use parts of it for P2 as well.<br /><br />It tells about things like prefetching, getting data to fit cachelines, etc.<br /><br />Also there is always the intel manuals, they have a part for cache optimization.</div>
+    <div class="meta">Posted on 2002-05-02 19:56:58 by _js_</div>
+   </div>
+   <div class="post" id="post-39105">
+    <div class="subject"><a href="#post-39105">Unroll loops is useless</a></div>
+    <div class="body">What about using the Direct Memory Access driver.  Last I heard it could copy memory to/from memory and I/O.</div>
+    <div class="meta">Posted on 2002-05-21 00:27:24 by eet_1024</div>
+   </div>
+   <div class="post" id="post-39113">
+    <div class="subject"><a href="#post-39113">Unroll loops is useless</a></div>
+    <div class="body">DMA on x86 is a joke. It's usable for sound card and harddrives,<br />and ... that's about it.</div>
+    <div class="meta">Posted on 2002-05-21 02:16:41 by f0dder</div>
+   </div>
+   <div class="post" id="post-39172">
+    <div class="subject"><a href="#post-39172">Unroll loops is useless</a></div>
+    <div class="body">Last I heard DMA ran at 8088 speeds (4.77MHz)... 'course I think EISA and MCA did them at 80286 speeds (10MHz IIRC)... hrm...<br /><br /> Well presumably the system makers have created faster DMA's </div>
+    <div class="meta">Posted on 2002-05-21 08:57:27 by AmkG</div>
+   </div>
+  </div>
+ </body>
+</html>

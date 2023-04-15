@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Crash occurs when loading to ebx... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16773" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16773">Crash occurs when loading to ebx...</a></p>
+   <div class="post" id="post-130234">
+    <div class="subject"><a href="#post-130234">Crash occurs when loading to ebx...</a></div>
+    <div class="body">Hi!<br />I'm at my first serious attempt to write X86 assembly code and today, I stumbled on a rather strange problem.<br /><br />Say this:<br /><br />void test(int *ptr); //This is the C prototype of the following asm proc<br /><br />_test:<br />  push ebp<br />  mov ebp, esp<br /><br />  mov eax, 1010<br />  mov ebx, 1010  ;This line causes the issue I'm experiencing<br />  mov edi,  ;In link with the use of edi<br />  mov , eax<br /><br />  mov esp, ebp<br />  pop ebp<br />  ret<br /><br />When this routine is called 2 times in a row, it crashes. When it is called a single time, it doesn't, why? I know ebx is the base register and it is used to address in 16-bit mode but I tought ebx was considered as a general purpose register in 32-bit. I assemble and compile with the latest version of nasm and MinGW.</div>
+    <div class="meta">Posted on 2004-01-09 22:19:06 by PyroMeistar</div>
+   </div>
+   <div class="post" id="post-130236">
+    <div class="subject"><a href="#post-130236">Crash occurs when loading to ebx...</a></div>
+    <div class="body">is this function called from inside a callback? if so then ebx must be preserved as well as esi and edi.</div>
+    <div class="meta">Posted on 2004-01-09 22:32:13 by ENF</div>
+   </div>
+   <div class="post" id="post-130237">
+    <div class="subject"><a href="#post-130237">Crash occurs when loading to ebx...</a></div>
+    <div class="body">No, it is called like this in main()<br /><br />int main(void)<br />{<br />int i;<br />test(&amp;i);<br />test(&amp;i);<br /><br />return 1;<br />}<br /><br />But I will try to push/pop ebx &amp; edi as you said. Thanks for your help!</div>
+    <div class="meta">Posted on 2004-01-09 22:45:47 by PyroMeistar</div>
+   </div>
+   <div class="post" id="post-130241">
+    <div class="subject"><a href="#post-130241">Re: Crash occurs when loading to ebx...</a></div>
+    <div class="body">void test(int *ptr); //This is the C prototype of the following asm proc<br /><br />_test:<br />  push ebp<br />  mov ebp, esp<br /><br />  mov eax, 1010<br />  mov ebx, 1010  ;This line causes the issue I'm experiencing<br />  mov edi,  ;In link with the use of edi<br />  mov , eax<br /><br />  mov esp, ebp<br />  pop ebp<br />  ret<br /><br />i see the  that would imply 1 param is passed to the proc, in which case it should be ret 4 instead of ret, looks like stack corruption</div>
+    <div class="meta">Posted on 2004-01-10 00:03:25 by evlncrn8</div>
+   </div>
+   <div class="post" id="post-130243">
+    <div class="subject"><a href="#post-130243">Crash occurs when loading to ebx...</a></div>
+    <div class="body">The C++ compiler requires that called routines preserve EBX, ESI, and EDI.<br /><br />You can save and restore EBX and EDI with PUSH and POP.<br />You are not using ESI, so you do not need to do anything special.<br /><br />By default, C++ and C compilers for Win32 will make the caller (in your case, the C code) remove the arguments, so an ordinary RET is correct.</div>
+    <div class="meta">Posted on 2004-01-10 00:57:06 by tenkey</div>
+   </div>
+   <div class="post" id="post-130244">
+    <div class="subject"><a href="#post-130244">Crash occurs when loading to ebx...</a></div>
+    <div class="body">I think evlncrn8 has got it , he is using  which is a parameter. So there was probably something pushed onto the stack before the call:<br /><br /><pre><code>push 999<br />call _test<br /><br />_test&#58;<br />push ebp<br />mov ebp, esp<br />; &#91;ebp+8&#93; = 999<br />; &#91;ebp+4&#93; = return address<br />.<br />.<br />.<br />mov esp, ebp<br />pop ebp<br />ret 4</code></pre><br /><br />The procedure is passed a parameter otherwise  would be indeterminate. Obviously test(int *ptr) means that a pointer is being pushed onto the stack so it must be corrected with ret 4.</div>
+    <div class="meta">Posted on 2004-01-10 01:11:03 by donkey</div>
+   </div>
+   <div class="post" id="post-130245">
+    <div class="subject"><a href="#post-130245">Crash occurs when loading to ebx...</a></div>
+    <div class="body">mov ebp, esp<br />;  = 999<br />;  = return address<br />.<br />.<br />.<br />mov esp, ebp<br /><br />Thre is no need for mov esp, ebp since ebp allready equals esp. This would only be necercary if there were locals.</div>
+    <div class="meta">Posted on 2004-01-10 01:22:11 by ENF</div>
+   </div>
+   <div class="post" id="post-130249">
+    <div class="subject"><a href="#post-130249">Crash occurs when loading to ebx...</a></div>
+    <div class="body">Agrees with the comments about the stack being corrupted by 4 bytes.<br />There's no probably about it.<br /><br />test(&amp;i);<br />test(&amp;i);<br /><br />resolves to:<br /><br />invoke test, addr i<br />invoke test,addr i<br /><br />or:<br /><br />push offset i<br />call test<br />push offset i<br />call test<br /><br />just change the ret to ret 4<br />Have a nice day :)</div>
+    <div class="meta">Posted on 2004-01-10 01:57:51 by Homer</div>
+   </div>
+   <div class="post" id="post-130257">
+    <div class="subject"><a href="#post-130257">Crash occurs when loading to ebx...</a></div>
+    <div class="body">Homer,<br />That would depend on what type of calling convention is the function defined as. <br /><br />PyroMeistar,<br />The mostly likely reason is because ebx is used without preservation thereby resulting in a crash (As mentioned by the rest).</div>
+    <div class="meta">Posted on 2004-01-10 04:59:57 by roticv</div>
+   </div>
+   <div class="post" id="post-130311">
+    <div class="subject"><a href="#post-130311">Crash occurs when loading to ebx...</a></div>
+    <div class="body">Thanks for the helpful replies.<br /><br />I pushed ebx and everything was in order.<br /><br />The stack isn't corrupted, in fact, I only posted the problematic part of the loop since the complete one is 4 pages of FPU calculations.<br /><br />Thanks again!</div>
+    <div class="meta">Posted on 2004-01-10 19:33:47 by PyroMeistar</div>
+   </div>
+  </div>
+ </body>
+</html>

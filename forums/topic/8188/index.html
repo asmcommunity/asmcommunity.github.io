@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Problem with invoke/wsprintf crashing program - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=8188" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=8188">Problem with invoke/wsprintf crashing program</a></p>
+   <div class="post" id="post-59925">
+    <div class="subject"><a href="#post-59925">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body">I have come upon a weird problem with call wsprintf with invoke. Perhaps I'm only doing something wrong here, but when I use a WORD for argument in wsprintf,<br />and use invoke,<br />the compiler produce code like this to push the value:<br /><br /><pre><code><br />push 0<br />push word ptr TheNumber<br /></code></pre><br /><br />And push 0 is the opcode 6a00 which pushes a DWORD, 00000000.<br />So the whole program crash, because the stackpointer gets messed up and wsprintf fails somehow. <br /><br />=(((((((<br /><br />It should be like this to work,<br /><br /><pre><code><br />push word ptr 0<br />push word ptr TheNumber<br /></code></pre><br /><br />I did a testprogram, please check it, and correct if I'm wrong,<br />because I really need to push words and use invoke, I don't want to handcode the calls to wsprintf.<br /><br />Am I doing something wrong in the invoke? Hope I'm not doing something terribly wrong...<br /><br /><pre><code><br /><br />.486<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\user32.inc<br /><br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\user32.lib<br /><br />.data<br /><br />szMes db &quot;Number1&#58;%#X&quot;,13,10,&quot;The_String&#58;%s&quot;,13,10,&quot;Number2&#58;%#X&quot;,0<br /><br />number1 dw 505h<br />The_String db &quot;Hello there.&quot;,0<br />number2 dw 0FFFFh<br /><br /><br />szCaption db &quot;testing wsprintf&quot;,0<br /><br />.data?<br /><br />szBuffer db 256 dup &#40;?&#41;<br /><br />.code<br /><br />start&#58;<br /><br />; This will produce right result<br /><br />    push word ptr 0<br />    push number2<br />    push OFFSET The_String<br />    push word ptr 0<br />    push number1<br />    push OFFSET szMes<br />    push OFFSET szBuffer<br />    <br />    call wsprintf<br />    add esp,4*5<br />    invoke MessageBoxA, NULL, addr szBuffer, addr szCaption, MB_OK<br /><br />; This will produce wrong result, and crash the program<br /><br />    invoke wsprintf, addr szBuffer, addr szMes, number1, addr The_String, number2<br />    <br />    invoke MessageBoxA, NULL,addr szBuffer,addr szCaption,MB_OK<br /><br />invoke ExitProcess,0<br /><br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2002-09-28 20:59:06 by david</div>
+   </div>
+   <div class="post" id="post-59927">
+    <div class="subject"><a href="#post-59927">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body">Hi,<br /><br /><pre><code><br />    invoke wsprintf, addr szBuffer, addr szMes, number1, The_String, number2<br /></code></pre><br /><br />should be <br /><br /><pre><code><br />    invoke wsprintf, addr szBuffer, addr szMes, number1, addr The_String, number2<br /></code></pre></div>
+    <div class="meta">Posted on 2002-09-28 21:02:36 by roticv</div>
+   </div>
+   <div class="post" id="post-59928">
+    <div class="subject"><a href="#post-59928">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body">Yes I just saw it when posting , I corrected that typo, it makes no difference though.<br />The problem still remains as I described it above.</div>
+    <div class="meta">Posted on 2002-09-28 21:22:08 by david</div>
+   </div>
+   <div class="post" id="post-59931">
+    <div class="subject"><a href="#post-59931">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body">MASM should assemble the short form: 66h, 6Ah, 00h -- to push an immediate byte of zero.  It looks like MASM is broken here - I'd just load the words into registers for pushing (MOVZX reg, WORD PTR mem). :(</div>
+    <div class="meta">Posted on 2002-09-28 22:44:21 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-59945">
+    <div class="subject"><a href="#post-59945">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body">What about changing word to dword, that should fix the problem?<br /><br />However i do not know why there is a need to push 0 or rather push word ptr 0</div>
+    <div class="meta">Posted on 2002-09-29 03:33:26 by roticv</div>
+   </div>
+   <div class="post" id="post-60060">
+    <div class="subject"><a href="#post-60060">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body">THis is a known MASM bug of invoke. Very strangely it occurs only with unsigned numbers. So if you def?ne<br /><br /><br />number1 SWORD 505h<br /><br />it may work</div>
+    <div class="meta">Posted on 2002-09-30 01:47:55 by japheth</div>
+   </div>
+   <div class="post" id="post-60063">
+    <div class="subject"><a href="#post-60063">Problem with invoke/wsprintf crashing program</a></div>
+    <div class="body"><pre><code>&#91;size=9&#93;.486<br />.model flat,stdcall<br />option casemap&#58;none<br /><br />include \dev\masm32\include\windows.inc<br />include \dev\masm32\include\kernel32.inc<br />include \dev\masm32\include\user32.inc<br /><br />includelib \dev\masm32\lib\kernel32.lib<br />includelib \dev\masm32\lib\user32.lib<br /><br />.data<br /><br />szMes db &quot;Number1&#58;%#X&quot;,13,10,&quot;The_String&#58;%s&quot;,13,10,&quot;Number2&#58;%#X&quot;,0<br /><br />number1 dw 505h<br />&#91;color=blue&#93;db 0, 0  ;or simply dw 0&#91;/color&#93;<br />The_String db &quot;Hello there.&quot;,0<br />number2 dw 0FFFFh<br />&#91;color=blue&#93;db 0, 0  ;or simply dw 0&#91;/color&#93;<br />&#91;color=red&#93;number3 dw 999h  ;Added, to test if it reads this address.&#91;/color&#93;<br /><br /><br /><br />szCaption db &quot;testing wsprintf&quot;,0<br /><br />.data?<br /><br />szBuffer db 256 dup &#40;?&#41;<br /><br />.code<br /><br />start&#58;<br /><br />; This will produce right result<br /><br />    push word ptr 0<br />    push number2<br />    push OFFSET The_String<br />    push word ptr 0<br />    push number1<br />    push OFFSET szMes<br />    push OFFSET szBuffer<br /><br />    call wsprintf<br />    add esp,4*5<br />    invoke MessageBoxA, NULL, addr szBuffer, addr szCaption, MB_OK<br /><br />; This will produce right result<br /><br />    invoke wsprintf, addr szBuffer, addr szMes, &#91;color=blue&#93;DWORD PTR &#91;number1&#93;&#91;/color&#93;, addr The_String, &#91;color=blue&#93;DWORD PTR &#91;number2&#93;&#91;/color&#93;<br /><br />    invoke MessageBoxA, NULL,addr szBuffer,addr szCaption,MB_OK<br /><br />invoke ExitProcess,0<br /><br />end start&#91;/size&#93;</code></pre>Remember normal stack alignment is 4.</div>
+    <div class="meta">Posted on 2002-09-30 02:15:45 by stryker</div>
+   </div>
+  </div>
+ </body>
+</html>

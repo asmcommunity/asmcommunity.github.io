@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Dynamic Code and Execution - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25215" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25215">Dynamic Code and Execution</a></p>
+   <div class="post" id="post-184542">
+    <div class="subject"><a href="#post-184542">Dynamic Code and Execution</a></div>
+    <div class="body">I had, what I thought, would be a great idea to play around with while writing my memory manager:&nbsp; Since I plan to return a &#39;handle&#39; for each type of mass memory allocation that i required, why not set up the memory behind this handle to self free itself at the program&#39;s end.&nbsp; The idea came to me when i noted that virtual memory allows for it to have executable permisions. <br /><br />My plan was to keep it simple, at the very first byte of the allocated memory (which i treat as a master handle for this group of memory objects), I would dynamically provide the op-codes to essentially move into EAX the base address of the memory allocated (as determined at run time). Then to finish this little piece of dynamic code, I would call a standard free function (which will be compiled into my the library):<br /><pre><code><br />; compiled with the library<br />Private_FreeVirtual proc<br />&nbsp;  invoke VirtualFree, eax, NULL, MEM_RELEASE<br />&nbsp;  ret<br />Private_FreeVirtual endp<br /></code></pre><br /><br /><pre><code><br />; Virtual memory base address: 12345678h<br />BYTE 0:&nbsp; mov eax, 12345678h&nbsp; ; Address will be determined at runtime and stored in memory as a constant<br />BYTE 5:&nbsp; jmp Private_FreeVirtual<br /></code></pre><br /><br />Then in pratice, Its practically idiot proof.&nbsp; All one needs to do is &quot;call h32byteMemoryObjects&quot; to free it.<br /><br />I hit the wall when debugging the idea to see why it was GPF&#39;n.&nbsp; I know it has something to do with the segment registers, but to be honest, I&#39;m totally out of my league here.&nbsp; What happens is the proper offest is loaded and dynamically placed in to the virtual memory for execution, but when executed, the interperted value of the offset is no longer correct.&nbsp; That is the raw op-codes are correct but as interpreted by the paging system the value borrowed from one segment reflects a totally different address in the virtuall memory pages.<br /><br />Im curious if anyone knows what the deal here is, and you have a suggestion on how to do it correctly.<br /><br />I realize this is overly crazy and it would not be nearly as complicated to simply pack into my library &quot;FreeMemoryObject PROC hBaseVirtualAddress:DWORD&quot; but I thought it would be fun to do as a challange, now I&#39;m determined to find out what I dont understand ;)<br /><br />Thanks for your help. <br />PS:&nbsp; I don&#39;t want to see any virus or similar responses.&nbsp; I know this borders such practices and I would rather not hear from you if thats all you have to offer.&nbsp; The idea has honest uses, and I&#39;m hoping to get similar feedback.<br /><br />Regadrs,<br />:NaN:&nbsp; <br /></div>
+    <div class="meta">Posted on 2006-08-17 19:53:53 by NaN</div>
+   </div>
+   <div class="post" id="post-184547">
+    <div class="subject"><a href="#post-184547">Re: Dynamic Code and Execution</a></div>
+    <div class="body">Hi NaN<br />The basics are the same as those used for the thunking method. I attached a demo developed by Jayaz that shows how it works and what APIs are required to implement it.<br /><br />Regards,<br /><br />Biterider</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2007" target="_blank">Demo02_Jayaz_2.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-08-18 01:23:47 by Biterider</div>
+   </div>
+   <div class="post" id="post-184548">
+    <div class="subject"><a href="#post-184548">Re: Dynamic Code and Execution</a></div>
+    <div class="body">Since the memory being allocated is mapped into the process which allocates it, this is highly unlikely to be a segment related issue.<br />In fact, since I have experience with this stuff, I know that for a fact.<br /><br />Which JMP encoding is being generated? If its a relative or near JMP thats being generated, there is your problem: you need to generate a far and absolute jump.<br /><br />If I was you, I&#39;d go even further, and get rid of the proc totally..<br />ie obtain the pointer to the VirtualFree api function - note thats not the same thing as the address of the function&#39;s stub in the IAT !!<br /><br />Inject the following opcodes in the remote memory block:<br /><pre><code><br />push MEM_RELEASE<br />push NULL<br />push (soft address of memory block)<br />call&nbsp; (hard address of VirtualFree api function)<br /></code></pre><br /><br />Note that VirtualFree lives in Kernel32.dll, whose image has a fixed address on all 32 bit versions of Windows, but for safety and for compatibility with 64bit os I&#39;d still obtain it via GetProcAddress, or by &#39;fishing&#39; its value from the IAT.<br /><br />Hopefully, some of that helps :)<br /></div>
+    <div class="meta">Posted on 2006-08-18 01:26:55 by Homer</div>
+   </div>
+   <div class="post" id="post-184552">
+    <div class="subject"><a href="#post-184552">Re: Dynamic Code and Execution</a></div>
+    <div class="body">Pretty bad idea, NaN... if you CALL the memory free routine, you will crash on return, since it&#39;s then trying to execute from unmapped memory. You&#39;d need to JMP to the free routine, which then *has* to be STDCALL, which will in effect return to after the &quot;call memoryblock&quot;.<br /><br />But even that is... weird. It&#39;s going to be pretty confusing to most people.<br /></div>
+    <div class="meta">Posted on 2006-08-18 03:43:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-184575">
+    <div class="subject"><a href="#post-184575">Re: Dynamic Code and Execution</a></div>
+    <div class="body">Thanks alot for your replies.?&nbsp; I see now what I was doing wrong.?&nbsp; I will continue to play a bit, but as f0dder has suggested its more weird than useful.?&nbsp; ?&nbsp;I have simply defaulted at this point to implementing a standard destroy function.<br /><br />I have a working memory manager now similar to Ultrano&#39;s but probably not as fast.?&nbsp; I&#39;m not after speed as much as robust uses for it.?&nbsp; I added an &#39;lparam&#39; extra feature for every memory allocation granted (if its required as dictated by the Creation parameter).?&nbsp; Internally, its a dual direction linked list and i make use of the IsBadReadPtr API for safety checks.?&nbsp; I also have made each memory item allocated to be &#39;smart&#39; in that it can seek out its memory page/chunk without the need of the main handle for the allocation pool.?&nbsp; This is so i can store the main handle and forget about it until clean up time.?&nbsp; A new handle is generated for each new allocation pool which is provides flexibility to the owner of the pool (for OOP uses), the size of the items allocated, and if i need to embed any &#39;extra&#39; data or Object pointers with each data item.<br /><br />I wrote it to make as efficient use of the memory as I could.?&nbsp; If you don&#39;t need extra data parameter, it will use this space for data storage.?&nbsp; Like Ultrano&#39;s version, I keep keep a list of each memory item capable of allocation.?&nbsp; This is for look up speed and tracking if its allocated.?&nbsp; I chose to follow BiteRider&#39;s suggestion to use Bit 0 in this case.<br /><br />Anyhow,?&nbsp; I just finished writing it and gave it a modest debugging test, but it was in no way complete.?&nbsp; I have not tested all the features and combinations at this point, but the basic uses are running correctly.?&nbsp; I commented the hell out of it as well.?&nbsp; To my surprise I found only one bug so far (I credit it to the extensive comments and planning).<br /><br />Anywho.?&nbsp; Check it out if your interested.?&nbsp; Likes / Dislikes are always welcome.<br />Regards,<br />:NaN:<br /><br /><br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2016" target="_blank">MyAlloc.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2006-08-19 03:10:05 by NaN</div>
+   </div>
+   <div class="post" id="post-184576">
+    <div class="subject"><a href="#post-184576">Re: Dynamic Code and Execution</a></div>
+    <div class="body">BTW, you should be aware that I traced it with OlyDbg so there is Int 3&#39;s in the &quot;Test.exe&quot;.&nbsp;  Also, I only store one handle in my create test routine.&nbsp; If you hammer the Create button you will essentially cause a memory leak because you won&#39;t be able to destroy all but one handle.<br /><br />What I checked was the memory mapping, header setup, linking, data setting, freeing memory, destroying all memory and the GetMaxBytes routine.&nbsp; I haven&#39;t tested the extra parameters yet, but im 99.9% sure it will work correctly.<br /><br />Regards<br />:NaN:</div>
+    <div class="meta">Posted on 2006-08-19 03:22:00 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

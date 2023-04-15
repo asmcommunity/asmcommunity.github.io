@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>[solved] nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25255" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25255">[solved] nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault</a></p>
+   <div class="post" id="post-184767">
+    <div class="subject"><a href="#post-184767">[solved] nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault</a></div>
+    <div class="body">Hello,<br /><br />the solution is probably very simple, but I can&#39;t find it... the source code:<br /><br /><br /><pre><code><br />SECTION .DATA<br />		hello:			DB		&#39;Hello world!&#39;,10<br />		helloLen:		EQU		$-hello<br /><br /><br /><br />SECTION .TEXT<br />		GLOBAL	_start<br /><br />		_start:<br /><br />		CALL	printHW<br />		XOR	EAX, EAX<br />		MOV	EBX, string<br />		MOV	, AL<br />		CALL	printHW<br />		CALL	exit<br />string:<br />		DB		0xff,0xff,0xff,0xff<br /><br /><br />		;; write &quot;hello world&quot; to the screen<br />printHW:<br />		PUSH	EAX<br />		PUSH	EBX<br />		PUSH	ECX<br />		PUSH	EDX<br />		MOV		EAX, 4			; system call &quot;write&quot;<br />		MOV		EBX, 1			; file descriptor stdout<br />		MOV		ECX, hello		; string to write<br />		MOV		EDX, helloLen	; num of bytes to write<br />		INT		80h				; call kernel interrupt<br />		POP		EDX<br />		POP		ECX<br />		POP		EBX<br />		POP		EAX<br />		RET<br /><br /><br /><br />		;; terminate program<br />exit:<br />		MOV		EAX, 1		; system call &quot;exit&quot;<br />		MOV		EBX, 0		; exit code<br />		INT		80h<br /><br /></code></pre><br /><br /><br /><br />compile and execute:<br /><br /><pre><code>chk@subnetrouter ~/nasm $ nasm -f elf foo.asm<br />chk@subnetrouter ~/nasm $ ld foo.o -o foo<br />chk@subnetrouter ~/nasm $ ./foo <br />Hello world!<br />Speicherzugriffsfehler</code></pre><br /><br />&quot;Speicherzugriffsfehler&quot; means &quot;segmentation fault&quot;, but why?<br /><br />Using the ald debugger I have found the origin of the error:	&quot;MOV , AL&quot;. The error is caused by writing the content of AL into the memory, but the pointer (EBX) is initialized correctly at the line above: &quot;MOV EBX, string&quot;<br /><br />I tried a couple of ideas with LEA instead of MOV, etc...<br /><br /><br />Anyone any idea?<br /><br />Thanks for reading<br />loskornosdelsol</div>
+    <div class="meta">Posted on 2006-08-24 10:37:58 by loskornosdelsol</div>
+   </div>
+   <div class="post" id="post-184768">
+    <div class="subject"><a href="#post-184768">Re: nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault</a></div>
+    <div class="body">The problem is that you are writing to the .TEXT section which has the permissions of Read/Execute. So when you try to write to it, you get an error because you don&#39;t have permission to write to that section of memory. Put string in the .DATA or .BSS sections (or set the permissions of .TEXT to Read/Write/Execute). Try using:<br /><br /><pre><code>SECTION .TEXT EXEC WRITE ALIGN=16</code></pre><br /><br />Regards,<br />Bryant Keller</div>
+    <div class="meta">Posted on 2006-08-24 11:39:08 by Synfire</div>
+   </div>
+   <div class="post" id="post-184777">
+    <div class="subject"><a href="#post-184777">Re: nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault</a></div>
+    <div class="body">Aaaah, ok. First: Thanks a lot! I didn&#39;t know, that such &quot;section flags&quot; exist. Replacing my section definition with yours solved the problem. Ok, it&#39;s a small security hole, but I know occurs.<br /><br />Second: I found this website: http://www.tortall.net/projects/yasm/wiki/ElfObject - it told me (like you), that .DATA would be writeable per default. But, before posting my problem, I tried this too. When I move &quot;string: DB 0xff,0xff,0xff,0xff&quot; into the .DATA section, the problem is still present. <br /><br />Mhmm, when changing to &quot;SECTION .DATA WRITE ALIGN=16&quot; the problem is really solved, but why is the data section not writable per default. Is this set by the nasm configuration, where can I change the defaults?<br /><br />I will read the nasm doc....<br /><br /><br />thanks for help!!!<br />loskornosdelsol<br /><br /><br />edit: I can&#39;t find information about the section access configuration in the nasm documentation at http://nasm.sourceforge.net/doc/html/nasmdoc0.html</div>
+    <div class="meta">Posted on 2006-08-24 16:06:19 by loskornosdelsol</div>
+   </div>
+   <div class="post" id="post-184782">
+    <div class="subject"><a href="#post-184782">Re: nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault</a></div>
+    <div class="body"><div class="quote"><br />edit: I can&#39;t find information about the section access configuration in the nasm documentation at http://nasm.sourceforge.net/doc/html/nasmdoc0.html<br /></div><br /><br />Read chapters 5 and 6 of the NASM docs.</div>
+    <div class="meta">Posted on 2006-08-24 20:55:10 by SpooK</div>
+   </div>
+   <div class="post" id="post-184791">
+    <div class="subject"><a href="#post-184791">Re: [solved] nasm: &quot;MOV [EBX], AL&quot; produces segmenation fault</a></div>
+    <div class="body">Aaaaah! The section &quot;.data&quot; is writable per default, but &quot;.DATA&quot; is treated as &quot;other&quot;, and &quot;other&quot; is not writable :-)<br /></div>
+    <div class="meta">Posted on 2006-08-25 04:31:33 by loskornosdelsol</div>
+   </div>
+  </div>
+ </body>
+</html>

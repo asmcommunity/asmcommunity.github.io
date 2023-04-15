@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CreatePointFont - Something Useful (I hope)! - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4986" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4986">CreatePointFont - Something Useful (I hope)!</a></p>
+   <div class="post" id="post-35065">
+    <div class="subject"><a href="#post-35065">CreatePointFont - Something Useful (I hope)!</a></div>
+    <div class="body">Okay, I don't know how useful this will be, but I've actually written something I think might be worth sharing. :)  So here it is, my desperate attempt To Be Not Useless here on the forum: :grin:<br /><br /><a target="_blank" href="http://www.xmission.com/~dbrady/TextOut.zip">Modified TextOut Tutorial: TextOut.zip (~5,900 bytes)</a><br /><br />The MFC CFont class has a method called &quot;CreatePointFont&quot; that takes a font name and a point size and handles all the ickiness of translating from points to logical to device coordinates.  I have ported this code to assembler.  Creating fonts is now as easy as picking a font name and point size.<br /><br />Of course, I'm still so new at this that the only way to get it is to copy the tutorial program I modified and extract the code... it's not really big enough yet to merit its own library.  Though it could be the *start* of one.  How would I create a .inc/.lib pair out of this?<br /><br /><br /><br />Anyway, give it a whirl, and let me know what you think.  If you change FontName and/or FontSize in the .data section, it will change the font accordingly.  Also note that I play around with the font color and background color, search for the two RGB macro calls to change those if you don't like Cyan on Dark Grey.<br /><br />Cheers!<br /><br />-Chalain</div>
+    <div class="meta">Posted on 2002-04-25 14:33:39 by Chalain</div>
+   </div>
+   <div class="post" id="post-35083">
+    <div class="subject"><a href="#post-35083">CreatePointFont - Something Useful (I hope)!</a></div>
+    <div class="body">hi<br />the example works well. but <br />CreateFontIndirect - you should use <strong>DeleteObject </strong> when you no longer need it . <br />the same for GetDC , when you no longer need it  use <strong>ReleaseDC</strong> <br />otherwise you will get some memory leaks :( <br /><br /><br />bye<br /><br />eko</div>
+    <div class="meta">Posted on 2002-04-25 17:02:35 by eko</div>
+   </div>
+   <div class="post" id="post-35087">
+    <div class="subject"><a href="#post-35087">CreatePointFont - Something Useful (I hope)!</a></div>
+    <div class="body"><div class="quote"><br />hi<br />the example works well. but <br />CreateFontIndirect - you should use <strong>DeleteObject </strong> when you no longer need it . <br />the same for GetDC , when you no longer need it  use <strong>ReleaseDC</strong> <br />otherwise you will get some memory leaks :( <br /></div><br /><br />DOH!  Thank you, you are correct.  I assumed (incorrectly) that since the screen DC was a common device context I didn't need to release it.<br /><br />I have modified CreatePointFontIndirect to release the DC if (and only if) it had to create the DC with GetDC(NULL).  (It would be bad to release the caller's DC for them. :grin: )<br /><br />As always with assembler, making this change immediately put me out of my depth.  All of my error tests can no longer simply check for an error, push the error code and ret... they also have to check to see if we created our own DC and release it.<br /><br />Here's what I did:<br /><br /><ul><br />[*] Created a &quot;clean up&quot; section labeled &quot;AllDone:&quot; at the end of the proc<br />[*] Changed the error ret's to jmp AllDone's<br />[*] Coded AllDone to do nothing if we didn't create the DC, otherwise push the HFONT return value, invoke ReleaseDC, and pop eax<br /><br /><br />Does that sound about right?  Here's the error test and AllDone section, comments are certainly welcome:<br /><br /><pre><code>    invoke GetDeviceCaps, hdc, LOGPIXELSY<br />    test eax,eax<br />    jnz @F<br />        invoke StdOut, addr ErrGetDeviceCaps<br />		jmp AllDone<br />@@&#58;<br /><br />    ; &#91;SNIP&#58; Rest of function&#93;<br /><br />AllDone&#58;<br />	cmp hadToGetCommonDC, 0<br />	jz @F<br />		push eax	; preserve return value before DC cleanup<br />		invoke ReleaseDC, NULL, hdc<br />		pop eax		; restore HFONT<br />@@&#58;<br />    ret ; HFONT &#40;or NULL&#41; is in eax<br />CreatePointFontIndirect endp</code></pre><br /><br />Heh, I just realized that in the tutorial sample, I *still* forgot to call DeleteObject on the HFONT.  However, that's the caller's responsibility, and is a defect in my example code, not my &quot;library function&quot; :grin:  (I'll go fix it in a minute).<br /><br />Cheers,<br /><br />-Chalain</div>
+    <div class="meta">Posted on 2002-04-25 17:37:55 by Chalain</div>
+   </div>
+   <div class="post" id="post-35088">
+    <div class="subject"><a href="#post-35088">CreatePointFont - Something Useful (I hope)!</a></div>
+    <div class="body">Fixed the sample code.  It now invokes DeleteObject, hFont before ret-ing from WinMain.  This time I just went for the quick-n-dirty &quot;invoke DeleteObject, hFont&quot; right before each ret, rather than doing a jmp to a cleanup section.<br /><br />Cheers,<br /><br />-Chalain</div>
+    <div class="meta">Posted on 2002-04-25 17:43:07 by Chalain</div>
+   </div>
+   <div class="post" id="post-35090">
+    <div class="subject"><a href="#post-35090">CreatePointFont - Something Useful (I hope)!</a></div>
+    <div class="body">The 'AllDone:' solution you made is the way a conservative programmer would do it.<br /><br />The 'dirty' method is justifiable only if the cleanup is very simple, such as a single API call.<br /><br />So basically, you're right on track.  Good job!</div>
+    <div class="meta">Posted on 2002-04-25 17:54:06 by AmkG</div>
+   </div>
+  </div>
+ </body>
+</html>

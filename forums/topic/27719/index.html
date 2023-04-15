@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Error trapping - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27719" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27719">Error trapping</a></p>
+   <div class="post" id="post-197675">
+    <div class="subject"><a href="#post-197675">Error trapping</a></div>
+    <div class="body">Hello all:
+I have a condition in my program, that if the calculate button is pushed without a value in hEdit29 the program locks up. This is because there is no loop value in MYt.
+How can I trap this and just return the focus to hEdit29?
+The code for these are as follows.
+<pre><code>
+      .elseif uMsg == WM_COMMAND
+       .if wParam == 1011              ; amount of edit boxes to use
+      invoke GetWindowText,hEdit29,ADDR bbuffer,40  ; put amount in buffer
+        lea esi, bbuffer                ; get 1st byte
+        lodsb                           ; load a byte from string into al
+        cmp al, 0                       ; see if its ascii zero
+        jne @F                          ; jump forward if not equal
+        invoke SetFocus,hEdit29         ; put focus back in edit control
+        xor eax, eax                    ; return zero if blank
+        ret                             ; and return
+        @@:                             ; jump label
+        invoke atodw,ADDR bbuffer       ; convert text to DWORD value
+        mov MYt, eax                    ; store input in MYt location
+        invoke SetFocus, hEdit8         ; set focus back to edit box for input
+</code></pre>
+
+The calculations are done here.
+
+<pre><code>
+       .elseif wParam == 1004           ; calc button for inductors in parallel
+    fld1                                ; Load 1.0f (this is to top line in formula)
+    fldz                                ; Load 0.0f (necessary because of addition later)
+    NextEditBox:                        ; return of loop
+    fld1                                ; Load 1.0f into st(0)
+    mov eax, 106                        ; put edit box location in eax
+    add eax, MYt                        ; add one so it is 107 to be incremented
+    FltIn addr R8t, eax                 ; put contents in R8t
+    fdiv R8t                            ; divide input by one
+    fadd                                ; st(0) = st(1) + st(0)
+    dec MYt                             ; decrement MYt by one
+    jnz NextEditBox                     ; get next edit box in the loop
+    fdiv                                ; divide by all inputs into one
+    fstp R8t                            ; pop st into R8t
+    FltOut R8t, 113                     ; put answer into edit box
+</code></pre>
+
+The program is all finished and works fine except for this hangup. I have tried different things that don't work.
+Thanks again
+Bob:rolleyes:</div>
+    <div class="meta">Posted on 2001-04-20 11:08:00 by BobMcK</div>
+   </div>
+   <div class="post" id="post-197676">
+    <div class="subject"><a href="#post-197676">Error trapping</a></div>
+    <div class="body">BobMcK,
+
+GetWindowText returns the length of the string in eax, so check that after you call it, if it's zero, then your buffer was empty.
+
+<pre><code>
+invoke GetWindowText,hEdit29,ADDR bbuffer,40  ; put amount in buffer
+cmp eax,0
+je the_buffer_was_empty
+</code></pre>
+
+Also you say :-
+
+<pre><code>
+cmp al,0 ; check for ascii zero
+</code></pre>
+
+but you're checking for zero there not ascii zero
+
+<pre><code>
+cmp al,'0' ; check for ascii zero
+</code></pre>
+Is for ascii zero :)
+
+
+
+umbongo
+
+This message was edited by umbongo, on 4/20/2001 11:19:00 AM</div>
+    <div class="meta">Posted on 2001-04-20 11:16:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-197677">
+    <div class="subject"><a href="#post-197677">Error trapping</a></div>
+    <div class="body">Hello Umbongo:
+I tried what you suggested but all I get is an answer
+of Zero. I tried some other ways also. No Go.
+Thanks anyways.
+Bob. :)</div>
+    <div class="meta">Posted on 2001-04-20 20:24:00 by BobMcK</div>
+   </div>
+   <div class="post" id="post-197678">
+    <div class="subject"><a href="#post-197678">Error trapping</a></div>
+    <div class="body">Bob,
+
+Sorry about the delay in repling, but I get lost on this message board....
+
+what you need is a trap for the text box being :
+
+1) empty
+2) some smart alec putting zero in
+
+I had a look at the code, and there's no real need to check for zero the second time, just convert it to a number, if that number is zero, then we failed (dwtoa will take a NULL string, so that ok too)
+
+like this:-
+
+<pre><code>
+        invoke GetWindowText,hEdit29,
+               ADDR bbuffer,40          ; put amount in buffer
+        cmp    eax,0                    ; zero return length?
+        jnz    NotEmpty                 ; no, carry on
+
+ValidationFailed:
+        invoke SetFocus,hEdit29         ; put focus back in edit control
+        xor    eax, eax                 ; return zero if blank
+        ret                             ; and return
+
+NotEmpty:
+        invoke atodw,ADDR bbuffer       ; convert text to DWORD value
+        cmp    eax,0                    ; zero?
+        je     ValidationFailed         ; user input an invalid number
+
+        mov    MYt, eax                 ; store input in MYt location
+        invoke SetFocus, hEdit8         ; set focus back to edit box for input
+</code></pre>
+
+umbongo
+
+
+
+
+This message was edited by umbongo, on 4/23/2001 5:49:31 AM
+
+This message was edited by umbongo, on 4/23/2001 5:50:23 AM</div>
+    <div class="meta">Posted on 2001-04-23 05:47:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-197679">
+    <div class="subject"><a href="#post-197679">Error trapping</a></div>
+    <div class="body">Hi there umbongo:
+Your code works like a charm. I made one up that
+works, but I think I will use yours.
+Thanks again
+Bob. 
+:)
+PS. I love your signature at the bottom.;)</div>
+    <div class="meta">Posted on 2001-04-24 11:27:00 by BobMcK</div>
+   </div>
+  </div>
+ </body>
+</html>

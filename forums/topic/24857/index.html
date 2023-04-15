@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Integer to REAL - FPU  - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24857" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24857">Integer to REAL - FPU </a></p>
+   <div class="post" id="post-181565">
+    <div class="subject"><a href="#post-181565">Integer to REAL - FPU </a></div>
+    <div class="body">hey all again<br /><br />how can i convert from a DWORD in memory to a float with decimal part ?<br /><br />i did this : <br /><pre><code> push eax<br /> fild dword ptr<br /> fadd myvar<br /> fstp myvar<br /> pop eax</code></pre><br />and i got the integer .. right<br /><br />but what about the &quot;.&quot; ?<br /><br />i mean<br />lets say i wanna have the value in REAL : &quot;1.5f&quot;<br />and my DWORD is formed by 2 words, the hight word would be the &quot;1&quot; and the low &quot;5&quot; ie : 00010005 <br />how can i convert 00010005h to 1.5f in the FPU ?<br /><br />thx</div>
+    <div class="meta">Posted on 2006-06-10 17:01:09 by GR33d</div>
+   </div>
+   <div class="post" id="post-181570">
+    <div class="subject"><a href="#post-181570">Re: Integer to REAL - FPU </a></div>
+    <div class="body">If you are really interested in using the FPU on your own, I would strongly suggest that you first get familiar with the format of the floating point data types and how various data types are handled by the FPU. Have a look at some of the chapters in the following. Simply ask if you need any clarification.<br /><br />http://www.ray.masmcode.com/fpu.html<br /><br />Raymond<br /></div>
+    <div class="meta">Posted on 2006-06-10 22:13:14 by Raymond</div>
+   </div>
+   <div class="post" id="post-181580">
+    <div class="subject"><a href="#post-181580">Re: Integer to REAL - FPU </a></div>
+    <div class="body">You can use the fpu to perform data type conversions if you want to get some instant satisfaction without learning all about mantissa bits and other vaguiaries of the fpu binary formating.<br /><br />First, know that the fpu only works with REAL (floating) values.<br />Use fild (instead of fld) to load an integer onto the fpu - it&#39;s now in REAL form on the fpu stack, NOT INTEGER.<br />After you finish screwing around, if you want to spit the value out as a (rounded) integer, use fistp (instead of fstp) :)<br /><br />.data<br />fp1pt5 REAL4 1.50f<br />myinteger dd 27065<br />myanswer dd 0<br />.code<br />fild myinteger<br />fmul fp1pt5 ;fimul is also available!<br />fistp myanswer<br /><br />There, we just multiplied 27065 * 1.5 and stored the answer as an integer, wasn&#39;t that fun?<br /></div>
+    <div class="meta">Posted on 2006-06-10 23:59:51 by Homer</div>
+   </div>
+   <div class="post" id="post-181599">
+    <div class="subject"><a href="#post-181599">Re: Integer to REAL - FPU </a></div>
+    <div class="body">but how would i make a compost value from a dword ?<br /><br />im trying :<br /><pre><code>	<br />mov split,eax<br />fild word ptr<br />fild word ptr<br /></code></pre><br /><br />but i dont know for what value should i divide ( fdiv ) : 10f.. 100f so i can make the decimal part from it...<br /></div>
+    <div class="meta">Posted on 2006-06-11 09:10:58 by GR33d</div>
+   </div>
+   <div class="post" id="post-181608">
+    <div class="subject"><a href="#post-181608">Re: Integer to REAL - FPU </a></div>
+    <div class="body">You are confused indeed, I get the impression you are referring to a quite dated idea called 16:16 fixedpoint math - this is quite different from how REALX values are encoded.<br /><br />Let&#39;s say for example though, that you had some value encoded in 16:16 form, such that the high word contained the &#39;integer&#39; and the low word contained the &#39;fraction&#39;..<br /><br />.data<br />fp1 REAL4 1.0f<br />MyFloatingValue REAL4 0.0f<br /><br />.code<br />lea eax,split ;eax points to our 16:16 fixedpoint value<br />;Let&#39;s create a Fraction using the low word <br />;That&#39;s like saying 1/X where X is the low word<br />fld fp1 ;fpu contains 1.0f<br />fidiv word ptr ;fpu contains 1/X (fraction)<br />fadd word ptr&nbsp; ;add the integer part of the value<br />fstp MyFloatingValue ;and store the result as a REAL<br /><br />Does that help at all?<br /></div>
+    <div class="meta">Posted on 2006-06-11 11:36:29 by Homer</div>
+   </div>
+   <div class="post" id="post-181613">
+    <div class="subject"><a href="#post-181613">Re: Integer to REAL - FPU </a></div>
+    <div class="body">Well, this is a bit of a poser, I have figured out how to generate the integer part of the REAL4 but not the fractional part yet, if anyone has any ideas ...<br /><br /><pre><code>// EAX contains the fixed point number (IIIIFFFFh)<br />// First split at the point<br />movzx ecx,ax<br />mov ,ecx<br />shr eax,16<br />movsx eax,ax<br />mov ,eax<br /><br />// Test for sign store in ebx<br />xor ebx,ebx<br />test eax,eax<br />jns &gt;<br />&nbsp; &nbsp; mov ebx,080000000h ; sign bit of REAL4<br />&nbsp; &nbsp; neg eax<br />:<br /><br />// Calculate the exponent<br />bsr edx,eax<br />add edx,127<br />// Shift the exponent to the left 22 bits<br />shl edx,23<br /><br />// merge the two parts<br />mov eax,<br /><br />// Calculate the highest bit in the number<br />bsr esi,eax<br />mov ecx,23<br />sub ecx,esi<br />shl eax,cl<br />mov ,eax<br /><br />// Calculate the fractional component<br />; ?????????????<br /><br />// Build the REAL4<br />or ,ebx<br />or ,edx</code></pre></div>
+    <div class="meta">Posted on 2006-06-11 14:25:18 by donkey</div>
+   </div>
+   <div class="post" id="post-181615">
+    <div class="subject"><a href="#post-181615">Re: Integer to REAL - FPU </a></div>
+    <div class="body">Well,<br /><br />I can&#39;t figure your problem out. The fixed point you are using is pretty bad, you should be using a more conventional standard for fixed point. The problem is that if you have 0007h in the low order of the DWORD how is it possible to know whether you mean 0.0000000000000111 or 0.111 or even 0.00000111 ? You would have to have a crystal ball to decode the fractional part of the fixed point. There are many tutorials on fixed/floating point, the link below explains an 8.8 method but it is easily portable to 16.16<br /><br />http://zone.ni.com/devzone/conceptd.nsf/webmain/3AFBFF5DC5EE63E68625712C00604463<br /><br />For now, I have pretty much given up on this problem as the encoding scheme you chose is fundamentally flawed and the problem is unsolvable in any consistent manner.<br /><br />Donkey</div>
+    <div class="meta">Posted on 2006-06-11 15:38:45 by donkey</div>
+   </div>
+   <div class="post" id="post-181630">
+    <div class="subject"><a href="#post-181630">Re: Integer to REAL - FPU </a></div>
+    <div class="body">If you are interested in &quot;standard&quot; fixed point math, you could also have a look at the following (on the same site as the the other link I posted above):<br /><br />http://www.ray.masmcode.com/fixmath.html<br /><br />Or, to solve your problem, you could also use the FPULIB library. For example, if you want to load a constant real number on the FPU without declaring it in your data section, you could make the following call (MASM syntax) for a value of 3.25:<br /><br /><pre><code>invoke FpuDiv,325,100,0,SRC1_DIMM or SRC2_DIMM or DEST_FPU</code></pre><br /><br />If you insist on using a &quot;non-standard&quot; fixed point system such as you proposed, you could convert it to an integer according to your system design and do the same as above. Using your original example of 00010005h in memory and knowing that the content of the low-word is strictly a fraction of 10 and the high-word is always positive, you could proceed as follows:<br /><br /><pre><code>&nbsp;  mov&nbsp; eax,myvar<br />&nbsp;  movzx edx,ax<br />&nbsp;  shr&nbsp;  eax,16<br />&nbsp;  imul eax,10<br />&nbsp;  add&nbsp; eax,edx<br />&nbsp;  invoke FpuDiv,eax,10,0,SRC1_DIMM or SRC2_DIMM or DEST_FPU</code></pre><br /><br />The above would load the 00010005h as 1.5 on the FPU. However, if you should have something like 000A0011h in memory, the above code would load 11.7 on the FPU!!!!! :sad:<br /><br />There are many ways to &quot;skin a cat&quot; but you MUST know what you are doing.&nbsp; :) :) :)<br /><br />Raymond<br /></div>
+    <div class="meta">Posted on 2006-06-11 22:58:32 by Raymond</div>
+   </div>
+  </div>
+ </body>
+</html>

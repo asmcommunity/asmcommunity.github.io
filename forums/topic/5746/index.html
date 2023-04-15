@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>TranslateAccelerator returns NOT ENOUGHT MEMORY :? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=5746" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=5746">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></p>
+   <div class="post" id="post-41065">
+    <div class="subject"><a href="#post-41065">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">.CODE<br />   invoke  LoadAccelerators, hInst, IDA_ACCEL<br />   mov     hAccel,eax<br />   .WHILE  TRUE<br />           INVOKE GetMessage, ADDR msg,NULL,0,0<br />           .BREAK .IF (!eax)<br />            invoke TranslateAccelerator, msg.hwnd, hAccel, ADDR msg<br />            .CONTINUE .IF (eax)<br />             INVOKE TranslateMessage, ADDR msg<br />              INVOKE DispatchMessage, ADDR msg <br />   .ENDW<br />    mov     eax,msg.wParam<br />    ret<br /><br /><br /><br />:?</div>
+    <div class="meta">Posted on 2002-06-02 07:01:30 by hunter</div>
+   </div>
+   <div class="post" id="post-41109">
+    <div class="subject"><a href="#post-41109">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">hunter,<br />  The second parameter to LoadAccelerators should be a pointer to a string name. By passing the IDA_ACCEL you're pointing it to some random place in memory. This is the proper way to do it (I will assume you are defining the accelerator table in a resource)<br /><br /><pre><code><br />rsrc.rc&#58;<br /><br />AppAccel ACCELERATORS<br />BEGIN<br />  &quot;O&quot;,IDM_FILE_OPEN,CONTROL,VIRTKEY<br />END<br /><br />source.asm&#58;<br /><br />.data<br />MyAccelName db &quot;AppAccel&quot;,0<br /><br />.code<br />invoke LoadAccelerators,hInstance,addr MyAccelName\<br /><br /></code></pre><br /><br />cya<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-06-02 12:32:44 by chorus</div>
+   </div>
+   <div class="post" id="post-41163">
+    <div class="subject"><a href="#post-41163">cant make it work...</a></div>
+    <div class="body">.rc<br /><br />TheAccel  ACCELERATORS<br />BEGIN<br />        &quot;x&quot;,IDM_EXIT,CONTROL,VIRTKEY<br />        &quot;s&quot;,IDM_SAVE,CONTROL,VIRTKEY<br />END<br /><br /><br />.asm<br /><br />.DATA<br /><br />AccelName          db 'TheAccel',0<br /><br />.CODE<br /><br />   invoke  LoadAccelerators, hInst, ADDR AccelName<br />    mov     hAccel,eax<br />   .WHILE  TRUE<br />         INVOKE GetMessage, ADDR msg,NULL,0,0<br />         .BREAK .IF (!eax)<br />             invoke TranslateAccelerator, msg.hwnd, hAccel, ADDR msg<br />             .IF !EAX<br />               invoke TranslateMessage,ADDR msg<br />               invoke DispatchMessage,ADDR msg<br />             .ELSE<br />               invoke GetLastError<br />               invoke FormatMessage,\<br />  	   FORMAT_MESSAGE_FROM_SYSTEM,\<br />  	   NULL, eax, NULL, ADDR buffer, MAX_PATH, NULL<br />               invoke MessageBoxEx, hwnd, ADDR buffer, ADDR           <br />                  szAppName,\  			                    <br />                  MB_OK+MB_ICONINFORMATION, LANG_SPANISH<br />             .ENDIF<br />         .ENDW<br />          mov     eax,msg.wParam<br />          ret<br /><br /><br />GetLastError = ERROR_NOT_ENOUGH_MEMORY        EQU   8</div>
+    <div class="meta">Posted on 2002-06-02 18:21:23 by hunter</div>
+   </div>
+   <div class="post" id="post-41191">
+    <div class="subject"><a href="#post-41191">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">this is wired!<br /><br />you can of course use an ID for the accel table, like in your first post (invoke LoadAccelerators, hInst, IDA_ACCEL).<br /><br />This error should not happen :)<br />Can you give some more details? Did you try the code posted or have you some more &quot;body&quot; around it? Maybe the function works only with valid window handles. Do you have a window proc? maybe some register save problems - these lead somethimes to such wired errors.</div>
+    <div class="meta">Posted on 2002-06-03 04:20:43 by beaster</div>
+   </div>
+   <div class="post" id="post-41199">
+    <div class="subject"><a href="#post-41199">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">code:<br /><br />myprog.rc<br /><br />TheAccel  ACCELERATORS<br />BEGIN<br />        &quot;s&quot;,IDM_SAVE,VIRTKEY, CONTROL<br />        &quot;x&quot;,IDM_EXIT,VIRTKEY, CONTROL<br />        &quot;r&quot;,IDM_RELOAD,VIRTKEY, CONTROL<br />END<br /><br /><br />code:<br /><br />.DATA<br />...<br />AccelName          db 'TheAccel',0<br />....<br /><br />code:<br />        invoke  GetModuleHandle, NULL<br />        mov     hInstance,eax<br /><br />        invoke  GetCommandLine<br />        invoke  WinMain, hInstance,NULL,CommandLine, SW_SHOWDEFAULT<br />        invoke  ExitProcess,eax<br /><br />WinMain    proc    hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD<br />  LOCAL   wc:WNDCLASSEX<br />  LOCAL   msg:MSG<br /><br />   mov     wc.cbSize,SIZEOF WNDCLASSEX<br />   mov     wc.style, CS_HREDRAW or CS_VREDRAW<br />   mov     wc.lpfnWndProc, OFFSET WndProc<br />   mov     wc.cbClsExtra,NULL<br />   mov     wc.cbWndExtra,NULL<br />   push    hInst<br />   pop     wc.hInstance<br />   mov     wc.hbrBackground,COLOR_WINDOW<br />   mov     wc.lpszMenuName,OFFSET MenuName<br />   mov     wc.lpszClassName,OFFSET szClassName<br />   invoke  LoadIcon,hInst,IDI_ICON1<br />   mov     hIcon,eax<br />   mov     wc.hIcon,eax<br />   mov     wc.hIconSm,eax<br />   invoke  LoadCursor,NULL,IDC_ARROW<br />   mov     wc.hCursor,eax<br />   invoke  RegisterClassEx, addr wc<br />   INVOKE  CreateWindowEx,NULL,ADDR szClassName,ADDR szAppName,\ WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,\<br />                     CW_USEDEFAULT,700,500,NULL,NULL,\<br />                    hInst,NULL<br />   mov     hwnd,eax<br />   INVOKE  ShowWindow, hwnd,SW_SHOWNORMAL<br />   INVOKE  UpdateWindow, hwnd<br />   invoke  LoadAccelerators, hInst, ADDR AccelName<br />    mov     hAccel,eax<br />   .WHILE  TRUE<br />         INVOKE GetMessage, ADDR msg,NULL,0,0<br />         .BREAK .IF (!eax)<br />           invoke TranslateAccelerator, msg.hwnd, hAccel, ADDR msg<br />          .IF !EAX<br />            invoke TranslateMessage,ADDR msg<br />            invoke DispatchMessage,ADDR msg<br />          .ELSE<br />              call  show_error<br />          .ENDIF<br />     .ENDW<br />     mov     eax,msg.wParam<br />     ret<br />WinMain    endp<br /><br /><br />It is very strange ... :(</div>
+    <div class="meta">Posted on 2002-06-03 05:13:23 by hunter</div>
+   </div>
+   <div class="post" id="post-41200">
+    <div class="subject"><a href="#post-41200">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">Compiler options:<br /><br />d:\masm32\bin\ml /c /coff /Cp /Id:\masm32\include myprog.asm<br />d:\masm32\bin\rc myprog.rc<br />d:\masm32\bin\Link /SUBSYSTEM:WINDOWS /LIBPATH:d:\masm32\lib myprogr.obj myprog.res</div>
+    <div class="meta">Posted on 2002-06-03 05:17:01 by hunter</div>
+   </div>
+   <div class="post" id="post-41202">
+    <div class="subject"><a href="#post-41202">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">The docs say the return code of TranslateAccelerators is nonzero if the function succeeds. So if it succeeds, why are you checking for an error code?</div>
+    <div class="meta">Posted on 2002-06-03 05:24:02 by tenkey</div>
+   </div>
+   <div class="post" id="post-41204">
+    <div class="subject"><a href="#post-41204">no...</a></div>
+    <div class="body">int TranslateAccelerator(<br /><br />    HWND hWnd,	// handle of destination window<br />    HACCEL hAccTable,	// handle of accelerator table<br />    LPMSG lpMsg 	// address of structure with message<br />   );<br /><br />If the function succeeds, the return value is TRUE.<br /><br />If the function fails, the return value is FALSE. To get extended error information, call GetLastError.<br /><br />...<br />When TranslateAccelerator returns a nonzero value and the message is translated, the application should not use the TranslateMessage function to process the message again. <br />....</div>
+    <div class="meta">Posted on 2002-06-03 05:49:41 by hunter</div>
+   </div>
+   <div class="post" id="post-41248">
+    <div class="subject"><a href="#post-41248">TranslateAccelerator returns NOT ENOUGHT MEMORY :?</a></div>
+    <div class="body">too MUCH data while procesing<br /><br />    .ELSEIF uMsg == WM_COMMAND<br />             ...<br />             ...<br /><br /><br />I 'move' some code and make 'call function1' .. 'call function2' .. .etc and voila! .. it works.</div>
+    <div class="meta">Posted on 2002-06-03 10:58:23 by hunter</div>
+   </div>
+  </div>
+ </body>
+</html>

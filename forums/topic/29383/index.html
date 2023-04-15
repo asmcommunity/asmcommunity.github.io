@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Profiling Java code in Netbeans - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29383" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=29383">Profiling Java code in Netbeans</a></p>
+   <div class="post" id="post-207434">
+    <div class="subject"><a href="#post-207434">Profiling Java code in Netbeans</a></div>
+    <div class="body">Yesterday I decided to try out the profiler that was added to Sun&#039;s Netbeans IDE not too long ago.<br />As some of you may know, I&#039;ve written a software 3d engine in Java a few years back.<br />Here&#039;s the 3d engine with the test-scene I used for the profiling:<br />http://bohemiq.scali.eu.org/ThreeDee/ThreeDee.html<br /><br />I had written and optimized the code a few years ago, &#039;by hand&#039;, as I didn&#039;t have any advanced profiling tools.<br />So it was mostly down to experience and analyzing the code, then doing my own timing on code that I suspected to be the bottleneck, and trying out how various optimizations would affect performance.<br /><br />With the new profiler I could now see how much time was spent in each function. Most of it didn&#039;t really come as a surprise to me... but there were a few things that I had not really thought about.<br />For example, something as simple as min(a, b) or max(a, b) ranked pretty high in terms of time spent. The standard Java functions for floating point did some extra testing at bit-level, to avoid special cases.<br />Funny enough, years ago, when Ewald and I designed the basic 2d graphics framework on top of which this 3d engine still runs... Ewald added his own min()/max() functions to this framework.<br />I had never given it much thought, but I think I now see why he did this: his implementations don&#039;t waste time on checking corner cases. So I did a search and replace for min/max, making it use the framework everywhere, and indeed my application benefited from it slightly.<br /><br />Another thing that amazed me was a static function that I used to index an array. I used a simple function (a &lt;&lt; 2) + b to generate array indices.<br />I was under the impression that the compiler would calculate a constant value at compile-time if both a and b were constants. This did not seem to be the case (at least, not with the current compiler... perhaps the compiler I used about 5 years ago, did... but in this one even the -O commandline option seems to be missing).<br />So by modifying the few most-used functions to use handcoded constants instead of the macro, I again gained some performance.<br /><br />Lastly I was surprised that the getPlane() function ranked so high on the list. This function is used to calculate the plane from three vertices. The plane equation is then used for backface-culling. I did already use a cache for these planes, because it speeds up the rendering a bit. Thing is just that this particular scene uses skinning. This basically means that the triangles change every frame, so the planes have to be re-calculated. I didn&#039;t expect it to rank very high though, but apparently a lot of time is spent here.<br />So I tried to optimize the function a bit, reducing some of the memory allocation going on (I also tried skipping it altogether, but rendering all the extra backfaces is still more expensive than the culling).<br /><br />Anyway, when I started, the scene ran at about 120 fps on my machine. Now I get about 140 fps... So although not really shocking, I did get a nice speedboost, and gained some new insights on this old code.<br />The Netbeans profiler is a very nice and useful tool, which I will certainly use again in the future, if I ever need high-performance Java code again :)</div>
+    <div class="meta">Posted on 2009-05-01 06:41:41 by Scali</div>
+   </div>
+   <div class="post" id="post-207435">
+    <div class="subject"><a href="#post-207435">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body">Interesting that some very simple optimizations aren&#039;t performed by the JITer :-s<br /><br />Btw, this reminds me... some people were claiming that java code performs oh-so-much-better on Linux than on Windows. However, some guy posted something along the lines of &quot;Duh. Linux by default uses the server JVM, whereas Windows by default uses the less aggressively optimizing client JVM - try switching and re-benchmark&quot;. Could this perhaps be relevant here as well?<br /><br />I couldn&#039;t figure out how to enable server JVM, though, it bitches about a missing DLL...</div>
+    <div class="meta">Posted on 2009-05-01 07:59:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-207436">
+    <div class="subject"><a href="#post-207436">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body">Scali, hi :) A few thoughts based on recent work with giftwrapping of convex hulls and implementing of GJK algo..<br /><br />Hum, you want to find the plane just so you can implement backface culling.<br />So I assume you are finding the plane in &#039;camera view space&#039;, and looking at the Z direction of its Normal?<br />Perhaps we don&#039;t need the whole plane equation.... we can do like the convex hull (wrapping) algorithms do, and perform &#039;Point and Edge classification&#039; to determine the winding order. It involves a crossproduct, which is most of the cost of finding a Plane, but we can totally ignore the Plane.w :)<br />Better yet, since we&#039;re in camera space, we can forget about Z and make this test 2D - see http://local.wasp.uwa.edu.au/~pbourke/geometry/clockwise/index.html</div>
+    <div class="meta">Posted on 2009-05-01 08:14:21 by Homer</div>
+   </div>
+   <div class="post" id="post-207437">
+    <div class="subject"><a href="#post-207437">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body"><div class="quote"><br />Interesting that some very simple optimizations aren&#039;t performed by the JITer :-s</div><br /><br />Well, this should be done by the static compiler even (which means you run the risk that the JIT-compiler doesn&#039;t even bother checking for such optimizations in the first place).<br />I have also wondered what you are profiling exactly. The profiler adds a lot of overhead, so when you run this thing in the profiler, you get not 140 fps, but 4 fps. The fps are not representative for actual performance either. For example, when using the built-in min/max functions, these are not counted by default, since the profiler only checks your project code. When you use your own custom min/max, you get a lower framerate, because your min/max are now being profiled. However, the actual function using min/max may now have become faster, which you can only see when analysing the percentage of time spent in that function. In my case I ran the code without profiling to check.<br /><br />So it&#039;s rather difficult to say what is happening here... In fact, I also wondered... would using a profiler actually force the compiler not to inline such functions, because they can not be profiled when they are optimized away?<br />I&#039;d have to do some more investigation, and disassemble the compiled source to see if it has inlined the functions or not (normally you had the -O flag to enable compiler optimization, but I no longer see it listed in the commandline options, and it doesn&#039;t seem to have any effect).<br /><br /><div class="quote">Btw, this reminds me... some people were claiming that java code performs oh-so-much-better on Linux than on Windows. However, some guy posted something along the lines of &quot;Duh. Linux by default uses the server JVM, whereas Windows by default uses the less aggressively optimizing client JVM - try switching and re-benchmark&quot;. Could this perhaps be relevant here as well?<br /><br />I couldn&#039;t figure out how to enable server JVM, though, it bitches about a missing DLL...<br /></div><br /><br />Yea, and I&#039;m not sure if there still is a difference. I know at some point, the server variation had the new hotspot optimization strategy, and the client didn&#039;t. But I believe they abandoned this concept and the client was given the same hotspot optimization engine as the server. Not sure if that is still the case today though.<br />I think you need to download the enterprise (J2EE) kit to get the server JVM anyway. I don&#039;t think it&#039;s in the standard JRE or JDK.</div>
+    <div class="meta">Posted on 2009-05-01 08:18:49 by Scali</div>
+   </div>
+   <div class="post" id="post-207438">
+    <div class="subject"><a href="#post-207438">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body"><div class="quote"><br />Scali, hi :) A few thoughts based on recent work with giftwrapping of convex hulls and implementing of GJK algo..<br /><br />Hum, you want to find the plane just so you can implement backface culling.<br />So I assume you are finding the plane in &#039;camera view space&#039;, and looking at the Z direction of its Normal?<br />Perhaps we don&#039;t need the whole plane equation.... we can do like the convex hull (wrapping) algorithms do, and perform &#039;Point and Edge classification&#039; to determine the winding order. It involves a crossproduct, which is most of the cost of finding a Plane, but we can totally ignore the Plane.w :)<br />Better yet, since we&#039;re in camera space, we can forget about Z and make this test 2D - see http://local.wasp.uwa.edu.au/~pbourke/geometry/clockwise/index.html<br /></div><br /><br />There is a problem with that technique: You have to be in camera space. I do backface culling in object space, which allows me to skip transform and lighting on culled triangles altogether (this is also why caching the planes works for non-animated meshes... the planes are always in object-space, and as such they are constant). Which is a much bigger win than a slightly faster plane-test (the lightSpecular()-method also ranks high on the functions in which most time is spent :)).</div>
+    <div class="meta">Posted on 2009-05-01 08:23:54 by Scali</div>
+   </div>
+   <div class="post" id="post-207440">
+    <div class="subject"><a href="#post-207440">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body"><strong>Scali</strong>: I can&#039;t remember where I found the client-vs-server discussion, nor exactly how long ago it was. But it&#039;s definitely less than half a year ago, so it might very well still be an issue.</div>
+    <div class="meta">Posted on 2009-05-01 08:31:35 by f0dder</div>
+   </div>
+   <div class="post" id="post-207441">
+    <div class="subject"><a href="#post-207441">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body">Yep - I cache my planes in bodyspace too, but not for the same reason.<br /></div>
+    <div class="meta">Posted on 2009-05-01 08:36:25 by Homer</div>
+   </div>
+   <div class="post" id="post-207442">
+    <div class="subject"><a href="#post-207442">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body"><div class="quote"><br />Yep - I cache my planes in bodyspace too, but not for the same reason.<br /><br /></div><br /><br />Well, if you&#039;re using hardware-acceleration, you can&#039;t do much about backface culling anyway :)<br />By the way, as far as I know, all hardware still does culling strictly in 2d. Then again, they are highly parallel architectures, with very optimized matrix math and pow() approximations etc. So the tradeoff is way different there. Besides, doing it in camera space is simpler. You don&#039;t need a separate eye position or anything.</div>
+    <div class="meta">Posted on 2009-05-01 08:41:57 by Scali</div>
+   </div>
+   <div class="post" id="post-216326">
+    <div class="subject"><a href="#post-216326">Re: Profiling Java code in Netbeans</a></div>
+    <div class="body">A separate view is nice, if you want to support stereoscopy.<br />Put on your special glasses and look back to the future :P<br /></div>
+    <div class="meta">Posted on 2012-10-09 02:57:42 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

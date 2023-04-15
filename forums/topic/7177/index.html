@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bad error - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7177" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=47">Assemblers</a> &raquo; <a href="../?id=7177">Bad error</a></p>
+   <div class="post" id="post-51928">
+    <div class="subject"><a href="#post-51928">Bad error</a></div>
+    <div class="body">Hi Tomasz,<br /><br />I have symbols like this:<br /><pre><code><br />                                MOV             P32 &#91;SIGNAL.TYPE&#93;,.MSG.NOTMAPPED<br />.._IMPORT_SIGNAL_051 =                          $-8<br /><br />                                MOV             P32 &#91;SIGNAL.CNT&#93;,ECX<br />.._IMPORT_SIGNAL_063 =                          $-4<br /></code></pre><br />When I have few tens of such symbols (differing only in the terminating part), FAsm says:<br /><br />---<br /><br />flat assembler  version 1.39<br />error: code cannot be generated.<br /><br />---<br /><br />After some experimenting, I found this even more weird fix:<br /><br /><pre><code><br />                                MOV             P32 &#91;SIGNAL.TYPE&#93;,.MSG.NOTMAPPED<br />.._IMPORT_SIGNAL_051 =                          $-8<br />.._IMPORT_SIGNAL_051 =                          .._IMPORT_SIGNAL_051<br /><br />                                MOV             P32 &#91;SIGNAL.CNT&#93;,ECX<br />.._IMPORT_SIGNAL_063 =                          $-4<br />.._IMPORT_SIGNAL_063 =                          .._IMPORT_SIGNAL_063<br /></code></pre><br /><br />---<br /><br />Q1: Will the above produce correct code at least?<br />Q2: Is there a real fix for this problem?<br /><br />---<br /><br />PS: I played a bit more and found the error: there's a limit ( = 100 ) in the maximum number of passes of ASSEMBLE.INC. I increased it to 255 (because it's stored in a byte.. I didn't remove the limit check code because the variable is referenced elsewhere, so it may not work anyway) and reassembled the FAsm source.<br /><br />Tomasz: it appears unnecessary to add passes for things like the above.. as also proven by the fix of the extra &quot;symbol = symbol&quot; solution. Nor it would be wise to limit the maximum number of *practically* usable symbols. I can imagine that equ may require additional passes in such cases.. but &quot;=&quot; should really not, in my understanding of how FAsm internally works.<br /><br />Please don't limit FAsm in such ways.<br /><br />Greets,<br />Fabio</div>
+    <div class="meta">Posted on 2002-08-06 11:51:44 by Maverick</div>
+   </div>
+   <div class="post" id="post-51957">
+    <div class="subject"><a href="#post-51957">Bad error</a></div>
+    <div class="body">Like it is stated in my new docs, when the constant is defined (using the = operator) only once, it can be accessed anywhere in source (it means that forward references are allowed). Because of it, when in the later passes fasm founds this constant is defined with different value than in previous pass, it is forced to do one more pass, because this constant may have been used previously and therefore that code should be generated once again. When the size of code changes, the value of $ in your constant definitions changes and it may cause them to force the next pass. I don't know what exactly caused the problem in your sources. Could you reproduce the error with minimum possible source and send it to me?</div>
+    <div class="meta">Posted on 2002-08-06 13:30:28 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-52062">
+    <div class="subject"><a href="#post-52062">Bad error</a></div>
+    <div class="body"><pre><code><br />; PROBLEM = additional, unnecessary passes are created<br /><br /> FORMAT COFF            ; omitting this removes the problem &#40;but omits also required functionality&#41;<br /><br />..SYMBOL1 = $+0         ; these symbols if placed here don't cause the problem<br />..SYMBOL2 = $+0<br />..SYMBOL3 = $+0<br />..SYMBOL4 = $+0<br /><br /> DD     ANYLABEL<br /><br />..SYMBOL5 = $+0         ; the symbols, placed here, cause the problem<br />..SYMBOL6 = $+0<br />..SYMBOL7 = $+0<br /><br />ANYLABEL&#58;<br /><br />..SYMBOL8 = $+0         ; the symbols, placed here, cause the problem<br />..SYMBOL9 = $+0<br /><br />;ANYLABEL&#58; could be here as well, nothing changes<br /><br />..SYMBOL10 = $+0        ; the symbols, placed here, cause the problem<br />..SYMBOL11 = $+0<br /><br />..SYMBOL12 = $+0<br />..SYMBOL12 = ..SYMBOL12 ; this fixes the problem for a single symbol<br /><br />..SYMBOL13 = $+0<br />..SYMBOL14 = $+0<br /><br />..SYMBOL15 = $          ; this doesn't cause the problem although is equivalent to $+0<br /><br />..SYMBOL16 = $+0<br />..SYMBOL17 = $+0<br /><br />;ANYLABEL&#58; could be here as well, nothing changes<br /><br />..SYMBOL18 = $+0<br />..SYMBOL19 = $+0<br /><br />;ANYLABEL&#58; could be here as well, nothing changes<br /><br />;In substance the n additional passes are created in the same quantity as the<br />;number of &quot;=&quot; statements after the DD statement that forward-references ANYLABEL.<br />;<br />;Weirdly, if instead of $+0 I use just $, the problem &#40;additional passes&#41; don't<br />;appear. Also if after the lines with &quot;xxx = $+0&quot; &#40;where +0 can be anything else,<br />;of course&#41; I add a simple &quot;xxx = xxx&quot; the additional pass won't be generated.<br /></code></pre></div>
+    <div class="meta">Posted on 2002-08-07 04:06:46 by Maverick</div>
+   </div>
+   <div class="post" id="post-52067">
+    <div class="subject"><a href="#post-52067">Bad error</a></div>
+    <div class="body">Now I see! Yes, it was a bug hidden in the routine for adding values, occuring in rare situation, but your code caused exactly that rare situation. It's now fixed (<a target="_blank" href="http://fasm.metro-nt.pl/fasm140b.zip">1.40 beta 5</a>). Thanks for the bug-report!<br /></div>
+    <div class="meta">Posted on 2002-08-07 05:01:22 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-52096">
+    <div class="subject"><a href="#post-52096">Bad error</a></div>
+    <div class="body">Hi Tomasz,<br /><br /><div class="quote"><em>Now I see! Yes, it was a bug hidden in the routine for adding values, occuring in rare situation, but your code caused exactly that rare situation. It's now fixed (1.40 beta 5). Thanks for the bug-report!</em></div>You're wellcome, I'm always glad to support FAsm in any possible way, and I'd do more if I only had the time.</div>
+    <div class="meta">Posted on 2002-08-07 10:32:11 by Maverick</div>
+   </div>
+   <div class="post" id="post-52097">
+    <div class="subject"><a href="#post-52097">Bad error</a></div>
+    <div class="body">Tested FAsm 1.40b5.. now my sources don't even assemble anymore :(<br /><br /><strong><br />flat assembler  version 1.40 beta 5<br />t.asm [5]:<br />REPEAT          3-(($-mylabel+3) and 3)<br />error: invalid use of symbol.<br /></strong><br /><br />---<br /><br />Minimum test source:<br /><br /><pre><code><br />FORMAT COFF<br /><br />mylabel&#58;        DD              mylabel.e-mylabel<br />                REPEAT          3-&#40;&#40;$-mylabel+3&#41; and 3&#41;<br />                DB              0<br />                END REPEAT<br />.e&#58;<br /></code></pre></div>
+    <div class="meta">Posted on 2002-08-07 10:52:43 by Maverick</div>
+   </div>
+   <div class="post" id="post-52104">
+    <div class="subject"><a href="#post-52104">Bad error</a></div>
+    <div class="body">I just downloaded beta 5, and I also experience errors:<br />when compiling a file (it includes antoher file at the end of the file)<br /><pre><code><br />D&#58;\FASM\FASM.exe \test\dt0.asm \test\dt0.bin &#91;enter&#93;<br />flat assembler  version 1.40 beta 5<br /><br /></code></pre><br />and nothing happens, when pressing crtl-c (or ctrl-break) and when i look in the dir where the output file is located the file is much larger (old 1kB -&gt; new ~11 kB) than it was when I compiled it with beta 4. The output format is the default (thus flat binary).</div>
+    <div class="meta">Posted on 2002-08-07 11:59:46 by scientica</div>
+   </div>
+   <div class="post" id="post-52118">
+    <div class="subject"><a href="#post-52118">Bad error</a></div>
+    <div class="body">My fault, I have made it too strict when removing that bug, please download it once again, now everything should work correctly.<br />scientica: If the error still occurs, please send me the source.</div>
+    <div class="meta">Posted on 2002-08-07 14:23:48 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-52126">
+    <div class="subject"><a href="#post-52126">Bad error</a></div>
+    <div class="body">Privalov, after looking closer at my code I saw that the error.<br />When I compiled it with the updated version i got an &quot;out of memory&quot;-error after along time of compiling.<br />The code that caused the error is as follows:<br /><pre><code><br />if $ &gt; 7C00h+512<br />	display &quot;Error! $ &gt; 512&quot;,0Dh,0Ah<br />end if<br />	times 7C00h+512-2-$ db 0<br />	db 055h,0AAh	;the signature itself<br /></code></pre><br />And I rewrote it as follows and the compilation preccess take 0-secs (but I still have to shrink the code :) ).<br /><pre><code><br />if $ &gt; 7C00h+512<br />	display &quot;SiMBoL&#58; Error! $ &gt; 512&quot;,0Dh,0Ah<br />&#91;COLOR=green&#93;else<br />	times 7C00h+512-2-$ db 0<br />	db 055h,0AAh            ;the signature itself<br />end if&#91;/COLOR&#93;<br /></code></pre><br /><br />BTW, Is there a command (to the compiler) that prints an error and then aborts the compilation process?</div>
+    <div class="meta">Posted on 2002-08-07 15:30:02 by scientica</div>
+   </div>
+   <div class="post" id="post-52190">
+    <div class="subject"><a href="#post-52190">Bad error</a></div>
+    <div class="body">Hi <strong>Privalov</strong>,<br />Now it assembles OK but, on most sources, it probably produces a different COFF structure because the COFF2REL utility you sent me time ago now crashes. :grin:<br /><br />&lt;EDIT&gt;<br />I found that COFF2REL now crashes when there are no relocations, although it checks for this occurrence anyway. If you have a quick fix good, otherwise I'll rewrite the util by myself when I have some time (which is not soon).<br />&lt;/EDIT&gt;</div>
+    <div class="meta">Posted on 2002-08-08 03:07:12 by Maverick</div>
+   </div>
+   <div class="post" id="post-52192">
+    <div class="subject"><a href="#post-52192">Source Power</a></div>
+    <div class="body">I fixed it by myself, don't worry.</div>
+    <div class="meta">Posted on 2002-08-08 04:33:45 by Maverick</div>
+   </div>
+  </div>
+ </body>
+</html>

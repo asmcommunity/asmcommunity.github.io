@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Getting a return value from a Call procedure - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20463" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20463">Getting a return value from a Call procedure</a></p>
+   <div class="post" id="post-156492">
+    <div class="subject"><a href="#post-156492">Getting a return value from a Call procedure</a></div>
+    <div class="body">Okay, I am using the Call procedure and pushing values onto the stack to use API<br /><br />On one of the API's I am using has one of the arguments recieve a return value.  But, if I am putting a value on the stack, how do I get it to store the return value into the variable I want it to? <br /><br />Here's the code I put together so far.  Look at the Push just before 'GetWindowThreadProcessID'. Help would be much appreciated. :) <br /><br /><pre><code>WriteMemory proc lpWindow&#58;DWORD,lpAddress&#58;DWORD,lpValue&#58;DWORD,lpSize&#58;BYTE<br />    LOCAL hWnd&#58;HWND<br />    LOCAL pID&#58;DWORD<br />    LOCAL pHandle&#58;DWORD<br />    <br />    push lpWindow<br />    push 0<br />    call FindWindow<br />    cmp eax,0<br />    jz @end<br />    mov hWnd,eax<br />    push ;??? - Return value of this argument should be stored in pID<br />    push hWnd<br />    call GetWindowThreadProcessId<br />    push pID<br />    push FALSE<br />    push PROCESS_ALL_ACCESS<br />    call OpenProcess<br />    cmp eax,0<br />    jz @end<br />    mov pHandle,eax<br />    push 0<br />    push 4<br />    push lpValue<br />    push lpAddress<br />    push pHandle<br />    call WriteProcessMemory<br />    push pHandle<br />    call CloseHandle<br />	@end&#58;<br />	ret<br /><br />WriteMemory endp</code></pre></div>
+    <div class="meta">Posted on 2005-01-30 21:30:17 by BBS</div>
+   </div>
+   <div class="post" id="post-156495">
+    <div class="subject"><a href="#post-156495">Getting a return value from a Call procedure</a></div>
+    <div class="body"><div class="quote">lpdwProcessId<br /><br />Points to a 32-bit value that receives the process identifier. If this parameter is not NULL, GetWindowThreadProcessId copies the identifier of the process to the 32-bit value; otherwise, it does not.</div><br /><br />In your case, it could be:<br /><pre><code>lea eax,pID<br />push eax</code></pre><br /><br />or you could use any other register you prefer. EAX would be used if you were to utilize the MASM invoke macro.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2005-01-30 22:26:12 by Raymond</div>
+   </div>
+   <div class="post" id="post-156496">
+    <div class="subject"><a href="#post-156496">Getting a return value from a Call procedure</a></div>
+    <div class="body">Thanks for replying.<br /><br />I probably should have mentioned that I already tried this code.<br /><pre><code>lea eax,pID<br />Push eax</code></pre><br />But, pID still doesn't recieve the value that GetWindowThreadProcessID retrieves since OpenProcess can't recieve a process handle.<br /><br />I also don't want to use invoke , I am just experimenting with the call procedure.</div>
+    <div class="meta">Posted on 2005-01-30 22:57:06 by BBS</div>
+   </div>
+   <div class="post" id="post-156499">
+    <div class="subject"><a href="#post-156499">Getting a return value from a Call procedure</a></div>
+    <div class="body">BBS,<br /><br />     This should do what you want.  INVOKE just PUSHes and CALLs, so I don't understand your reluctance to use it.  Ratch<br /><br /><pre><code><br />WriteMemory&#58;<br />WM$1 STRUC<br />ADR1=$<br />  hWnd      DWORD ?<br />  pID       DWORD ?<br />  pHandle   DWORD ?<br />ADR2=$<br />  return DWORD ?<br />ADR3=$<br />  lpWindow  DWORD ?<br />  lpAddress DWORD ?<br />  lpValue   DWORD ?<br />  lpSize    DWORD ?<br />ADR4=$<br />WM$1 ENDS<br /><br />S$1 EQU ESP.WM$1<br /><br />  SUB ESP,ADR2-ADR1  ;make room for local variables<br /><br />  INVOKE FindWindow,0,&#91;S$1.lpWindow&#93;<br /><br />  TEST EAX,EAX<br />  .IF !ZERO?<br />    LEA ECX,&#91;S$1.pID&#93;  ;address of pID<br />    MOV &#91;S$1.hWnd&#93;,EAX<br />    INVOKE GetWindowThreadProcessId,EAX,ECX<br />    INVOKE OpenProcess,PROCESS_ALL_ACCESS,FALSE,&#91;S$1.pID&#93;<br /><br />    TEST EAX,EAX<br />    .IF !ZERO?<br />      MOV &#91;S$1.pHandle&#93;,EAX<br />      INVOKE WriteProcessMemory,EAX,&#91;S$1.lpAddress+3*DWORD&#93;,&#91;S$1.lpValue+2*DWORD&#93;,4,0<br />      INVOKE CloseHandle,&#91;S$1.pHandle&#93;<br />    .ENDIF<br />  .ENDIF<br /><br />  ADD ESP,ADR1-ADR1 ;reclaim local variable space<br />  RET ADR4-ADR3     ;balance stack and return to sender<br /></code></pre></div>
+    <div class="meta">Posted on 2005-01-31 00:34:21 by Ratch</div>
+   </div>
+   <div class="post" id="post-156508">
+    <div class="subject"><a href="#post-156508">Getting a return value from a Call procedure</a></div>
+    <div class="body"><div class="quote"><br />pdwProcessId<br /><br />Points to a 32-bit value that receives the process identifier. If this parameter is not NULL, GetWindowThreadProcessId copies the identifier of the process to the 32-bit value; otherwise, it does not. <br /></div><br /><br /><pre><code><br />LOCAL pHandle&#58;DWORD<br />mov pID,0  &lt;---------<br /><br />snip <br /><br />mov hWnd,eax <br />lea eax,pID  &lt;--------<br />push eax   &lt;---------------<br />push hWnd <br />call GetWindowThreadProcessId <br />snip<br /></code></pre><br /><br />and the disassembly<br /><br /><div class="quote"><br />00401051  PUSH    DWORD PTR SS:             ; /ProcessId = 35C<br />00401054  PUSH    0                                ; |Inheritable = FALSE<br />00401056  PUSH    1F0FFF                           ; |Access = PROCESS_ALL_ACCESS<br />0040105B  CALL    &lt;JMP.&amp;KERNEL32.OpenProcess&gt;      ; \OpenProcess<br />00401060  CMP     EAX, 0<br />00401063  JE      SHORT msgbox.00401082<br />00401065  MOV     DWORD PTR SS:, EAX<br />00401068  PUSH    0                                ; /pBytesWritten = NULL<br />0040106A  PUSH    4                                ; |BytesToWrite = 4<br />0040106C  PUSH    DWORD PTR SS:            ; |Buffer = 7FFDF000<br />0040106F  PUSH    DWORD PTR SS:             ; |Address = 0<br />00401072  PUSH    DWORD PTR SS:             ; |hProcess = 00000044 (window)<br />00401075  CALL    &lt;JMP.&amp;KERNEL32.WriteProcessMemor&gt;; \WriteProcessMemory<br /><br /></div><br /><br />seems to work for me <br /><br />hope it helped</div>
+    <div class="meta">Posted on 2005-01-31 10:44:50 by bluffer</div>
+   </div>
+   <div class="post" id="post-156527">
+    <div class="subject"><a href="#post-156527">Getting a return value from a Call procedure</a></div>
+    <div class="body">Ratch,<br />It's not that I'm reluctant to use invoke, I use it regularly.  I just want to become accustomed to pushing and calling manually.<br /><br />Bluffer,<br />It still doesn't open the process for me, like it still isn't registering to pID or something.<br /><br />Here's the code I am using,  I invoke a message box after open process to see if it was able to open it, but it never recieves a process handle.<br /><br /><pre><code>WriteMemory proc lpWindow&#58;DWORD,lpAddress&#58;DWORD,lpValue&#58;DWORD,lpSize&#58;BYTE<br />    LOCAL hWnd&#58;HWND<br />    LOCAL pID&#58;DWORD<br />    LOCAL pHandle&#58;DWORD<br />    <br />    mov pID,0<br />    push lpWindow<br />    push 0<br />    call FindWindow<br />    cmp eax,0<br />    jz @end<br />    mov hWnd,eax  <br />    lea eax,pID<br />    push eax<br />    push hWnd <br />    call GetWindowThreadProcessId<br />    push pID<br />    push 0<br />    push PROCESS_ALL_ACCESS<br />    call OpenProcess<br />    cmp eax,0<br />    jz @end<br />    invoke MessageBox,0,0,0,0<br />    mov pHandle,eax<br />    push 0<br />    push 4<br />    push lpValue<br />    push lpAddress<br />    push pHandle<br />    call WriteProcessMemory<br />    push pHandle<br />    call CloseHandle<br />	@end&#58;<br />	ret<br /><br />WriteMemory endp</code></pre></div>
+    <div class="meta">Posted on 2005-01-31 19:56:26 by BBS</div>
+   </div>
+   <div class="post" id="post-156529">
+    <div class="subject"><a href="#post-156529">Getting a return value from a Call procedure</a></div>
+    <div class="body">Hi BBS,<br /><br />dont know really whats goin wrong in your code coz i havent tried it myself. but from what ive read so far the code youve posted should do fine...<br /><br />have you looked at pID after GWTPID returns? what does OP return?<br />forget that messagebox, single-step thru the code and see whats goin on!<br /><br />what are you tryin to do anyway? looks like youre tryin stuff you cant handle...<br />maybe you need a whole different approach?<br /><br />give us some more info - the better the help can be.<br /><br />regards,<br />enodev</div>
+    <div class="meta">Posted on 2005-01-31 20:32:32 by enodev</div>
+   </div>
+   <div class="post" id="post-156531">
+    <div class="subject"><a href="#post-156531">Getting a return value from a Call procedure</a></div>
+    <div class="body">Hey enodev,<br /><br />This is my write engine for when I create my *** in MASM. (*** for PC games)<br /><br />I understand what I'm doing, I have alot of experience for making *** in VB and C++, and in MASM (Using the invoke macro for the API calls of course).<br /><br />This is just my first attempt of pushing, then calling the API.<br /><br />FindWindow -<br />Locates the target window that I want to ***, after use,eax holds the window's handle if the window was found.<br /><br />GetWindowThreadProcessId -<br />Once I have the window's handle, I proceed to get it's process ID, so I can gain access to the process.  The process' ID will be returned in pID's argument.<br /><br />OpenProcess -<br />Once I get the process Id, I can open the process.  I pass 'PROCESS_ALL_ACCESS', for accessability of it all.  I could just get away with 'PROCESS_VM_WRITE', if I am only writing to memory.  After use, eax holds the process' handle if the process was found.<br /><br />WriteProcessMemory -<br />Now I can write to the process through the process' handle.  I just need a  target address and whatever value I find suitable for it. (This is where *** comes in, something seperate from programming, unless you get into debugging.)<br /><br />CloseHandle -<br />Don't want any memory leaks, close the target process handle.<br /><br />Hope that helps you help me.</div>
+    <div class="meta">Posted on 2005-01-31 20:45:01 by BBS</div>
+   </div>
+   <div class="post" id="post-156547">
+    <div class="subject"><a href="#post-156547">Getting a return value from a Call procedure</a></div>
+    <div class="body">well if you are depending on one message box to identify if your code reached there or not then you will keep on breaking your head and probably will never be able to solve it<br /><br />how do you know your findwindow didnt fail (do you have a message box there)<br /><br />what guarentee you can have that it will never fail <br />get out a debugger and single step through the code to find what is failing where <br /><br />anyway as i said it works for me<br /><br /><pre><code><br />00401042  |.&gt;MOV     DWORD PTR SS&#58;&#91;EBP-4&#93;, EAX<br />00401045  |.&gt;LEA     EAX, DWORD PTR SS&#58;&#91;EBP-8&#93;<br />00401048  |.&gt;PUSH    EAX                              ; /pProcessID = 0012FFB8<br />00401049  |.&gt;PUSH    DWORD PTR SS&#58;&#91;EBP-4&#93;             ; |hWnd = 0004004C &#40;'Default IME',class='IME',parent=00080024&#41;<br />0040104C  |.&gt;CALL    &lt;JMP.&amp;USER32.GetWindowThreadProc&gt;; \GetWindowThreadProcessId<br /><br /></code></pre><br /><br /><pre><code><br />0012FFA8   00401051  /CALL to GetWindowThreadProcessId from msgbox.0040104C<br />0012FFAC   0004004C  |hWnd = 0004004C &#40;'Default IME',class='IME',parent=00080024&#41;<br />0012FFB0   0012FFB8  \pProcessID = 0012FFB8<br />0012FFB4   77E87900  RETURN to KERNEL32.77E87900 from ntdll.ZwSetInformationThread<br /><br /></code></pre><br /><br /><pre><code><br />0012FFA4   00401060  /CALL to OpenProcess from msgbox.0040105B<br />0012FFA8   001F0FFF  |Access = PROCESS_ALL_ACCESS<br />0012FFAC   00000000  |Inheritable = FALSE<br />0012FFB0   00000308  \ProcessId = 308<br /></code></pre><br /><br /><pre><code><br />0012FF9C   0040107A  /CALL to WriteProcessMemory from msgbox.00401075<br />0012FFA0   00000044  |hProcess = 00000044 &#40;window&#41;<br />0012FFA4   00000000  |Address = 0<br />0012FFA8   7FFDF000  |Buffer = 7FFDF000<br />0012FFAC   00000004  |BytesToWrite = 4<br />0012FFB0   00000000  \pBytesWritten = NULL<br /><br /></code></pre><br /><br />so probably it must be some other fault</div>
+    <div class="meta">Posted on 2005-02-01 04:43:20 by bluffer</div>
+   </div>
+   <div class="post" id="post-156584">
+    <div class="subject"><a href="#post-156584">Getting a return value from a Call procedure</a></div>
+    <div class="body">Yeah, I already tried putting a message box after find window.   The code runs up to open process and eax returns 0.  Thanks anyways guys.  I guess I will just have to keep messing around with this one.</div>
+    <div class="meta">Posted on 2005-02-01 19:40:50 by BBS</div>
+   </div>
+   <div class="post" id="post-156599">
+    <div class="subject"><a href="#post-156599">Getting a return value from a Call procedure</a></div>
+    <div class="body">hint : ask vanilla flavoured questions - keep the details to yourself and you won't tread on any toes here...</div>
+    <div class="meta">Posted on 2005-02-02 07:26:32 by Homer</div>
+   </div>
+   <div class="post" id="post-156624">
+    <div class="subject"><a href="#post-156624">Getting a return value from a Call procedure</a></div>
+    <div class="body">I wouldn't have mentioned it, but enodev said that more informtaion about what the code is doing might help the support.</div>
+    <div class="meta">Posted on 2005-02-02 21:17:28 by BBS</div>
+   </div>
+  </div>
+ </body>
+</html>

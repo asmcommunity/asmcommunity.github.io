@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>calling convention &amp; ss0:esp0 from tss - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14281" />
+    <link rel="next" href="../?id=14281&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=14281">calling convention &amp; ss0:esp0 from tss</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=14281&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=14281&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="14281" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=14281&amp;page=2">&gt;</a><a href="../?id=14281&amp;page=2">&raquo;</a></form>   <div class="post" id="post-110453">
+    <div class="subject"><a href="#post-110453">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">at the beginning: i thank everyone who will read this (i don't want this thread to be another unanswered one)<br /><br />the system-functions in my os can currently be called by the call gate <strong>int 30h</strong>. up to now i'm using register calling convention (i.e. i pass all parameters via the GPRs and esi/edi). this is damn unflexible and uncomfortable. i was thinking about a better calling convention using the stack and al for a function-number.<br /><br />here's my sketch:<br /><pre><code><br />&#58;<br />&#58;<br />push param2<br />push param1<br />push param0 ;reverse push the params<br />mov al,0 ;the function-number<br />int 0x30<br />add esp, 3*4 ;correct the stack<br />&#58;<br />&#58;<br /><br />int30handler&#58;<br />  movzx eax,al<br />  call &#91;calltable+eax*4&#93;<br />  iret<br /><br />calltable&#58;<br />  dd function0<br />  dd function1<br /><br />function0&#58;<br />  push ebp<br />  lea ebp, &#91;esp+20&#93; ;point to beginning of params<br />  ;do something<br />;  push &#91;ebp+4&#93; ;param1<br />;  push &#91;ebp&#93; ;param0<br />;  &#91;b&#93;call function1&#91;/b&#93; ;&lt;-- not possible &#40;explaining below&#41;<br /><br />  push &#91;ebp+4&#93; ;param1<br />  push &#91;ebp&#93; ;param0  <br />  mov al,1<br />  int 0x30 ;the only possibility... pushing another 20 bytes<br /><br />  pop ebp<br />  ret<br /><br />funtion1&#58;<br />&#58;<br />&#58;<br /></code></pre><br /><br />i know that it costs 20 bytes on the stack just for calling without parameters. furthermore if a system-functions wants to call another system-function (for example a line-function needs to putpixel) it has to go over int30 too since the functions assume 20 bytes between esp and the params and so i can't call them directly (marked bold above).<br />i somewhere heard that such callgates being called from ring3 mix up the cache making things slower?<br /><br />the questions:<br />- is this convention a good one?<br />- is there a better (remember that i'll keep my ring3-callgate)<br />- will it work from ring3?<br /><br />;-----------------------------------------------------&lt;snip&gt;-------------------------------------------<br />topic switch, but still my os. this is a taskstate-segment:<br /><pre><code><br />tss &#40;104 bytes&#41;&#58;<br />  dw previous task link, reserved<br />  dd esp0<br />  dw ss0, reserved<br />  dd esp1<br />  dw ss1, reserved<br />  dd esp2<br />  dw ss2, reserved<br />  dd cr3<br />  dd eip<br />  dd eflags<br />  dd eax<br />  dd ecx<br />  dd edx<br />  dd ebx<br />  dd esp<br />  dd ebp<br />  dd esi<br />  dd edi<br />  dw es, reserved<br />  dw cs, reserved<br />  dw ss, reserved<br />  dw ds, reserved<br />  dw fs, reserved<br />  dw gs, reserved<br />  dw ldt segment selector, reserved<br />  dw trace&#58;0, i/o map base address &#40;=sizeof&#40;TSS&#41;&#41;<br /></code></pre><br />i don't know exactly the usage of ss0:esp0, ss1:esp1 and ss2:esp2.<br />from the intel software developer's guide:<br /><pre><code><br />&#91;b&#93;Privilege level-0, -1, and -1 stack pointer fields&#58;&#91;/b&#93;<br />These stack pointers consist of a logical address made up of the segment<br />selector for the stack segment &#40;ss0, ss1, ss2&#41; and and offset into the stack<br />&#40;esp0, esp1, esp2&#41;. Note that the values in these fields are static for a<br />particular task&#58; whereas, the ss and esp values will change if stack switching<br />occours within the task.<br /></code></pre><br />can somebody tell me what that means? i hope it doesn't say that i need 4 stacks, one for ring3, one for ring2 and so on! is the stack switched when a ring3-task switches to ring0? (i.e. the ss0:esp0-values are used until switching back?), i hope its not like that since i don't want to make 4 stacks...<br /><br />thanks for reading, thanks for thinking</div>
+    <div class="meta">Posted on 2003-07-14 14:09:08 by hartyl</div>
+   </div>
+   <div class="post" id="post-110458">
+    <div class="subject"><a href="#post-110458">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">Good to have C calling convension!  Yes, there must be different stacks - what kind of protection would there be otherwise! :)</div>
+    <div class="meta">Posted on 2003-07-14 16:01:05 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-110462">
+    <div class="subject"><a href="#post-110462">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">Indeed STDCALL is a good calling convention... unfortunately yes there is a separated stack for each ring switch via TSS, :(<br /><br />Besides Callgates are NOT slow, FreBSD /BSD is using callgates as opposed to Linux int/register parameters and it is much faster... unfortunately mixing stack based and register based (al) parameters is not my taste ...<br /><br />Also using callgate and INT might not be that god a simple callgate in GTD / IDT could work better IMHO</div>
+    <div class="meta">Posted on 2003-07-14 16:24:30 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-110524">
+    <div class="subject"><a href="#post-110524">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body"><div class="quote"><br />Also using callgate and INT might not be that god a simple callgate in GTD / IDT could work better IMHO</div><br />how would that work? the callgate is just an entry in the idt with some special bits set. what would you callgate look like using the gdt and idt?<br /><br />since this is a ring3-callgate it sould be possible to call from there, right (currently have no chance to test it yet)?<br />do you have some ideas of reducing the amount of bytes being pushed on the stack (20 for every call is pretty much - nothing for recursive functions).<br /><br /><br />another question: how is the normal calling convention done? somehow the stack is corrected inside the function, you don't need to do it after the call - i have no idea how to do that, so: can somebody tell me?<br /></div>
+    <div class="meta">Posted on 2003-07-15 04:03:25 by hartyl</div>
+   </div>
+   <div class="post" id="post-110530">
+    <div class="subject"><a href="#post-110530">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">Hi,<br /><br />forget about the 20 bytes and get it running now. <br /><br />Mixing stack and register based parameters is not that pretty. I <br />recommend you C calling too. Register based calling was even a <br />pain under MC680x0/Amiga with 14 registers (d0-d7, a0-a5).<br /><br />Do you really want to use ring1 and ring2? For what purpose?<br />Ofcource there are 4 rings but I'd rather use ring3 and ring0 only.<br /><br />Bye Miracle</div>
+    <div class="meta">Posted on 2003-07-15 04:24:50 by miracle</div>
+   </div>
+   <div class="post" id="post-110541">
+    <div class="subject"><a href="#post-110541">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">you are right, ring1 and ring2 are not neseccary.<br />the idea is now the following:<br /><pre><code><br />     ----------<br />     |<br />     | stack     <br />     |<br />     |  -------<br />data |      |<br />sel  |      |<br />     | code |<br />     | sel  |<br />     |      |<br />     ----------<br /></code></pre><br />i want to make 2 selectors for every task. one data and one code-selector. the top, say 4kb of the data-segment are the stack, so esp points to the end of the data-segment.<br />so, if i have now a ring3 task, the selectors have DPL=3 (sure). since i don't want to make a own stack for ring0, is it possible to half the stack (esp points to top of data-segment, esp0 is 2 kb lower) and let the ring0-stack use the ring3-segment as well? (please say yes :))<br />i hope i explained it ok...<br /><br />@<strong>miracle</strong>: could you explain me who exactly the (original) c-calling works?<br />actually i don't mix register- and c-calling, just the function-number is in al - eax is trashed usually.</div>
+    <div class="meta">Posted on 2003-07-15 05:50:38 by hartyl</div>
+   </div>
+   <div class="post" id="post-110542">
+    <div class="subject"><a href="#post-110542">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">1)IF you have the same stack for ring3 app and ring0 app then protection will suffer a lot, any ring3 application will be able to easyly crash OK kernel by missbalancing the stack.<br />2)IMHO (i might be wrong though you could use Callgates in GDT also -- <br /><br />However i do not use them --so i might be very wrong-- <br /><br />Mainly this is why i use only ring0 code in my OS :D<br /><br />IMHO the ring3 to ring 0 switch will leave you the address of the old ring3 stack segment/pointer on stack and you could use that to read parameters of the ring3 API call from the ring0 implementation.</div>
+    <div class="meta">Posted on 2003-07-15 05:59:59 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-110547">
+    <div class="subject"><a href="#post-110547">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body"><div class="quote"><br />1)IF you have the same stack for ring3 app and ring0 app then protection will suffer a lot, any ring3 application will be able to easyly crash OK kernel by missbalancing the stack.</div><br />huh?! if a ring3 program generates a stack-overflow it will just crash with a gpf - the program, not the kernel (i think...)<br />i dunno if i explained it ok, but<br /><pre><code><br />     ---------- &lt;-- esp<br />     | r3-stack<br />     |---------- &lt;-- esp0<br />     | r0-stack<br />     |  -------<br />data |      |<br />sel  |      |<br />     | code |<br />     | sel  |<br />     |      |<br />     ----------<br /></code></pre></div>
+    <div class="meta">Posted on 2003-07-15 06:27:15 by hartyl</div>
+   </div>
+   <div class="post" id="post-110558">
+    <div class="subject"><a href="#post-110558">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">The C-Calling convension:<pre><code>   push 3<br />   push 2<br />   push 1<br />   call _proc<br />; could use data on stack<br />   add esp, 3*4<br /><br />...<br /><br />_proc&#58;<br />   mov eax, &#91;esp + 4&#93;<br />   inc eax<br />   xor &#91;esp + 8&#93;, eax ; change data on stack for return values<br />   retn ; don't correct stack</code></pre>Main feature being the parameters are left on the stack by the called function.  This makes stack clean up the job of the programmer/compiler -- they put the data on the stack, therefore they clean it up.  Also, note that item on the stack could be changed and the program MOV/POP them to get results!  Or data can be left on the stack for multiple CALLs in a row!  There is much flexiblity.</div>
+    <div class="meta">Posted on 2003-07-15 08:34:25 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-110614">
+    <div class="subject"><a href="#post-110614">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">multiple calls in a row, eh? sounds good :)<br />when travelling home from work i thought about this stack-switching thingy in combination with my calling convention - and i noticed its <strong>impossible</strong> (as i wanted to implement it).<br />follow my thoughts: i have a ring3-task wanting to call a system-function with parameters. first the params are reverse-pushed on the stack, the function number is set and finall int30 is called, the task enters ring0. and here comes the stack-switch! (due to changing the privilege level) ss:esp is filled with ss0:esp0 (where is then the ss:esp saved?). things wont work since the parameters are not on the ring0 stack, they are on the ring3-stack.<br />i'm at the end of my ideas - is there a possibility to trick around? or just to *disable* the stack-switching (ya, i hate this function).<br /><br />greets, hartyl</div>
+    <div class="meta">Posted on 2003-07-15 14:37:27 by hartyl</div>
+   </div>
+   <div class="post" id="post-110626">
+    <div class="subject"><a href="#post-110626">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">Well, you could do it like this:<br />movzx eax,al<br />push ebp<br />mov ebp,esp<br />mov esp,<br />call <br />mov ,esp<br />leave<br />iretd<br /><br />The great thing about this is that you can call the procedures directly from system code. And you may want to run the system code at Ring 1, so you can trap stack faults at Ring 0, since you'll now be using the user's stack.</div>
+    <div class="meta">Posted on 2003-07-15 15:56:47 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-110673">
+    <div class="subject"><a href="#post-110673">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">Sorry Hartyl,<br />But from your initial ascii art ...  i thought you are using a single stack for both ring3 and ring0 code, my mistake :(<br /><br />One of the extra features of C calling conventions is the fact that IF you push the WRONG number of parameters it &quot;might&quot; not get a crash. <br /><br />This is because the stack will NOT be unbabanced at end if you still clear it corectly. <br /><br />So let's say a function will eventually print some grabbled text on screen but will not GPF. <br /><br />However this is not so TRUE anymore in an protected environment because the wrong text pointer might generate a GPF because it wonders in protected land data ...<br /><br />Adding the hassle you have to always balance the stack by hand after every procedure/function call...i dislike it :)<br /><br />Maybe only C compilers should use such calling convetion :) ---eh and a macro eventually ...</div>
+    <div class="meta">Posted on 2003-07-15 22:22:31 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-110693">
+    <div class="subject"><a href="#post-110693">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body"><div class="quote"><br />i thought you are using a single stack for both ring3 and ring0 code, my mistake :(</div><br />um... that's what i wanted to do. the dataselector contains the two stacks (for ring0 and ring3) and the data, the code-segment ends right before the stacks, but the base of it is equal to the data's base.<br /><br />i took a look at the call gates yesterday. you have an idt-entry where some bits represent the number of parameters to be transfered between the stacks during the stack switch - but that's not a dynamic value. it then looks like this on the new stack: ss:esp (from old stack), parameters, cs:eip.<br />so, it's completely different wheather i call from ring3 or from ring0 - and i can't get it out where the function has been called from.<br />in intel's architecture system programming guide i saw a graphic showing when there's a stack-switch and when not. there were the different privilege levels shown in levels. it showed that a call (via call gate) from ring3 causes a stacks-switch but ring2 (ya, two) doesn't; so.. why? (i had no time reading the text above and below...)<br /><br />different view: is there a possibility to prevent stack switches?<br /><br />yet another view: what if i make 2 call gates, one can be called from ring3 - the gate *knows* that and can fiddle out the old ss:esp. the other one is for system-internal calls or for ring0, it doesn't need to do that.<br /><br />last try: i know that the last values pushed on the stack are cs:eip of the calling task (due to the int30-call). i can check cs for its DPL and if it's == 3, again, i know that there was a stack-switch and can look for the old ss:esp.<br /><br />please *help* me :eek:</div>
+    <div class="meta">Posted on 2003-07-16 02:02:53 by hartyl</div>
+   </div>
+   <div class="post" id="post-110709">
+    <div class="subject"><a href="#post-110709">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">i got another approach - but this is the best (i think):<br />if i make a call gate with the params-bits set to 0 (i.e. nothing is transferred between the stacks) it will look like this on the new stack when a stack switch occours:<br /><pre><code><br />ss<br />esp<br />cs<br />eip<br /></code></pre><br />if there's no stack-switch occours:<br /><pre><code><br />cs<br />eip<br /></code></pre><br />by getting cs i can check the CPL before the call (cs &amp; 0x0003). if it was 0, i don't need to fiddle around. if it was 3 i get the old ss:esp by swapping them with the new values. then i call the function with my calltable - everything will be processed on the old stack. when returning and the CPL was 3 on calling i swap them back - assuming the stack is still balanced.<br /><br />could that work now? (oh man, i have many ideas here... :))<br />the last question then: how is a callgate called?<br />kinda:<br /><pre><code><br />call CALLGATE_SEL&#58;0x00000000<br /></code></pre><br />?<br /><br />thanks all</div>
+    <div class="meta">Posted on 2003-07-16 06:22:24 by hartyl</div>
+   </div>
+   <div class="post" id="post-110924">
+    <div class="subject"><a href="#post-110924">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">Well, obviously you don't need a call gate to call system code from other system code. This code could just call the other code directly.<br />And when the system call returns, it doesn't matter whether the stack is balanced or not, since you can just update the old esp.</div>
+    <div class="meta">Posted on 2003-07-17 14:37:16 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-111058">
+    <div class="subject"><a href="#post-111058">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">i dunno, but i need a callgate for every systemfunction?</div>
+    <div class="meta">Posted on 2003-07-18 13:23:19 by hartyl</div>
+   </div>
+   <div class="post" id="post-111064">
+    <div class="subject"><a href="#post-111064">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">No, you can put the function number in the offset part. Then you would do this in the called code:<br /><br />mov eax,<br />mov eax,<br />call <br />retf</div>
+    <div class="meta">Posted on 2003-07-18 14:02:56 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-111185">
+    <div class="subject"><a href="#post-111185">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">afaik, then all function must have the same number of bytes as parameters since the amount of memory copied is set in the gdt-entry, i would not know how to make this universal for every function.<br />the callgate-way seems to be very easy - if you have a good idea for the parameters, i'll use em.</div>
+    <div class="meta">Posted on 2003-07-19 12:49:47 by hartyl</div>
+   </div>
+   <div class="post" id="post-111188">
+    <div class="subject"><a href="#post-111188">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">You'd have to have one callgate for functions that take 1 parameter, another for functions that take 2 etc. Or you could use the technique with interrupts that I posted above</div>
+    <div class="meta">Posted on 2003-07-19 13:57:36 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-111214">
+    <div class="subject"><a href="#post-111214">calling convention &amp; ss0:esp0 from tss</a></div>
+    <div class="body">i don't want to make a callgate for every parameter-count... that's complicated.<br />well, i've already implemented the interrupt-gate-way. but i don't like it that i have to put 20 bytes on the stack for just a call without parameters (and i want to preserve the <br />registers). is there a way out with the interrupt gates?</div>
+    <div class="meta">Posted on 2003-07-19 20:53:05 by hartyl</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=14281&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=14281&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="14281" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=14281&amp;page=2">&gt;</a><a href="../?id=14281&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Reading Huffman Codes - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13858" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=13858">Reading Huffman Codes</a></p>
+   <div class="post" id="post-107127">
+    <div class="subject"><a href="#post-107127">Reading Huffman Codes</a></div>
+    <div class="body">Hello all,<br />  I have a question about decoding streams of Huffman codes. I want to know what is the best way to go about doing it (specifically size optimization).<br /><br />  My initial attempt works something like this:<br /><br />  I'll use the example from RFC 1951 for convenience sake (b/c I'm interested in the deflate algorithm). To the left, a simple binary tree, to the right the alphabet and corresponding Huffman codes.<br /><br /><pre><code><br />                          /\              Symbol    Code<br />                         0  1             ------    ----<br />                        /    \                A      00<br />                       /\     B               B       1<br />                      0  1                    C     011<br />                     /    \                   D     010<br />                    A     /\<br />                         0  1<br />                        /    \<br />                       D      C<br /></code></pre><br /><br />  So the stream of codes for ABCD is: 001011010<br /><br />  To decode this stream I would first construct a table of packed DWORDs representing the nodes of the tree. The low-word representing going left down the tree and the high-word representing going right down the tree. Each word value either being the symbol or a pointer to another node (I use sign bit to distinguish between them). I'll use this notation for clarity: <br /><br />  So the table I would construct would be:<br /><br />  HuffmanTable: [^node1, B]  <br /><br />  Decoding would work like this:<br />  -Start with node 0 (i.e., the first DWORD in the table)<br />@@:<br />  -Read a bit<br />  -If bit was 0, load up the loword. Else the hiword<br />  -If loaded value was a symbol, we're done extracting this Huffman code<br />  -Else, go to the node indicated in the loaded value and jmp @B<br /><br />Or, in assembly language:<br /><pre><code><br />-------------------------------------------------------------------------------<br />DecodeHuffman PROC uses ebx esi ecx lpBitstream,lpHuffmanTable&#58;DWORD<br />      mov ebx,lpBitstream              ;ebx=pointer to Bitstream base<br />      mov esi,lpHuffmanTable           ;esi=pointer to HuffmanTable<br />      mov ecx,nBitIndex                ;ecx is bit count into stream where we<br />                                       ;will begin decoding<br />      xor eax,eax                      ;eax is going to be the node Init=0<br />@@&#58;<br />      bt &#91;ebx&#93;,ecx                     ;test the bit if it was 0 or 1<br />      adc eax,eax                      ;get 2*node index + bit value<br />      inc ecx                          ;adjust ecx for next bit<br />      movzx eax,WORD PTR &#91;esi+2*eax&#93;   ;read word in HuffmanTable for this node<br />                                       ; note we've already double eax above<br />      test eax,8000h                   ;I use sign bit to signal symbol<br />      jz @B                            ;If not a symbol, it's a node index. jmp<br />      mov nBitIndex,ecx                ;Save our place in the bitstream<br />      and eax,7FFFh                    ;Only want bottom 15 bits for symbol<br />      ret<br />DecodeHuffman endp<br />-------------------------------------------------------------------------------<br /></code></pre><br />So any comments or criticisms are appreciated. Is this a bad way of going about it? I kinda like it, because it should be reasonably extensible (any alphabet involving 15 bits or less will work) and it seems pretty compact (especially if you keep ebx,esi,ecx loaded with appropriate values in a loop). But if I'm completely off base let me know.<br /><br />Thanks in advance<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2003-06-14 19:33:09 by chorus</div>
+   </div>
+   <div class="post" id="post-107145">
+    <div class="subject"><a href="#post-107145">Reading Huffman Codes</a></div>
+    <div class="body">Here are my thoughts on huffman from a while ago:<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4183">http://www.asmcommunity.net/board/index.php?topic=4183</a><br /><br />I implemented it in my PNG decoder.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2003-06-15 04:06:11 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

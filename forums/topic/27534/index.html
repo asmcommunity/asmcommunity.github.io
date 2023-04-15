@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Uses of registers - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27534" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27534">Uses of registers</a></p>
+   <div class="post" id="post-196810">
+    <div class="subject"><a href="#post-196810">Uses of registers</a></div>
+    <div class="body">I'm wondering if it matters which register one uses as pointers. In fact this is a general question about the uses of all register.
+
+First on pointers:
+edi, esi and ebx seem to be the standard ones to use but edx also works. Does it matter speed wise which ones you use.
+
+Second for counters
+ecx seems to be the standard counter but whats the next best if ecx is unavailable. Also if your doing a nested loop should you push and pop ecx so that you can use it for both loops. 
+Also if ecx can't be preserved through a loop without pushs and pops is it a big proformance hit if a memory location is used.
+
+Third regarding maths.
+Eax seems to be king here, but what if its not available. 
+Also regarding mul. Does edx need to be XORed before calling it, I've read conflicting reports on this. Also which register should be used with mul.
+
+Finally with windows
+Which registers need to be preserved, and which ones are completly out of bounds.
+
+This post has arrisen out of various confilicting article I've read and so I'd just like to get the issue straight.</div>
+    <div class="meta">Posted on 2001-04-04 15:21:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-196811">
+    <div class="subject"><a href="#post-196811">Uses of registers</a></div>
+    <div class="body">1. In 32 bit mode pointer reg decoding the same for common regs (eax,ebx,ecx,edx,esi,edi)
+but loading to and from are generaly faster with eax \ al
+(BTW I saw in your tute usage ax - don't do it try change it to al or eax)
+also calculations faster with eax. But all this doesn't make too big difference, 
+for more explonation I'd better send you to A.Fog. Cause all can say is the same but
+with worse English :)
+2. It doesn't make any difference for counters as long as you just inc or dec it.
+3. It cause exeption on some systems if you mul 32 bit operand + result is biger then 32 bit +
+edx wasn't previously zeroed. Not on all systems. And all three things must to have place
+for the exeption.
+4. In callback procs edi esi ebx must be the same upon return as they was in the enter
+to the callback proc.
+So if your stdproc doesn't use callback proc and you start your callback proc with
+uses edi esi ebx. Then everything will be OK even if some stdproc you called from
+your callback proc will change the registers (or you change it in code of the callback proc).
+Otherwise it might cause GPF (in NT you may be sure that it will).
+For better understanding you must keep in mind what is special about callback proc among the
+others - it is called by System and so that returned to the System and System uses ebx esi edi
+for inner perposes to speed up whole system performens.
+In 9x there lots of APIs that not in 32 bit code and most of major API32 just wrappers to thank
+in 16 bit executable code to do the API job. That's why among other reasons some code
+may does GPF on NT or W2000 but sometime runs OK in 9x.
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-04 16:34:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196812">
+    <div class="subject"><a href="#post-196812">Uses of registers</a></div>
+    <div class="body">1) The eight main registers (EAX,EBX,ECX,EDX,ESI,EDI,EBP,ESP) can all be used as base registers for addressing.  ESP cannot be used as an index register (it can't take a scaling factor), the others can.
+
+The preference for EBX, ESI, and EDI is a holdover from 16-bit programming.  One reason for preferring ESI and EDI: they are implicitly used (hardwired) in the string operations (e.g.,MOVSB,MOVSD,CMPSB,CMPSD).
+
+-------------------
+
+2a) ECX is hardwired into only a few instructions.  The LOOP instructions, JECXZ, and the REP prefix come to my mind.  LOOPs and JECXZ are discouraged.
+
+Otherwise, any register (except ESP for obvious reasons) can be used as a counter without performance problems.
+
+2b) Memory has a performance hit if you must write to it.  On the micro scale, you must do a little bit of register-only calculations to hide it.
+
+Performance of reads depends on the number of cache misses.  On the micro scale, each cache miss results in eight (!) read cycles on a Pentium.  Once the data is cached, the data can be read again without accessing memory (meaning no penalty).
+
+And, of course, performance is much, much worse if a cache miss triggers a page fault.  That adds disk access time.  (But then, who is going to create a critical loop that spans more than 1K of code space?)
+
+--------------------
+
+3a) Any of the main registers can be used as destination for adds, subtracts, ands, ors, xors, ... including ESP.
+
+3b) Unless I'm behind the times, there is no exception (in the interrupt vector) for multiplication.
+
+I'll need to check my docs (which I don't have with me), but I believe any register can be used as a product register.  If so, the instruction written without a destination register will use EAX and put the upper 32-bits of the product in EDX.
+
+3c) Division is special and must use part or all of EAX as a dividend and quotient register. A <em><strong>64-bit divided by 32-bit</strong></em> op must use EAX and EDX as the dividend.  EAX will have the quotient, EDX will have the remainder (modulus). You may get an exception if EDX is not properly set before a divide.  If you don't get an exception, you'll definitely get bad results.
+
+------------------
+
+4a) Only the ESP register must have restricted use.  Any change you make to it must be associated with stack management.
+
+4b) The register saving conventions are those of the C compilers used to build NT. You must use them when interfacing with Windows, whether through API calls or Windows callbacks.  When calling and creating your own private routines, you can use the registers as you see fit.
+
+Called functions (such as WndProc and DlgProc) must preserve EBX, ESI, EDI, and EBP. Options include ...  not using them, saving and restoring them (on the stack for recursion), or undoing simple calculations.  You are allowed to trash the other three registers (but most, if not all, of the API functions require a return value in EAX.) Note ... normal stack frame management saves and restores EBP.
+
+The result of the above rule is ... it's redundant to save those four registers before calling an API function.
+
+4c) In addition to the registers, the direction flag DF is clear before the routine is called.  It must be clear before returning.  The only time you need to change the DF is for descending string ops (e.g.,REPxx CMPS and MOVS).  Change the DF back before returning.
+
+4d) Oh, and don't touch the segment registers (CS, DS, SS, ES, FS, GS).
+
+This message was edited by tank, on 4/4/2001 7:12:19 PM</div>
+    <div class="meta">Posted on 2001-04-04 19:04:00 by tank</div>
+   </div>
+   <div class="post" id="post-196813">
+    <div class="subject"><a href="#post-196813">Uses of registers</a></div>
+    <div class="body">Zadkiel,
+
+In 32 bit processors from 486 upwards, you can effectively use
+any register to do what you need. In most instances ESP & EBP
+are used for procedure entry and exit which leave you 6 of the
+general purpose registers.
+
+ESI & EDI can only be split into WORD size where the rest can
+handle BYTE size operations as well but to answer your question,
+there is no speed difference using any register as a memory
+address.
+
+Normal things apply when using windows, if you use EBX, ESI or EDI
+in a procedure, you must preserve any of the three that you use at
+entry and restore them on exit of the procedure.
+
+EAX is usually used as the return value from a proc if it is subject
+to an integer return value.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-04-04 19:58:00 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

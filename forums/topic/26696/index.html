@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Filling a listbox with directories w/ out LB_DIR - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26696" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26696">Filling a listbox with directories w/ out LB_DIR</a></p>
+   <div class="post" id="post-192639">
+    <div class="subject"><a href="#post-192639">Filling a listbox with directories w/ out LB_DIR</a></div>
+    <div class="body">Hi there, when I use the send the LB_DIR message to a list box I can populate it with a directory listing. Except it shows all short names (8.3 filenames) Is there anyway around this? I need to fill a list box with all the directories (But not subdirectories) within a directory.
+
+These should be shown with long filenames too.
+
+Anyhelp?
+Thanks,
+Ben</div>
+    <div class="meta">Posted on 2001-01-27 23:46:00 by cyberben</div>
+   </div>
+   <div class="post" id="post-192640">
+    <div class="subject"><a href="#post-192640">Filling a listbox with directories w/ out LB_DIR</a></div>
+    <div class="body">You can enumerate the directories with FindNextFile and add each dir to your list. Something like this:
+<pre>
+
+    FindData    WIN32_FIND_DATA     <>
+    hSearch     dd                  ?
+
+    SearchDir   "C:\windows\*.*",0  ;here's your search directory,
+                                    ;don't forget the *.*
+
+    invoke  FindFirstFile, ADDR SearchDir, ADDR FindData
+    .IF     eax==INVALID_HANDLE_VALUE
+        ;failed
+    .ENDIF
+    mov     hSearch, eax
+    .WHILE  TRUE
+        mov     eax, FindData.dwFileAttributes
+        .IF     (eax & FILE_ATTRIBUTE_DIRECTORY)==0
+            .CONTINUE   ;no dir, next file
+        .ENDIF
+        mov     ecx, FindData.cFileName
+        
+        invoke  SendMessage, hListBox, LB_ADDSTRING, NULL, ecx
+        ;(hListBox is your listbox handle)
+        
+        invoke  FindNextFile, hSearch, ADDR FindData
+        .IF     eax==ERROR_NO_MORE_FILES
+            jmp     @enum_done
+        .ENDIF
+    .ENDW
+    @enum_done:
+    invoke  FindClose, hSearch
+</pre>
+(I haven't tried the code but I guess it should work)
+
+Thomas</div>
+    <div class="meta">Posted on 2001-01-28 06:58:00 by Thomas</div>
+   </div>
+   <div class="post" id="post-192641">
+    <div class="subject"><a href="#post-192641">Filling a listbox with directories w/ out LB_DIR</a></div>
+    <div class="body">Thanks, you had some errors, but you got the idea down. Here's what I boiled that down to, for any others interested in listing long filenames in a listbox. Take note there is an if aroung the SendMessage which checks for a period in the first character of the directory that's because I didn't want the move up directories to be shown ("." and ".."). Take that away if you want all the directories shown.
+
+Hmmm. This won't show the code properly. So either you've got to edit it yourself or one of the moderators should come a long and tell me why this won't show the code right? (It's in the code brackets!) - Good Luck!
+
+
+<pre><code>
+
+    FindData    WIN32_FIND_DATA     <>
+    hSearch     dd                  ?
+
+    SearchDir   "C:\windows\*.*",0  ;here's your search directory,
+                                    ;don't forget the *.*
+
+                        invoke  FindFirstFile, ADDR SearchDir, ADDR FindData
+                        .if eax==INVALID_HANDLE_VALUE
+                                ;failed
+                        .endif
+                        mov hSearch, eax
+
+                    SearchAgain:
+                        mov eax, FindData.dwFileAttributes
+                        and eax, FILE_ATTRIBUTE_DIRECTORY
+                        cmp eax, 0
+                        jz NotDirectory
+
+                        mov     ecx,offset FindData.cFileName
+                        .if FindData.cFileName[0] != "."
+                                ;This sends a message to a list box with the ID of 151 on a dialog with the handle "hdwnd".
+                                invoke SendDlgItemMessage,hdwnd,151,LB_ADDSTRING, NULL, ecx
+                        .endif
+
+                    NotDirectory:
+                        invoke FindNextFile, hSearch, ADDR FindData
+                        invoke GetLastError
+                        cmp eax, ERROR_NO_MORE_FILES
+                        jnz SearchAgain
+
+                        invoke  FindClose, hSearch
+
+</code></pre>
+
+Sorry about the tabs but I didn't have time to remove them.
+See ya,
+Ben
+
+This message was edited by cyberben, on 1/28/2001 12:44:38 PM</div>
+    <div class="meta">Posted on 2001-01-28 12:43:00 by cyberben</div>
+   </div>
+  </div>
+ </body>
+</html>

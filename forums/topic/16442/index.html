@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Is this overkill? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16442" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16442">Is this overkill?</a></p>
+   <div class="post" id="post-127835">
+    <div class="subject"><a href="#post-127835">Is this overkill?</a></div>
+    <div class="body">Heya all...<br />I have a question regarding the following procedure, taken from a DX9 PointSprite ParticleEngine demo. The procedure's job is to return a random 3d vector, which is simply three ranged random floats, between -1.0f and +1.0f<br />I will supply here the original c++ souce, followed by my translation.<br />My question is simply this: why go to all this trouble? Why not just return three ranged random floats?<br /><br /><br />//-----------------------------------------------------------------------------<br />// Name: getRandomVector()<br />// Desc: Generates a random vector where X,Y, and Z components are between<br />//       -1.0 and 1.0<br />//-----------------------------------------------------------------------------<br />D3DXVECTOR3 getRandomVector( void )<br />{<br />	D3DXVECTOR3 vVector;<br /><br />    // Pick a random Z between -1.0f and 1.0f.<br />    vVector.z = getRandomMinMax( -1.0f, 1.0f );<br />    <br />    // Get radius of this circle<br />    float radius = (float)sqrt(1 - vVector.z * vVector.z);<br />    <br />    // Pick a random point on a circle.<br />    float t = getRandomMinMax( -D3DX_PI, D3DX_PI );<br /><br />    // Compute matching X and Y for our Z.<br />    vVector.x = (float)cosf(t) * radius;<br />    vVector.y = (float)sinf(t) * radius;<br /><br />	return vVector;<br />}<br /><br /><br />==========================================<br />ok now here's my version of that... (I just leave them on the fp stack and return)<br /><br />getRandomVector proc<br />local vVector:D3DXVECTOR3<br />local fradius:FLOAT<br />local ft:FLOAT<br /><br />    fld fp1     ;*see below<br /><br />;    // Pick a random Z between -1.0f and 1.0f.<br />    invoke TFRandom,fpm1,fp1<br />    fst vVector.z  ;leave on fp stack so we can multiply with self<br />    <br />;   // Get radius of this circle<br />;   fradius = sqrt(1 - vVector.z * vVector.z)   note the 1 in there, see above<br />    fmul vVector.z<br />    fsub<br />    fsqrt<br />    fstp fradius<br />   <br />;   // Pick a random point on a circle.<br />.data<br />fpmpi    REAL4  -3.1415926535897932384626433832795<br />fppi    REAL4  3.1415926535897932384626433832795<br />.code<br />    invoke TFRandom,fpmpi,fppi  ; my Ranged Randoms func works fine<br /><br />;    // Compute matching X and Y for our Z.<br />    fsincos<br />    fmul fradius<br />    fstp vVector.x<br />    fmul fradius<br />    fstp vVector.y<br />    __LoadFloat3 vVector<br />    ret<br />getRandomVector endp<br /><br /><br />=======================================<br /><br />ok guys, so why not simply:<br />    invoke TFRandom,fpm1,fp1<br />    invoke TFRandom,fpm1,fp1<br />    invoke TFRandom,fpm1,fp1<br />    ret<br /><br />Is there some fundamentally decent reason for normalizing a single random float (z) and then extracting x and y using sine /cosine math ?<br />Can we simply deduce that the rand() func used by c++ is extremely slow?</div>
+    <div class="meta">Posted on 2003-12-15 06:42:39 by Homer</div>
+   </div>
+   <div class="post" id="post-127837">
+    <div class="subject"><a href="#post-127837">Is this overkill?</a></div>
+    <div class="body">Afternoon, EvilHomer2k.<br /><br />If the returned vector isn't normalized, then any &quot;movement&quot; calculations will be stuffed up ( some particles would move faster than others in an uncontrolled way ). In any particle system, you'd want them to be random in a controlled way ;) .<br /><br />Cheers,<br />Scronty</div>
+    <div class="meta">Posted on 2003-12-15 06:55:43 by Scronty</div>
+   </div>
+   <div class="post" id="post-127838">
+    <div class="subject"><a href="#post-127838">Is this overkill?</a></div>
+    <div class="body">I understand this Scronty, and I agree with you, but let's put this in perspective by stating that this is ONLY for direction , and nothing to do with velocity (in this instance) and let's examine the usage of the code in c++<br /><br />                {<br />                    D3DXVECTOR3 vRandomVec = getRandomVector();<br />                    pParticle-&gt;m_vCurVel += vRandomVec * m_fVelocityVar;<br />                }<br /><br />We can see now that we are multiplying what is effectively a normal vector by a velocity factor, ie, that the RandomVector is limited to + or - 1 anyway (in x/y/z) and then multiplied by a Velocity constant, so with this in mind, can you see merit in normalizing the vector when we could simply limit it within the realm of normality in the first place?</div>
+    <div class="meta">Posted on 2003-12-15 07:01:38 by Homer</div>
+   </div>
+   <div class="post" id="post-127927">
+    <div class="subject"><a href="#post-127927">Is this overkill?</a></div>
+    <div class="body">If you just return 3 random numbers for x, y and z you will get a vector with a random length.  I would assume that you only want a vector with random direction, but constant length of 1.  Having a random vector with random length will probably complicate the calculations further down the line.</div>
+    <div class="meta">Posted on 2003-12-15 16:04:43 by Beelzebub</div>
+   </div>
+   <div class="post" id="post-127933">
+    <div class="subject"><a href="#post-127933">Is this overkill?</a></div>
+    <div class="body">The original code seems to be based on generating a point on a sphere through polar coordinates (is that what it was called? longitude/lattitude anyway).<br />I am not sure why exactly, but it could be that this gives a slightly different behaviour than just doing something like:<br /><br />Vector3( rand(), rand(), rand() ).normalize();<br /><br />So perhaps there's an idea behind this particular method (the above method is faster, after all, one sqrt(), 3 rand()s vs 1 sqrt(), 2 rand()s and a cos()/sin())...<br />Else well, the above should do fine, and if you only want direction, you could indeed leave out the normalization.<br />(The vector will be within the unit cube anyway, assuming the rand() returns a number from a uniform distribution of [-1..1]).</div>
+    <div class="meta">Posted on 2003-12-15 16:55:28 by Bruce-li</div>
+   </div>
+   <div class="post" id="post-127956">
+    <div class="subject"><a href="#post-127956">Is this overkill?</a></div>
+    <div class="body">Yes, I was thinking in terms of a unit cube, not a unit sphere. I believe the original code is calculating random rays based on a unit sphere, as you pointed out, and obviously normalizing it means it always has unary length. Thanks guys, you are both absolutely correct in your observations, I'm sure, I'd already implemented this method yesterday, however it seems not to be the source of my problems :(<br />Having ascertained that base factor used for Velocity is correct, I had been hoping that the lack of motion of Particles was associated with bad calculation of the only other component in the calculation (apart from Time), being the direction vector.<br />I went on the ensure that my rand function was returning ranged floats correctly, and that the constant Velocity was correct. This only leaves Time, and that seems to be working too, because particles are certainly emitted over time, and emitted with the appropriate Delay. Sigh. What could be wrong now? :(</div>
+    <div class="meta">Posted on 2003-12-15 21:28:31 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

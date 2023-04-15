@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Using memory twice - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6510" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=6510">Using memory twice</a></p>
+   <div class="post" id="post-46971">
+    <div class="subject"><a href="#post-46971">Using memory twice</a></div>
+    <div class="body">Hi!<br />It's known that some constants and variables are needed only for initialization.<br />Class name and Window name are good examples.<br />After creating window those strings are useless.<br />It's not a big problem in the case of only two strings.<br />But if you have many such initializing constants it's good idea<br />to think about usig that space for other purposes.<br />To do that we can use well-known LABEL stuff:<br /><br /><pre><code><br />dwVar1	LABEL	DWORD<br />szClassName	db	&quot;Wind&quot;<br />dwVar2	LABEL	DWORD<br />		db	&quot;ow C&quot;<br />dwVar3	LABEL	DWORD<br />		db	&quot;lass&quot;, 0<br /></code></pre><br /><br />Works without any problem, but looks, IMHO, very ugly and difficult to change.<br />So, bugs are welcome here.<br /><br />I use other method for such things.<br /><pre><code><br />DISCARDABLE_DATA_START MACRO<br />	;; define begining of data to discard<br />	@DiscardableDataStart LABEL BYTE<br />ENDM<br /><br />DISCARDABLE_DATA_END MACRO<br />	;; calculate size of data to discard<br />	@DiscardableDataSize = $ - @DiscardableDataStart<br />ENDM<br /><br />SUBSTITUTION_DATA_START MACRO<br />	;; set location counter to begining of data to discard<br />	ORG $ - @DiscardableDataSize<br />ENDM<br /><br />SUBSTITUTE MACRO sub&#58;REQ, typ&#58;REQ, num&#58;=&lt;1&gt;<br />local over<br />		sub LABEL typ<br />		;; take into account size of defined variable<br />		@DiscardableDataSize = @DiscardableDataSize - &#40;sizeof sub&#41;*num<br />		;; report error if Substitution is more than Discardable<br />		IF @DiscardableDataSize LT 0<br />			over TEXTEQU %&#40;0 - @DiscardableDataSize&#41;<br />			% .ERR &lt;Size of discardable data was exceeded by substitution data for over bytes&gt;<br />		ENDIF<br />		;; point location counter to next memory available<br />		ORG $ + &#40;sizeof sub&#41;*num<br />ENDM<br /><br />SUBSTITUTION_DATA_END MACRO<br />local available<br />	IF @DiscardableDataSize GT 0<br />		;; report how much available data left<br />		available TEXTEQU %@DiscardableDataSize<br />		% ECHO *** available bytes are left to substitute. ***<br />		;; and take the rest into account<br />		ORG $ + @DiscardableDataSize<br />	ENDIF<br />ENDM<br /></code></pre><br /><br />With the help of above macros i can write such code:<br /><pre><code><br />.data<br />DISCARDABLE_DATA_START<br />	szClassName	db &quot;Window Class&quot;, 0<br />DISCARDABLE_DATA_END<br /><br />SUBSTITUTION_DATA_START<br />	SUBSTITUTE dwVar1, DWORD<br />	SUBSTITUTE dwVar2, DWORD<br />	SUBSTITUTE dwVar3, DWORD<br />SUBSTITUTION_DATA_END<br /></code></pre><br /><br />The szClassName and dwVar1 here reference to the same memory address.<br />szClassName is used at window creating but later will be substituted by value of dwVar1, dwVar2, dwVar3.<br />See full example in attach.<br /><br />I find it's much more clear and easy to make changes.<br />But don't sure is it the best way.<br />May be someone has discovered better method.<br />How do you do that?</div>
+    <div class="meta">Posted on 2002-07-10 06:08:39 by Four-F</div>
+   </div>
+   <div class="post" id="post-46973">
+    <div class="subject"><a href="#post-46973">Using memory twice</a></div>
+    <div class="body">with fasm you do it simply:<br /><br /><pre><code><br />szClassName db &quot;Window Class&quot;, 0<br /><br />virtual at szClassName<br /> dwVar1 dd ?<br /> dwVar2 dd ?<br /> dwVar3 dd ?<br />end virtual<br /></code></pre></div>
+    <div class="meta">Posted on 2002-07-10 06:22:39 by Tomasz Grysztar</div>
+   </div>
+   <div class="post" id="post-47004">
+    <div class="subject"><a href="#post-47004">Using memory twice</a></div>
+    <div class="body">Four-F, we no longer live in the world with 640KB of memory and 10Mhz CPUs.</div>
+    <div class="meta">Posted on 2002-07-10 13:05:32 by comrade</div>
+   </div>
+   <div class="post" id="post-47008">
+    <div class="subject"><a href="#post-47008">Using memory twice</a></div>
+    <div class="body"><strong>comrade</strong>, waste not, want not. :grin: :grin:</div>
+    <div class="meta">Posted on 2002-07-10 13:14:13 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47038">
+    <div class="subject"><a href="#post-47038">Using memory twice</a></div>
+    <div class="body">We're now living in a world with stack frames and virtual memory.<br /><br />When building an NT driver, it was a practice to put initialization code into a separate read-only block of pages. After the paging system discards these &quot;initialization&quot; pages, they are never reloaded. (Unless, of course, you unload and restart the driver.)<br /><br />Also, LOCAL (stack) variables are discarded when you leave a PROC. The next PROC you invoke will automatically reuse that space for LOCAL variables.</div>
+    <div class="meta">Posted on 2002-07-10 15:54:44 by tenkey</div>
+   </div>
+   <div class="post" id="post-47097">
+    <div class="subject"><a href="#post-47097">Using memory twice</a></div>
+    <div class="body">comrade &amp; tenkey, thanx for answering. :( <br />But you answered the question that i haven't asked.<br /><br />I know about 640KB/10Mhz/IDATA/ICODE etc...<br />I'm writing some spying tool.<br />My goal to use as few as possible of remote process resources.<br />It's ring3, and i can't say to OS to discard something.<br /><br />You may be know about EliCZ's excellent asm/system stuff that is full of such juggles.<br />Question for what?... If you find no sense to do such trick don't do it.<br />But i merely asked that i asked. No more.<br />Sorry for some rudeness.</div>
+    <div class="meta">Posted on 2002-07-11 03:05:58 by Four-F</div>
+   </div>
+   <div class="post" id="post-47099">
+    <div class="subject"><a href="#post-47099">Using memory twice</a></div>
+    <div class="body">Tvoi post kogbuto bi cherez russkiy-&gt;english translator proshol</div>
+    <div class="meta">Posted on 2002-07-11 03:58:57 by comrade</div>
+   </div>
+   <div class="post" id="post-47102">
+    <div class="subject"><a href="#post-47102">Using memory twice</a></div>
+    <div class="body">Four-F,<br /><br />Thanks for some examples that use lesser used dirctives/operators...  ORG and $.</div>
+    <div class="meta">Posted on 2002-07-11 04:57:21 by ThoughtCriminal</div>
+   </div>
+   <div class="post" id="post-47111">
+    <div class="subject"><a href="#post-47111">Using memory twice</a></div>
+    <div class="body"><div class="quote"><strong>comrade:</strong><em><br />Tvoi post kogbuto bi cherez russkiy-&gt;english translator proshol</em></div><br />Eto ti k chemu?<br />I know my english is ugly.<br />Also my russian is not good.<br />Hope my asm is perfect. ;) <br /><br /><div class="quote"><strong>ThoughtCriminal:</strong><em><br />Thanks for some examples that use lesser used dirctives/operators...  ORG and $. </em></div><br />Thanx.</div>
+    <div class="meta">Posted on 2002-07-11 06:25:44 by Four-F</div>
+   </div>
+   <div class="post" id="post-47113">
+    <div class="subject"><a href="#post-47113">Hi there!</a></div>
+    <div class="body">Hi Four-F!<br /><br />Good idea, nice macro. I will use it, if you please.<br /><br />Thanx ;-)</div>
+    <div class="meta">Posted on 2002-07-11 06:59:07 by Andycar</div>
+   </div>
+   <div class="post" id="post-47122">
+    <div class="subject"><a href="#post-47122">Using memory twice</a></div>
+    <div class="body">Hi, Andy!<br />Can't find time to complete my ListView/TreeView/etc... macros.</div>
+    <div class="meta">Posted on 2002-07-11 09:31:57 by Four-F</div>
+   </div>
+   <div class="post" id="post-47144">
+    <div class="subject"><a href="#post-47144">Using memory twice</a></div>
+    <div class="body">Russkiy! Klass! Teper 3 takih na etoi message board: ia, ti i Dmitry. :)</div>
+    <div class="meta">Posted on 2002-07-11 14:34:44 by comrade</div>
+   </div>
+   <div class="post" id="post-47152">
+    <div class="subject"><a href="#post-47152">Using memory twice</a></div>
+    <div class="body"><strong>Four-F</strong>, look for documentation of the COMMON segment directive - it can also be used to accomplish this double use of memory.  It is a little trickier. :)</div>
+    <div class="meta">Posted on 2002-07-11 15:19:18 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47194">
+    <div class="subject"><a href="#post-47194">4k page size</a></div>
+    <div class="body">You cant forget that if you declare, say for example 300 bytes of data in your data section, and then use say for example 160 bytes of it again (For a total of 560 bytes), it does not matter how much you use that memory over and over again, you are still effectivly going to be using the whole 4096 byte memory page.</div>
+    <div class="meta">Posted on 2002-07-11 23:55:22 by huh</div>
+   </div>
+   <div class="post" id="post-47204">
+    <div class="subject"><a href="#post-47204">Using memory twice</a></div>
+    <div class="body"><div class="quote"><br />Russkiy! Klass! Teper 3 takih na etoi message board: ia, ti i Dmitry. :) </div><br /><br />Privet,<br />Ya dumayu, tut gorazdo bolshe, chem 'na troih' russkih sobralos', prosto ostal'nie sidyat' sebe tihonechko :grin:</div>
+    <div class="meta">Posted on 2002-07-12 03:00:28 by Andycar</div>
+   </div>
+   <div class="post" id="post-47206">
+    <div class="subject"><a href="#post-47206">Using memory twice</a></div>
+    <div class="body"><div class="quote"><em>You cant forget that if you declare....</em></div><br /><br />Of course i know about page granularity.<br />My ex is only very very simple explanation of principle.<br />It depends on you to use it properly.<br /><br />For russian guys:<br /><strong>Please, don't forget that the language of this board is NOT russian!</strong></div>
+    <div class="meta">Posted on 2002-07-12 03:57:23 by Four-F</div>
+   </div>
+   <div class="post" id="post-47214">
+    <div class="subject"><a href="#post-47214">Using memory twice</a></div>
+    <div class="body"><div class="quote"><strong>bitRAKE:</strong><br /><em>Four-F, look for documentation of the COMMON segment directive - it can also be used to accomplish this double use of memory. It is a little trickier.</em></div><br /><br />Yes, seems to be useful, but i couldn't make it overlap DATA segment.<br />Also seems to me that segment being overlapped by COMMON segment can contain only discardable data.<br />So, you can't mix discardable/nondiscardable data in one seg.<br />But can't prove it to myself because of the reason above.<br />If you have some workable ex, please throw it at me. Thanx.</div>
+    <div class="meta">Posted on 2002-07-12 05:34:54 by Four-F</div>
+   </div>
+   <div class="post" id="post-47218">
+    <div class="subject"><a href="#post-47218">Using memory twice</a></div>
+    <div class="body">Have to build separate object files, and the object file with initial data has to be linked in last.  I should create an example - it has been a long time since I used this.  Also, all the references to the initial data are specified external public.</div>
+    <div class="meta">Posted on 2002-07-12 05:51:41 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-47271">
+    <div class="subject"><a href="#post-47271">Using memory twice</a></div>
+    <div class="body">Okey, 4 teper - ia, AndyCar, Four-F, Dmitry.</div>
+    <div class="meta">Posted on 2002-07-12 12:52:16 by comrade</div>
+   </div>
+  </div>
+ </body>
+</html>

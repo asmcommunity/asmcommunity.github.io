@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Same(?) calculation with different results - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21257" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21257">Same(?) calculation with different results</a></p>
+   <div class="post" id="post-160839">
+    <div class="subject"><a href="#post-160839">Same(?) calculation with different results</a></div>
+    <div class="body">Hey,<br /><br />I hope I&#39;m in the right sub. I&#39;m trying to write a simple put_pixel routine in assembly using nasm to compile. Somehow my code produces the wrong memory offset.<br /><br />This is my put_pixel code:<br /><br /><pre><code><br />global _put_pixel<br /><br />section .text<br />_put_pixel:<br />	; y*WIDTH<br />	mov	eax, <br />	mov	ebx, 8<br />	mul	ebx<br /><br />	;&nbsp; &nbsp; &nbsp; &nbsp;  + x<br />	mov	ebx, <br />	add	eax, ebx<br /><br />	;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; + buffer<br />	mov	edx, dword <br />	add	eax, edx<br /><br />	ret<br /></code></pre><br /><br />To cross check the resulting offset in EAX I&#39;m using this C++ snippet:<br /><br /><pre><code><br />#include &lt;stdio.h&gt;<br />#include &lt;memory.h&gt;<br /><br />extern &quot;C&quot; int put_pixel(int* buffer, int x, int y, int color);<br /><br />#define WIDTH 8<br />#define HEIGHT 8<br /><br />int main()<br />{<br />	int* buffer = new int ;<br />	memset(buffer, 0, sizeof(int)*WIDTH*HEIGHT);<br />	int color = 16777215, x=4, y=4;<br />	int test = put_pixel(buffer, x, y, color);<br />&nbsp; &nbsp; &nbsp; &nbsp; int test2 =&nbsp; y*WIDTH+x+buffer;<br />	printf(&quot;%10d\n&quot;, test);<br />	printf(&quot;%10d\n&quot;, test2);<br />	delete buffer;<br />	return 0;<br />}<br /></code></pre><br /><br />The resulting offset in test is always 108 bytes smaller than the one in test2. Can someone give a hint on what&#39;s wrong in my assembly code.<br /><br />TIA,<br />paris</div>
+    <div class="meta">Posted on 2005-06-06 14:44:39 by Parasight</div>
+   </div>
+   <div class="post" id="post-160840">
+    <div class="subject"><a href="#post-160840">Re: Same(?) calculation with different results</a></div>
+    <div class="body">I see nothing wrong with your ASM code, except that it doesn&#39;t actually put the pixel ;) you&#39;re never reading the color parameter from the stack, not setting it&#39;s value in the buffer.<br /><br />I&#39;m not sure how NASM expects numbers to be, in decimal or hexa, you could try using hexa just to be on the safe side.<br /><br />I&#39;d stay away from modifying EBX too, the compiler expects it&#39;s value to be preserved by the function (this also counts for EBP, ESI and EDI).<br /><br />Also you&#39;re returning the wrong value, in EAX you should put whatever you want the procedure to return (currently it just has the pointer to the pixel set).<br /><br />If you want to return the previous pixel value (I&#39;m guessing), you can use something like this instead:<br /><span class="mono"><br />	;			y*WIDTH<br />	mov	eax, <br />	mov	edx, 8<br />	mul	edx<br />	;			+ x<br />	mov	edx, <br />	add	edx, eax<br />	;			+ buffer<br />	add	edx, <br />	;			set the pixel<br />	mov	eax, <br />	xchg	eax, <br />	;			return the previous value<br />	ret<br /></span><br /><br />Hope that helps! :)</div>
+    <div class="meta">Posted on 2005-06-06 15:11:46 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160848">
+    <div class="subject"><a href="#post-160848">Re: Same(?) calculation with different results</a></div>
+    <div class="body">QvasiModo,<br /><br />thanks for the tips. You&#39;re right. I don&#39;t put the pixel in the code. I just return the memory offset ... at least i think so. I do it to check it it against the one calculated in C++.<br /><br />The offset from the put_pixel routine is different from the one calculated by <br /><br /><pre><code>y*WIDTH+x+buffer</code></pre><br /><br />and the pixel is put in the wrong position.<br /><br />I do use EDX instead of EBX and hex numbers now. But still the memory offset calculated by the assembly routine is 108 less than the one calculated in C++.<br /><br /><pre><code><br />global _put_pixel<br /><br />section .text<br />_put_pixel:<br />	; y*WIDTH<br />	mov	eax, <br />	mov	edx, 8<br />	mul	edx<br /><br />	;&nbsp; &nbsp; &nbsp; &nbsp;  + x<br />	mov	edx, <br />	add	edx, eax<br /><br />	;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; + buffer<br />	add	edx, <br /><br />	; set the pixel<br />	mov	eax, <br />	xchg	eax, <br /><br />	ret<br /></code></pre></div>
+    <div class="meta">Posted on 2005-06-06 16:14:31 by Parasight</div>
+   </div>
+   <div class="post" id="post-160850">
+    <div class="subject"><a href="#post-160850">Re: Same(?) calculation with different results</a></div>
+    <div class="body">Try this...<br /><br /><pre><code><br />WIDTH equ 8<br /><br />ARG_BUF equ 0x04<br />ARG_X&nbsp;  equ 0x08<br />ARG_Y&nbsp;  equ 0x0C<br /><br />global _put_pixel<br /><br />section .text<br /><br />_put_pixel:<br />&nbsp; &nbsp; mov&nbsp; &nbsp;  eax, WIDTH<br />&nbsp; &nbsp; xor&nbsp; &nbsp;  edx, edx<br />&nbsp; &nbsp; mul&nbsp; &nbsp;  dword &nbsp; &nbsp;  ; y*WIDTH<br />&nbsp; &nbsp; add&nbsp; &nbsp;  eax, &nbsp; &nbsp; &nbsp; ; +x <br />&nbsp; &nbsp; add&nbsp; &nbsp;  eax, &nbsp; &nbsp; ; +buffer<br /><br />&nbsp; &nbsp; ret<br /></code></pre><br /><br /><strong>EDIT:</strong> - you don&#39;t have a function prototype for put_pixel in your C code, and you should either fix the ESP offset or not pass the &#39;color&#39; argument.</div>
+    <div class="meta">Posted on 2005-06-06 16:32:15 by f0dder</div>
+   </div>
+   <div class="post" id="post-160851">
+    <div class="subject"><a href="#post-160851">Re: Same(?) calculation with different results</a></div>
+    <div class="body"><div class="quote"><br />thanks for the tips. You&#39;re right. I don&#39;t put the pixel in the code. I just return the memory offset ... at least i think so. I do it to check it it against the one calculated in C++.<br /></div><br /><br />And I should have realized that by reading the test code more carefully... sorry for the noise then :(<br /><br /><div class="quote"><br />The offset from the put_pixel routine is different from the one calculated by <br /><br /><pre><code>y*WIDTH+x+buffer</code></pre><br /><br />and the pixel is put in the wrong position.<br /><br />I do use EDX instead of EBX and hex numbers now. But still the memory offset calculated by the assembly routine is 108 less than the one calculated in C++.<br /><br /><pre><code><br />global _put_pixel<br /><br />section .text<br />_put_pixel:<br />	; y*WIDTH<br />	mov	eax, <br />	mov	edx, 8<br />	mul	edx<br /><br />	; + x<br />	mov	edx, <br />	add	edx, eax<br /><br />	; + buffer<br />	add	edx, <br /><br />	; set the pixel<br />	mov	eax, <br />	xchg	eax, <br /><br />	ret<br /></code></pre><br /></div><br /><br />It should be 10h, not 0Ah. :)<br /><div class="quote"><br />Try this...<br /><br /><pre><code><br />WIDTH equ 8<br /><br />ARG_BUF equ 0x04<br />ARG_X equ 0x08<br />ARG_Y equ 0x0C<br /><br />global _put_pixel<br /><br />section .text<br /><br />_put_pixel:<br /> mov eax, WIDTH<br /> xor edx, edx<br /> mul dword  ; y*WIDTH<br /> add eax,  ; +x <br /> add eax,  ; +buffer<br /><br /> ret<br /></code></pre><br /></div><br /><br />You&#39;re right, as usual. :)<br /><br /><div class="quote"><br /><strong>EDIT:</strong> - you don&#39;t have a function prototype for put_pixel in your C code, and you should either fix the ESP offset or not pass the &#39;color&#39; argument.<br /></div><br /><br />Uh? Now you&#39;ve lost me...</div>
+    <div class="meta">Posted on 2005-06-06 16:37:44 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160852">
+    <div class="subject"><a href="#post-160852">Re: Same(?) calculation with different results</a></div>
+    <div class="body"><div class="quote"><br />Uh? Now you&#39;ve lost me...<br /></div><br />Oops - he *did* have the function prototype, I just missed it. I blame all the reading I&#39;ve had to do because of exams - never mind that EDIT text ;)</div>
+    <div class="meta">Posted on 2005-06-06 16:47:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-160853">
+    <div class="subject"><a href="#post-160853">Re: Same(?) calculation with different results</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote"><br />Uh? Now you&#39;ve lost me...<br /></div><br />Oops - he *did* have the function prototype, I just missed it. I blame all the reading I&#39;ve had to do because of exams - never mind that EDIT text ;)<br /></div><br />I can relate! :D</div>
+    <div class="meta">Posted on 2005-06-06 16:49:39 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160854">
+    <div class="subject"><a href="#post-160854">Re: Same(?) calculation with different results</a></div>
+    <div class="body"><div class="quote"><br /><pre><code><br />global _put_pixel<br /><br />section .text<br />_put_pixel:<br />	; y*WIDTH<br />	mov	eax, <br />	mov	ebx, 8<br />	mul	ebx<br /><br />	;? ? ? ? ?+ x<br />	mov	ebx, <br />	add	eax, ebx<br /><br />	;? ? ? ? ? ? ? + buffer<br />	mov	edx, dword <br />	add	eax, edx<br /><br />	ret<br /></code></pre><br /></div><br /><br />Here is the problem:<br /><br /><pre><code><br />	int* buffer = new int ;<br /><br />? ? ? ? int test2 =? y*WIDTH+x+buffer;<br /></code></pre><br /><br />Because <strong>buffer</strong> is a pointer to <strong>int</strong>s, the C compiler automatically scales the nonpointer values.<br /><br />The last few instructions should be<br /><br /><pre><code>	;? ? ? ? ?+ x<br />	mov	ebx, <br />	add	eax, ebx<br /><br />; *** Add this line...<br />	shl? ? ?eax, 2? ? ? ?; To get correct offset, multiply by 4, the size of an int (DWORD)<br />; ***<br /><br />	;? ? ? ? ? ? ? + buffer<br />	mov	edx, dword <br />	add	eax, edx<br /><br /></code></pre><br /></div>
+    <div class="meta">Posted on 2005-06-06 17:15:05 by tenkey</div>
+   </div>
+   <div class="post" id="post-160855">
+    <div class="subject"><a href="#post-160855">Re: Same(?) calculation with different results</a></div>
+    <div class="body">This is definitely not my day... :(</div>
+    <div class="meta">Posted on 2005-06-06 17:17:53 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-160868">
+    <div class="subject"><a href="#post-160868">Re: Same(?) calculation with different results</a></div>
+    <div class="body">Ah! Now I see the light :D<br /><br />Thank you all very much!</div>
+    <div class="meta">Posted on 2005-06-07 04:17:45 by Parasight</div>
+   </div>
+  </div>
+ </body>
+</html>

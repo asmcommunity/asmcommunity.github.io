@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. ex #12 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27703" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27703">Basics of Asm32 in opt. ex #12</a></p>
+   <div class="post" id="post-197606">
+    <div class="subject"><a href="#post-197606">Basics of Asm32 in opt. ex #12</a></div>
+    <div class="body">original masm32\example1\listbox
+<pre><code>
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\user32.inc
+include C:\masm32\include\kernel32.inc
+
+includelib C:\masm32\lib\kernel32.lib
+includelib C:\masm32\lib\user32.lib
+
+;###############################################################
+
+	;=============
+	;Local macros
+	;=============
+
+szText MACRO Name, Text:VARARG
+ LOCAL lbl
+ jmp lbl
+	Name db Text,0
+ lbl:
+ENDM
+
+m2m MACRO M1, M2
+ push M2
+ pop   M1
+ENDM
+
+return MACRO arg
+ mov eax,arg
+ ret
+ENDM
+
+	;================
+	;Local prototypes
+	;================
+
+WinMain PROTO
+WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
+TopXY PROTO :DWORD,:DWORD
+ListBox PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+ListBoxProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
+
+.data
+
+szDisplayName db "List Box Demo",0
+TheMsg db "Assembler, Pure & Simple",0
+litem1 	db 'Roses are red',0
+litem2	db 'Violets are blue.',0
+litem3 	db 'If sugar is sweet,',0
+litem4 	db 'What happend to you?',0
+TheText db "Please confirm Exit",0
+CurSel1 db "You selected from hList1",0
+CurSel2 db "You selected from hList2",0
+Path db "*.*",0
+lstBox db "LISTBOX",0
+hInstance		equ 400000h
+
+ClassName db 1,0
+wc WNDCLASSEX <SIZEOF wc,CS_HREDRAW or CS_VREDRAW or CS_BYTEALIGNWINDOW, offset WndProc,\
+		0,0,hInstance,0,0,COLOR_BTNFACE+1,600,offset ClassName,0>
+
+.data?
+
+hList1		dd ?
+hList2		dd ?
+lpLstBox1	dd ?
+hWnd		dd ?
+msg	MSG <>
+.code
+start:
+
+
+	invoke WinMain
+
+	call ExitProcess
+;,eax
+
+;##########################################################################
+
+WinMain proc uses ebx esi edi
+
+
+;====================================================
+;Fill WNDCLASSEX structure with required variables
+;====================================================
+
+xor ebx,ebx
+invoke LoadIcon,hInstance,500 ;icon ID
+mov wc.hIcon,eax
+invoke LoadCursor,ebx,IDC_ARROW
+mov wc.hCursor, eax
+
+invoke RegisterClassEx,addr wc
+mov edi,eax
+;===========================
+;Center window at following size
+;===========================
+
+Wwd equ 470
+Wht equ 285
+
+invoke GetSystemMetrics,SM_CXSCREEN
+mov esi,eax
+invoke GetSystemMetrics,SM_CYSCREEN
+shr esi,1
+shr eax,1
+sub esi,Wwd/2
+sub eax,Wht/2
+
+invoke CreateWindowEx,ebx,
+	edi,
+	ADDR szDisplayName,
+	WS_OVERLAPPEDWINDOW or WS_VISIBLE,
+	esi,eax,Wwd,Wht,
+	ebx,ebx,hInstance,ebx
+
+;==================================
+;Loop until PostQuitMessage is sent
+;==================================
+mov esi,offset msg
+StartLoop:
+	invoke GetMessage,esi,ebx,ebx,ebx
+	or eax,eax
+	je ExitLoop
+	invoke TranslateMessage,esi
+	invoke DispatchMessage,esi
+	jmp StartLoop
+ExitLoop:
+
+	ret
+;urn msg.wParam
+WinMain endp
+
+;####################################################################
+
+WndProc proc 	uses ebx edi esi 	hWin :DWORD,
+				uMsg:DWORD,
+				wParam:DWORD,
+				lParam:DWORD
+mov eax,uMsg
+mov esi,hWin
+.IF eax == WM_COMMAND
+;=========== menu commands ==============
+ mov eax,wParam
+.IF eax == 1000
+	mov eax,WM_SYSCOMMAND
+	mov wParam,SC_CLOSE
+	jmp d
+.ELSEIF eax == 1900
+	invoke MessageBox,esi,addr TheMsg,addr szDisplayName,MB_OK
+.ENDIF
+;========== end menu commands ============
+
+.ELSEIF eax == WM_CREATE
+
+mov ecx,240
+mov edi,1
+mov ebx,501
+
+;----------------------------------------------
+@@: 	
+	invoke CreateWindowEx,WS_EX_CLIENTEDGE,ADDR lstBox,0,
+	WS_VSCROLL or WS_VISIBLE or WS_BORDER or WS_CHILD or LBS_HASSTRINGS \
+	or LBS_NOINTEGRALHEIGHT or LBS_DISABLENOSCROLL,\
+	ecx,20,200,200,esi,ebx,hInstance,0
+	mov dword ptr +offset hList1,eax
+	invoke SetWindowLong,eax,GWL_WNDPROC,offset ListBoxProc
+	dec ebx
+	mov ecx,40
+	dec edi
+	jns @B
+;----------------------------------------------
+	mov lpLstBox1,eax
+ invoke SendMessage,hList1,LB_DIR,DDL_ARCHIVE or DDL_DRIVES or DDL_DIRECTORY, addr Path
+.data
+ALIGN 4
+strtbl dd offset litem4
+         dd offset litem3
+         dd offset litem2
+         dd offset litem1
+.code
+mov edi,3
+mov ebx,offset strtbl
+@@: 
+invoke SendMessage,hList2,LB_ADDSTRING,0,d</div>
+    <div class="meta">Posted on 2001-04-19 08:37:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>CreateWindowEx fails but GetLastError says everything OK - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21063" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21063">CreateWindowEx fails but GetLastError says everything OK</a></p>
+   <div class="post" id="post-159600">
+    <div class="subject"><a href="#post-159600">CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">This is a very simple program, it should just open a window but for some reason CreateWindowEx fails (returns 0). I tried to call GetLastError to find the source of the problem and it returned zero as well (no error)! Any suggestions would be greatly appreciated!<br /><br /><pre><code>.386<br />.model flat,stdcall<br />option casemap:none<br />include \masm32\include\windows.inc<br />include \masm32\include\kernel32.inc<br />include \masm32\include\user32.inc<br />include \masm32\include\gdi32.inc<br />includelib \masm32\lib\kernel32.lib<br />includelib \masm32\lib\user32.lib<br />includelib \masm32\lib\gdi32.lib<br /><br />WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD<br />WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD<br />Fatal PROTO<br /><br />.data<br />g_AppName db &quot;My First App&quot;,0<br />g_ClassName db &quot;SimpleWindowClass&quot;,0<br />g_MainWndClass WNDCLASSEX &lt;SIZEOF WNDCLASSEX,CS_HREDRAW or CS_VREDRAW,OFFSET WndProc,0,0,,,,,0,OFFSET g_ClassName,&gt;<br /><br />.data?<br />g_hInstance HINSTANCE ?<br />g_lpCmdLine LPSTR ?<br /><br />.code<br />start:<br />; setup and call WinMain<br />invoke GetModuleHandle,0<br />mov g_hInstance,eax<br />invoke GetCommandLine<br />mov g_lpCmdLine,eax<br />invoke WinMain,g_hInstance,0,g_lpCmdLine,0<br /><br />; exit<br />invoke ExitProcess,0<br /><br />WinMain PROC hInst:HINSTANCE,hPrev:HINSTANCE,lpCmdLine:LPSTR,nCmdShow:DWORD<br />? ? ? LOCAL hMainWnd:HWND<br />? ? ? LOCAL msg:MSG<br />? ? ? <br />? ? ? ; fill in g_MainWndClass<br />? ? ? push g_hInstance<br />? ? ? pop g_MainWndClass.hInstance<br />? ? ? invoke GetStockObject,WHITE_BRUSH<br />? ? ? mov g_MainWndClass.hbrBackground,eax<br />? ? ? invoke LoadIcon,0,IDI_APPLICATION<br />? ? ? mov g_MainWndClass.hIcon,eax<br />? ? ? mov g_MainWndClass.hIconSm,eax<br />? ? ? invoke LoadCursor,0,IDC_ARROW<br />? ? ? mov g_MainWndClass.hCursor,eax<br /><br />? ? ? ; open main window<br />? ? ? invoke RegisterClassEx,ADDR g_MainWndClass<br />? ? ? .IF (!ax)<br />? ? ? ? ? ? invoke Fatal<br />? ? ? ? ? ? ret<br />? ? ? .ENDIF<br />? ? ? invoke CreateWindowEx,0,OFFSET g_ClassName,OFFSET g_AppName,WS_OVERLAPPED,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,0,0,hInst,0<br />? ? ? .IF (!eax)<br />? ? ? ? ? ? invoke Fatal<br />? ? ? ? ? ? ret<br />? ? ? .ENDIF<br />? ? ? mov hMainWnd,eax<br />? ? ? invoke ShowWindow,hMainWnd,0<br />? ? ? invoke UpdateWindow,hMainWnd<br /><br />? ? ? .WHILE 1<br />? ? ? ? ? ? invoke GetMessage,ADDR msg,0,0,0<br />? ? ? ? ? ? .BREAK .IF (!eax)<br />? ? ? ? ? ? invoke TranslateMessage,ADDR msg<br />? ? ? ? ? ? invoke DispatchMessage,ADDR msg<br />? ? ? .ENDW<br /><br />? ? ? mov eax,msg.wParam<br />? ? ? ret<br />WinMain ENDP<br /><br />WndProc PROC hwnd:HWND,uMsg:UINT,wparam:WPARAM,lparam:LPARAM<br />? ? ? .IF (uMsg==WM_DESTROY)<br />? ? ? ? ? ? invoke PostQuitMessage,0<br />? ? ? .ELSE<br />? ? ? ? ? ? invoke DefWindowProc,hwnd,uMsg,wparam,lparam<br />? ? ? .ENDIF<br />? ? ? xor eax,eax<br />? ? ? ret<br />WndProc ENDP<br /><br />Fatal PROC<br />? ? ? LOCAL lpBuffer:DWORD<br />? ? ? LOCAL errno:DWORD<br />? ? ? invoke GetLastError<br />? ? ? mov errno,eax<br />? ? ? invoke FormatMessage,FORMAT_MESSAGE_ALLOCATE_BUFFER or FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS,0,errno,0,ADDR lpBuffer,0,0<br />? ? ? invoke MessageBox,0,lpBuffer,0,MB_OK or MB_ICONINFORMATION<br />? ? ? invoke LocalFree,lpBuffer<br />? ? ? ret<br />Fatal ENDP<br /></code></pre></div>
+    <div class="meta">Posted on 2005-05-05 19:58:53 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159603">
+    <div class="subject"><a href="#post-159603">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">Tough one, but I found it... happened to me before ;)<br /><br />You missed the <strong>ret</strong> after <em>invoke DefWindowProc,hwnd,uMsg,wparam,lparam</em><br /><br />Also you never show the window. You use: <em>invoke ShowWindow,hMainWnd,0</em> and 0 equals SW_HIDE.<br /><br />J.<br /><br /></div>
+    <div class="meta">Posted on 2005-05-05 20:49:59 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-159607">
+    <div class="subject"><a href="#post-159607">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">Thanks for noticing! For some reason I thought the mCmdShow argument of ShowWindow was semi-meaningless.<br /><br />But wait I thought I did put a ret after invoke DefWindowProc!<br /><br /><pre><code>WndProc PROC hwnd:HWND,uMsg:UINT,wparam:WPARAM,lparam:LPARAM<br />&nbsp; &nbsp; &nbsp; .IF (uMsg==WM_DESTROY)<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; invoke PostQuitMessage,0<br />&nbsp; &nbsp; &nbsp; .ELSE<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; invoke DefWindowProc,hwnd,uMsg,wparam,lparam<br />&nbsp; &nbsp; &nbsp; .ENDIF<br />&nbsp; &nbsp; &nbsp; xor eax,eax<br />&nbsp; &nbsp; &nbsp; ret ; &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br />WndProc ENDP</code></pre><br /><br />Are you saying this isn&#39;t good enough?<br /><br />Sure enough I get the same strange error if I don&#39;t put a ret inside the .ELSE block. What gives?</div>
+    <div class="meta">Posted on 2005-05-05 21:27:07 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159609">
+    <div class="subject"><a href="#post-159609">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">Oh wait, duh. I get it! WndProc needs to return whatever DefWindowProc returns. So am I do understand that CreateWindowEx calls my WndProc and that by failing to return the proper value this caused CreateWindowEx to think it was in an error condition even though there was no error condition?</div>
+    <div class="meta">Posted on 2005-05-05 21:38:00 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159611">
+    <div class="subject"><a href="#post-159611">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">Ok stupid question: how come my window doesn&#39;t have a close box?</div>
+    <div class="meta">Posted on 2005-05-05 21:57:17 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159612">
+    <div class="subject"><a href="#post-159612">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">Never mind, figured it out!</div>
+    <div class="meta">Posted on 2005-05-05 21:59:46 by wildgnu</div>
+   </div>
+   <div class="post" id="post-159616">
+    <div class="subject"><a href="#post-159616">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">An additional note: on Win9x, there&#39;s a lot of cases where GetLastError doesn&#39;t return meaningful values, especially after GDI calls.<br /></div>
+    <div class="meta">Posted on 2005-05-06 01:29:29 by f0dder</div>
+   </div>
+   <div class="post" id="post-159701">
+    <div class="subject"><a href="#post-159701">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body"><div class="quote"><br />An additional note: on Win9x, there&#39;s a lot of cases where GetLastError doesn&#39;t return meaningful values, especially after GDI calls.<br /></div><br />...and messages to common controls too.</div>
+    <div class="meta">Posted on 2005-05-06 14:12:36 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-159707">
+    <div class="subject"><a href="#post-159707">Re: CreateWindowEx fails but GetLastError says everything OK</a></div>
+    <div class="body">Yet another reason why you shouldn&#39;t use 9x as a development platform, I guess :)</div>
+    <div class="meta">Posted on 2005-05-06 14:50:29 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

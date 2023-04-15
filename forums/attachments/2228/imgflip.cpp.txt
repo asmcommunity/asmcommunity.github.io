@@ -1,0 +1,189 @@
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <intrin.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef unsigned int uint;
+typedef unsigned char uchar;
+
+static void FlipVertical24_nc1(uchar* tSrcImagePtr, uchar* tDstImagePtr, uint iWidth, uint iHeight)
+{
+	const uint		iRowBytes    = iWidth*3;
+	const uint		iImageBytes  = iWidth*iHeight*3;
+
+	uint			*src;
+	uint			*dst = (uint*) tDstImagePtr;
+	uchar			*srcRow = tSrcImagePtr;
+
+	srcRow = srcRow + iImageBytes - iRowBytes;
+
+	// Loop through each line
+	for (uint y=0; y<iHeight; y++)
+	{	
+		src = (uint*) srcRow;
+
+		for (uint x=0; x<iWidth; x++)
+		{
+			uchar ir, ig, ib;
+
+			ir = *src++;
+			ig = *src++;
+			ib = *src++;
+
+			*dst++ = (ir << 16) | (ig << 8) | ib;
+		}
+
+		// Decrement src pointer by a line
+		srcRow = srcRow - iRowBytes;
+	}
+}
+
+
+static void FlipVertical24_f1(uchar* tSrcImagePtr, uchar* tDstImagePtr, uint iWidth, uint iHeight)
+{
+	const uint		iRowBytes    = iWidth*3;
+	const uint		iImageBytes  = iWidth*iHeight*3;
+
+	uint			*src;
+	uint			*dst = (uint*) tDstImagePtr;
+	uchar			*srcRow = tSrcImagePtr;
+
+	srcRow = srcRow + iImageBytes - iRowBytes;
+
+	// Loop through each line
+	for (uint y=0; y<iHeight; y++)
+	{	
+		src = (uint*) srcRow;
+
+		for (uint x=0; x<iWidth/4; x++)
+		{
+			uint i1, i2, i3;
+			uint o1, o2, o3, o4;
+
+							// 00  08  16  24
+			i1 = *src++;	// R1, G1, B1, R2
+			i2 = *src++;	// G2, B2, R3, G3
+			i3 = *src++;	// B3, R4, G4, B4
+
+			// directly extract 24bpp RGB -> 32bpp 0RGB
+			o1 = i1 & 0x00FFFFFF;
+			o2 = (i1 >> 24) | (i2 << 8);
+			o3 = (i2 >> 16) | (i3 << 16);
+			o4 = i3 >> 8;
+
+			// swap 0RGB -> 0BGR, store output
+			*dst++ = _byteswap_ulong(o1) >> 8;
+			*dst++ = _byteswap_ulong(o2) >> 8;
+			*dst++ = _byteswap_ulong(o3) >> 8;
+			*dst++ = _byteswap_ulong(o4) >> 8;
+		}
+
+		// Decrement src pointer by a line
+		srcRow = srcRow - iRowBytes;
+	}
+}
+
+
+static inline uint make32(uchar bb, uchar gg, uchar rr)
+{
+	return (rr << 16) | (gg << 8) | bb;
+}
+
+static void FlipVertical24_f2(uchar* tSrcImagePtr, uchar* tDstImagePtr, uint iWidth, uint iHeight)
+{
+	const uint		iRowBytes    = iWidth*3;
+	const uint		iImageBytes  = iWidth*iHeight*3;
+
+	uint			*src;
+	uint			*dst = (uint*) tDstImagePtr;
+	uchar			*srcRow = tSrcImagePtr;
+
+	srcRow = srcRow + iImageBytes - iRowBytes;
+
+	// Loop through each line
+	for (uint y=0; y<iHeight; y++)
+	{	
+		src = (uint*) srcRow;
+
+		for (uint x=0; x<iWidth/4; x++)
+		{
+			uint i1, i2, i3;
+			uint o1, o2, o3, o4;
+
+							// 00  08  16  24
+			i1 = *src++;	// R1, G1, B1, R2
+			i2 = *src++;	// G2, B2, R3, G3
+			i3 = *src++;	// B3, R4, G4, B4
+
+			// 24bpp RGB -> 32bpp 0BGR
+			o1 = make32( (i1>>16)&0xFF, (i1>>8)&0xFF, i1&0xFF);
+			o2 = make32( (i2>>8)&0xFF,  i2&0xFF, (i1>>24));
+			o3 = make32( (i3)&0xFF, (i2>>24), (i2>>16)&0xFF);
+			o4 = make32( (i3>>24), (i3>>16)&0xFF, (i3>>8)&0xFF);
+
+			// swap 0RGB -> 0BGR, store output
+			*dst++ = o1;
+			*dst++ = o2;
+			*dst++ = o3;
+			*dst++ = o4;
+		}
+
+		// Decrement src pointer by a line
+		srcRow = srcRow - iRowBytes;
+	}
+}
+
+
+const unsigned	TESTITER = 5000;
+const unsigned	WIDTH = 400;
+const unsigned	HEIGHT = 400;
+const char		*fni = "input_24bpp_bgr.raw";
+const char		*fno = "output32.raw";
+
+void boost_priority()
+{
+	SetPriorityClass(GetCurrentProcess(), REALTIME_PRIORITY_CLASS);
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+	SetThreadAffinityMask(GetCurrentThread(), 1);
+}
+
+int main()
+{
+	DWORD tick;
+	uchar *m1 = new uchar[WIDTH*HEIGHT*3];
+	uchar *m2 = new uchar[WIDTH*HEIGHT*4];
+
+	
+	FILE *fin = fopen(fni, "rb");
+	fread(m1, 1, WIDTH*HEIGHT*3, fin);
+	fclose(fin);
+
+	boost_priority();
+
+	tick = GetTickCount();
+	for(unsigned i=0; i<TESTITER; i++)
+		FlipVertical24_f1(m1, m2, WIDTH, HEIGHT);
+	tick = GetTickCount() - tick;
+	printf("%d iterations of f1: %d ticks\n", TESTITER, tick);
+
+	tick = GetTickCount();
+	for(unsigned i=0; i<TESTITER; i++)
+		FlipVertical24_f2(m1, m2, WIDTH, HEIGHT);
+	tick = GetTickCount() - tick;
+	printf("%d iterations of f1: %d ticks\n", TESTITER, tick);
+
+	tick = GetTickCount();
+	for(unsigned i=0; i<TESTITER; i++)
+		FlipVertical24_nc1(m1, m2, WIDTH, HEIGHT);
+	tick = GetTickCount() - tick;
+	printf("%d iterations of nc1: %d ticks\n", TESTITER, tick);
+
+	FILE *fout= fopen(fno, "wb");
+	fwrite(m2, 1, WIDTH*HEIGHT*4, fout);
+	fclose(fout);
+
+	delete[] m1;
+	delete[] m2;
+}

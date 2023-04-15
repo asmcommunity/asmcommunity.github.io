@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Help for resizing files - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9301" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9301">Help for resizing files</a></p>
+   <div class="post" id="post-68644">
+    <div class="subject"><a href="#post-68644">Help for resizing files</a></div>
+    <div class="body">Hi<br /><br />I make this MP3 editor (for TAG v1) and updating of tag works fine only for files that already have this TAG info. First problem is that i dont know how to resize this file so i can add new 128 bytes at the end of file and update this TAG info. Second is that i want to completely remove this TAG and then the file will be 128 bytes smaller (shorter). I try with this:<br />	invoke CreateFile,lpFilename,GENERIC_READ or GENERIC_WRITE,FILE_SHARE_READ or FILE_SHARE_WRITE,<br />           ebx,OPEN_EXISTING or CREATE_ALWAYS,FILE_FLAG_SEQUENTIAL_SCAN OR FILE_FLAG_NO_BUFFERING,ebx<br />	.if eax==INVALID_HANDLE_VALUE<br />		jmp End1<br />	.endif<br />	mov hFileUpdate,eax<br />	invoke GetFileSize,hFileUpdate,0<br />	mov edx,eax<br />	add edx,128d<br />	push edx	; save new file size for writing<br />	invoke   CreateFileMapping, hFileUpdate, ebx, PAGE_READWRITE, eax,ebx,ebx ; eax is dwMaximumSizeHigh<br />	.if eax==NULL	; error<br />		jmp End1<br />	.endif<br /><br />But here CreateFileMapping fail. I use olly's debugger and there i can see ERROR_INVALID_PARAMETER. What i doing wrong? Can you help me with this?<br /><br />Thank in advance<br /><br />stanks<br /><br />Here is the file: <a target="_blank" href="http://dojaja.gamer.hr/stanks/MP3 Editor.zip">MP3 Editor.zip</a></div>
+    <div class="meta">Posted on 2002-12-02 12:24:24 by stanks</div>
+   </div>
+   <div class="post" id="post-68648">
+    <div class="subject"><a href="#post-68648">i think your tought is not the good one</a></div>
+    <div class="body">probably you just have to allocate 128 bytes more (even if tag already present)<br />or just check if tag if present before openning the mp3<br /><br />then 3 case:<br />add tag: -if tag already present Do Nothing or Update tag<br />               -if not go to then end of mp3 file (GetFileSize) and add you 128 bytes struct(TAG) and save the file with (GetFileSize)+128 as size<br /><br />Update tag:-if tag not present do nothing or just add tag<br />                   -if tag just update it and save file with it original file size<br /><br />Del Tag:-if tag not there do nothing<br />              -if tag just save file with it filesize reduced by 128<br /><br />ok hope it will be but sometimes a better point of view can fix some bugs or prevent you to fail doing what you want.<br /><br />of course you can use FileMapping if you want.</div>
+    <div class="meta">Posted on 2002-12-02 12:57:18 by Thor0Asgard</div>
+   </div>
+   <div class="post" id="post-68772">
+    <div class="subject"><a href="#post-68772">Help for resizing files</a></div>
+    <div class="body">You invoke CreateFileMapping with wrong parameters.<br /><br />instead of:<br />invoke CreateFileMapping, hFileUpdate, ebx, PAGE_READWRITE, eax,ebx,ebx <br /><br />you should use<br /><br />invoke CreateFileMapping, hFileUpdate, 0, PAGE_READWRITE, 0, eax, 0<br /><br />because pair 0, eax makes the new 64-bit file size and 0 is high word.<br />and obviously you should xor ebx,ebx<br /><br />(sorry Stanks for sending thrash to your private mailbox, but i had problems with cookies and couldn't log to the forum and tried to reply to this post via private message box but now everything works fine)<br />PS: Bomb Raider rules!!!</div>
+    <div class="meta">Posted on 2002-12-03 03:41:50 by stolarz</div>
+   </div>
+   <div class="post" id="post-68774">
+    <div class="subject"><a href="#post-68774">Help for resizing files</a></div>
+    <div class="body">you can change the size of memory mapped files very easily...<br /><br /><pre><code><br />.DATA<br />        MAPSIZE         DD 1000<br />        <br />.DATA?<br />        <br />        FILENAME1       DB &quot;test.dat&quot;,0<br />        <br />        FILEHANDLE      DD ?<br />        FILESIZE        DD ?<br />        H_BUFFER        DD ?<br />        M_BUFFER        DD ?                <br /><br />.CODE        <br />        INVOKE          CreateFile,addr FILENAME1,GENERIC_READ+GENERIC_WRITE,0,NULL,\<br />                        OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL<br />        CMP             EAX, INVALID_HANDLE_VALUE        <br />        JZ              _ERR<br /><br />        MOV             FILEHANDLE,EAX<br /><br />        INVOKE          GetFileSize,EAX,NULL             <br />        INC             EAX<br />        JZ              _ERR<br />        DEC             EAX<br /><br />        MOV             FILESIZE,EAX<br />        ADD             MAPSIZE,EAX                      <br />                                                         <br />        INVOKE          CreateFileMapping,FILEHANDLE,NULL,PAGE_READWRITE,NULL,MAPSIZE,0<br />        MOV             H_BUFFER, EAX<br />                                                         <br />        INVOKE          MapViewOfFile,H_BUFFER,FILE_MAP_WRITE,0,0,MAPSIZE<br />        MOV             M_BUFFER,EAX<br />        MOV             EDI, EAX                         <br /><br />        ;&#91;I&#93;EDI points now to the allocated memory &#40;filesize + 1000 bytes extra buffer&#41;&#91;/I&#93;<br />        ;&#91;I&#93;you can do now what you want to do with that data... read it, change it...&#91;/I&#93;<br />        ;&#91;I&#93;whatever...&#91;/I&#93;<br /><br />        INVOKE          UnmapViewOfFile,M_BUFFER         <br />        INVOKE          CloseHandle,H_BUFFER             <br /><br />        ;&#91;I&#93;the next part is very important... please look up the next two api functions &#91;/I&#93;<br />        ;&#91;I&#93;in your api-ref. SetFilePointer is able to change the position of the &quot;filpointer&quot;&#91;/I&#93;<br />        ;&#91;I&#93;and SetEndOfFile marks the end-of-file at the filepointers current position.&#91;/I&#93;<br />        ;&#91;I&#93;so with these two instructions you can enlarge or cut the file with no problems.&#91;/I&#93;<br />                                                         <br />        INVOKE          SetFilePointer,FILEHANDLE,ESI,0,FILE_BEGIN<br />        INVOKE          SetEndOfFile,FILEHANDLE          <br /><br />        INVOKE          CloseHandle,FILEHANDLE<br /></code></pre></div>
+    <div class="meta">Posted on 2002-12-03 03:46:58 by mob</div>
+   </div>
+   <div class="post" id="post-68827">
+    <div class="subject"><a href="#post-68827">Thanks!</a></div>
+    <div class="body">Thank you guys very much. Now i will finish my program. Thanks again.<br /><br />stanks</div>
+    <div class="meta">Posted on 2002-12-03 10:41:04 by stanks</div>
+   </div>
+  </div>
+ </body>
+</html>

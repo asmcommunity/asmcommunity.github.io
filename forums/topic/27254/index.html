@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Optimize your code with a cool MACRO... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27254" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27254">Optimize your code with a cool MACRO...</a></p>
+   <div class="post" id="post-195296">
+    <div class="subject"><a href="#post-195296">Optimize your code with a cool MACRO...</a></div>
+    <div class="body"><pre><code>mmov MACRO M1, M2
+  IF (OPATTR (M2)) AND 00010000y
+    ;; Source is a register
+    mov  M1, M2
+  ELSEIF (OPATTR (M2)) AND 00000100y
+    ;; Source is constant
+    IF M2 EQ 0
+      IF (OPATTR (M1)) AND 00010000y
+        ;; Destination is register
+        xor M1, M1
+      ELSE
+        and M1, 0
+      ENDIF
+    ELSEIF M2 EQ -1
+      or M1, -1
+    ELSE
+      mov  M1, M2
+    ENDIF
+  ELSE
+    ;; Source is memory
+    IF (OPATTR (M1)) AND 00010000y
+      ;; Destination is a register
+      mov M1, M2
+    ELSE
+      push M2
+      pop  M1
+    ENDIF
+  ENDIF
+ENDM</code></pre>
+
+...turns...
+
+<pre><code>
+    mmov eax, 0
+    mmov eax, -1
+    mmov MyDWORD, 0
+    mmov MyDWORD, -1
+
+    mmov MyDWORD, MyDWORD2
+    mmov MyDWORD, eax
+    mmov eax, MyDWORD
+    mmov eax, ebx
+</code></pre>
+...into...
+<pre><code>
+    xor eax, eax
+    or eax, -1
+    and MyDWORD, 0
+    or MyDWORD, -1
+
+    push MyDWORD2
+    pop MyDWORD
+    mov MyDWORD, eax
+    mov eax, MyDWORD
+    mov eax, ebx
+</code></pre>
+I like to use all the windows constants, but we shouldn't have to sacrafice having compact or slower code :)  I'd sure like suggestion on improvements or other similar cool MACROS :)
+Take care, bitRAKE</div>
+    <div class="meta">Posted on 2001-03-16 02:37:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195297">
+    <div class="subject"><a href="#post-195297">Optimize your code with a cool MACRO...</a></div>
+    <div class="body"><em>"The punishment for the wise man who refuses to get involved in politics, is to be ruled by lesser men." - Plato
+</em>
+can anybody translate this spell into german language?
+It goes a little bit beyond my english translation capabilities ... :rolleyes:
+
+beaster.</div>
+    <div class="meta">Posted on 2001-03-16 05:55:00 by beaster</div>
+   </div>
+   <div class="post" id="post-195298">
+    <div class="subject"><a href="#post-195298">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">"The punishment for the wise man who refuses to get involved in politics, is to be ruled by lesser men." - Plato
+
+Well, "frei übersetzt":
+
+"Die Schlauen, die sich nicht in der Politik engagieren wollen, werden dadurch bestraft, daß sie von Dummen regiert werden." - Plato</div>
+    <div class="meta">Posted on 2001-03-16 07:05:00 by stem</div>
+   </div>
+   <div class="post" id="post-195299">
+    <div class="subject"><a href="#post-195299">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">I don't like mem to mem realization - push pop mem slow and NP!!
+Compile and run it several times and look for youself:
+.586
+.model flat,stdcall
+option casemap:none
+include C:\masm32\include\windows.inc
+include C:\masm32\include\kernel32.inc
+include C:\masm32\include\user32.inc
+includelib kernel32.lib
+includelib user32.lib
+TimeTest_ON macro 
+
+ db 0fh,31h 
+ push edx  
+ push eax
+endm
+
+TimeTest_OFF macro 
+  db 0fh,31h  
+  pop ebx     
+  pop ecx     
+  sub eax,ebx 
+  sbb edx,ecx
+endm
+.data
+tmpl 	db 'Using m1push, m2pop  took %i clocks',13,10
+	db 'Using rpush, m1>r, r>m2,rpop  %i clocks',0
+.data?
+buffer	db 64 dup (?)
+firstres	dd ?
+secondres dd ?
+dummy dd ?
+.code
+start:
+	TimeTest_ON
+	mov ecx,100h
+test1:	push ecx
+;Caanu oanoeðoaiue eia
+	push firstres
+	pop dummy
+	pop ecx
+	dec ecx
+	jne test1
+	TimeTest_OFF
+	shr eax,8
+	mov firstres,eax
+	TimeTest_ON
+	mov ecx,100h
+test2:	push ecx
+;Aoiðie oanoeðoaiue eia
+	push eax
+	mov eax,firstres
+	mov dummy,eax
+	pop eax
+	pop ecx
+	dec ecx
+	jne test2
+	TimeTest_OFF
+	shr eax,8
+	mov secondres,eax
+	invoke wsprintf,addr buffer,addr tmpl,firstres,secondres
+	invoke MessageBox,0,addr buffer,0,0
+	call ExitProcess
+
+	end start</div>
+    <div class="meta">Posted on 2001-03-16 09:01:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-195300">
+    <div class="subject"><a href="#post-195300">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">The Svin,
+Can you provide a better solution?  I don't like mem->mem moves either - that is why I wrote the macro :)
+
+Maybe it should be:
+
+mmmov MACRO M1, M2, M3, M4
+    push M2
+    push M4
+    pop M3
+    pop M1
+ENM
+
+...is that faster?
+
+Please, advise Svin.  I'd really like to have the easy way as I'm a lazy asm programmer :P
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-16 10:23:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195301">
+    <div class="subject"><a href="#post-195301">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">I was hoping that some people would test out the macro and give me some pointers :)  Just do a search and replace changing all 'mov' to 'mmov'.  Did I mess anything up, or does this macro work as a direct replacement for 'mov'?
+Thanks,
+bitRAKE
+
+
+beaster,
+The quote means many things.  I like it because I hate politics.  But with wisdom one learns that they must communicate their ideas, and this requires getting involved in politics.
+Take care,
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-16 10:32:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195302">
+    <div class="subject"><a href="#post-195302">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">Well I don't know if it's any faster than push and pop, but try this for registers:-
+
+<pre><code>
+
+MACRO swap m1,m2
+    xor m1,m2
+    xor m2,m1
+    xor m1,m2
+ENDM
+
+</code></pre>
+
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-03-16 10:44:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195303">
+    <div class="subject"><a href="#post-195303">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">In mem to mem case there might be two versions:
+if you care of previous value of eax before the macro runs:
+1.
+push eax
+mov eax,MEM1
+mov MEM2,eax
+pop eax
+if you don't care of eax
+mov eax,MEM1
+mov MEM2,eax
+
+in test example I used the first version it's better.
+Though we've got here 4 instractions instead of 2
+push mem1
+pop mem2
+this 4 instructions runs ~3clocks faster and we preserve and restore value of eax so it as safe as push mem pop mem version.
+For the rest I like your macro ans think that may be it worth to
+put it for common use after some further analiz.
+Good luck.
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-16 10:56:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-195304">
+    <div class="subject"><a href="#post-195304">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">Thanks Svin that was the clue I needed :)
+
+How about a third parameter for mem->mem moves that lets you say what register to use, or it will push/pop eax if third parameter not defined?
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-16 12:42:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195305">
+    <div class="subject"><a href="#post-195305">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">Svin,
+
+  I dont know if it just my AMD 800, but I copied your bench code and ran it and found the first way slower (push and pop memory).
+
+  I liked your code so i tried it on some of my stuff, and in every case i found about the same time for the first trial, and the second was always faster. So i modified your code to this:
+
+<pre><code>
+start:
+     push esi
+     mov esi, 0
+   .while esi < 10
+   
+     TimeTest_ON
+     mov ecx,100h
+test2:
+     push ecx
+
+     push eax
+     mov eax, dummy1
+     mov dummy2, eax
+     pop eax
+
+
+     pop ecx
+     dec ecx
+     jne test2
+     TimeTest_OFF
+
+     shr eax,8
+     DPrintValD eax, "AVERAGE CLOCKS"
+     
+     inc esi
+   .endw
+     pop esi
+     call ExitProcess
+end start
+</code></pre>
+
+<strong>Which Tested and gave an output array:</strong>
+<pre><code>
+AVERAGE CLOCKS:  75
+AVERAGE CLOCKS:  7
+AVERAGE CLOCKS:  7
+AVERAGE CLOCKS:  7
+AVERAGE CLOCKS:  7
+AVERAGE CLOCKS:  7
+AVERAGE CLOCKS:  6
+AVERAGE CLOCKS:  6
+AVERAGE CLOCKS:  6
+AVERAGE CLOCKS:  6
+</code></pre>
+
+This on my cpu shows the first test cycle can't be trusted, as it shows up for anything i tested. (Perhaps a windows setup thread is still grunting away or something, i dunno ).  But as you have your previous code above, BitRAKE's version (push M1, pop M2) will always yeild false answers.
+
+<strong>When tested separatly with BitRAKE's code i got:</strong>
+<pre><code>
+AVERAGE CLOCKS:  98
+AVERAGE CLOCKS:  6
+AVERAGE CLOCKS:  6
+AVERAGE CLOCKS:  5
+AVERAGE CLOCKS:  5
+AVERAGE CLOCKS:  5
+AVERAGE CLOCKS:  5
+AVERAGE CLOCKS:  5
+AVERAGE CLOCKS:  5
+AVERAGE CLOCKS:  5
+</code></pre>
+
+Which shows, (at least on my machine), that BitRAKE's origional code is faster...
+
+Hate to rock to boat, but the numbers seem :rolleyes:
+
+NaN</div>
+    <div class="meta">Posted on 2001-03-19 23:44:00 by NaN</div>
+   </div>
+   <div class="post" id="post-195306">
+    <div class="subject"><a href="#post-195306">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">I've added an optional third parameter which allows you to do mem-mem moves by trashing a register.  The default mem-mem moves without a third value can be push-pop, or Svin's methode above.
+bitRAKE
+
+<pre><code>
+mv MACRO M1:REQ, M2:REQ, M3
+  IF (OPATTR (M2)) AND 00010000y
+    ;; Source is a register
+    IFDIFI M1,M2
+      ;; source and destination are different
+      mov M1,M2
+    ENDIF
+  ELSEIF (OPATTR (M2)) AND 00000100y
+    ;; Source is constant
+    IF M2 EQ 0
+      IF (OPATTR (M1)) AND 00010000y
+        ;; Destination is register
+        xor M1,M1
+      ELSE
+        and M1,0
+      ENDIF
+    ELSEIF M2 EQ -1
+      or M1,-1
+    ELSE
+      mov M1,M2
+    ENDIF
+  ELSE
+    ;; Source is memory
+    IF (OPATTR (M1)) AND 00010000y
+      ;; Destination is a register
+      mov M1,M2
+    ELSE
+      IFDIF M1,M2
+        ;; source and destination are different
+        IFNB M3
+          IF (OPATTR (M3)) AND 00010000y
+            mov M3,M2
+            mov M1,M3
+          ELSE
+            ;; Try to make an object file anyway
+            ECHO MACRO Warning:mv:M3 should be a register
+;push eax    ;If this is faster on your machine use it :)
+;mov eax,M2
+;mov M1,eax
+;pop eax
+            push M2
+            pop M1
+          ENDIF
+        ELSE
+;push eax    ;If this is faster on your machine use it :)
+;mov eax,M2
+;mov M1,eax
+;pop eax
+          push M2
+          pop M1
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
+ENDM
+</code></pre>
+
+NAN - I think it's just the AMD chips, but I'll test it out.  Need to work on adding better chip support to my macro :P *joking*  Close is close enough for general use.
+
+This message was edited by bitRAKE, on 3/20/2001 2:58:56 AM</div>
+    <div class="meta">Posted on 2001-03-20 01:31:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195307">
+    <div class="subject"><a href="#post-195307">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">Guys,
+
+there will always be a problem benchmarking code of this type
+because the context that it occurs in effects the total speed
+of the algorithm.
+<pre><code>
+    push mem
+    pop mem
+</code></pre>
+is handy because it does not use a register, generally using a
+register is faster if you have a spare but the overriding
+consideration is the leading and trailing instructions which
+effect the choice of instructions for doing the memory move.
+
+Things like this matter in a loop that is speed critical and the
+actual loop design will effect which works better in the particular
+context. You need to take into consideration a number of things
+when you make the choice, if you are short on registers in the
+algo, push/pop is a lot faster than preserving the register then
+doing the copy through a register.
+
+Best method is to code up the algo if it is speed critical and then
+benchmark it while making changes to see what actually runs faster.
+
+Outside a speed critical loop, push/pop wins in terms of convenience.
+
+Regards,
+
+hutch@pbq.com.au
+
+
+
+This message was edited by hutch--, on 3/20/2001 2:55:28 AM</div>
+    <div class="meta">Posted on 2001-03-20 01:54:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-195308">
+    <div class="subject"><a href="#post-195308">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">This macro really was meant to be used in a general context.  All loop code, I would certainly hand code.  It not allows you to trash whatever register you want to - just try:
+<pre><code>
+    mv MyDWORD1, MyDWORD2, eax
+</code></pre>
+...and it'll use eax.
+I'll be using it and I can't see why others wouldn't as well - it's quite usefull and common.
+Enjoy,
+bitRAKE</div>
+    <div class="meta">Posted on 2001-03-20 02:05:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-195309">
+    <div class="subject"><a href="#post-195309">Optimize your code with a cool MACRO...</a></div>
+    <div class="body">To Nan:
+You are right about first time issue in this particular code.
+But it can be easily avoided with inreasing number of interations replacing
+mov ecx,100h with mov ecx,100h
+and
+shr eax,8 with shr eax,16
+As to the rest, I optimize for Intel Pentium. Ran your algo and got the same result 2-3 clock faster in
+favour to mem > reg mem vs push mem pop mem.
+
+To Hutch:
+The worst thing about push mem pop mem in that it not only takes 5 clocks but it is NP
+wich is slowing down not only this operation but code before and after.
+The only thing for it - for some beginners it's easier to write and follow, that's
+why macro is needed. Moving through reg > mem will be at the and always faster
+even if you need to preserve and restore value of the reg you used for transition.
+Apparently it's true for Intell Pentium. Since it's the proccessor I'm writing for, it's true for me.
+
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-20 14:19:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Restricting user access on Windows 98 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17726" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=17726">Restricting user access on Windows 98</a></p>
+   <div class="post" id="post-136895">
+    <div class="subject"><a href="#post-136895">Restricting user access on Windows 98</a></div>
+    <div class="body">I work for a company that manages a bunch of vocational schools around the country.  Recently, the students at one of the schools has taken it upon themselves to go ahead and mess up the computers in the computer lab whenever the instructor isn't looking.  Everything from viruses to spyware to missing files.  It's a mess.  I'm constantly being called in to service these computers and it has gotten to the point where I just don't have the time or resources to keep doing this.<br /><br />The computers in the computer lab are pretty old, and can't run Windows 2000.  The programs that they use for their education will not run on NT either, so I'm stuck with 98.  Don't bother suggesting that the schools upgrade their computers, as it's already been discussed to death with the management and it's just not going to happen.  So basically I'm stuck with insecure and non-manageable Windows 98 here.  Keep this in mind.<br /><br /><br />Okay, so my idea was to write a program that would somehow deny the students access to every program that they don't need to be using, and only allow the programs that they do need to run.  I will also be implementing a shell replacement that will provide a very simple desktop with links to the programs they need.  I also need to restrict their access to the hard drive.  In effect, make it read-only, so that they cannot bring programs in from home and save them or run them.<br /><br />My problem is that I have only a very very vague idea of how to do this.  I'm guessing I will have to write a VxD and get into some nasty ring0 coding.  But I'm hoping that there might be some other hack-ish solution.  I've been looking around for some open source anti-virus programs, or programs like them that have the ability to stop other programs from running and restricting device access and such, but no luck so far.<br /><br />Any ideas or input on this will be greatly appreciated.  PM me instead of posting if you think your reply might overstep the bounds of the forum rules.<br /><br />Thanks in advance.</div>
+    <div class="meta">Posted on 2004-03-24 13:59:30 by iblis</div>
+   </div>
+   <div class="post" id="post-136941">
+    <div class="subject"><a href="#post-136941">Restricting user access on Windows 98</a></div>
+    <div class="body">Have you tried one of the other shell replacements?<br /><br />Remove the floppy/CD ROM drives, and force students to save their work on a network drive that is externally read only.  Take away all other network access.</div>
+    <div class="meta">Posted on 2004-03-25 06:24:37 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-136957">
+    <div class="subject"><a href="#post-136957">Restricting user access on Windows 98</a></div>
+    <div class="body">Hi bitRAKE<br /><br />Removing the floppy/CDROM drives is not an option.  One of the things they do in their education is to learn how to use MS Word to write their r?sum?s, and save files to a floppy disk.  And the CDROM is needed for a specific program they use.  I've fought this battle before with the school director and it's just not going to happen.  The computers don't have internet access, but unfortunately that doesn't stop the students.  They just bring in their own programs and whatnot from home.<br /><br />I did find a product called &quot;secure desktop&quot; that does what I need.  Unfortunately buying thirty or so copies of this software is well beyond our budget for this particular school, as they've already used up most of it purchasing all of the high priced special equipment they need.<br /><br /><br /><br />Right now I'm looking into API hooking, and hooking such things as CreateProcess, TerminateProcess, CreateFile, WriteFile, registry APIs, etc.  I'm hoping that this will do the trick.<br /><br />Thanks for the input!</div>
+    <div class="meta">Posted on 2004-03-25 10:03:17 by iblis</div>
+   </div>
+   <div class="post" id="post-136963">
+    <div class="subject"><a href="#post-136963">Restricting user access on Windows 98</a></div>
+    <div class="body">I wonder if you might write a small monitoring program to check for an insert notification on the CDROM. You can then check to make sure it is one that is allowed, if it isn't then eject it. Something like a message only window that watches WM_DEVICECHANGE...<br /><br /><pre><code>cmp D&#91;uMsg&#93;,WM_DEVICECHANGE<br />jne &gt;.NEXTMSG<br />	mov eax,&#91;wParam&#93;<br />	cmp eax,DBT_DEVICEARRIVAL<br />	jne &gt;.DEFPROC<br />		; Do your verification of the media here<br /><br />		cmp eax,TRUE ; TRUE = media approved<br />		je &gt;.DEFPROC<br />		; Log the user name and time<br /><br />		; Eject the disk<br />		invoke	mciSendString,&quot;open cdaudio&quot;,0,0,0<br />		invoke	mciSendString,&quot;set cdaudio door open&quot;,0,0,0<br />		invoke	mciSendString,&quot;close cdaudio&quot;,0,0,0<br />		jmp &gt;.DEFPROC</code></pre></div>
+    <div class="meta">Posted on 2004-03-25 10:37:48 by donkey</div>
+   </div>
+   <div class="post" id="post-136964">
+    <div class="subject"><a href="#post-136964">Restricting user access on Windows 98</a></div>
+    <div class="body">My old school had a different approach than locking everything down.<br /><br />First, make a network drive for saving stuff. This can either be per-user shares, or a single &quot;netdisk&quot; share. Inform people that they have so save everything on that folder, or it's too bad for them (make &quot;my documents&quot; point to this network drive, makes everything a lot easier).<br /><br />Next, there are two steps. I hope all computer configuarations are rather equal, because this means you can use a product like Norton Ghost when installing from scratch - will save a LOT of time.<br /><br />Next, get some &quot;on-the-fly&quot; &quot;restore&quot; program. We used some small danish program (sorry, I cannot remember the name, but I can probably find it) that was run on every user login. The idea is to scan the entire harddrive for changes, and restore any changed file from the server mirror - and delete files not in the mirror. This sounds rather slow, but even on the pmmx-200 boxes, this took max 5 seconds on every login.<br /><br />The idea is that people can do sorta what they want, but that most changes will be nuked on every new user login. When things become bad (virus, messed up system, ...), the &quot;install from scratch&quot; procedure is automated and will take around 5 minutes. You could even use networked multicast ghost, so you don't have to bring a CD to the machines.</div>
+    <div class="meta">Posted on 2004-03-25 10:48:31 by f0dder</div>
+   </div>
+   <div class="post" id="post-136972">
+    <div class="subject"><a href="#post-136972">Restricting user access on Windows 98</a></div>
+    <div class="body">Donkey,<br />That's a good idea.  I'll look into it, thanks.<br /><br />f0dder,<br />There is a network drive, and the students are encouraged to use it.  However they need the floppy to save word documents for homework and such.<br /><br />I actually suggested Norton Ghost, but higher-ups decided that they didn't want to purchase the licenses.  It's out of my hands.  I know it sounds stupid, and it is, but that's what I have to work with.<br /><br />However I would be interested in that Danish program you mentioned.  Even as just a temporary band-aid solution, that might cut down on the service calls.<br /><br /><br />Part of me would like to write this program, however.  It would be a learning process and would give me an excuse to get away from the duller areas of my job for awhile.<br /><br />Thanks again.</div>
+    <div class="meta">Posted on 2004-03-25 11:26:51 by iblis</div>
+   </div>
+   <div class="post" id="post-136981">
+    <div class="subject"><a href="#post-136981">Restricting user access on Windows 98</a></div>
+    <div class="body"><div class="quote"><br />There is a network drive, and the students are encouraged to use it. However they need the floppy to save word documents for homework and such.<br /></div><br />No problem with floppy drives - I would suggest removing them either.<br /><br /><div class="quote"><br />I actually suggested Norton Ghost, but higher-ups decided that they didn't want to purchase the licenses. It's out of my hands. I know it sounds stupid, and it is, but that's what I have to work with.<br /></div><br />That's sad - you could probably do with a single ghost license :/. Perhaps this will do the trick? <a target="_blank" href="http://www.partimage.org/">http://www.partimage.org/</a> .<br /><br />Anyway, the &quot;Mirror&quot; app - unfortunately I cannot remember it's name, and it seems like I never took a copy of it home because it was on a mapped netware disk and I never needed to. I think it's name was &quot;mirror&quot; or &quot;archive&quot;, which means it's somewhat hard to google for :p.<br /><br />The tool was dos based, used a &quot;level 3 lock&quot; (I think it was called) so it, under win9x, could modify even system DLLs. It's mode of operation was from folder to folder, so it required network drives to be mapped. I think it probably accessed the filesystem directly?<br /><br />I guess you could code a sync tool yourself... I would either make it client/server based, or have it read from a compressed archive on a network share, to reduce traffic load and generally make things faster (the danish app, iirc, worked with a plain directory structure).</div>
+    <div class="meta">Posted on 2004-03-25 12:38:21 by f0dder</div>
+   </div>
+   <div class="post" id="post-137164">
+    <div class="subject"><a href="#post-137164">Restricting user access on Windows 98</a></div>
+    <div class="body">Update:<br /><br />I just found this web site full of little registry tricks that can be used to restrict user access.  This link in particular:<br /><a target="_blank" href="http://www.jsiinc.com/SUBA/tip0000/rh0050.htm">http://www.jsiinc.com/SUBA/tip0000/rh0050.htm</a><br />And the links from that page.  The trick seems to do just what I need for now.  Particularly the &quot;RestrictRun&quot; key.  I just tested it as well as a few of the others on a Win98 system running in VMWare and it works like a charm.<br /><br />Just thought I'd share.</div>
+    <div class="meta">Posted on 2004-03-27 19:57:03 by iblis</div>
+   </div>
+   <div class="post" id="post-137166">
+    <div class="subject"><a href="#post-137166">Restricting user access on Windows 98</a></div>
+    <div class="body">Nice source for information. Glad you found what you needed.</div>
+    <div class="meta">Posted on 2004-03-27 20:41:20 by donkey</div>
+   </div>
+   <div class="post" id="post-137169">
+    <div class="subject"><a href="#post-137169">Restricting user access on Windows 98</a></div>
+    <div class="body">Yeah and it's easy to implement.  :alright:<br />I guess I'll save learning about API hooks and such for another day.</div>
+    <div class="meta">Posted on 2004-03-27 23:44:04 by iblis</div>
+   </div>
+  </div>
+ </body>
+</html>

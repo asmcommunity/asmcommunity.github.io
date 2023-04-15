@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>zlib compression - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26167" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26167">zlib compression</a></p>
+   <div class="post" id="post-190420">
+    <div class="subject"><a href="#post-190420">zlib compression</a></div>
+    <div class="body">Does anyone know what I am doing wrong here?
+I am trying to compress a small string, here is the compression part...
+...
+ustr1 db "Example Input String",0
+...
+LOCAL src:DWORD ;source buffer
+LOCAL sln:DWORD ;source size
+LOCAL dest:DWORD ;dest buffer
+LOCAL dln:DWORD ;dest size
+...
+mov eax,ustr1
+mov src,eax
+...
+invoke compress,dest,SIZEOF dln,src,SIZEOF sln
+...
+I get a invalid page fault error, the zlib dll works fine...</div>
+    <div class="meta">Posted on 2000-11-15 20:02:00 by Plur</div>
+   </div>
+   <div class="post" id="post-190421">
+    <div class="subject"><a href="#post-190421">zlib compression</a></div>
+    <div class="body">I think that your compress statement should be
+
+invoke compress,dest,SIZEOF dest,src,SIZEOF src
+
+SIZEOF returns the size of the variable.  In this case a DWORD, 
+if you are storing the size of dest in the variable dln then just pass dln.....like
+
+invoke compress,dest,dln,src,sln
+
+It looks to me like you are telling the compress function that the size of your string is a DWORD.
+
+The only other thing that I can suggest is to make sure that you are passing in exactly what the function thinks it getting.....
+
+I may be way off in my assessment as I have not use zlib before but it is something to think about.
+
+HTH</div>
+    <div class="meta">Posted on 2000-11-15 20:52:00 by Raeldin </div>
+   </div>
+   <div class="post" id="post-190422">
+    <div class="subject"><a href="#post-190422">zlib compression</a></div>
+    <div class="body">The following is what it would look like in visual basic...
+Public Function CompressString(TheString As String) As Long
+OriginalSize = Len(TheString)
+'Allocate string space for the buffers
+Dim CmpSize As Long
+Dim TBuff As String
+orgSize = Len(TheString)
+TBuff = String(orgSize + (orgSize * 0.01) + 12, 0)
+CmpSize = Len(TBuff)
+'Compress string (temporary string buffer) data
+ret = compress(ByVal TBuff, CmpSize, ByVal TheString, Len(TheString))
+'Set original value
+OriginalSize = Len(TheString)
+'Crop the string and set it to the actual string.
+TheString = Left$(TBuff, CmpSize)
+'Set compressed size of string.
+CompressedSize = CmpSize
+'Cleanup
+TBuff = ""
+'Return error code (if any)
+CompressString = ret
+End Function
+I'm not sure how asm buffers work, that is probaly what is wrong?</div>
+    <div class="meta">Posted on 2000-11-15 22:07:00 by Plur </div>
+   </div>
+   <div class="post" id="post-190423">
+    <div class="subject"><a href="#post-190423">zlib compression</a></div>
+    <div class="body">The zlib prototype (in C) is
+
+ZEXTERN int ZEXPORT compress OF((Bytef *dest,
+                                 uLongf *destLen,
+                                 const Bytef *source,
+                                 uLong sourceLen));
+
+So you should code something like:
+
+ustr1 byte "Example Input String",0
+
+local dest:dword    ; -> Destination buffer
+local dln:dword     ; Destination buffer size
+
+invoke compress,
+       dest,
+       addr dln,
+       addr ustr1,
+       sizeof ustr1
+
+That's it.</div>
+    <div class="meta">Posted on 2000-11-16 01:21:00 by zaphod </div>
+   </div>
+   <div class="post" id="post-190424">
+    <div class="subject"><a href="#post-190424">zlib compression</a></div>
+    <div class="body">This is what you posted:
+
+ustr1 db "Example Input String",0
+...
+LOCAL src:DWORD ;source buffer
+LOCAL sln:DWORD ;source size
+LOCAL dest:DWORD ;dest buffer
+LOCAL dln:DWORD ;dest size
+...
+mov eax,ustr1
+mov src,eax
+...
+invoke compress,dest,SIZEOF dln,src,SIZEOF sln
+...
+everything is fine but change the:
+mov eax,ustr1 to mov eax,offset ustr1</div>
+    <div class="meta">Posted on 2001-03-02 08:18:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-190425">
+    <div class="subject"><a href="#post-190425">zlib compression</a></div>
+    <div class="body">If I remember correctly, zlib wants the last parameter to be a
+pointer to a dword - so it can store the actual output length.
+This gave me quite some queer errors back when I was using zlib
+to compress/decompress my fancy new executable format for a 32bit
+dos project.
+
+It took a long time to sort out the problem. I was calling zlib from
+assembly, and thus I had it's proto as all dwords. "destlen", not
+"pdestlen", so you couldn't tell from the name it wanted a pointer.
+
+I had almost given up, when I looked at the C definition, and saw
+that little start telling me that I should bang my head into the
+wall a couple times.</div>
+    <div class="meta">Posted on 2001-03-02 08:39:00 by f0dder</div>
+   </div>
+   <div class="post" id="post-190426">
+    <div class="subject"><a href="#post-190426">zlib compression</a></div>
+    <div class="body">I think I should just give you a
+small snipet from my Pack Rat program
+that zips files.
+hMem1$    dd ?      ;address of memroy block Dest.
+hMem2$    dd ?      ;address of memory block Source
+dBuffSize dd ?      ;DWORD of Dest size.
+sBuffSize dd ?      ;DWORD of Source Size.
+
+invoke compress2,hMem1$,addr dBuffSize,hMem2$,sBuffSize,9
+
+Notice that the first three Params are all
+address pointers this must be how you invoke this
+call into the zlib DLL.
+The last Param tells how much to compress the data
+that value can only be from 0-9 zero meaning no
+compress, while 9 equ Max.
+
+I hope this clears up how to use zlib..</div>
+    <div class="meta">Posted on 2001-03-05 00:47:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-190427">
+    <div class="subject"><a href="#post-190427">zlib compression</a></div>
+    <div class="body">i want to work with zlib.dll but i'm unable to import function
+like compress2 or uncompress.
+I've: LNK2001  : unresolved external symbol _compress2@20
+
+I've make this in my source file:
+include zlibdll.inc
+includelib zlibstat.lib
+includelib zlibdll.lib
+
+and this in zlibdll.inc (new file):
+compress2 PROTO  :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
+
+how to include zlib in order to INVOKE compress2 and uncompress?
+
+thank you</div>
+    <div class="meta">Posted on 2001-03-13 08:17:00 by gael</div>
+   </div>
+   <div class="post" id="post-190428">
+    <div class="subject"><a href="#post-190428">zlib compression</a></div>
+    <div class="body">I don't know what zlib you are using
+but what I am working with only has
+zlib.lib and zlib.inc and it works
+great I use compress2 it really
+works easy. maybe you should tell
+me if you want the vertsion I am
+working with. cuz I have this one
+woking and there is only one lib
+and inc file to make the DLL work.</div>
+    <div class="meta">Posted on 2001-03-13 10:25:00 by Zcoder</div>
+   </div>
+   <div class="post" id="post-190429">
+    <div class="subject"><a href="#post-190429">zlib compression</a></div>
+    <div class="body">I've email  you.
+thanx!:)</div>
+    <div class="meta">Posted on 2001-03-13 13:42:00 by gael</div>
+   </div>
+   <div class="post" id="post-190430">
+    <div class="subject"><a href="#post-190430">zlib compression</a></div>
+    <div class="body">I have sent you my whole
+project with all the files
+this project is not done, but
+it does zip all files from a
+folder into a zip file. the
+compression is zip compadible
+but the archive is not zip
+compadible, I am still reading
+about the zip archive layout..</div>
+    <div class="meta">Posted on 2001-03-14 14:06:00 by Zcoder</div>
+   </div>
+  </div>
+ </body>
+</html>

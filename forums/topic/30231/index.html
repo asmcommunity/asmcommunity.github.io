@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ReqQueryValueEx woes - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30231" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30231">ReqQueryValueEx woes</a></p>
+   <div class="post" id="post-213111">
+    <div class="subject"><a href="#post-213111">ReqQueryValueEx woes</a></div>
+    <div class="body">I&#039;ve been messing with this for quite a while with no luck.<br />I&#039;m sure the answer is probably simple.<br /><br />I am trying to compare KeyValue and do something based on it.<br /><br /><br /><br /><pre><code><br />.DATA<br /><br />SubKey&nbsp; &nbsp; &nbsp; BYTE &quot;Marzipan\Mint&quot;,0; name of sub key in HKEY_CURRENT_USER<br />Key_Made&nbsp; &nbsp; BYTE &quot;Register key sucessfully created.&quot;,0<br />Failed&nbsp; &nbsp; &nbsp; BYTE &quot;Register key NOT sucessfully created.&quot;,0<br />Sample&nbsp; &nbsp; &nbsp; BYTE &quot;BOX&quot;,0<br />NewRegValue BYTE &quot;Key&#039;s Value&quot;,0&nbsp; ; Value name<br />KeyValue&nbsp; &nbsp; DWORD 1234&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Key set to this value<br />RegBuffer&nbsp;  db&nbsp; &nbsp; &nbsp; 256 dup(?)<br />RegSize&nbsp; &nbsp;  dd&nbsp; &nbsp; &nbsp; 256<br />CmpOK&nbsp; &nbsp; &nbsp;  db &quot;Key value is OK.&quot;,0<br /><br />.DATA?<br /><br />RegH&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PHKEY&nbsp; &nbsp; ?&nbsp; &nbsp;  ; Handle for reg. key<br />RegType&nbsp; &nbsp; &nbsp; &nbsp;  DWORD&nbsp; &nbsp; ?<br /><br />.CODE<br /><br />Start:<br />jmp begin<br /><br />begin:<br /><br /><br />invoke RegCreateKey,HKEY_CURRENT_USER, ADDR SubKey,ADDR RegH<br /><br />.IF EAX == ERROR_SUCCESS<br />invoke MessageBox, 0, ADDR Key_Made, ADDR Sample,MB_ICONINFORMATION<br />.ELSE<br />; if failed<br /><br />invoke MessageBox, 0, ADDR Failed, ADDR Sample,MB_ICONINFORMATION<br /><br />.ENDIF<br /><br />invoke RegCloseKey, ADDR RegH; close handle for reg. key<br /><br />invoke RegSetValueEx, RegH,ADDR NewRegValue,0,REG_DWORD,ADDR KeyValue,4<br /><br />invoke&nbsp; RegQueryValueEx, ADDR SubKey,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  addr KeyValue, NULL,ADDR RegType,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  addr RegBuffer, addr RegSize<br /><br /><br />.IF EAX == ERROR_SUCCESS<br /><br />invoke MessageBox, 0, ADDR CmpOK, ADDR Sample,MB_ICONINFORMATION<br />.ELSE<br />; if failed<br /><br />;invoke MessageBox, 0, ADDR Failed, ADDR Sample,MB_ICONINFORMATION<br /><br />.ENDIF<br /><br /><br />invoke RegCloseKey, ADDR RegH; close handle for reg. key<br /></code></pre></div>
+    <div class="meta">Posted on 2010-09-11 19:48:23 by skywalker</div>
+   </div>
+   <div class="post" id="post-213113">
+    <div class="subject"><a href="#post-213113">Re: ReqQueryValueEx woes</a></div>
+    <div class="body">Very simple indeed.&nbsp; You closed the key handle and are subsequently trying to use the now invalid handle in subsequent calls ;)</div>
+    <div class="meta">Posted on 2010-09-11 21:42:23 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213114">
+    <div class="subject"><a href="#post-213114">Re: ReqQueryValueEx woes</a></div>
+    <div class="body"><pre><code>.DATA<br /><br />SubKey&nbsp; &nbsp; &nbsp; BYTE &quot;Marzipan\Mint&quot;,0; name of sub key in HKEY_CURRENT_USER<br />Key_Made&nbsp; &nbsp; BYTE &quot;Register key sucessfully created.&quot;,0<br />Failed&nbsp; &nbsp; &nbsp; BYTE &quot;Register key NOT sucessfully created.&quot;,0<br />Sample&nbsp; &nbsp; &nbsp; BYTE &quot;BOX&quot;,0<br />NewRegValue BYTE &quot;Key&#039;s Value&quot;,0&nbsp; ; Value name<br />KeyValue&nbsp; &nbsp; DWORD 1234&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Key set to this value<br />RegBuffer&nbsp;  db&nbsp; &nbsp; &nbsp; 256 dup(?)<br />RegSize&nbsp; &nbsp;  dd&nbsp; &nbsp; &nbsp; 256<br />CmpOK&nbsp; &nbsp; &nbsp;  db &quot;Key value is OK.&quot;,0<br /><br />.DATA?<br /><br />RegH&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PHKEY&nbsp; &nbsp; ?&nbsp; &nbsp;  ; Handle for reg. key<br />RegType&nbsp; &nbsp; &nbsp; &nbsp;  DWORD&nbsp; &nbsp; ?<br />lpcbData		dword	?<br />.code<br /><br /><br />; ---------------------------------------------------------------------------<br /><br /><br />start:<br />		invoke RegCreateKey,HKEY_CURRENT_USER, ADDR SubKey,ADDR RegH<br />		<br /><br />.IF EAX == ERROR_SUCCESS<br />invoke MessageBox, 0, ADDR Key_Made, ADDR Sample,MB_ICONINFORMATION<br />.ELSE<br />; if failed<br /><br />invoke MessageBox, 0, ADDR Failed, ADDR Sample,MB_ICONINFORMATION<br /><br />.ENDIF<br /><br />COMMENT *<br />	Why are you closing the handle?&nbsp; You need the handle to set and query the value! <br />	<br />	invoke RegCloseKey,&nbsp; RegH; close handle for reg. key *<br /><br />invoke RegSetValueEx, RegH,ADDR NewRegValue,0,REG_DWORD,ADDR KeyValue,4<br /><br />COMMENT *<br />	lpcbData  <br />A pointer to a variable that specifies the size of the buffer pointed to by the lpData parameter, in bytes. When the function returns, this variable contains the size of the data copied to lpData. <br /><br />The lpcbData parameter can be NULL only if lpData is NULL.<br /><br />invoke&nbsp; RegQueryValueEx, ADDR SubKey,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  addr KeyValue, NULL,ADDR RegType,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  addr RegBuffer, addr RegSize<br /><br />Also, you need to use the handle of the key you used to set the value!<br />*<br />mov		lpcbData, 4<br />invoke&nbsp; RegQueryValueEx,&nbsp; RegH,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  addr NewRegValue, 0,0,\<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  addr RegBuffer, addr lpcbData<br /><br /><br />.IF EAX == ERROR_SUCCESS<br /><br />invoke MessageBox, 0, ADDR CmpOK, ADDR Sample,MB_ICONINFORMATION<br />.ELSE<br />; if failed<br /><br />invoke MessageBox, 0, ADDR Failed, ADDR Sample,MB_ICONINFORMATION<br /><br />.ENDIF<br /><br />COMMENT *<br />NOW we can close the handle!<br />hKey  <br />A handle to the open key to be closed<br /><br />NOT a pointer to the handle!<br />*<br /><br />invoke RegCloseKey, RegH; close handle for reg. key<br /></code></pre></div>
+    <div class="meta">Posted on 2010-09-11 21:59:48 by Gunner</div>
+   </div>
+   <div class="post" id="post-213115">
+    <div class="subject"><a href="#post-213115">Re: ReqQueryValueEx woes</a></div>
+    <div class="body">Thanks a lot.<br /><br />What is this doing?<br /><pre><code><br />mov		lpcbData, 4<br /></code></pre><br /></div>
+    <div class="meta">Posted on 2010-09-11 22:16:35 by skywalker</div>
+   </div>
+   <div class="post" id="post-213116">
+    <div class="subject"><a href="#post-213116">Re: ReqQueryValueEx woes</a></div>
+    <div class="body"><div class="quote"><br />Thanks a lot.<br /><br />What is this doing?<br /><pre><code><br />mov		lpcbData, 4<br /></code></pre><br /><br /></div><br />Read the comment in the code, it tells you!</div>
+    <div class="meta">Posted on 2010-09-11 22:19:23 by Gunner</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Trying to understand some instruction timing - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12764" />
+    <link rel="next" href="../?id=12764&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=12764">Trying to understand some instruction timing</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=12764&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=12764&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="12764" /><input type="number" name="page" min="1" max="4" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=12764&amp;page=2">&gt;</a><a href="../?id=12764&amp;page=4">&raquo;</a></form>   <div class="post" id="post-98822">
+    <div class="subject"><a href="#post-98822">Trying to understand some instruction timing</a></div>
+    <div class="body">I wrote some ASM which I thought was very efficient, but it turned out not to be. I execute it a billion times in a loop and subtract the time for the empty loop. I whittled it down to the following, which takes more than 28 clock cycles...<br /><br /><pre><code><br />movzx  eax, word ptr &#91;edi&#93;<br />imul   eax, 92<br />mov    &#91;edi&#93;,ax<br /></code></pre><br /><br />IMUL seemed to be the culprit so I replaced it with equivalent code...<br /><br /><pre><code><br />movzx  eax, word ptr &#91;edi&#93;<br />lea    edx, &#91;eax*4&#93;<br />lea    eax, &#91;eax*2 + eax&#93;<br />shl    eax, 5<br />sub    eax, edx<br />mov    &#91;edi&#93;,ax<br /></code></pre><br /><br />This code takes 23 clock cycles. When I comment out the SHL it only takes 11.5 clock cycles. Can someone help me understand what is happeneing here? Intel's docs for Pentium 4 timings say SHL has a latency of 4 and a throughput of 1. Am i doing something wrong?</div>
+    <div class="meta">Posted on 2003-04-23 08:37:11 by Ekted</div>
+   </div>
+   <div class="post" id="post-98837">
+    <div class="subject"><a href="#post-98837">Trying to understand some instruction timing</a></div>
+    <div class="body">You could try the floating point fmul but I doubt it would be any faster as I think it uses thwe same circuitry for multiplications.<br /><br />The combination of LEA and shifts will probably be hard to improve on, multiplications are generally slow in comparison to other integer operators.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-23 09:27:06 by hutch--</div>
+   </div>
+   <div class="post" id="post-98845">
+    <div class="subject"><a href="#post-98845">Trying to understand some instruction timing</a></div>
+    <div class="body">Give this a try,<br /><pre><code><br />            push eax<br />            lea ecx, &#91;eax+eax*8&#93;    ; x 9<br />            lea edx, &#91;ecx+ecx*8&#93;    ; edx = / 81<br />            lea ecx, &#91;eax+eax*4&#93;<br />            lea eax, &#91;ecx+ecx&#93;<br />            add eax, edx<br />            pop edx<br />            add eax, edx<br /></code></pre><br />It seems to work OK but I have no idea if its faster. Input into EAX and output in EAX.<br /><br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-23 09:50:36 by hutch--</div>
+   </div>
+   <div class="post" id="post-98852">
+    <div class="subject"><a href="#post-98852">Trying to understand some instruction timing</a></div>
+    <div class="body">Using your code I get 21 cycles now. But what I am asking is: how is it that SHL adds 12 cycles when docs say 1? How can I possibly make intelligent decisions about which ops to use when the docs don't match reality?</div>
+    <div class="meta">Posted on 2003-04-23 09:59:45 by Ekted</div>
+   </div>
+   <div class="post" id="post-98854">
+    <div class="subject"><a href="#post-98854">Trying to understand some instruction timing</a></div>
+    <div class="body">Ekted,<br /><br />Timings are always tricky to get precisely. The LEA can have stalls with the multiple use of the same registers in each instruction. I have tried to alternate them but you will get a few effects like this unfortunately.<br /><br />I am a bit toobrain dead to do much more as its 1 am but you may be able to fiddle the sequence to get the time down a bit.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-23 10:05:17 by hutch--</div>
+   </div>
+   <div class="post" id="post-98855">
+    <div class="subject"><a href="#post-98855">Trying to understand some instruction timing</a></div>
+    <div class="body">Maybe it is due to AGI stall as lea is prone to that.</div>
+    <div class="meta">Posted on 2003-04-23 10:10:10 by roticv</div>
+   </div>
+   <div class="post" id="post-98856">
+    <div class="subject"><a href="#post-98856">Trying to understand some instruction timing</a></div>
+    <div class="body">humm, do you need to work on a single short (16bit unsigned word), or an array of them?<br />For multiplying an array of 1024 shorts by 92, I tinkered a bit with the intel C++ compiler.<br />It produced the following output, which has neither been tested nor timed :)<br /><br /><pre><code><br />        mov       eax, 2048                                     ;11.11<br />        <br />                                ; LOE eax ebp esi edi<br />.B1.2&#58;                          ; Preds .B1.1 .B1.2<br />        movzx     edx, WORD PTR ?blah@@3PAGA&#91;eax-2&#93;             ;13.8<br />        lea       ecx, DWORD PTR &#91;edx+edx&#93;                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        movzx     edx, WORD PTR ?blah@@3PAGA&#91;eax-4&#93;             ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        mov       WORD PTR ?blah@@3PAGA&#91;eax-2&#93;, cx              ;13.8<br />        lea       ecx, DWORD PTR &#91;edx+edx&#93;                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        movzx     edx, WORD PTR ?blah@@3PAGA&#91;eax-6&#93;             ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        mov       WORD PTR ?blah@@3PAGA&#91;eax-4&#93;, cx              ;13.8<br />        lea       ecx, DWORD PTR &#91;edx+edx&#93;                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        movzx     edx, WORD PTR ?blah@@3PAGA&#91;eax-8&#93;             ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        mov       WORD PTR ?blah@@3PAGA&#91;eax-6&#93;, cx              ;13.8<br />        lea       ecx, DWORD PTR &#91;edx+edx&#93;                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        sub       ecx, edx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        add       ecx, ecx                                      ;13.8<br />        mov       WORD PTR ?blah@@3PAGA&#91;eax-8&#93;, cx              ;13.8<br />        add       eax, -8                                       ;11.24<br />        jne       .B1.2         ; Prob 99%                      ;11.2<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-23 10:10:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-98857">
+    <div class="subject"><a href="#post-98857">Trying to understand some instruction timing</a></div>
+    <div class="body">Try this one, it has a lower instruction count.<br /><pre><code><br />            lea ecx, &#91;eax*8&#93;<br />            lea edx, &#91;ecx*4&#93;<br />            lea ecx, &#91;edx+edx*2&#93;<br />            lea edx, &#91;eax*4&#93;<br />            sub ecx, edx<br /></code></pre><br />EAX in, ECX out.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-23 10:17:38 by hutch--</div>
+   </div>
+   <div class="post" id="post-98858">
+    <div class="subject"><a href="#post-98858">Trying to understand some instruction timing</a></div>
+    <div class="body">1000000 iterations of 2048 muls (2048000000 total) took 3515 ticks<br />That's on a 2.53GHZ Pentium4 - you do the maths and tell me the average cycles/mul.<br /><br />MMX might be beneficial here...<br /><br />assuming that we're working on an array of values.</div>
+    <div class="meta">Posted on 2003-04-23 10:23:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-98859">
+    <div class="subject"><a href="#post-98859">Trying to understand some instruction timing</a></div>
+    <div class="body">That code is about 35 clock cycles. I made a version not using LEA at all:<br /><pre><code><br />mov   ecx,  eax             ; ecx = n<br />add   ecx,  ecx             ; ecx = n * 2<br />add   ecx,  ecx             ; ecx = n * 4<br />add   ecx,  ecx             ; ecx = n * 8<br />add   ecx,  ecx             ; ecx = n * 16<br />add   ecx,  ecx             ; ecx = n * 32<br />sub   ecx,  eax             ; ecx = n * 31<br />mov   edx,  ecx             ; edx = n * 31<br />add   ecx,  ecx             ; ecx = n * 62<br />add   ecx,  edx             ; ecx = n * 93<br />sub   ecx,  eax             ; ecx = n * 92<br /></code></pre><br />which takes only 11.5 clock cycles. Maybe the solution is just to use ADD,SUB,MOV for eveything and completely avoid LEA and SHL.</div>
+    <div class="meta">Posted on 2003-04-23 10:24:20 by Ekted</div>
+   </div>
+   <div class="post" id="post-98860">
+    <div class="subject"><a href="#post-98860">Trying to understand some instruction timing</a></div>
+    <div class="body">What about<br /><pre><code><br />lea ecx, &#91;eax*8+eax&#93;; n* 9<br />shl eax,7;n*128<br />nop<br />shl ecx,2;n*36<br />sub eax,ecx;n*128 - n*36<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-23 10:38:01 by roticv</div>
+   </div>
+   <div class="post" id="post-98861">
+    <div class="subject"><a href="#post-98861">Trying to understand some instruction timing</a></div>
+    <div class="body">That's 28 clocks. What's the NOP for?</div>
+    <div class="meta">Posted on 2003-04-23 10:44:32 by Ekted</div>
+   </div>
+   <div class="post" id="post-98862">
+    <div class="subject"><a href="#post-98862">Trying to understand some instruction timing</a></div>
+    <div class="body">My logic is probably pretty flawed. That, or the compiler has optimized<br />away something that breaks the results (don't think so though, I put<br />the innerloop in a separate .cpp file, and I'm not doing cross-module<br />nor whole program optimization). If anything is flawed, most likely<br />it's my calculations ;). I VirtualAlloc a 4k array (2048 words = 4k),<br />virtualalloc so alignment definitely wont be an issue (it shouldn't anyway).<br />The memory is filled with zeroes - this way memory is pretouched and<br />should in cache. The contents of the memory shouldn't really matter,<br />I guess. Process + thread priority is raised to realtime/timecritical,<br />then a Sleep(0) is done, and the mainloop runs for 1000000 iterations.<br />The mainloop calls &quot;time1&quot;, which multiplies all entries of the 2048-word<br />array with CONSTANT (defined as 92).<br /><br />Results:<br />1000000 iterations of 2048 muls (2048000000 total) took 3500 ticks<br />(Possibly flawed) logic:<br />2.53 ghz ~= 2530000000 cycles/sec<br />that's 2530000 cycles/milisec<br />3500 tics is (3500*2530000) 8855000000 cycles<br /><br />To get approx cycles/instruction, divide cycles used by muls completed.<br />That would be 8855000000/2048000000, so effectively ~4,3237 cycles/mul</div>
+    <div class="meta">Posted on 2003-04-23 10:44:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-98863">
+    <div class="subject"><a href="#post-98863">Trying to understand some instruction timing</a></div>
+    <div class="body"><pre><code><br />; 1000000 iterations of 2048 muls &#40;2048000000 total&#41; took 5235 ticks<br />_time2@4&#58;<br />	push	esi<br />	push	edi<br /><br />	mov		esi, &#91;esp+12&#93;<br />	mov		edi, 2048 - 1<br /><br />.loop&#58;<br />	movzx	eax, word &#91;esi + &#40;edi*2&#41;&#93;<br />	; his code<br />	mov		ecx,  eax             ; ecx = n<br />	add		ecx,  ecx             ; ecx = n * 2<br />	add		ecx,  ecx             ; ecx = n * 4<br />	add		ecx,  ecx             ; ecx = n * 8<br />	add		ecx,  ecx             ; ecx = n * 16<br />	add		ecx,  ecx             ; ecx = n * 32<br />	sub		ecx,  eax             ; ecx = n * 31<br />	mov		edx,  ecx             ; edx = n * 31<br />	add		ecx,  ecx             ; ecx = n * 62<br />	add		ecx,  edx             ; ecx = n * 93<br />	sub		ecx,  eax             ; ecx = n * 92<br />	mov		&#91;esi + &#40;edi*2&#41;&#93;, cx<br /><br />	dec		edi<br />	jnz		.loop<br /><br />	pop		edi<br />	pop		esi<br />	ret 4<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-23 10:49:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-98864">
+    <div class="subject"><a href="#post-98864">Trying to understand some instruction timing</a></div>
+    <div class="body">Ekted,<br /><br />What processor are you running as it may effect what code works well.<br /><br />try the second LEA version as it has a lower instruction count and shorter complex addressing which should bring its time down some.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2003-04-23 10:49:44 by hutch--</div>
+   </div>
+   <div class="post" id="post-98865">
+    <div class="subject"><a href="#post-98865">Trying to understand some instruction timing</a></div>
+    <div class="body">Yes. The timings I am posting include my load/store instructions:<br /><pre><code><br />movzx eax,  word ptr &#91;edi&#93;<br />...<br />mov   &#91;edi&#93;, ax<br /></code></pre></div>
+    <div class="meta">Posted on 2003-04-23 10:50:27 by Ekted</div>
+   </div>
+   <div class="post" id="post-98866">
+    <div class="subject"><a href="#post-98866">Trying to understand some instruction timing</a></div>
+    <div class="body">I am using a P4 2.4GHz.</div>
+    <div class="meta">Posted on 2003-04-23 10:52:51 by Ekted</div>
+   </div>
+   <div class="post" id="post-98867">
+    <div class="subject"><a href="#post-98867">Trying to understand some instruction timing</a></div>
+    <div class="body">Maybe my logic is flawed. I was hoping that nop makes my shifts pairable. But it is indeed puzzling that the shifts are so slow.  Are you using Athlon?</div>
+    <div class="meta">Posted on 2003-04-23 10:56:30 by roticv</div>
+   </div>
+   <div class="post" id="post-98868">
+    <div class="subject"><a href="#post-98868">Trying to understand some instruction timing</a></div>
+    <div class="body">O my P4 2.53ghz, the sample code snippet I posted (adjusted a bit from your code snippet, and obviously not unrolled) ran quite somewhat slower than the previously posted compiler output. <br /><br />What I'm wondering is, if my &quot;logic&quot; stuff seems correct, or flawed?</div>
+    <div class="meta">Posted on 2003-04-23 10:56:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-98870">
+    <div class="subject"><a href="#post-98870">Trying to understand some instruction timing</a></div>
+    <div class="body"><pre><code><br />;1000000 iterations of 2048 muls &#40;2048000000 total&#41; took 4421 ticks<br />_time3@4&#58;<br />	push	esi<br />	push	edi<br /><br />	mov		esi, &#91;esp+12&#93;<br />	mov		edi, 2048 - 1<br /><br />.loop&#58;<br />	movzx	eax, word &#91;esi + &#40;edi*2&#41;&#93;<br />	; roticv code begin<br />	lea		ecx, &#91;eax*8+eax&#93;	; n * 9<br />	shl		eax, 7				; n * 128<br />	shl		ecx, 2				; n * 36<br />	sub		eax, ecx			; n * 128 - n*36<br />	; roticv code end<br /><br /><br />	mov		&#91;esi + &#40;edi*2&#41;&#93;, ax<br />	dec		edi<br />	jnz		.loop<br /><br />	pop		edi<br />	pop		esi<br />	ret 4<br /></code></pre><br />Of course not unrolled, so again comparison isn't entirely fair.</div>
+    <div class="meta">Posted on 2003-04-23 11:03:01 by f0dder</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=12764&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=12764&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="12764" /><input type="number" name="page" min="1" max="4" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=12764&amp;page=2">&gt;</a><a href="../?id=12764&amp;page=4">&raquo;</a></form>  </div>
+ </body>
+</html>

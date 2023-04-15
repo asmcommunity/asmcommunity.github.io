@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>DWORD To Octal - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24952" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24952">DWORD To Octal</a></p>
+   <div class="post" id="post-182504">
+    <div class="subject"><a href="#post-182504">DWORD To Octal</a></div>
+    <div class="body">Can anybody give me an idea how i can convert an unsigned DWORD value to its equivalent Octal value which should be written onto a null-terminated string?</div>
+    <div class="meta">Posted on 2006-06-26 03:40:53 by XCHG</div>
+   </div>
+   <div class="post" id="post-182507">
+    <div class="subject"><a href="#post-182507">Re: DWORD To Octal</a></div>
+    <div class="body">Try this (untested - not got time atm):<br /><br /> Tested it now, works fine <br /><br /><pre><code>dw2oct proc pszStr:DWORD, val:DWORD<br /><br />&nbsp; &nbsp; push edi<br /><br />&nbsp; &nbsp; mov edi, pszStr<br />&nbsp; &nbsp; mov eax, val<br /><br />&nbsp; &nbsp; mov ecx, 10<br />&nbsp; &nbsp; mov , ch<br /><br />@@:<br />&nbsp; &nbsp; mov edx, eax<br />&nbsp; &nbsp; and dl, 07h<br />&nbsp; &nbsp; add dl, &#39;0&#39;<br /><br />&nbsp; &nbsp; mov , dl<br />&nbsp; &nbsp; <br />&nbsp; &nbsp; shr eax, 3<br />&nbsp; &nbsp; sub ecx, 1<br />&nbsp; &nbsp; jns @B<br /><br />&nbsp; &nbsp; pop edi<br /><br />&nbsp; &nbsp; ret<br />dw2oct endp</code></pre><br /><br />Ossa</div>
+    <div class="meta">Posted on 2006-06-26 06:00:53 by Ossa</div>
+   </div>
+   <div class="post" id="post-182509">
+    <div class="subject"><a href="#post-182509">Re: DWORD To Octal</a></div>
+    <div class="body">Probably overkill&nbsp; :P :P but will use only exact number of bytes in output string, instead of the output being right aligned!!!<br /><br /><pre><code>DwordToOctal	proc	dwNumber:DWORD, pszOutString:LPTSTR<br />	LOCAL	szLocal[32]:BYTE<br />	<br />	push	esi	;for the temp string<br />	push	edi	;for the final target<br />	push	eax	;for number<br />	push	ecx	;for counting length of string<br />	push	edx<br />	<br />	mov	ecx, 1<br />	mov	eax, dwNumber<br />	lea	esi, szLocal<br />	<br />	.while	eax != 0<br />		mov	edx, eax<br />		and	edx, 07h	;111b<br />		add	dl,&#39;0&#39;<br />		<br />		mov	, dl<br />		<br />		inc	esi<br />		inc	ecx		;counter<br />		shr	eax,3		;div by 8<br />	.endw<br />	<br />	dec	esi<br />	mov	edi, pszOutString<br />	.while	ecx != 0<br />		mov	al, <br />		mov	, al<br />		<br />		dec	esi<br />		inc	edi<br />		dec	ecx<br />	.endw<br />	mov	byte ptr ,0<br />	<br />	pop	edx<br />	pop	ecx<br />	pop	eax<br />	pop	edi<br />	pop	esi<br />	<br />	ret<br /><br />DwordToOctal endp</code></pre></div>
+    <div class="meta">Posted on 2006-06-26 07:44:20 by shantanu_gadgil</div>
+   </div>
+   <div class="post" id="post-182548">
+    <div class="subject"><a href="#post-182548">Re: DWORD To Octal</a></div>
+    <div class="body">Okay i got the idea and coded my own algorithm. I don not think there is any need to do any tricks with the buffer as we can use ROL to first rotate the two leftmost bits of the number and convert it to its equivalent character, and the rest of the rotates to the left can be based on 3 bits now. so 32 - 2 = 30 now the result is divisible by 3 so 10 rotates to the left, each 3 times will do the job.<br /><br /><br /><pre><span style="font-size:2>DWORDToOct PROC __TheDWORD:DWORD, __Buffer:DWORD<br />&nbsp; PUSH&nbsp; &nbsp; EBX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Push the EBX Register<br />&nbsp; MOV&nbsp; &nbsp;  EBX , __Buffer&nbsp; &nbsp; &nbsp; &nbsp;  ; EBX = Buffer<br />&nbsp; MOV&nbsp; &nbsp;  BYTE PTR  , 30h&nbsp;  ; Move &#39;0&#39; to the buffer <br />&nbsp; MOV&nbsp; &nbsp;  EAX , __TheDWORD&nbsp; &nbsp; &nbsp;  ; EAX = The number<br />&nbsp; MOV&nbsp; &nbsp;  ECX , 0000000Bh&nbsp; &nbsp; &nbsp; &nbsp; ; Total number of digits to retrieve<br />&nbsp; ROL&nbsp; &nbsp;  EAX , 00000002h&nbsp; &nbsp; &nbsp; &nbsp; ; Get the two leftmost bits<br />&nbsp; MOV&nbsp; &nbsp;  EDX , EAX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Put EAX in EDX<br />&nbsp; AND&nbsp; &nbsp;  EDX , 00000003h&nbsp; &nbsp; &nbsp; &nbsp; ; Zero out all other bits<br />&nbsp; JNE&nbsp; &nbsp;  @@PutChars&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; See if it is zero<br />&nbsp; @@RemoveZeros:&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Remove the zeros to the left<br />&nbsp; &nbsp; DEC&nbsp; &nbsp;  ECX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Decrement the counter<br />&nbsp; &nbsp; JE&nbsp; &nbsp; &nbsp; @@EP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Jump to @@EP if ECX = 0<br />&nbsp; &nbsp; ROL&nbsp; &nbsp;  EAX , 03h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Now start retrieving 3 bits<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  EDX , EAX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Put the bits in EDX<br />&nbsp; &nbsp; AND&nbsp; &nbsp;  EDX , 00000007h&nbsp; &nbsp; &nbsp; ; Zero out all other bits but 3 rightmost bits<br />&nbsp; &nbsp; JE&nbsp; &nbsp; &nbsp; @@RemoveZeros&nbsp; &nbsp; &nbsp; &nbsp; ; Keep on doing this till the bits are not zero<br />&nbsp; @@PutChars:&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; The loop for transfering the number to buffer<br />&nbsp; &nbsp; ADD&nbsp; &nbsp;  EDX , 00000030h&nbsp; &nbsp; &nbsp; ; Convert the number to character<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BYTE PTR  , DL&nbsp; ; Move it to the buffer<br />&nbsp; &nbsp; DEC&nbsp; &nbsp;  ECX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Decrement the counter<br />&nbsp; &nbsp; JE&nbsp; &nbsp; &nbsp; @@EP&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Jump to @@EP if counter is zero<br />&nbsp; &nbsp; INC&nbsp; &nbsp;  EBX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Navigate to the next block of buffer<br />&nbsp; &nbsp; ROL&nbsp; &nbsp;  EAX , 03h&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Rotate the number 3 bits to the left<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  EDX , EAX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Put it into EDX again<br />&nbsp; &nbsp; AND&nbsp; &nbsp;  EDX , 00000007h&nbsp; &nbsp; &nbsp; ; Zero out all bits but the bit 0, 1 and 2<br />&nbsp; &nbsp; JMP&nbsp; &nbsp;  @@PutChars&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; Keep doing this until ECX = 0<br />&nbsp; @@EP:&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; End of Procedure<br />&nbsp; &nbsp; INC&nbsp; &nbsp;  EBX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Increment the buffer<br />&nbsp; &nbsp; MOV&nbsp; &nbsp;  BYTE PTR  , 00h ; Terminate the buffer<br />&nbsp; &nbsp; POP&nbsp; &nbsp;  EBX&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Pop the EBX register from stack<br />&nbsp; RET&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; Return to the calling procedure<br />DWORDToOct ENDP</span></pre></div>
+    <div class="meta">Posted on 2006-06-27 02:36:23 by XCHG</div>
+   </div>
+  </div>
+ </body>
+</html>

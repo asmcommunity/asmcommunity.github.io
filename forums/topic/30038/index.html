@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Rotary Encoder Disc Pattern Generator - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30038" />
+    <link rel="next" href="../?id=30038&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=32">Electronics</a> &raquo; <a href="../?id=30038">Rotary Encoder Disc Pattern Generator</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=30038&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=30038&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="30038" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=30038&amp;page=2">&gt;</a><a href="../?id=30038&amp;page=2">&raquo;</a></form>   <div class="post" id="post-212066">
+    <div class="subject"><a href="#post-212066">Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">New side project of mine - program to generate graycode-patterns for manufacturing of optical rotary encoder discs.<br />Graycodes can be any desired bitlength, in my case I need 12, but I&#039;m not paying 500 uk pounds for something I can make out of some junk components and an old CD or DVD (who hasn&#039;t got lots of dead/scratched ones laying around?)<br /><br />I decided to use OA32&#039;s Pixelmap object because it lets me quickly create BMP files from nothing.<br />It has much functionality, but is sadly missing things like &quot;DrawCircle&quot; and &quot;DrawLine&quot;.<br /><br />Here is a picture of the output of a quick function I wrote for plotting circles using Pixelmap&#039;s integer-based SetPixel method (there&#039;s a floating-coord version of SetPixel which uses bilinear filtering, it would make nicer LOOKING circles by bleeding into neighbouring pixels at reduced brightness).<br />I needed the function to be accurate, rather than fast. I chose to use 32bit fpu trig, plotting with an angular stepover calculated from the tangent of the circle at one pixel versus the radius.<br />It&#039;s not perfect - theres a little occasional pixel crowding - but the circles I generate are &#039;leak-proof&#039; (can be filled by any algorithm). <br /><br />Here&#039;s some circles generated onto a 512x512 image (I&#039;m using 4096x4096 here).<br />Next will be to reimplement lineplotting algorithm.<br />If radial lines fill the pattern cleanly, as they should, I can think about combining the circle and line plotting algos to generate the complete filled graycode encoder wheel in a single pass.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3177" target="_blank">circle.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-06-14 12:57:15 by Homer</div>
+   </div>
+   <div class="post" id="post-212070">
+    <div class="subject"><a href="#post-212070">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">Just incase anyone is actually curious to see the code.. here&#039;s that circle plotting function.<br />I tried to implement several other circle algos, but they just didn&#039;t cut it, especially at high resolutions.<br /><pre><code><br /><br />;PosX,PosY = coordinate of center of circle<br />;Rad = Radius in Pixels<br />PlotCircle proc posX, posY, rad, color<br />LOCAL x,y<br />LOCAL step:real4,angle:real4<br /><br />	fld1			;Calculate the angle of a triangle whose<br />	mov eax,rad		;base is the radius, and whose side is 1.0<br />	fildReg eax		;This is the inverse tangent of 1/radius<br />	fdiv			;Note that this value is in radians<br />	fArcTan<br />	fstp step<br />	<br />	mov x,0<br />	mov y,0<br />	<br />	mov angle,0<br />	.repeat	<br />		fld angle	;X and Y position are calculated via trig<br />		fsincos<br />		fimul rad<br />		fRndDn &nbsp; &nbsp; ;I will round DOWN to nearest integer (just a convention)<br />		fistp y &nbsp; &nbsp; &nbsp;;which slightly improves appearance of circle by eliminating &#039;wobble&#039; during plotting<br />		fimul rad<br />		fRndDn<br />		fistp x<br /><br /> &nbsp; &nbsp;	mov eax,posX<br /> &nbsp; &nbsp;	add eax,x<br /> &nbsp; &nbsp;	mov edx,posY<br /> &nbsp; &nbsp;	add edx,y<br /> &nbsp; &nbsp;	OCall pPXM::Pixelmap.SetPixel, eax, edx,, color <br />		<br />		;Increment angle<br />		fld step<br />		fadd angle<br />		fst angle<br />		<br />		;Check if we have passed &quot;2PI&quot; (a full circle)<br />		fldpi<br />		fldpi<br />		fadd<br />		fsubr<br />		fstpReg eax<br />		.ifBitSet eax,BIT31<br />			DbgFloat eax<br />			.break<br />		.endif<br />		<br />		<br />		<br />	.until 0<br /> &nbsp; &nbsp;ret<br />PlotCircle endp<br /></code></pre><br /><br />And the new one, integer-optimized Bresenham line (and no, the code is not optimized, the algo is)<br /><br /><pre><code><br /><br />PlotLine proc x0,y0,x1,y1,color<br />LOCAL steep:BOOL<br />LOCAL error:SDWORD<br />LOCAL deltax,deltay,ystep,y<br />&nbsp; &nbsp;  mov eax,y1<br />&nbsp; &nbsp;  sub eax,y0<br />&nbsp; &nbsp;  BitClr eax,BIT31<br />&nbsp; &nbsp;  mov edx,x1<br />&nbsp; &nbsp;  sub edx,x0<br />&nbsp; &nbsp;  BitClr edx,BIT31<br />&nbsp; &nbsp;  .if eax&gt;edx<br />&nbsp; &nbsp;  	mov steep,TRUE<br />&nbsp; &nbsp;  .else<br />&nbsp; &nbsp;  	mov steep,FALSE<br />&nbsp; &nbsp;  .endif<br />&nbsp; &nbsp;  <br />&nbsp; &nbsp;  .if steep<br />&nbsp; &nbsp;  	push x0<br />&nbsp; &nbsp;  	push y0<br />&nbsp; &nbsp;  	pop x0<br />&nbsp; &nbsp;  	pop y0<br />&nbsp; &nbsp;  	push x1<br />&nbsp; &nbsp;  	push y1<br />&nbsp; &nbsp;  	pop x1<br />&nbsp; &nbsp;  	pop y1<br />&nbsp; &nbsp;  .endif<br />&nbsp; &nbsp;  <br />&nbsp; &nbsp;  mov eax,x0<br />&nbsp; &nbsp;  .if eax &gt; x1 <br />&nbsp; &nbsp; &nbsp; &nbsp;  push x0<br />&nbsp; &nbsp; &nbsp; &nbsp;  push x1<br />&nbsp; &nbsp; &nbsp; &nbsp;  pop x0<br />&nbsp; &nbsp; &nbsp; &nbsp;  pop x1<br />&nbsp; &nbsp; &nbsp; &nbsp;  push y0<br />&nbsp; &nbsp; &nbsp; &nbsp;  push y1<br />&nbsp; &nbsp; &nbsp; &nbsp;  pop y0<br />&nbsp; &nbsp; &nbsp; &nbsp;  pop y1<br />&nbsp; &nbsp;  .endif<br />&nbsp; &nbsp;  <br />&nbsp; &nbsp;  mov eax,x1<br />&nbsp; &nbsp;  sub eax,x0<br />&nbsp; &nbsp;  mov deltax,eax<br />&nbsp; &nbsp;  mov eax,y1<br />&nbsp; &nbsp;  sub eax,y0<br />&nbsp; &nbsp;  mov deltay,eax<br />&nbsp; &nbsp;  mov eax,deltax<br />&nbsp; &nbsp;  shr eax,1<br />&nbsp; &nbsp;  mov error,eax<br /><br />&nbsp; &nbsp;  m2m y,y0,edx<br />&nbsp; &nbsp;  <br />&nbsp; &nbsp;  .if edx &lt; y1 <br />&nbsp; &nbsp;  	mov ystep, 1<br />&nbsp; &nbsp;  .else <br />&nbsp; &nbsp; &nbsp; &nbsp; mov ystep, -1<br />	 .endif<br />&nbsp; &nbsp;  <br />&nbsp; &nbsp; &nbsp; mov ebx,x0<br />&nbsp; &nbsp; &nbsp; .while ebx&lt;x1<br />&nbsp; &nbsp; &nbsp; &nbsp;  .if steep <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; OCall pPXM::Pixelmap.SetPixel, y, ebx, color <br />&nbsp; &nbsp; &nbsp; &nbsp;  .else <br />	&nbsp; &nbsp; 	OCall pPXM::Pixelmap.SetPixel, ebx, y, color <br />&nbsp; &nbsp; &nbsp; &nbsp;  .endif<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov eax,error<br />&nbsp; &nbsp; &nbsp; &nbsp;  sub eax,deltay<br />&nbsp; &nbsp; &nbsp; &nbsp;  mov error,eax<br />&nbsp; &nbsp; &nbsp; &nbsp;  <br />&nbsp; &nbsp; &nbsp; &nbsp;  .if error &lt; 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov eax,y<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  add eax,ystep<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov y,eax<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov eax,error<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  add eax,deltax<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  mov error,eax<br />&nbsp; &nbsp; &nbsp; &nbsp;  .endif<br /><br />&nbsp; &nbsp; &nbsp; &nbsp;  inc ebx<br />	 .endw<br />	ret<br />PlotLine endp<br />	<br /></code></pre><br /><br />I tried tracing lines from the center of the circle to each point plotted on its circumference.<br />The resulting image is attached.<br />As you can see, this method of filling the circle is entirely unacceptable - and I suspected it would be.<br />But that is ok, I&#039;ll probably develop a raster-based flood-filling algo.<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3179" target="_blank">circle.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-06-15 00:46:02 by Homer</div>
+   </div>
+   <div class="post" id="post-212074">
+    <div class="subject"><a href="#post-212074">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">Seems the problem was in the line drawing algorithm.<br />I implemented a slightly different one, and here&#039;s my current result... ooh, pretty patterns!<br />This is an Absolute 8-Bit graycode encoder, I&#039;ve only filled half of the pattern (as I was doing it by hand, which is NOT the goal)... also, it&#039;s rendered to only a 1024x1024 image, so it appears a little pixellated - this problem is reduced greatly by increasing the resolution further, my final goal is CD LABEL sized image, so remember that even at a lowly 300 dpi, we still need 300 pixels for every inch.. this is an optical device, cutting corners WILL adversely affect its performance.<br /><br />I have written a function to generate graycode tables of up to 32 bit precision - if anyone wants that, let me know.<br /><br />Next will be to attempt to implement automatic cell filling of some kind, so I can get rid of the &#039;grid&#039; completely.<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3181" target="_blank">circle.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-06-15 07:48:03 by Homer</div>
+   </div>
+   <div class="post" id="post-212075">
+    <div class="subject"><a href="#post-212075">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">Instead of plotting pixels, have you considered outputting to a vector format? That way you would get perfect quality &amp; scaling...</div>
+    <div class="meta">Posted on 2010-06-15 08:40:55 by f0dder</div>
+   </div>
+   <div class="post" id="post-212076">
+    <div class="subject"><a href="#post-212076">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">I have not thought about that no, I know nothing about &quot;modern 2d vector graphics&quot;.<br /><br />But heres some more eye candy :)<br />I finished writing the code anyways.<br /><br />For each &#039;cell&#039; which has an associated graycode bit of 1, I draw all 4 edges of that cell, then I flood-fill it using a particularly lame recursive filler that I wrote on the spot. Just happens I can guarantee that my polygon is always closed and convex which made life easy - and doing it this way avoids any messy edge-ordering / coordinate-switching, and no need for interpolation.<br />Lazy man gets the job done.<br /><br />OK, these gray codes are counted from the inside outwards - LSB on the outside track.<br />The first graycode on my image is located at 6 oclock, and the series then counts in the counterclockwise direction.<br /><br />00000000<br />00000001<br />00000011<br />00000010 and so on<br /><br /><br />I am considering whether or not to remove the circles marking the &#039;tracks&#039; from the image - just leaving the filled areas, the outermost circle, and the little one in the middle with the crosshair on it.<br />But I guess the circles are doing no harm being there - they won&#039;t affect the device&#039;s operation.<br /><br /><br /><br />6 oclock - yes, I mixed up sine and cosine, silly me, and im WAY too lazy to fix it, so NER<br /><br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3183" target="_blank">circle_red.JPG</a></li>
+      <li><a href="../../attachments/?id=3185" target="_blank">circle_blackwhite.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-06-15 10:08:23 by Homer</div>
+   </div>
+   <div class="post" id="post-212077">
+    <div class="subject"><a href="#post-212077">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><br />Hum, last minute bug crept in<br />Probably noone noticed theres only 7 tracks worth of active cells in those images.<br /><br />Shoulda looked like this:<br /></div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3187" target="_blank">circle_blackwhite.JPG</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-06-15 10:24:39 by Homer</div>
+   </div>
+   <div class="post" id="post-212078">
+    <div class="subject"><a href="#post-212078">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><div class="quote">I have not thought about that no, I know nothing about &quot;modern 2d vector graphics&quot;.</div>:)<br /><br />Never dealth with 2D vector graphics myself, but for a project like this I would&#039;ve looked into the SVG graphics format. If you want to be able to do printing directly from your app instead of just generating files and rendering+printing with another app I dunno if it&#039;s more trouble than it&#039;s worth, though.<br /><br />Anyway, nice-looking eyecandy =)</div>
+    <div class="meta">Posted on 2010-06-15 10:44:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-212079">
+    <div class="subject"><a href="#post-212079">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">I have now generated 9,10,11 and 12-bit encoder wheels.<br /><br />Now I know why the commercial ones all stop at 12 bits.<br /><br /><br />10 bits required an image resolution of 2048x2048 to look respectable.<br />11 bits needed 4096x4096.<br />For 12 bits, even 8192x8192 was not enough.<br />I settled on 9000x9000<br />This is close to the limit of what winpaint will handle - its a 308MB bmp file !!<br />I haven&#039;t tried to generate more bit depth, I&#039;d need to free up some hard drive space lol</div>
+    <div class="meta">Posted on 2010-06-15 11:03:24 by Homer</div>
+   </div>
+   <div class="post" id="post-212080">
+    <div class="subject"><a href="#post-212080">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><div class="quote">For 12 bits, even 8192x8192 was not enough.<br />I settled on 9000x9000<br />This is close to the limit of what winpaint will handle - its a 308MB bmp file !!<br />I haven&#039;t tried to generate more bit depth, I&#039;d need to free up some hard drive space lol</div>Well, there&#039;s your incentive to look at a vector-based solution :P</div>
+    <div class="meta">Posted on 2010-06-15 11:07:19 by f0dder</div>
+   </div>
+   <div class="post" id="post-212082">
+    <div class="subject"><a href="#post-212082">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><div class="quote"><br />Well, there&#039;s your incentive to look at a vector-based solution :P<br /></div><br /><br />Agreed, especially considering the geometric nature of this application.<br /><br />Grab a copy of <a target="_blank" href="http://www.inkscape.org/">Inkscape</a> and have a quick look at what the SVG format can do for you.</div>
+    <div class="meta">Posted on 2010-06-15 11:23:17 by SpooK</div>
+   </div>
+   <div class="post" id="post-212083">
+    <div class="subject"><a href="#post-212083">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">I&#039;ll certainly take a look :)<br /><br />However what I meant was that there is a physical problem with increasing resolution further.<br />I need to be able to shine a light through these holes while the disc is rotating, and capture that light with a detector.<br />If the cells (or, in the case of the outer edge at high precision, slots) are too narrow, there wont be enough time for the detector to switch states (rise time) unless the encoder is rotating very slowly, and the light is very bright (or is a laser diode).<br />I was planning on using regular Infrared LEDs both for emitter and reversebiased as detector.<br />These have rise/fall times of about 5 microseconds.<br />So there is a relationship between how fast the encoder can rotate, and how narrow the slots are (regardless of the other optical issues caused by the slot).<br /><br />The only solution to that problem is to use a BIGGER DISC.<br />But I want to use a CD - its already quite large compared to commercial encoders, which use special IR LED array ICs that have little slot-shaped apertures all red in a row.<br />And to etch the cd, I&#039;ve confirmed that I can use sulphuric or hydrochloric acids in household strength, or even sodium hydroxide will work - and I think I can use almost anything as a resist for those - good news :D<br /><br />Now I just need to find a really cheap and nasty CD with no print and no lacquer on the surface. Should not be too hard :P<br /><br /></div>
+    <div class="meta">Posted on 2010-06-15 11:58:11 by Homer</div>
+   </div>
+   <div class="post" id="post-212085">
+    <div class="subject"><a href="#post-212085">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">Just did a quick calculation, with a rise/fall time of 5us, and resolution of 12 bits = 4096 absolute positions, my system WILL FAIL UTTERLY at 2929.6875 RPM.<br /><br />The shaft whose position I intend to measure will never exceed 300 RPM.<br />More good news :)<br /><br /><br /></div>
+    <div class="meta">Posted on 2010-06-15 12:16:36 by Homer</div>
+   </div>
+   <div class="post" id="post-212086">
+    <div class="subject"><a href="#post-212086">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><br />If anyone wants to ask any questions about rotary encoders (for example, what the hell they are for), then please feel free to do so. I have a formal qualification in this field, and I&#039;m happy to pass on what I&#039;ve learned.<br /><br /></div>
+    <div class="meta">Posted on 2010-06-16 01:20:59 by Homer</div>
+   </div>
+   <div class="post" id="post-212087">
+    <div class="subject"><a href="#post-212087">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><div class="quote"><br />If anyone wants to ask any questions about rotary encoders (for example, what the hell they are for), then please feel free to do so. I have a formal qualification in this field, and I&#039;m happy to pass on what I&#039;ve learned.<br /></div><br /><br />I&#039;ve read Hiltgen/Paterson paper on STCCs (not completely understood it yet ;)) and thought about combining several single-track encoders to get the best of two worlds. Is there a theory about this approach?</div>
+    <div class="meta">Posted on 2010-06-16 05:53:54 by baldr</div>
+   </div>
+   <div class="post" id="post-212088">
+    <div class="subject"><a href="#post-212088">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><br />OK, Let&#039;s start with the idea that we have one track, containing a sequence of just 0, 1, 0, 1, 0, 1 .....<br />Now let&#039;s split that track into two, and shift one of them out of phase by half of one cell.<br />We now have enough to build a quadrature encoder ... &nbsp;the offset pattern is a quadrature pattern.<br />That means we can tell which direction the device is rotating, as well as merely being able to count the ticks.<br /><br />If we want to be able to tell the position at any moment without using a counter (that can miss counts), we can make an absolute encoder wheel as I have, and fill it will gray codes.<br /><br />Now, there are more than one set of gray codes.<br />The professor Gray who invented them defined them as any set of binary numbers which increment by changing of only one bit at each step.<br />I used the &#039;classic&#039; or &#039;vanilla flavored&#039; set of gray codes, which follow a very simple pattern that I&#039;d be happy to describe.<br />But we could choose ANY gray code set, and put that on an encoder wheel...<br />Note that the gray codes appear on the encoder wheel &quot;radially&quot;, ie you pick some angle , draw a line from the center of the encoder wheel along that angle, and start reading one bit from each track the line passes through.<br /><br />The idea in the paper you mentioned is an extension of the previous &quot;quadrature from two out of phase tracks&quot; concept.<br />The idea is that we can find some bit pattern that we can shove onto any one of our rings, which can be then duplicated in every other ring, except at different orientations, to produce that shift... and also produce &quot;some valid set of gray codes&quot;. The idea is that such a pattern and set of orientations exists, and that we can find it algorithmically.<br />I have no backbone for that stuff, sorry, I am wimping out, I am not a math major.<br /><br /><br /></div>
+    <div class="meta">Posted on 2010-06-16 11:48:04 by Homer</div>
+   </div>
+   <div class="post" id="post-212091">
+    <div class="subject"><a href="#post-212091">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">OK you got me thinking.<br /><br />I said I&#039;m not a math major, and that&#039;s true.<br />However I am pretty switched on.<br /><br />I decided to have a go at generating a cyclic gray code.<br />For my little test I chose 4 bits.<br /><br />Forgetting about all the math, and just using these simple rules:<br />1. Each concurrent set of 4 bits will represent a binary value (from 0000 to 1111).<br />2. The first and last values must be chosen to form a closed loop of bits.<br />3. All binary values must appear.<br />4. Each binary value must appear only once.<br /><br />For no reason at all, I chose to start with the number 1.<br />So I wrote down the binary:<br /><br />0001<br /><br />Now I have to choose a value that (A) begins with &quot;001&quot; and (B) I have not used it before.<br />I ended up with the following series:<br /><br />0 0 0 1 1 0 1 0 0 1 0 1 1 1 1 0 <br /><br />These 16 bits contain an entire 4-bit graycode set !!!<br />And we KNOW that its a legitimate gray code set because at each step, the value changes by only one bit :D<br /><br />0001 = 1<br />0011 = 3<br />0110 = 6<br />1101 = 13<br />1010 = 10<br />0100 = 4<br />1001 = 9<br />0010 = 2<br />0101 = 5<br />1011 = 11<br />0111 = 7<br />1111 = 15<br />1110 = 14<br />(and we start cycling bits already)<br />1100 = 12<br />1000 = 8<br />0000 = 0<br /><br />ad nauseum.<br /><br /><br />The idea is to arrange the 16 bits in a circle, and use four sensors that are situated on the same radius as the bitpattern is (a single track) - rather than having the sensors arranged along a ray from the circle origin as normal. The spacing is now important too, because we need to have each of the four sensors situated directly above each of four consecutive bits on our encoder wheel. Now as the wheel turns, the four sensors will see a 4-bit gray code at each of 16 steps, see the above table of values.<br /><br /><br />Can you come up with another 4 bit pattern?<br />Can you suggest an algorithmic approach to the discovery of such patterns at arbitrary bitlength?<br /></div>
+    <div class="meta">Posted on 2010-06-17 04:57:19 by Homer</div>
+   </div>
+   <div class="post" id="post-212093">
+    <div class="subject"><a href="#post-212093">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><pre><code><br />0000<br />0001<br />0011<br />0010<br />0110<br />0111<br />0101<br />0100<br />1100<br />1101<br />1111<br />1110<br />1010<br />1011<br />1001<br />1000<br /></code></pre><br />just observe the collumn for each bit, the gray code is as simple as binary</div>
+    <div class="meta">Posted on 2010-06-17 06:32:03 by edfed</div>
+   </div>
+   <div class="post" id="post-212094">
+    <div class="subject"><a href="#post-212094">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body"><br />Looks like someone didn&#039;t bother to read before they posted :P<br />I know what a gray code is - and that there is more than one !!<br />In particular, my last post was about &quot;circular&quot; or &quot;cyclic&quot; gray codes.<br />The classic gray code you posted is not cyclic.<br /></div>
+    <div class="meta">Posted on 2010-06-17 08:27:36 by Homer</div>
+   </div>
+   <div class="post" id="post-212095">
+    <div class="subject"><a href="#post-212095">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">i read everything in the post, just i find it usefull to confirm the only real gray code.<br /><br />your previous &quot;gray&quot; code seems to don&#039;t be so gray...<br />0001 = 1<br />0011 = 3<br />*0110 = 6<br />*1101 = 13<br />*1010 = 10<br />*0100 = 4<br />*1001 = 9<br />*0010 = 2<br />*0101 = 5<br />*1011 = 11<br />*0111 = 7<br />1111 = 15<br />1110 = 14<br />(and we start cycling bits already)<br />1100 = 12<br />1000 = 8<br />0000 = 0<br /><br /><br />cyclic means (for me) something that have a cycle, i know only ONE real gray code, the one understood by TTL/CMOS circuits.<br />the classic gray code is striclly CYCLIC, because you can reloop.<br /></div>
+    <div class="meta">Posted on 2010-06-17 09:44:00 by edfed</div>
+   </div>
+   <div class="post" id="post-212099">
+    <div class="subject"><a href="#post-212099">Re: Rotary Encoder Disc Pattern Generator</a></div>
+    <div class="body">Not gray huh?<br /><br />ok do this<br /><br />write out the bit sequence i posted (the 16 1s and 0s)<br /><br />now look at each GROUP of 4 bits using a sliding window, starting at offset 0, then offset 1, etc<br /><br />note that we shifted by ONE BIT to look at the next 4 bits - in effect our gray code is shifted too.<br /><br />yes, more than one bit appears to change making it APPEAR not to be a gray code, but we&#039;re not moving from value to value in the usual way, we&#039;re sliding along our viewing window by one bit instead - it&#039;s legit.<br /><br /><br />its just not a CONVENTIONAL gray code ;)<br /></div>
+    <div class="meta">Posted on 2010-06-17 18:21:26 by Homer</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=30038&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=30038&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="30038" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=30038&amp;page=2">&gt;</a><a href="../?id=30038&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

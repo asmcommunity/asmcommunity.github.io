@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>ReadFile and SetFilePointer - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=4200" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=4200">ReadFile and SetFilePointer</a></p>
+   <div class="post" id="post-28958">
+    <div class="subject"><a href="#post-28958">ReadFile and SetFilePointer</a></div>
+    <div class="body">Hello,<br />I have a problem with subj.<br />I read file, close handle, then read this file again (file handler appear the same) and get the number of bytes read is zero (return value non zero). OK, MSDN say the file pointer is beyond the end of file, no problem<br /><pre><code><br />invoke CreateFile, addr filename,GENERIC_READ,0,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,0<br />cmp eax, -1<br />jz @@somewhere_else<br />mov hFile, eax<br />invoke SetFilePointer, hFile,0,0,FILE_BEGIN<br />invoke ReadFile, hFile, ADDR buffer, buf_len, ADDR buf_len, 0<br /></code></pre><br />Very first time is OK, but next - problem persist.<br />OS:Win2K</div>
+    <div class="meta">Posted on 2002-03-14 08:18:14 by masquer</div>
+   </div>
+   <div class="post" id="post-28965">
+    <div class="subject"><a href="#post-28965">ReadFile and SetFilePointer</a></div>
+    <div class="body">When you first open your file it's pointer is at the begining so you don't have to set the file pointer to the begining, for each byte you read the file pointer is being incremented by one so if your ReadFile reads everything then you should change the pointer but if you close and reopen the pointer is at the begining again.<br />maybe what you want is<br /><br />CreateFile<br />ReadFile<br />SetFilePointer ;begining<br />ReadFile</div>
+    <div class="meta">Posted on 2002-03-14 09:08:37 by Quantum</div>
+   </div>
+   <div class="post" id="post-28969">
+    <div class="subject"><a href="#post-28969">ReadFile and SetFilePointer</a></div>
+    <div class="body">masquer are you trying to ReadFile on your handle after you CloseHandle'd it?<br />That obviously will not work (and if it does - it's a bug ;)).<br /><br />As for your code, compare to INVALID_HANDLE_VALUE instead of -1,<br />it's a lot cleaner.</div>
+    <div class="meta">Posted on 2002-03-14 09:20:34 by f0dder</div>
+   </div>
+   <div class="post" id="post-28972">
+    <div class="subject"><a href="#post-28972">ReadFile and SetFilePointer</a></div>
+    <div class="body">No, it is don't work.<br />The situation is:<br />I need to insert one smaller file in another bigger. But there is a situation when I need to insert this file at several offset in the bigger one (optionally), that's why I read this small file, close it, and if I need, I open it again, and there is a problem, as I read in MSDN, with file pointer.<br /><br /><strong>2 f0dder:</strong><br />No, I'm not read file after close handle. In my proc I createfile, then readfile, then closehandle. Ther first time everything fine, then after readfile data is actually in memory at the data buffer, but nNumberOfBytesToRead is zero :(</div>
+    <div class="meta">Posted on 2002-03-14 09:25:25 by masquer</div>
+   </div>
+   <div class="post" id="post-28977">
+    <div class="subject"><a href="#post-28977">ReadFile and SetFilePointer</a></div>
+    <div class="body">I don't know what file pointer problem you are talking a bout - after<br />CreateFile, file pointer is always at file start. So either keep doing<br />createfile/closehandle, or keep the file open and do setfilepointer<br />before each read.<br /><br />Can't see why nNumberOfBytesToRead (buf_len) should end up zero...<br />*shrug*.<br /><br />Oh well, another comment on your code... use &quot;OPEN_EXISTING&quot;<br />instead of &quot;OPEN_ALWAYS&quot; if the file is something you need to<br />insert (since it logically has to be already existant to be inserted<br />into another file :)).</div>
+    <div class="meta">Posted on 2002-03-14 09:42:53 by f0dder</div>
+   </div>
+   <div class="post" id="post-28982">
+    <div class="subject"><a href="#post-28982">ReadFile and SetFilePointer</a></div>
+    <div class="body">I'm too do not understand what is going on. Here is my proc<br /><br />buf_V, buf_P - buffers of filenames (_V - is bigger)<br />offs - offset in the _V file, specified by user<br />When it run second time and only offset is different after the ReadFile bufin_len=0.<br />After each reading I'm clearing the buf_V, buf_P, and read them from edit box<br />:confused:<br /><pre><code><br />writein proc uses ecx<br />	invoke CreateFile, addr buf_V, GENERIC_WRITE,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0<br />	cmp eax, INVALID_HANDLE_VALUE<br />	jz @@exit<br />	mov hV, eax<br /><br />	mov ecx, offs ; offset<br />	cmp ecx, -1 ;if offset==-1 then go to the EOF<br />	jz @@bigger<br /><br />	invoke GetFileSize, hV, NULL<br />	mov ecx, offs<br />	cmp eax, ecx<br />	jl @@bigger<br />	push FILE_BEGIN<br />	jmp @@end<br />@@bigger&#58;<br />	push FILE_END<br />	xor ecx, ecx<br />@@end&#58;<br />	push 0<br />	push ecx<br />	push hV<br />	call SetFilePointer<br />	cmp eax, -1<br />	jz @@exit<br /><br />	invoke CreateFile, addr buf_P, GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0<br />	cmp eax, INVALID_HANDLE_VALUE<br />	jz @@exit<br />	mov hP, eax<br />@@read&#58;<br />	invoke ReadFile, hP, ADDR bufin, bufin_len, ADDR bufin_len, 0<br />	mov ecx, bufin_len<br />	or ecx, ecx<br />	jnz @@write<br />	jmp @@preexit<br />@@write&#58;<br />	invoke WriteFile, hV, ADDR bufin, bufin_len, ADDR bufin_len, 0<br />	jmp @@read<br />@@preexit&#58;<br />	invoke CloseHandle, hP<br />	invoke CloseHandle, hV<br />	mov eax,1<br />	ret<br />@@exit&#58;<br />	xor eax, eax<br />	ret<br />writein endp<br /></code></pre></div>
+    <div class="meta">Posted on 2002-03-14 10:07:36 by masquer</div>
+   </div>
+   <div class="post" id="post-29202">
+    <div class="subject"><a href="#post-29202">ReadFile and SetFilePointer</a></div>
+    <div class="body">All I can see is -- when your proc is done, bufin_len will be 0. So you will need to reinitialize bufin_len before calling the proc again.</div>
+    <div class="meta">Posted on 2002-03-15 13:53:43 by tenkey</div>
+   </div>
+   <div class="post" id="post-29340">
+    <div class="subject"><a href="#post-29340">ReadFile and SetFilePointer</a></div>
+    <div class="body">Thank you, but what do you mean reinitialize - it is already zero, it is the condition of stop reading.<br />Here is the simpler code with tha same effect - after first cycle ReadFile did not work.<br /><br /><strong>Can someone explain what's going on</strong><br /><br />My text file is 4 byte length<br /><pre><code><br />.data<br />	buf_P db &quot;text.txt&quot;,0<br />	bufin_len dd 4096<br />	offs	dd 10h<br />.data?<br />	bufin dd 4096 dup &#40;?&#41;<br />	hP	dd ?<br /><br />.code<br /><br />start&#58;<br />	invoke CreateFile, offset buf_P, GENERIC_READ,0,0,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,0<br />	cmp eax, INVALID_HANDLE_VALUE<br />	jz @@final<br />	mov hP, eax<br />@@read&#58;<br />	invoke ReadFile, hP, ADDR bufin, bufin_len, ADDR bufin_len, 0<br />	mov ecx, bufin_len<br />	or ecx, ecx<br />	jnz @@read<br />	jmp @@exit<br />@@exit&#58;<br />	mov bufin_len, ecx<br />	invoke CloseHandle, hP<br />	add offs, 10h<br />	cmp offs, 100h<br />	jz @@final<br />	jmp start<br />@@final&#58;<br />	invoke ExitProcess,0<br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2002-03-16 03:17:03 by masquer</div>
+   </div>
+   <div class="post" id="post-29797">
+    <div class="subject"><a href="#post-29797">ReadFile and SetFilePointer</a></div>
+    <div class="body">The first bufin_len in your ReadFile invoke is the <strong>maximum number of bytes you want</strong>. After the first call to writein, bufin_len is set to zero, so when you call writein a second time, you are <strong>asking for zero bytes</strong> (unless you reset bufin_len to a nonzero value).<br /><br />Your last example is different. The second read yields zero bytes because there are no bytes to read the second time. (All four bytes were read the first time.)<br /><br />I suggest using different variables for bufin_len and the number of bytes actually read.<br /><br />Another tip: you don't need to jump around a jump in 32-bit code. Long conditional jumps are supported.</div>
+    <div class="meta">Posted on 2002-03-18 13:42:09 by tenkey</div>
+   </div>
+   <div class="post" id="post-29803">
+    <div class="subject"><a href="#post-29803">ReadFile and SetFilePointer</a></div>
+    <div class="body">Thanks, tenkey.<br />Mirno makes it faster. I'm just get lost. :)<br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=4293">http://www.asmcommunity.net/board/index.php?topic=4293</a></div>
+    <div class="meta">Posted on 2002-03-18 14:01:09 by masquer</div>
+   </div>
+  </div>
+ </body>
+</html>

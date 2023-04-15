@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Calculation of SizeofImage - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=11806" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=11806">Calculation of SizeofImage</a></p>
+   <div class="post" id="post-90151">
+    <div class="subject"><a href="#post-90151">Calculation of SizeofImage</a></div>
+    <div class="body">How can I calculate the members &quot;SizeOfImage&quot; and &quot;SizeOfHeaders&quot; belonging to the PE Optional Header?<br />I want to remove the debug section of my executables compiled with DigitalMars;that's why I<br />need some infos.Could somebody demonstrate the calculations on a real<br />example?<br /><br />Vortex</div>
+    <div class="meta">Posted on 2003-03-25 10:06:01 by Vortex</div>
+   </div>
+   <div class="post" id="post-90393">
+    <div class="subject"><a href="#post-90393">Calculation of SizeofImage</a></div>
+    <div class="body"><pre><code>	invoke	CreateFile, ADDR szInputFile, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0<br />	mov	&#91;hFile&#93;, eax<br />	invoke	GetFileSize, eax, 0	; get the size<br />	mov	&#91;dwFileSize&#93;, eax<br />	invoke	GlobalAlloc, GMEM_MOVEABLE, eax		; allocate memory needed<br />	mov	&#91;hMemory&#93;, eax<br />	invoke	GlobalLock, eax				; lock the allocated memory<br />	mov	&#91;dwFile&#93;, eax<br />	invoke	ReadFile, &#91;hFile&#93;, eax, &#91;dwFileSize&#93;, esp, 0		; read the file<br /><br />	push	esi<br />	push	edi<br />	push	ebx<br />	; check for the file for validity<br />	mov	esi, &#91;dwFile&#93;<br />	; check the standard EXE header &#40;MZ&#41;<br />	cmp	word ptr &#91;esi&#93;, &quot;ZM&quot;<br />	jne	@@done<br />	; jump to the new PE header<br />	add	esi, &#91;esi&#93;&#91;IMAGE_DOS_HEADER.e_lfanew&#93;<br />	; check the PE header signature<br />	cmp	word ptr &#91;esi&#93;, &quot;EP&quot;<br />	jne	@@done<br />	; initialize registers<br />	movsx	ecx, &#91;esi&#93;&#91;IMAGE_NT_HEADERS.FileHeader.NumberOfSections&#93;<br />	mov	edi, esi<br />	add	esi, &#91;IMAGE_NT_HEADERS.OptionalHeader&#93;<br />	add	edi, sizeof IMAGE_NT_HEADERS<br />@@sect&#58;	push	ecx<br />	push	edx<br />	;test	&#91;edi&#93;&#91;IMAGE_SECTION_HEADER.Characteristics&#93;, IMAGE_SCN_CNT_UNINITIALIZED_DATA<br />	;jz	@@nocr<br />	; pad the section's VirtualSize &#40;size when its loaded&#41; to the next section's start<br />	mov	eax, &#91;edi&#93;&#91;sizeof IMAGE_SECTION_HEADER&#93;&#91;IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />	test	eax, eax<br />	jz	@@nocr	; no section to padd it up to<br />	sub	eax, &#91;edi&#93;&#91;IMAGE_SECTION_HEADER.VirtualAddress&#93;<br />	mov	&#91;edi&#93;&#91;IMAGE_SECTION_HEADER.Misc.VirtualSize&#93;, eax<br />@@nocr&#58;	xor	edx, edx<br />	mov	eax, &#91;edi&#93;&#91;IMAGE_SECTION_HEADER.Misc.VirtualSize&#93;<br />	div	&#91;esi&#93;&#91;IMAGE_OPTIONAL_HEADER.SectionAlignment&#93;	; make sure VirtualSize is a multiple of SectionAlignment<br />	test	edx, edx<br />	.if !zero?	; round up VirtualSize to the SectionAlignment<br />		sub	edx, &#91;esi&#93;&#91;IMAGE_OPTIONAL_HEADER.SectionAlignment&#93;<br />		neg	edx<br />		add	&#91;edi&#93;&#91;IMAGE_SECTION_HEADER.Misc.VirtualSize&#93;, edx<br />	.endif<br />	pop	edx<br />	add	edx, &#91;edi&#93;&#91;IMAGE_SECTION_HEADER.Misc.VirtualSize&#93;<br />	; next section &#40;if there are any&#41;<br />	pop	ecx<br />	add	edi, sizeof IMAGE_SECTION_HEADER<br />	dec	ecx<br />	jnz	@@sect<br /><br />	; correct SizeOfImage in the OptionalHeader &#40;all sections' correct VirtualSize + rounded up SizeOfHeaders to SectionAlignment&#41;<br />	push	edx<br />	mov	edi, &#91;dwFile&#93;<br />	add	edi, &#91;edi&#93;&#91;IMAGE_DOS_HEADER.e_lfanew&#93;<br />	xor	edx, edx<br />	mov	eax, &#91;edi&#93;&#91;IMAGE_NT_HEADERS.OptionalHeader.SizeOfHeaders&#93;<br />	div	dword ptr &#91;edi&#93;&#91;IMAGE_NT_HEADERS.OptionalHeader.SectionAlignment&#93;<br />	test	edx, edx<br />	.if !zero?	; pad the SizeOfHeaders to the SectionAlignment, but do not store it<br />		sub	edx, &#91;edi&#93;&#91;IMAGE_NT_HEADERS.OptionalHeader.SectionAlignment&#93;<br />		neg	edx<br />	.endif<br />	pop	eax<br />	add	eax, edx<br />	; save our new SizeOfImage<br />	mov	&#91;edi&#93;&#91;IMAGE_NT_HEADERS.OptionalHeader.SizeOfImage&#93;, eax<br /><br />	invoke	CreateFile, ADDR szOutputFile, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0<br />	mov	&#91;hFileOut&#93;, eax<br />	invoke	WriteFile, eax, &#91;dwFile&#93;, &#91;dwFileSize&#93;, esp, 0<br />	invoke	CloseHandle, &#91;hFileOut&#93;<br />	pop	ebx<br />	pop	edi<br />	pop	esi</code></pre></div>
+    <div class="meta">Posted on 2003-03-25 20:56:00 by comrade</div>
+   </div>
+  </div>
+ </body>
+</html>

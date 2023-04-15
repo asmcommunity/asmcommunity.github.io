@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Fixed output DW to ASCII Dec convertions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27422" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27422">Fixed output DW to ASCII Dec convertions</a></p>
+   <div class="post" id="post-196221">
+    <div class="subject"><a href="#post-196221">Fixed output DW to ASCII Dec convertions</a></div>
+    <div class="body">A little overview of num to string convertions.
+----------------------------------------------
+It's a big a worthy topic, but I'm not a writer
+so I'll just tach it.
+The most difficult of those convertion when radix
+of representing in ASCII numeric system is not power of 2.
+In such a case we hardly can predict before the hand number
+of caracters for output without complex math wich makes all
+alo slow.
+And, of course amoung all of the numeric system we need
+most radix 10 system or in other words the decimal numeric system.
+
+Let's name teqnics to do it:
+If number from 0 to 9 just add 30h (better OR 30h)
+----------
+If number upto 99
+1. We can use BCD instructions (such as aam)
+2. Or we can use some table with ASCII dec represantation and use
+the value being converted as an index pointer to the table
+----------
+If number is BIG.
+
+Well it is real task, and a lot of good brains racked trying to
+find NEW ways to do it.
+Sometime I may be show unusual teqs I invented, but for now let's
+say that most universal way to do it, with all different realisation
+is in the root the same:
+Devide the number by 10 and put reminders in array until the number is
+zero. Then reverse the array.
+
+So let's consentrate on the division part.
+DIV instruction is and ALWAYS BE very slow. It one itself comsume at
+least twice more clocks then all the rest job in algo.
+So the way to optimize is clear - if you find how to replace usage of DIV
+with faster way - then you speed up your convertion.
+I invented one of the way how to do it with mul instruction, you can look at 
+the method in new SP for MASM32.
+Second and well known way to replace DIV instruction to use SUB.
+Lately I tried to optimize some of my old procs for FIXED positioning
+decemal convertions.
+For sake of learning and exchenging ideas I wrote 4 sample procs and was
+shocked when after testing speed for whole range of DWORD from 0 to FFFFFFFFh
+this procs gave 20-25% better results than already optimized procs with
+devision through multiplications (wich was 4 times faster than using DIV)
+Actually the procs can be rewritten to be used with varable output,
+but since there is no fixed DW2ASCII decimal proc in M32LIB I'm posting
+versions for fixed output.
+<pre><code>
+sDw2AFixed proc num:DWORD,lpBuffer:DWORD
+for signed numbers
+output 11 bytes for insert in some string 11 bytes positions
+example '-0000234567' 1000000000'
+sDw2AFixedz proc num:DWORD,lpBuffer:DWORD
+output 12 bytes in ASCIIZ the same as sDw2AFixed but insert 0 at the end
+(I wrote it in case for beginners actully if you need both ASCII and
+ASCIIZ versions in your programm - use just sDw2AFixed and do
+ mov  upon the return from the proc)
+UDw2AFixed num:DWORD,lpBuffer:DWORD
+for unsigned numbers
+output 10 bytes
+UDw2AFixedz num:DWORD,lpBuffer:DWORD
+the same as previous but insert 0 at the end - altogether 11 bytes output
+(the same recommendations of usage as for 1st pare)
+.586
+.model flat,stdcall
+option casemap:none
+.code
+sDw2AFixed proc num:DWORD,lpBuffer:DWORD
+ mov edx,lpBuffer
+ mov eax,num
+ mov byte ptr ,' ' 
+ inc edx
+ cmp eax,0
+ jns ns
+ mov byte ptr ,'-'
+ neg eax
+ns:
+ mov cl,30h
+ cmp eax,1000000000
+ jb next1
+
+@@: inc cl
+    sub eax,1000000000    
+    jns @B	
+    dec cl
+    add eax,1000000000
+next1:     
+    mov ,cl
+    cmp eax,100000000
+    mov cl,30h
+    jb next2
+@@: 
+    inc cl
+    sub eax,100000000
+    jns @B
+    dec cl
+    add eax,100000000
+next2:
+    mov ,cl
+    cmp eax,10000000
+    mov cl,30h
+    jb next3
+@@: inc cl
+    sub eax,10000000
+    jns @B
+    dec cl
+    add eax,10000000
+next3:
+    mov ,cl
+    cmp eax,1000000
+    mov cl,30h
+    jb next4
+
+@@: inc cl
+    sub eax,1000000
+    jns @B
+    dec cl
+    add eax,1000000
+
+next4:
+    mov ,cl
+    cmp eax,100000
+    mov cl,30h
+    jb next5
+@@: inc cl
+    sub eax,100000
+    jns @B
+    dec cl
+    add eax,100000
+next5:
+    mov ,cl
+    cmp eax,10000
+    mov cl,30h
+    jb next6
+@@: inc cl
+    sub eax,10000
+    jns @B</div>
+    <div class="meta">Posted on 2001-03-28 05:49:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196222">
+    <div class="subject"><a href="#post-196222">Fixed output DW to ASCII Dec convertions</a></div>
+    <div class="body">i once made my own dw2str conversation routine. it needs ~8 cycles per digit (w/ ten digits 80cycles in contrasts to vultures ba2big or so w/ 267 (if anyone knows this)).
+i did this w/ tasm in dos w/ pmode from tran because so i could read the timestamp for the cycles but it should be easy to convert this to masm.
+
+here we go-->
+
+	align 32
+	TextNumBig db "000000000"
+	TextNumEnd db "0","$"
+
+        align 32
+;to reduce jmp-opcode size
+upperret:
+	ret
+
+;number in eax
+B2ABig PROC
+	mov ecx, '0000'
+	mov esi, o textnumend + 1
+	mov edx, eax
+
+	;this exchanged order brings 1 cycle (i dont why, esp with the cx!)
+	mov dword ptr , ecx
+	mov  word ptr ,  cx
+	mov dword ptr , ecx
+
+	;EAX=Temp
+	;EBX=Original.
+	;ECX="0000"
+	;EDX=Original/10
+	;ESI=PTR to the act. position
+
+i = 0
+rept 9					;For the first 9 digits
+	test edx, edx
+	mov ebx, edx
+	if $ - o upperret lt 128	;When short jmp possible 
+	 jz upperret
+	else
+	 jz getout
+	endif
+	dec esi
+
+
+        ;divide by 10
+	mov eax, (0FFFFFFFFH shr 1)/5+1		;tasm doesnt do "/10"
+	mul edx
+
+	; *10
+	lea eax, ;3 cycles
+	add eax, edx		;-
+
+        ;calculate difference = mod 10
+	sub ebx, eax
+
+	db 088H, 05EH, 000H
+;	mov ,bl  ;amd doc says w/ "+0" its faster and it is!
+	i = i + 1
+endm
+rr:
+	test edx, edx
+	jz getout
+
+	dec esi
+	add dl,"0"
+
+	db 088H, 056H, 000H
+;	mov ,dl
+getout:
+	ret
+ENDP B2ABig
+
+thats it and its VERY fast, i needed months to bring it to this speed but i think its impossible from now on. if anyone beats this, bring your code onto the msgboard, i really want to see this!
+(if anyone wants i will post/send the whole code w/ pmode and cycle counter)</div>
+    <div class="meta">Posted on 2001-03-28 08:48:00 by vineon</div>
+   </div>
+   <div class="post" id="post-196223">
+    <div class="subject"><a href="#post-196223">Fixed output DW to ASCII Dec convertions</a></div>
+    <div class="body">Vivat,Coder!
+Well done!
+It's always pleasure to see some careful coding here.
+As to testing - I have a humble preposition,
+if you care if there is possible way to it faster,
+make a STDCALL procedure from your algo wich
+will accept two parameters - pointer to string buffer
+to put the convertions in, and a number to convert.
+So that it can work with invoke.
+The output string must be in ASCIIZ format.
+Then I can write something to compare with it.
+I found some interesting parts in your approach, but
+use my own algo to get divisions and mod(10).
+So it will be interesting if there really is something
+to learn from your code.
+I must say - I'm not against AMD but I'm Intel Proc programmer
+and interested only in results with Pentium + series.
+Another thing to say I use VTUNE clock tables only in
+design stage (and not always) then I test results in
+numerous real eviorements and conditions.
+Anyway I'm glad to see you here, the more interesting coding
+the better.
+Awayting your STDCALL ASCIIZ version for further talk.
+Good luck with coding!
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-28 09:40:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196224">
+    <div class="subject"><a href="#post-196224">Fixed output DW to ASCII Dec convertions</a></div>
+    <div class="body">It's possible to make your algo faster.
+Change exit mainloop condition to checking if it's lower than ten not zero.
+And after exit loop just add 30h to the reminder and place it as the formated byte.
+It'll save upto 10-11 clocks.
+The Svin.</div>
+    <div class="meta">Posted on 2001-04-18 08:50:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

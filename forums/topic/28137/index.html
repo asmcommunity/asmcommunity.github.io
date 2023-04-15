@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Creating a Dialog in a DLL - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28137" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28137">Creating a Dialog in a DLL</a></p>
+   <div class="post" id="post-199529">
+    <div class="subject"><a href="#post-199529">Creating a Dialog in a DLL</a></div>
+    <div class="body">Hello,
+I'm trying to develop some DLL utilities for the QEditor editor starting from the qeplugin.dll template.
+I would like to know how to create a dialog in a DLL.
+
+Anyone can help ?</div>
+    <div class="meta">Posted on 2001-05-21 07:31:00 by sERpICo</div>
+   </div>
+   <div class="post" id="post-199530">
+    <div class="subject"><a href="#post-199530">Creating a Dialog in a DLL</a></div>
+    <div class="body">The same way you did in exe.</div>
+    <div class="meta">Posted on 2001-05-21 08:13:00 by Iczelion</div>
+   </div>
+   <div class="post" id="post-199531">
+    <div class="subject"><a href="#post-199531">Creating a Dialog in a DLL</a></div>
+    <div class="body">sERpICo,
+
+Just keep in mind that you normally use the instance handle passed
+to the LibMain in the DLL when you creat a dialog in a DLL. The
+rest is much the same as an EXE file. QE uses richedit 1 so you have
+to be a bit familiar with the rich edit 1 messaging to work with
+the editor properly.
+
+Good Luck with it.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-05-21 08:47:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-199532">
+    <div class="subject"><a href="#post-199532">Creating a Dialog in a DLL</a></div>
+    <div class="body">Hello hutch--
+I thought I could use even the HINSTANCE passed to the 
+QePlugIn procedure, however I tried  both but nothing good at all,I have:
+
+<pre><code>
+//////////////////////////////////////////////////////////
+
+;dateplugin.asm
+
+; #############################################
+
+    .386
+    .model flat, stdcall
+    option casemap :none   ; case sensitive
+
+; ##############################################
+
+    include \masm32\include\windows.inc
+    include \masm32\include\user32.inc
+    include \masm32\include\kernel32.inc
+    include \MASM32\include\oleaut32.inc
+
+    includelib \masm32\lib\user32.lib
+    includelib \masm32\lib\kernel32.lib
+    includelib \MASM32\LIB\oleaut32.lib
+
+; #####################################################
+
+    stralloc MACRO ln
+      invoke SysAllocStringByteLen,0,ln
+    ENDM
+
+    strfree MACRO strhandle
+      invoke SysFreeString,strhandle
+    ENDM
+
+    szText MACRO Name, Text:VARARG
+      LOCAL lbl
+        jmp lbl
+          Name db Text,0
+        lbl:
+      ENDM
+
+    m2m MACRO M1, M2
+      push M2
+      pop  M1
+    ENDM
+
+    return MACRO arg
+      mov eax, arg
+      ret
+    ENDM
+
+  ; -----------
+  ; not needed
+  ; -----------
+    LibMain  PROTO :DWORD,:DWORD,:DWORD
+    QePlugIn PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD    
+    DlgProc proto :DWORD,:DWORD,:DWORD,:DWORD 
+ 
+
+.data
+
+mybuffer db 20 dup(0)
+dateLabel db ";Current Date: ",0
+ClassName db "DLGCLASS",0 
+MenuName db "MyMenu",0 
+DlgName db "MyDialog",0 
+AppName db "Our First Dialog Box",0 
+
+.const
+IDC_EDIT       equ 3000 
+IDC_BUTTON     equ 3001 
+IDC_EXIT       equ 3002 
+IDM_GETTEXT    equ 32000 
+IDM_CLEAR      equ 32001 
+IDM_EXIT       equ 32003
+
+.data?
+buffer db 512 dup(?)
+hIn HINSTANCE ?
+
+.code
+
+; #########################################################
+
+LibMain proc hInstDLL:DWORD, reason:DWORD, unused:DWORD
+
+	
+	
+        .if reason == DLL_PROCESS_ATTACH
+
+            return TRUE
+          ; -----------------------------
+          ; If error at startup, return 0
+          ; System will abort loading DLL
+          ; -----------------------------
+
+ ;         ---------------------
+ ;          uncomment if needed
+ ;         ---------------------
+ ;         .elseif reason == DLL_PROCESS_DETACH
+ ; 
+ ;         .elseif reason == DLL_THREAD_ATTACH
+ ; 
+ ;         .elseif reason == DLL_THREAD_DETACH
+            
+        .endif
+
+        ret
+
+LibMain Endp
+
+; #################################################
+
+QePlugIn proc hInst:DWORD,hMain:DWORD,hEd:DWORD,hTool:DWORD,hStat:DWORD
+
+ ;     hInst    =   instance handle
+ ;     hMain    =   main window handle
+ ;     hEd      =   rich edit control handle
+ ;     hTool    =   toolbar handle
+ ;     hStat    =   status bar handle
+
+    LOCAL hMem:DWORD
+    LOCAL Cr:CHARRANGE
+    LOCAL time:SYSTEMTIME
+
+
+    szText dateFormat,"ddd','dd MMM yyyy"
+    szText TestString,"FOo StRiNG"
+    
+    m2m hIn,hInst
+    invoke GetSystemTime,ADDR time
+    
+    invoke GetDateFormat,LOCALE_USER_DEFAULT,0,ADDR time,ADDR dateFormat,ADDR mybuffer,sizeof mybuffer
+    .if(!eax)
+    	invoke GetLastError
+    	.if(eax==ERROR_INSUFFICIENT_BUFFER)
+    		szText errbuf,"INSUFFICIENT BUFFER!"
+    		invoke SendMessage,hEd,WM_SETTEXT,0,ADDR errbuf
+		jmp Bye
+	.endif
+	.if (eax==ERROR_INVALID_PARAMETER)
+			szText errparm,"INVALID PARAMETER!"
+			invoke SendMessage,hEd,WM_SETTEXT,0,ADDR errparm
+			jmp Bye	
+	.endif
+	.if (eax==ERROR_INVALID_FLAGS)
+	   	szText errflag,"INVALID FLAGS!"
+		invoke SendMessage,hEd,WM_SETTEXT,0,ADDR errflag
+		jmp Bye
+	.endif
+	jmp Bye	
+   .endif  
+	
+	invoke lstrcat,ADDR dateLabel,ADDR mybuffer ;dateLabel owns the date string
+	
+	invoke DialogBoxParam, hInst, ADDR DlgName,NULL, addr DlgProc, NULL 
+    	
+	
+  Bye:
+
+    ret
+
+QePlugIn endp
+
+; #######################################################
+
+DlgProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM 
+    .IF uMsg==WM_INITDIALOG 
+        invoke GetDlgItem, hWnd,IDC_EDIT 
+        invoke SetFocus,eax</div>
+    <div class="meta">Posted on 2001-05-22 06:38:00 by sERpICo</div>
+   </div>
+  </div>
+ </body>
+</html>

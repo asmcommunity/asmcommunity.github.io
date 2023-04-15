@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Flicker-free drawing using WM_PRINTCLIENT? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9911" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=9911">Flicker-free drawing using WM_PRINTCLIENT?</a></p>
+   <div class="post" id="post-73979">
+    <div class="subject"><a href="#post-73979">Flicker-free drawing using WM_PRINTCLIENT?</a></div>
+    <div class="body">Hi,<br /><br />My application toolbar and status bar flicker on resizing,<br />so I decided to use double buffering.<br />A number of threads refer to the ESF example by Chris Hobbs,<br />which doesn't seem to be available on Iczelions site any more.<br />Does anyone have a new pointer to it, or can repost it?<br /><br />So I'm using a memory device context for double buffering my entire<br />client window. With the WM_PRINTCLIENT API I've managed to<br />have the status and toolbar window paint itself to my backbuffer.<br />Then I blit onto my app DC.<br /><br />This works as expected without any flicker, but as I had to reset<br />the WM_VISIBLE flag on the child windows (I want to paint/blit them<br />myself) they &quot;don't work&quot; anymore either...<br />That is, when I click the space normally taken up by the toolbar buttons,<br />nothing happens.<br /><br />How can I leave WM_VISIBLE and still prevent the child windows<br />from repainting at all?<br /><br />Also, the status/toolbar paint themselves to (0,0) within my memory DC<br />on WM_PRINTCLIENT, so I first print the status bar, blit it, print my toolbar,<br />and blit that. It would be more straightforward if I could give coordinates<br />within the DC as well.<br />Has anyony tried sending WM_PAINT with a memory device context to<br />controls?</div>
+    <div class="meta">Posted on 2003-01-02 06:00:58 by Gluco</div>
+   </div>
+   <div class="post" id="post-73983">
+    <div class="subject"><a href="#post-73983">Flicker-free drawing using WM_PRINTCLIENT?</a></div>
+    <div class="body"><a target="_blank" href="http://spiff.tripnet.se/~iczelion/source0.html">All the way at the bottom for that esf thingie</a> <br /><br />I dont know anything about WM_PRINTCLIENT and all that, but I do know that sending WM_PAINT to a window with a hdc as a wParam or lParam will not do anything because wParam and lParam are not used in the WM_PAINT message. The only way this would work is if your app was the one responding to the WM_PAINT messages.</div>
+    <div class="meta">Posted on 2003-01-02 06:48:45 by BubbaFate</div>
+   </div>
+   <div class="post" id="post-73984">
+    <div class="subject"><a href="#post-73984">Flicker-free drawing using WM_PRINTCLIENT?</a></div>
+    <div class="body">The ESF example is still there. Source codes section, at the bottom of page 2.<br /><br /> Dammit, BubbaFate, you beat me :grin:</div>
+    <div class="meta">Posted on 2003-01-02 06:49:24 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-73985">
+    <div class="subject"><a href="#post-73985">faking child window DC?</a></div>
+    <div class="body">Thanks for the pointer! :alright:</div>
+    <div class="meta">Posted on 2003-01-02 06:53:43 by Gluco</div>
+   </div>
+   <div class="post" id="post-73988">
+    <div class="subject"><a href="#post-73988">Flicker-free drawing using WM_PRINTCLIENT?</a></div>
+    <div class="body">Speaking of flickering windows, has anyone heard of the listview style LVS_EX_DOUBLEBUFFER? I just found out that it existed and its saved me a bit of trouble... but I believe it only works on winxp however =( The value is 10000h btw.</div>
+    <div class="meta">Posted on 2003-01-02 07:36:35 by BubbaFate</div>
+   </div>
+   <div class="post" id="post-73992">
+    <div class="subject"><a href="#post-73992">subclassing toolbar class</a></div>
+    <div class="body">I've looked at the ESF tutorial now, but it doesn't show how to draw<br />windows controls in general onto a backbuffer, and then blit that backbuffer<br />to screen in one go.<br /><br />I'm using subclassing now, referring to Iczelion's tut #20 this should look<br />familiar:<br /><br />invoke CreateToolbarEx, hWnd, WS_CHILD or WS_CLIPSIBLINGS and not WS_VISIBLE, ....<br />mov hToolBar, eax<br />... stuff like adding buttons....<br />;subclassing, so that child window does NO painting<br />invoke SetWindowLong, hToolBar, GWL_WNDPROC, addr ToolbarWndProc <br />mov OldToolbarWndProc, eax<br />invoke ShowWindow, hToolBar, SW_SHOWNORMAL<br /><br />Here is the new WndProc function:<br /><br />ToolbarWndProc PROC hEdit:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD <br />  .if uMsg==WM_PAINT <br />        ret <br />  .elseif uMsg==WM_ERASEBKGND<br />     ret<br />  .endif <br />   invoke CallWindowProc, OldToolbarWndProc, hToolBar,uMsg,wParam,lParam <br />   ret <br />  xor eax,eax <br />  ret <br />ToolbarWndProc endp<br /><br />As you can see, I'm trapping only WM_PAINT and WM_ERASEBACKGROUND with<br />an empty handler. This is so that nothing gets output by windows because I<br />want to blit the child windows using the backbuffer (see further up in thread).<br /><br />However - the above code produces the following result:<br />The toolbar is invisible, which is what I want.<br />It responds to mouse clicks now, which is what I wanted.<br />:confused: It also deadlocks as soon as I click it, which is the annoying part.<br />More specifically, the app window isn't active anymore (caption bar changes color)<br />and is inoperable (sys/menu doesn't work).<br /><br />Have you got any idea what could be wrong with my ToolbarWndProc ?<br /><br />It works for the status bar - I can use it's resizing tab although I can't see it.<br />That's cool, because this means I can just &quot;render&quot; the bar and other windows<br />stuff onto the back buffer, then blit everything in one go, whilst maintaining standard<br />windows functionality!</div>
+    <div class="meta">Posted on 2003-01-02 08:33:44 by Gluco</div>
+   </div>
+   <div class="post" id="post-74003">
+    <div class="subject"><a href="#post-74003">Flicker-free drawing using WM_PRINTCLIENT?</a></div>
+    <div class="body">i dunno if this makes a difference but in the following code...<br /><br />ToolbarWndProc PROC hEdit:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD <br />.if uMsg==WM_PAINT <br />ret <br />.elseif uMsg==WM_ERASEBKGND<br />ret<br />.endif <br />invoke CallWindowProc, OldToolbarWndProc, hToolBar,uMsg,wParam,lParam <br />ret <br />xor eax,eax <br />ret <br />ToolbarWndProc endp<br /><br />ToolbarWndProc's first argument is hEdit, but when u call CallWindowProc you pass in hToolBar... it seems like that would work... but when I use callwindowproc i always pass the arguments directly from the procedure</div>
+    <div class="meta">Posted on 2003-01-02 09:14:41 by BubbaFate</div>
+   </div>
+   <div class="post" id="post-74010">
+    <div class="subject"><a href="#post-74010">Flicker-free drawing using WM_PRINTCLIENT?</a></div>
+    <div class="body">Thanks BubbaFate,<br /><br />I know what's wrong now :alright: When subclassing the toolbar,<br />your ersatz-WndProc must call the toolbars DefWindowProc in its<br />WM_PAINT handler, which I didn't do:<br /><br />ToolbarWndProc PROC hToolBarW:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD <br />  .if uMsg==WM_PAINT <br />     invoke DefWindowProc, hToolBar, uMsg, wParam, lParam<br />     ret <br />  .elseif uMsg==WM_ERASEBKGND<br />     ret    <br />  .else<br />   invoke CallWindowProc, OldToolbarWndProc, hToolBar,uMsg,wParam,lParam <br />   ret <br />  .endif <br />ToolbarWndProc endp</div>
+    <div class="meta">Posted on 2003-01-02 10:49:32 by Gluco</div>
+   </div>
+  </div>
+ </body>
+</html>

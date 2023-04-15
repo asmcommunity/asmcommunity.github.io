@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Can a member function of a C++ class be STDCALL? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17748" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=12">The Heap</a> &raquo; <a href="../?id=17748">Can a member function of a C++ class be STDCALL?</a></p>
+   <div class="post" id="post-137027">
+    <div class="subject"><a href="#post-137027">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">In other word, can I use a member function in class to be a window message processing function?</div>
+    <div class="meta">Posted on 2004-03-26 02:12:45 by optimus</div>
+   </div>
+   <div class="post" id="post-137029">
+    <div class="subject"><a href="#post-137029">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">Probably not, but even if it could it still wouldn't work. You always need to have a 'this' pointer that identifies the right object instance. However you can make a static member use stdcall, but then you don't have a 'this' pointer. You could use Set/GetWindowLong to store the object pointer, read it in the static WndProc function, cast it to the right class and call some function on it.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2004-03-26 02:52:53 by Thomas</div>
+   </div>
+   <div class="post" id="post-137031">
+    <div class="subject"><a href="#post-137031">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">Just curious.  What does stack clearing have to do with this ptr?  I don't see any relevance.</div>
+    <div class="meta">Posted on 2004-03-26 03:07:15 by Starless</div>
+   </div>
+   <div class="post" id="post-137037">
+    <div class="subject"><a href="#post-137037">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">class one{<br />long Loop(hWnd,msg,w,l); // lazy me<br />}<br /><br />long one::Loop(hWnd,msg,w,l){  // again lazy<br />_this = GetWindowLong(hWnd);<br />switch(msg){<br /><br />}<br />}<br /><br />class members are always stdcall. _this is in ECX. Only problem might be not being able to trick the compiler to accept<br />one::Loop  as a wc.lpfnWndLoop.</div>
+    <div class="meta">Posted on 2004-03-26 05:42:49 by Ultrano</div>
+   </div>
+   <div class="post" id="post-137064">
+    <div class="subject"><a href="#post-137064">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">Hmm ultrano was right, member functions are usually stdcall, I thought they were using C convention. Actually, they are thiscall (search msdn for it) which comes down to stdcall with the this pointer passed in ECX. Except for functions with a variable number of arguments, where the C calling convention is used.<br /><br /><div class="quote"><br />Just curious.  What does stack clearing have to do with this ptr?</div><br />Nothing :) At least not as long as the this pointer is not passed on the stack, which isn't done in any calling convention at the moment.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2004-03-26 10:35:42 by Thomas</div>
+   </div>
+   <div class="post" id="post-137065">
+    <div class="subject"><a href="#post-137065">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">Yes member functions are &quot;_thiscall&quot; though you cannot explicitly declare a function with it.<br /><br />optimus, here's some pseudocode that illustrates a little bit of what Thomas was explaining.  I've used this model in many programs.  Hope it helps.<br /><br /><pre><code>&#91;size=12&#93;class BasicWindow<br />&#123;<br />  public&#58;<br />    static LRESULT CALLBACK _WndProc&#40;HWND h, UINT msg, WPARAM wp, LPARAM lp&#41;<br />    &#123;<br />        BasicWindow * _this;<br /><br />        if&#40;msg == WM_NCCREATE&#41;<br />        &#123;<br />            _this = &#40;BasicWindow *&#41;&#40;&#40;CREATESTRUCT*&#41;lp&#41;-&gt;lpCreateParams;<br />            _this-&gt;hwnd = h;<br />            SetWindowLong&#40;h, GWL_USERDATA, &#40;LONG&#41;_this&#41;;<br />        &#125;<br />        else<br />            _this = &#40;BasicWindow *&#41;GetWindowLong&#40;h, GWL_USERDATA&#41;;<br /><br />        return _this-&gt;WndProc&#40;msg, wp, lp&#41;;<br />    &#125;<br /><br />    LRESULT WndProc&#40;UINT msg, WPARAM wp, LPARAM lp&#41;<br />    &#123;<br />        // Main Window procedure.<br />        // Handle window messages here.<br />    &#125;<br /><br />    BOOL RegisterClass&#40;void&#41;<br />    &#123;<br />        WNDCLASSEX wc;<br />        wc.cbSize = sizeof&#40;WNDCLASSEX&#41;;<br />        wc.lpfnWndProc = _WndProc;<br />        // etc. etc.<br />        <br />        RegisterClassEx&#40;&amp;wc&#41;;<br />    &#125;<br /><br />    BOOL Create&#40;void&#41;<br />    &#123;<br />        CreateWindowEx&#40;..., etc. etc., this&#41;;  // lpParam = this<br />    &#125;<br /><br />  private&#58;<br />    HWND hwnd;<br />    <br />&#125;;<br /><br /><br />// ...<br />// ...<br /><br /><br />WinMain&#40;...&#41;<br />&#123;<br />    // Do stuff<br /><br />    BasicWindow * MyWindow = new BasicWindow;<br />    MyWindow-&gt;RegisterClass&#40;&#41;;<br />    MyWindow-&gt;Create&#40;&#41;;<br /><br />    // Do stuff<br />&#125;&#91;/size&#93;</code></pre><br /><br /><br />Although I usually have a separate class that handles window class registration, this is just a very basic idea of how to handle windows in c++.</div>
+    <div class="meta">Posted on 2004-03-26 11:01:07 by iblis</div>
+   </div>
+   <div class="post" id="post-137134">
+    <div class="subject"><a href="#post-137134">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">that's just what i need in my program!! thanks iblis!!</div>
+    <div class="meta">Posted on 2004-03-27 06:48:27 by optimus</div>
+   </div>
+   <div class="post" id="post-137137">
+    <div class="subject"><a href="#post-137137">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">Remember that's just a basic idea.  Doing things exactly as described above is a little dangerous and error prone.  For example you'd have to ensure that the window object remains in memory until the window is destroyed.<br /><br />But it does show you how to handle the Window procedure.  So with that knowledge I'm sure you can come up with a nice way to handle things that works for you.<br /><br />Good luck.</div>
+    <div class="meta">Posted on 2004-03-27 08:29:01 by iblis</div>
+   </div>
+   <div class="post" id="post-137141">
+    <div class="subject"><a href="#post-137141">Can a member function of a C++ class be STDCALL?</a></div>
+    <div class="body">I tried the code. Unfortunately, after calling the class' create function, my app ends up. It seems that the create function does not return to the caller.</div>
+    <div class="meta">Posted on 2004-03-27 09:07:42 by optimus</div>
+   </div>
+  </div>
+ </body>
+</html>

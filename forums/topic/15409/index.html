@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>getpixel,getdibbitmap?  and optimizations - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15409" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15409">getpixel,getdibbitmap?  and optimizations</a></p>
+   <div class="post" id="post-119727">
+    <div class="subject"><a href="#post-119727">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">1) I understand a faster way to do a getpixel is to get it from a dibmap?  I think I need to include a HBITMAP structure and do an api call to createdibbitmap, but how would I reference the pixels in the bitmap? Something like:<br /><br />  mov eax,            ?<br /><br /><br />2) How would I optimize/make it go faster, for the two loops, such as below? I kind of don't want a rewrite, trying to do this stuff on my own.. maybe some pointers in the right directions.<br /><br /><br /><pre><code><br /><br />lj2&#58;                                     ;loop<br />	mov edx,eax<br />	mov tmp,ecx<br />                xor eax,eax<br /><br />	shr tmp,3   ;mulitply tmp variable by 4, for dword array<br />	mul tmp     ;multiply whatever's in eax to tmp<br />	mov &#91;esi+eax&#93;,edx<br />	inc ecx       ;this is the main index<br /><br />	inc ex         <br />	cmp ex,128<br />	jng lj2               ;for ex=0 to 128<br />	mov ex,0<br />	inc fx<br />	cmp fx,14<br />	jng lj2               ;for fx=0 to 128<br />	<br /></code></pre><br /><br /><br />thanks</div>
+    <div class="meta">Posted on 2003-09-27 11:18:48 by drarem</div>
+   </div>
+   <div class="post" id="post-119735">
+    <div class="subject"><a href="#post-119735">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">1) <strong>mov eax,</strong> is not a valid opcode if ptr is memory.<br /><br />2) For<br /><pre><code><br />                xor eax,eax<br /><br />	shr tmp,3   ;mulitply tmp variable by 4, for dword array<br />	mul tmp     ;multiply whatever's in eax to tmp<br /></code></pre><br /><strong>shr tmp,3</strong> != <strong>tmp *= 4</strong><br /><br />Also what is the point of the <strong>mul</strong> since eax will always be zero, and that means the result will always be zero.<br /><br />If I was to code it, it would look something like<br /><pre><code><br />mov counter, 128*128<br />loop_&#58;<br />mov edx, eax<br />xor eax, eax ; do not know whether this is needed<br />push ecx<br />shr ecx, 2<br />mul ecx<br />mov &#91;esi+eax&#93;, edx<br />pop ecx<br />inc ecx<br />dec counter<br />jnz loop_<br /></code></pre><br /><br />The trick is to use mainyl registers and cut down on memory usage.</div>
+    <div class="meta">Posted on 2003-09-27 11:57:08 by roticv</div>
+   </div>
+   <div class="post" id="post-119868">
+    <div class="subject"><a href="#post-119868">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">Wouldn't it be:<br /><br />shl tmp,2  = same as tmp*4    ? <br /><br />when bits are shifted to the left, the number grows, right?<br />0001 = 1<br />0010 = 2<br />0100 = 4<br />1000 = 8<br /><br />shr tmp,2 = same as tmp/4     ?</div>
+    <div class="meta">Posted on 2003-09-28 12:40:17 by drarem</div>
+   </div>
+   <div class="post" id="post-119870">
+    <div class="subject"><a href="#post-119870">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">typo... was just commenting on your code. Yea it should be shl. Was too sleepy then. :grin:</div>
+    <div class="meta">Posted on 2003-09-28 12:50:20 by roticv</div>
+   </div>
+   <div class="post" id="post-119876">
+    <div class="subject"><a href="#post-119876">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">No prob, I admit my code is atrocious as well as my though processes.<br /><br />Ok, here is what I have... and have been burning out on too..<br />how would I reference a dib-sectioned bitmap?<br /><br />mov eax,      ; where ecx is the index and 4 is to align it to dword<br /><br />what if given is an x and y value?  para-coded below:<br /><br />mov eax,     -  this way<br /><br />or<br /><br />mov eax,  - this way?<br /><br />below is what I have but I am getting the 'jaggies' and not an aligned picture..<br /><br /><pre><code><br />LOOP&#58;<br />    &#58;&#58;            &#58;&#58;             &#58;&#58;             &#58;&#58;<br />    &#58;&#58;            &#58;&#58;             &#58;&#58;             &#58;&#58;<br />	mov eax,fx                ;mov fx &#40;y value&#41; into eax<br />	mov dptr,570            ;mov 570 &#40;width of bitmap&#41; into mem location<br /><br />	mul dptr                    ;mul eax by 570, storing in eax<br />	shl eax,2                   ;multiply by 4 for DWORD access<br /><br />	push ex                     ;push ex &#40;x value&#41;<br />	pop dptr                    ;pop it into dptr<br />	shl dptr,2                   ;multiply by 4 for DWORD access<br /><br />	add eax,dptr             ;add dptr to whatever is already in eax from above<br />   ;            	shl eax,2                   ;this is commented out, tried it this way too, still got jaggies<br />	mov dptr,eax             ;mov eax total into dptr<br /><br />	mov eax,&#91;edx+dptr&#93;   ;point to &#91;edx+dptr&#93; - works in my CopyArray but I need x/y for convenience..<br />    &#58;&#58;            &#58;&#58;             &#58;&#58;             &#58;&#58;<br />    &#58;&#58;            &#58;&#58;             &#58;&#58;             &#58;&#58;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-09-28 13:47:44 by drarem</div>
+   </div>
+   <div class="post" id="post-119879">
+    <div class="subject"><a href="#post-119879">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">doh!  I was trashing my pointer edx... it seems to be working now.<br /><br />	mov edx,pBitmapBits          ;this was getting trashed within the loop<br />	mov eax,           ;so I need to either push/pop it or mov it into edx during usage<br /><br />I have getpixels and setpixels in there could be the culprit.<br /><br />thanx for your help, Roticv<br /><br />UPDATE:  I also just figured out, it has to be with registers for:<br /><br />     mov eax,<br /><br />and not<br /><br />    mov eax,<br /><br />I guess that is low-level  :)</div>
+    <div class="meta">Posted on 2003-09-28 14:07:53 by drarem</div>
+   </div>
+   <div class="post" id="post-119892">
+    <div class="subject"><a href="#post-119892">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">consider using static table with y values, this could be faster then calcualating it all the time.</div>
+    <div class="meta">Posted on 2003-09-28 17:20:04 by AceEmbler</div>
+   </div>
+   <div class="post" id="post-119894">
+    <div class="subject"><a href="#post-119894">getpixel,getdibbitmap?  and optimizations</a></div>
+    <div class="body">thnx Ace, I'll keep that in mind..  well it's all the time I have today for, so here it is:<br /><br /><a target="_blank" href="http://www.web.ms11.net/drarem/ron2.exe">http://www.web.ms11.net/drarem/ron2.exe</a><br /><br />may want to hold shift down when selecting, the older version loaded in from cache memory.<br /><br />pushing 14k, the upper right button on the 'control panel' side will lighten the image, and the bottom right button (the two lines with the two red arrows between them) will blur the image..<br /><br />the slider bar controls brush size<br /><br />and you will notice when you blur, certain colors smear - and I'm not capping my colors correctly when lightening up the image, they tend to go on to the next color.  Got an interesting side effect, after lightening it up so many times, black surrounded my mouse drawings - kind of an edge detection.<br /><br />also there is a small delay after hitting blur or lighten - optimization is required.. ran it thru memproof to debug any memory leaks, appears there are none.</div>
+    <div class="meta">Posted on 2003-09-28 17:50:32 by drarem</div>
+   </div>
+  </div>
+ </body>
+</html>

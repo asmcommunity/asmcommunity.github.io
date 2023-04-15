@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>x64 api problem [DialogBoxaram] - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30223" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=30223">x64 api problem [DialogBoxaram]</a></p>
+   <div class="post" id="post-213063">
+    <div class="subject"><a href="#post-213063">x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">Hi,<br />I have a little problem with DialogBoxParam. <br />Ok... may be i will post some code and after describe my problem.<br /><br /><br />That code work<br />RC<br /><pre><code>&nbsp; CONTROL &quot;List&quot;,IDC_LSV1,&quot;SysListView32&quot;,WS_VISIBLE|WS_BORDER|WS_TABSTOP|!!!!!LVS_LIST!!!!!!,0,39,681,258,WS_EX_CLIENTEDGE</code></pre><br /><br />ASM<br /><pre><code>invoke DialogBoxParam, ,1000,0,DialogMain,0<br /><br /><br />proc DialogMain;hDlg=rcx uMsg=rdx wParam=r8 lParam= r9<br />mov , rcx<br />&nbsp; &nbsp; cmp rdx, WM_INITDIALOG<br />&nbsp; &nbsp; jne _@@<br />&nbsp; &nbsp; invoke GetDlgItem,,1003<br />&nbsp; &nbsp; mov , rax<br />_@@:</code></pre><br /><br />That don&#039;t<br /><br /><br />RC<br /><pre><code>&nbsp; CONTROL &quot;List&quot;,IDC_LSV1,&quot;SysListView32&quot;,WS_VISIBLE|WS_BORDER|WS_TABSTOP|!!!!!LVS_REPORT!!!!!,0,39,681,258,WS_EX_CLIENTEDGE</code></pre><br /><br />ASM<br /><pre><code>invoke DialogBoxParam, ,1000,0,DialogMain,0<br /><br /><br />proc DialogMain;hDlg=rcx uMsg=rdx wParam=r8 lParam= r9<br />mov , rcx<br />&nbsp; &nbsp; cmp rdx, WM_INITDIALOG<br />&nbsp; &nbsp; jne _@@<br />&nbsp; &nbsp; invoke GetDlgItem,,1003<br />&nbsp; &nbsp; mov , rax<br />&nbsp; &nbsp; invoke SendMessage, , LVM_INSERTCOLUMN, 0,offset kolumna<br />_@@:</code></pre><br /><br />data:<br /><br /><pre><code>&nbsp; &nbsp; NASMX_ISTRUC kolumna, LV_COLUMN<br />&nbsp; &nbsp; NASMX_AT imask, LVCF_TEXT+LVCF_WIDTH+LVCF_SUBITEM<br />&nbsp; &nbsp; NASMX_AT fmt, NULL<br />&nbsp; &nbsp; NASMX_AT lx, 100<br />&nbsp; &nbsp; NASMX_AT pszText, &quot;name&quot;<br />&nbsp; &nbsp; NASMX_AT cchTextMax, NULL<br />&nbsp; &nbsp; NASMX_AT iSubItem, NULL<br />&nbsp; &nbsp; NASMX_IENDSTRUC</code></pre><br /><br />Lang: nasm with nasmx<br />rc link: go<br />platform: win 7 x64<br /><br />Program will compile. Difference is only in rc file. In second situation I add insert column but without too don&#039;t work. <br />In second option program have problem after dialogboxparam execute. <br /><br />any suggestion ?<br /><br />Greets </div>
+    <div class="meta">Posted on 2010-09-07 10:17:56 by Duracell</div>
+   </div>
+   <div class="post" id="post-213069">
+    <div class="subject"><a href="#post-213069">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">Hello Duracell,<br /><br />Two quick suggestions:<br />I see you&#039;re using the newer NASMX syntax which is cool.&nbsp; In defining the structure are you instantiating by initializing all struc fields?&nbsp; There is a %fatal that occurs which I used for debugging that didn&#039;t get removed when I packaged up v1.0b3 but will be taken care of in the next beta.&nbsp; The fix is already available on source forge if you care to download.<br /><br />Secondly, NASMX in it&#039;s current state does not really play nice with 64-bit Windows and is next on my TODO list.&nbsp; Modify your code by placing the function params into the appropriate registers (RCX, RDX, R8, R9) and <strong>call function</strong><br /><br />Please note that you should also establish a Register Shadow Storage space within the caller to ensure the called function operates properly.&nbsp; It&#039;s easiest to do this by simply:<br /><pre><code><br />sub rsp, 32<br />call function<br />add rsp, 32<br /></code></pre><br /><br />Any functions that take more than 4 parameters must be placed above this area so you may wish to <strong>push reg</strong> prior to modifying the stack pointer. The next beta release of NASMX will take care of things like this automatically.&nbsp; Let me know if that works for you.<br /><br /></div>
+    <div class="meta">Posted on 2010-09-07 14:27:31 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213071">
+    <div class="subject"><a href="#post-213071">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">It helped. One kind of the way. I trusted too much in nasmx.<br /><br />After when I start coding in x64 I was looking for more comfortable sdk (writing more then 4 line of code for one function is horrible xD). Nasmx is actually the better. My congratulation for new leader :P<br /><br />And what will i do witk sendmessage ? sub sizeof column struct ?<br /><br /><br />P.S. are structs good implemented for x64 for win?</div>
+    <div class="meta">Posted on 2010-09-07 15:49:45 by Duracell</div>
+   </div>
+   <div class="post" id="post-213079">
+    <div class="subject"><a href="#post-213079">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">Defining your own struc&#039;s are fine.&nbsp; Using the windows.inc struc&#039;s as currently defined may/may not work in x64 due to pointer size differences.&nbsp; In your particular case you must modify the windows.inc LV_COLUMN struc definition by changing the pszText field from:<br /><br /><pre><code><br />&nbsp; &nbsp; NASMX_RESERVE pszText, int32_t, 1<br /></code></pre><br /><br />to<br /><br /><pre><code><br />&nbsp; &nbsp; NASMX_RESERVE pszText, NASMX_PTR, 1<br /></code></pre><br /><br />I simply have not had time to go through every definition and update to the appropriate sizes yet.&nbsp; I&#039;m currently developing a tool to help me do that but in the meantime I would advise you to double-check the definitions against the actual SDK headers.<br /><br />After looking at the SDK help I also realized that you filled in the struct field <strong>cchTextMax</strong> incorrectly.&nbsp; That field contains the size of TCHAR&#039;s pointed to by <strong>pszText</strong>, thus in your case you have told windows that there are no chars contained in the buffer, something I&#039;m sure you did not intend.<br /><br />Hope this helps...<br /><br /></div>
+    <div class="meta">Posted on 2010-09-08 12:50:42 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213086">
+    <div class="subject"><a href="#post-213086">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">I was trying use&nbsp; cchtextmax earlier. Changing reserved value too. That isn&#039;t that way. <br />Any suggestion for that?</div>
+    <div class="meta">Posted on 2010-09-09 01:42:58 by Duracell</div>
+   </div>
+   <div class="post" id="post-213087">
+    <div class="subject"><a href="#post-213087">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">cchtextmax is only used when READING items from the listview - it is ignored when WRITING them, so no problem using cchtextmax=0<br /><br /></div>
+    <div class="meta">Posted on 2010-09-09 06:17:55 by Homer</div>
+   </div>
+   <div class="post" id="post-213135">
+    <div class="subject"><a href="#post-213135">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">does anyone have any idea what is wrong or what i should add to this?</div>
+    <div class="meta">Posted on 2010-09-15 03:33:24 by Duracell</div>
+   </div>
+   <div class="post" id="post-213136">
+    <div class="subject"><a href="#post-213136">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">Duracell,<br /><br />Zip up your source code and either attach it to your reply here or email it to me and I&#039;ll take a look at it.&nbsp; Please do not send me any binaries, source files only.<br /></div>
+    <div class="meta">Posted on 2010-09-15 06:19:27 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213137">
+    <div class="subject"><a href="#post-213137">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">Problem is with sendmessage. I think that is problem.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=3252" target="_blank">ax.rar</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2010-09-15 07:12:13 by Duracell</div>
+   </div>
+   <div class="post" id="post-213211">
+    <div class="subject"><a href="#post-213211">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">sig link builder alert!&nbsp; :roll: :roll: :roll:</div>
+    <div class="meta">Posted on 2010-09-22 11:59:21 by p1ranha</div>
+   </div>
+   <div class="post" id="post-213212">
+    <div class="subject"><a href="#post-213212">Re: x64 api problem [DialogBoxaram]</a></div>
+    <div class="body">Some info about it?<br /><br />Are u looking in disasm code? I&#039;ll try find errors in fdbg. Declaration of function look correctly. <br />Builder alert will be well-seen. </div>
+    <div class="meta">Posted on 2010-09-22 12:30:32 by Duracell</div>
+   </div>
+  </div>
+ </body>
+</html>

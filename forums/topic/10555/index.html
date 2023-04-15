@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Faster CriticalSection - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=10555" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=10555">Faster CriticalSection</a></p>
+   <div class="post" id="post-79384">
+    <div class="subject"><a href="#post-79384">Faster CriticalSection</a></div>
+    <div class="body">If you have a program, that has many threads that access the same dynamic arrays of data, you need some mutex or CriticalSection. But mutex is slow- it has to enter global memory, and search for a string, specifying your mutex, and you have to wait for all. CriticalSections seem good, but accessing arrays of one million objects, and if you need to put an mutex in each of them, it all turns crap, as Andy Dick says :).<br />So, the easiest solution is this:<br /><pre><code><br />MyObject struct<br />     IsAccessed db ?<br />     MyData dd ? ;.....any data you want, you can have the structure as big as you want<br />MyObject ends<br /><br /><br />OnNewData proc    me   ; this is pointer to a MyObject structure<br />mov ebx,me<br />.while &#91;ebx&#93;.MyObject.IsAccessed<br />     push ebx<br />     call SwitchToThread ; it is useless to do anything else!<br />     pop ebx<br />.endw<br />mov &#91;ebx&#93;.MyObject.IsAccessed,1<br /><br />;.... do our processing on MyData here<br /><br /><br /><br />mov ebx,me<br />mov &#91;ebx&#93;.MyObject.IsAccessed,0 ; release the object<br /><br />call SwitchToThread ; if this procedure is usually called by a low-priority thread, you should do this, to give immediate access to threads that are more important! Otherwise delete this line<br /><br />ret<br />OnNewData endp<br /><br /></code></pre> <br /><br />Yet, you can use only one bit to specify that the data is locked:<br /><br /><br /><pre><code><br />MyObject struct<br />     Status db ?<br />     MyData dd ? ;.....any data you want, you can have the structure as big as you want<br />MyObject ends<br /><br />MY_OBJECT_STATUS_LOCKED equ 128<br /><br />OnNewData proc    me   ; this is pointer to a MyObject structure<br />mov ebx,me<br />.while &#91;ebx&#93;.MyObject.Status &amp; MY_OBJECT_STATUS_LOCKED<br />     push ebx<br />     call SwitchToThread ; it is useless to do anything else!<br />     pop ebx<br />.endw<br />or &#91;ebx&#93;.MyObject.Status,MY_OBJECT_STATUS_LOCKED<br /><br />;.... do our processing on MyData here<br /><br /><br /><br />mov ebx,me<br />xor &#91;ebx&#93;.MyObject.Status,MY_OBJECT_STATUS_LOCKED ; release the object<br /><br />; you can use also&#58;<br /><br />;-------\<br />;  and &#91;ebx&#93;.MyObject.Status,&#40; -1 - MY_OBJECT_STATUS_LOCKED&#41; <br />;-------/<br /><br />call SwitchToThread <br />ret<br /><br />OnNewData endp<br /><br /></code></pre></div>
+    <div class="meta">Posted on 2003-01-31 22:02:45 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79416">
+    <div class="subject"><a href="#post-79416">Faster CriticalSection</a></div>
+    <div class="body">A lot of 286 code... <br />It will be better to consider bitRAKE's solution here:<br /><a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?threadid=8796&amp;perpage=15&amp;highlight=xchg%20bitRAKE&amp;pagenumber=1">http://www.asmcommunity.net/board/showthread.php?threadid=8796&amp;perpage=15&amp;highlight=xchg%20bitRAKE&amp;pagenumber=1</a><br /><br />Regards,<br />Lingo</div>
+    <div class="meta">Posted on 2003-02-01 05:38:49 by lingo12</div>
+   </div>
+   <div class="post" id="post-79421">
+    <div class="subject"><a href="#post-79421">Faster CriticalSection</a></div>
+    <div class="body">bitRake's algo is not good if the program knows the pointer, and has to save its data. For example, imagine some object that has a dynamic array with 700 objects, and it's being told to save the data into a file. So, xchg will make the program skip some important data. Or if you have a window with custom-drawn and managed windows inside (that do not use win API to work, but are managed by your program). You click with the mouse on this window over the area that is taken from virtual window Head (for instance). The program searches which window is in the Mouse_x::Mouse_y position, willing to send him a message that the mouse is down. The main window has its own array, where the children windows are registered, and if it doesn't find the target window, it does nothing. Imagine if that window is working in the moment the mouse button is pressed and we've deleted the window's pointer (unregister it). Nothing happens. Won't the user hate it? <br /> So, if the data that we have will be saved, we should wait for the object to be released instead of skipping it ;). And with thread priorities set up, we can know which thread will be the first to switch to. I know it not from theory, but from a lot of practise. I've got a huge mainframe created using these mutex of mine, that works perfectly.</div>
+    <div class="meta">Posted on 2003-02-01 07:07:24 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79449">
+    <div class="subject"><a href="#post-79449">Faster CriticalSection</a></div>
+    <div class="body">Have you thought of what would happend if two threads came to the line:<br />mov .MyObject.IsAccessed,1<br /><br />...at the same time? Both will get access!</div>
+    <div class="meta">Posted on 2003-02-01 12:11:41 by gliptic</div>
+   </div>
+   <div class="post" id="post-79477">
+    <div class="subject"><a href="#post-79477">Faster CriticalSection</a></div>
+    <div class="body">How it can happen in 1 processor system if threads have different priorities?</div>
+    <div class="meta">Posted on 2003-02-01 16:13:55 by The Svin</div>
+   </div>
+   <div class="post" id="post-79503">
+    <div class="subject"><a href="#post-79503">Faster CriticalSection</a></div>
+    <div class="body">gliptic: that hasn't happened even once for one month of testing. But if you want to ensure, if you have threads with same , normal priority, you should use <br /><pre><code><br />_beforeloop&#58;<br />.while &#91;ebx&#93;.MyObject.IsAccessed<br />push ebx<br />call SwitchToThread<br />pop ebx<br />.endw<br />inc &#91;ebx&#93;.MyObject.IsAccessed<br />... a little code, a pause of two cycles<br />.if &#91;ebx&#93;.MyObject.IsAccessed!=1<br />dec &#91;ebx&#93;.MyObject.IsAccessed<br />jmp _beforeloop<br />.endif<br /><br /></code></pre><br />Thus, the two threads will absolutely never access the object at once</div>
+    <div class="meta">Posted on 2003-02-01 20:43:41 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79519">
+    <div class="subject"><a href="#post-79519">Faster CriticalSection</a></div>
+    <div class="body">And what about multiprocessor systems?  ;)</div>
+    <div class="meta">Posted on 2003-02-01 22:41:02 by iblis</div>
+   </div>
+   <div class="post" id="post-79524">
+    <div class="subject"><a href="#post-79524">Faster CriticalSection</a></div>
+    <div class="body"><div class="quote"><br />gliptic: that hasn't happened even once for one month of testing. But if you want to ensure, if you have threads with same <br /><br />Thus, the two threads will absolutely never access the object at once </div><br /><br />IMHO, you missed <strong>lingo12</strong>'s and <strong>gliptic</strong>'s point.  <strong>mov</strong> does not lock the memory automatically, while <strong>xchg</strong> with memory operand does.  The important part is <strong>lock</strong> prefix.  Without <strong>lock</strong> prefix, gliptic's argument is the expected result, and your experience is a pure luck -- or, you locked it before calling your code and you just forgot it.  Anyhow, the code presented here is MT-unsafe, even under single CPU environment.</div>
+    <div class="meta">Posted on 2003-02-02 00:55:15 by Starless</div>
+   </div>
+   <div class="post" id="post-79547">
+    <div class="subject"><a href="#post-79547">Faster CriticalSection</a></div>
+    <div class="body">Gosh, sorry then. /me dumb . very, very dumb.<br /> I guess I've really been lucky.</div>
+    <div class="meta">Posted on 2003-02-02 04:59:10 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79549">
+    <div class="subject"><a href="#post-79549">Faster CriticalSection</a></div>
+    <div class="body">You can combine the best of both worlds and use this:<br /><br /><pre><code><br />mov eax,TRUE<br />.while eax<br />    xchg &#91;esi&#93;.IsUsed,eax<br />.endw<br /></code></pre></div>
+    <div class="meta">Posted on 2003-02-02 05:39:29 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-79655">
+    <div class="subject"><a href="#post-79655">Faster CriticalSection</a></div>
+    <div class="body">no! you got the good idea, but I think the code is nothing like that. I think this is it:<br /><br /><pre><code><br />@@&#58;<br />mov al,1<br />mov ebx,me<br />xchg al,&#91;ebx&#93;.MyObject.IsAccessed<br />or al,al<br />jz @F<br />call SwitchToThread<br />jmp @B<br />@@&#58;<br /></code></pre><br /><br />(I hope I'm not wrong as usual)</div>
+    <div class="meta">Posted on 2003-02-02 20:31:48 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79658">
+    <div class="subject"><a href="#post-79658">Faster CriticalSection</a></div>
+    <div class="body">Try cmpxchg.</div>
+    <div class="meta">Posted on 2003-02-02 20:46:41 by The Svin</div>
+   </div>
+   <div class="post" id="post-79734">
+    <div class="subject"><a href="#post-79734">Faster CriticalSection</a></div>
+    <div class="body">Ultrano, I don't really understand what the SwitchToThread proc does. My little snippet just waits until the object is available before continuing.</div>
+    <div class="meta">Posted on 2003-02-03 08:40:13 by Qweerdy</div>
+   </div>
+   <div class="post" id="post-79754">
+    <div class="subject"><a href="#post-79754">Faster CriticalSection</a></div>
+    <div class="body">Switches to another thead. It's in fact the essence of my idea- you must not loop and try the data, because thus you just loop until the OS switches to another thead several times, and finally goes to the thread that unlocks the object. Why wait unnecessary? Immediately switch to the thead. Well, this is best for single-cpu systems only.</div>
+    <div class="meta">Posted on 2003-02-03 11:24:25 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79759">
+    <div class="subject"><a href="#post-79759">Faster CriticalSection</a></div>
+    <div class="body">SwitchToThread is NT only. what about Sleep(0) ? or are there some consequences my dull mind hasn't picked up?</div>
+    <div class="meta">Posted on 2003-02-03 11:48:40 by f0dder</div>
+   </div>
+   <div class="post" id="post-79811">
+    <div class="subject"><a href="#post-79811">Faster CriticalSection</a></div>
+    <div class="body">f0dder, there are some consequences that <strong>my</strong> dull mind hasn't picked up. I am using Win98SE ...<br />Anyway, gotta test all the thread functions today. SwitchToFiber might be ok.<br />Ah, at least I found one thing: in Sleep ():<br /><div class="quote">A value of zero causes the thread to relinquish the remainder of its time slice to any other thread of equal priority that is ready to run. If there are no other threads of equal priority ready to run, the function returns immediately, and the thread continues execution. </div> <br />Aww, sorry for wasting your time with crap</div>
+    <div class="meta">Posted on 2003-02-03 21:21:20 by Ultrano</div>
+   </div>
+   <div class="post" id="post-79840">
+    <div class="subject"><a href="#post-79840">Faster CriticalSection</a></div>
+    <div class="body">well, i was thinking whether there's something &quot;bad&quot; about Sleep(0) vs. SwitchToThread() in a situation like this?</div>
+    <div class="meta">Posted on 2003-02-04 01:38:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-79953">
+    <div class="subject"><a href="#post-79953">Faster CriticalSection</a></div>
+    <div class="body"><div class="quote"><br />no! you got the good idea, but I think the code is nothing like that. I think this is it:<br /><br /><pre><code><br />@@&#58;<br />mov al,1<br />mov ebx,me<br />xchg al,&#91;ebx&#93;.MyObject.IsAccessed<br />or al,al<br />jz @F<br />call SwitchToThread<br />jmp @B<br />@@&#58;<br /></code></pre><br /><br />(I hope I'm not wrong as usual) </div><br /><pre><code><br />@@&#58;<br />mov eax,1<br />mov ebx,me<br />cmpxchg eax,&#91;ebx&#93;.MyObject.IsAccessed<br />jne @free<br />call SwitchToThread<br />jmp @B<br />@free&#58;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-02-04 17:01:03 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

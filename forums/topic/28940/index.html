@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>winsock + nasm - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28940" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28940">winsock + nasm</a></p>
+   <div class="post" id="post-204623">
+    <div class="subject"><a href="#post-204623">winsock + nasm</a></div>
+    <div class="body">My program is crashing from a write error... apparently I&#039;m trying to write at address 0x33 after a call to socket in the winsock library (wsock32.dll) before I stepover the call to socket, edx = what i want it to be (an address in memory i have read/write permissions to) and after the call to socket edx contains 3. not only that, but ecx has changed as well. I know there is a calling convention that uses ecx/edx to pass arguments (as used in starcraft for example) but the socket call takes it&#039;s 3 args off the stack.<br /><br />sure I could work around this by pushing ecx/edx but i want to know why it is doing this. this is my first project with nasm, I am pretty fluent with masm and have never had this problem before.<br /><br /><pre><code>;edx is correct at this point<br />call socket,AF_INET,SOCK_STREAM,0<br />;edx comes out wrong here ecx too, but ecx gets changed next anyways<br />&nbsp; mov ecx, eax<br />&nbsp; mov dword,eax</code></pre><br /><br />and here&#039;s the same code in ollydbg:<br /><br /><pre><code><br />100010AC&nbsp; |&gt; 6A 00&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PUSH 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; /Protocol = IPPROTO_IP<br />100010AE&nbsp; |. 6A 01&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PUSH 1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; |Type = SOCK_STREAM<br />100010B0&nbsp; |. 6A 02&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; PUSH 2&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; |Family = AF_INET<br />100010B2&nbsp; |. FF15 58130010&nbsp; CALL DWORD PTR DS:[&lt;&amp;wsock32.socket&gt;]&nbsp; &nbsp; ; \socket<br />100010B8&nbsp; |. 89C1&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  MOV ECX,EAX<br />100010BA&nbsp; |. 8942 08&nbsp; &nbsp; &nbsp; &nbsp; MOV DWORD PTR DS:,EAX<br /></code></pre></div>
+    <div class="meta">Posted on 2008-01-25 13:33:53 by jakor</div>
+   </div>
+   <div class="post" id="post-204624">
+    <div class="subject"><a href="#post-204624">Re: winsock + nasm</a></div>
+    <div class="body">Don&#039;t use edx because the register could be used in the function socket. The only register that you can be sure that its value will not change will be ebp, ebx, edi, esi and esp when you call the api.</div>
+    <div class="meta">Posted on 2008-01-25 17:49:42 by roticv</div>
+   </div>
+   <div class="post" id="post-204626">
+    <div class="subject"><a href="#post-204626">Re: winsock + nasm</a></div>
+    <div class="body"><strong>jakor:</strong> this is standard windows calling convention, as roticv is saying. Basically, every time you CALL a piece of code, you should <strong>expect</strong> EAX, ECX and EDX to be destroyed. Doesn&#039;t matter if it doesn&#039;t happen on whatever version of windows you&#039;re using, you must always treat them this way.<br /><br />Similarly, you&#039;re guaranteed that EBX, ESI, EDI, EBP won&#039;t be trashed... and, again, this means you <strong>should</strong> preserve those registers in your own functions and you <strong>must</strong> do so in callbacks.</div>
+    <div class="meta">Posted on 2008-01-25 19:16:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-204630">
+    <div class="subject"><a href="#post-204630">Re: winsock + nasm</a></div>
+    <div class="body">I always just assumed that the standard procedure was to save everything except for eax and I have written many winsock programs with masm and never had a problem (then again, i wasn&#039;t trying to save ecx/edx either... =p)&nbsp; for all of my functions that touched anything except eax i always had uses registers... thank you for clarifying this. This may actually explain a couple other rare bugs I&#039;ve had in my projects now that i think about it.</div>
+    <div class="meta">Posted on 2008-01-25 22:56:01 by jakor</div>
+   </div>
+   <div class="post" id="post-204635">
+    <div class="subject"><a href="#post-204635">Re: winsock + nasm</a></div>
+    <div class="body">There&#039;s a couple of other rules as well: if you STD you should also CLD before returning, ESP should always be aligned, structures should be aligned, and some more.<br /><br />There should be a wiki entry about this, somewhere :)</div>
+    <div class="meta">Posted on 2008-01-26 06:32:50 by f0dder</div>
+   </div>
+   <div class="post" id="post-204637">
+    <div class="subject"><a href="#post-204637">Re: winsock + nasm</a></div>
+    <div class="body">Actually the standard procedure was to save only ebp, esp, edi, esi and ebx. Most people usually end up with weird bugs because they didn&#039;t realise this. Glad you found out about it before you pull out all of your hair.&nbsp; ;)</div>
+    <div class="meta">Posted on 2008-01-26 07:33:44 by roticv</div>
+   </div>
+   <div class="post" id="post-204638">
+    <div class="subject"><a href="#post-204638">Re: winsock + nasm</a></div>
+    <div class="body">Also, notice that &quot;preserving&quot; the registers don&#039;t mean you have to blindly push/pop them, only if you&#039;re actually modifying those registers (to avoid senseless discussions from the past ;)).<br /><br />But, again, for EAX/ECX/EDX, always assume they&#039;re trashed when you call external code.</div>
+    <div class="meta">Posted on 2008-01-26 07:42:24 by f0dder</div>
+   </div>
+   <div class="post" id="post-204656">
+    <div class="subject"><a href="#post-204656">Re: winsock + nasm</a></div>
+    <div class="body">what about a pushf-popf i know this saves more than you need, but what&#039;s the cost of this?</div>
+    <div class="meta">Posted on 2008-01-29 23:47:14 by jakor</div>
+   </div>
+   <div class="post" id="post-204657">
+    <div class="subject"><a href="#post-204657">Re: winsock + nasm</a></div>
+    <div class="body">Dunno what pushf/popf is like speedwise, to be honest, but outside of pretty specific driver code, I wouldn&#039;t use pushf/popf but just follow the &quot;if you STD, CLD before exit&quot; rule.<br /></div>
+    <div class="meta">Posted on 2008-01-30 04:07:03 by f0dder</div>
+   </div>
+   <div class="post" id="post-204662">
+    <div class="subject"><a href="#post-204662">Re: winsock + nasm</a></div>
+    <div class="body">and pushfd / popfd wont preserve the registers.. only push &lt;register&gt; or pushad</div>
+    <div class="meta">Posted on 2008-01-30 11:06:29 by evlncrn8</div>
+   </div>
+  </div>
+ </body>
+</html>

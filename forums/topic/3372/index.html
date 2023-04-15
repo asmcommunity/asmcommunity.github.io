@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Loading dlg from within DLL - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3372" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=3372">Loading dlg from within DLL</a></p>
+   <div class="post" id="post-22361">
+    <div class="subject"><a href="#post-22361">Loading dlg from within DLL</a></div>
+    <div class="body">Is it posible to display a dialog box from within a DLL? I've been<br />trying to a call a function inside the dll which would then display<br />the dialog but no success... Can anyone give me an idea?<br />Below I have included the most important parts. I know that the dll <br />is loading and calling the function because the GetLastError reports<br />Error 87 = ERROR_INVALID_PARAMETER. Any pointers on a fix would be<br />greatly appreciated!<br /><br /><br />---------Main Program Code---------<br /><br /><br />; Test our RAMiscC.DLL...<br />invoke LoadLibrary, addr TestDLL<br />mov    hLib, eax<br /><br />invoke GetProcAddress, hLib, addr MSGTestFunc<br /><br />; Pass test arg...<br />mov    edx, addr ProgramName<br />push   edx<br /><br />; Call our Test DLL function...<br />call   eax<br /><br />invoke FreeLibrary, hLib<br /><br /><br /><br />------------DLL CODE---------------<br />.data<br />DLLName          db  &quot;test.dll&quot;, 0<br />ErrorMessageCode db  &quot;%i&quot;, 0<br /><br />.data?<br />hInstance        dd  ?<br /><br />.const<br />IDD_MSGDLG       equ 101<br /><br />.code<br />.<br />. DLL Attach stuff<br />.<br />; Display dialog box<br />MSGBOX proc Messg:DWORD<br />    invoke DialogBoxParam, hInstance, IDD_MSGDLG, NULL, addr MSGBOXProc, NULL<br />    <br /><br />    ; For some reason it aint workin so display the damn error :(<br />    invoke GetLastError<br />    invoke wsprintf, addr ErrorBuffer, addr ErrorMessageCode, eax<br />    invoke MessageBox, NULL, addr ErrorBuffer, addr DLLName, MB_OK<br /><br />    ret<br />MSGBOX endp<br /><br />;-----------------------------------------------------------------------------<br />; MSGBOXProc - This is a test dialog<br />;-----------------------------------------------------------------------------<br />MSGBOXProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM<br />   .if uMsg == WM_INITDIALOG<br />      invoke MessageBox, NULL, addr MSGBOXFunc, addr DLLName, MB_OK<br /><br />   .elseif uMsg == WM_CLOSE<br />      invoke EndDialog, hWnd, NULL<br /><br />   .elseif uMsg == WM_COMMAND<br />      mov eax, wParam<br /><br />      .if lParam == 0<br />      .else<br />         mov edx, wParam<br />         shr edx, 16<br />         invoke EndDialog, hWnd, NULL<br />      .endif	<br />   .else<br />      mov eax, FALSE<br />      ret<br />	<br />   .endif<br /><br />   mov eax, TRUE<br />   ret<br />MSGBOXProc endp<br /><br />Thanks again,<br />James</div>
+    <div class="meta">Posted on 2002-02-01 11:54:38 by JamesE</div>
+   </div>
+   <div class="post" id="post-22386">
+    <div class="subject"><a href="#post-22386">Loading dlg from within DLL</a></div>
+    <div class="body">If the dialog resource is in the DLL, then the hInstance you pass to DialogBoxParam must be the hInstance of the DLL, which I believe is hLib in your case.</div>
+    <div class="meta">Posted on 2002-02-01 15:57:55 by tank</div>
+   </div>
+   <div class="post" id="post-22396">
+    <div class="subject"><a href="#post-22396">Loading dlg from within DLL</a></div>
+    <div class="body">JamesE,<br /><br />tank is right. Best is to save the module handle in dll startup code. Looks like:<br /><br /><pre><code><br />DllMain PROC public Inst&#58;HINSTANCE,dwReason&#58;dword,lpReserved&#58;dword<br /><br />           mov eax,hInst<br />          mov hInstance,eax<br /></code></pre><br /><br />Another point which might cause problems:<br /><br />a dialog proc should return zero if it doesn't process a message. Yours always returns TRUE.<br /><br />japheth</div>
+    <div class="meta">Posted on 2002-02-01 17:40:09 by japheth</div>
+   </div>
+   <div class="post" id="post-22397">
+    <div class="subject"><a href="#post-22397">I don't think so but....</a></div>
+    <div class="body">Hey tank,<br /><br />Thanks for the reply, below is the entry point to the dll... I'm pretty sure the code is correct but I'm sorta new to dlls and assembler so... anyways here it is:<br /><br /><pre><code><br />;-----------------------------------------------------------------------------<br />; LibMain - Entry Point to the dll<br />;-----------------------------------------------------------------------------<br />LibMain proc hInst&#58;DWORD, reason&#58;DWORD, unused&#58;DWORD<br />    push hInst<br />    pop hInstance<br /><br />    .if reason == DLL_PROCESS_ATTACH<br />        ; Return TRUE so windows knows everything is ok!<br />        mov    eax, TRUE<br />        ret<br /><br />    .elseif reason == DLL_PROCESS_DETACH<br />        invoke MessageBox, NULL, addr DetachDLL, addr DLLName, MB_OK<br /><br />    .elseif reason == DLL_THREAD_ATTACH<br />        invoke MessageBox, NULL, addr ThreadAttach, addr DLLName, MB_OK<br /><br />    .elseif reason == DLL_THREAD_DETACH<br />        invoke MessageBox, NULL, addr ThreadDetach, addr DLLName, MB_OK<br /><br />    .endif<br /><br />    ret<br /><br />LibMain endp<br /></code></pre> <br /><br />I'm sure I'll figure it out... It must be something really small and pretty obvious like many of the bugs you run into everyday.<br /><br />Thanks for the reply!<br />James</div>
+    <div class="meta">Posted on 2002-02-01 17:41:06 by JamesE</div>
+   </div>
+   <div class="post" id="post-22416">
+    <div class="subject"><a href="#post-22416">Loading dlg from within DLL</a></div>
+    <div class="body">James,<br /><br />The info you have been given here is correct, make sure you use the INSTANCE handle that is passed to the LibMain/DllMain for the dialog if you use resources in the DLL.<br /><br />Usually you make a GLOBAL value in the .DATA? section,<br /><br />hInstance dd ?<br /><br />Somewhere in the LibMain DLL_PROCESS_ATTACH you copy the instance handle to the global variable,<br /><br />mov eax, hInst<br />mov hInstance, eax    ; &lt;&lt; handle is now global<br /><br />(Your push/pop works fine on the global as well)<br /><br />and then when you call the dialog box from a function in the DLL, you use the DLLs instance handle that you have saved to the global variable.<br /><br />This should get you out of trouble. Just make sure you use the correct ID for the dialog and get the handles for any controls you choose to use.<br /><br />Regards,<br /><br /><a href="mailto:hutch@movsd.com">hutch@movsd.com</a></div>
+    <div class="meta">Posted on 2002-02-01 20:23:21 by hutch--</div>
+   </div>
+  </div>
+ </body>
+</html>

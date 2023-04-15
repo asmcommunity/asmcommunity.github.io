@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Another $INVOKE warning - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15497" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=15497">Another $INVOKE warning</a></p>
+   <div class="post" id="post-120393">
+    <div class="subject"><a href="#post-120393">Another $INVOKE warning</a></div>
+    <div class="body">Perhaps you already noticed, but I still want to point out that the $INVOKE macro does not work correctly when nesting it. Example:<br /><pre><code><br />mov Result,$invoke&#40;Proc1,$invoke&#40;Proc2,1&#41;,$invoke&#40;Proc3,2&#41;&#41;<br /></code></pre><br />Assembles this:<br /><pre><code><br />push 2<br />call Proc3<br />push 1<br />call Proc2<br />push eax<br />push eax<br />call Proc1<br />mov Result,eax<br /></code></pre><br />Wich is surely <em>not</em> what we intended. :( <br />Since &quot;$INVOKE&quot; is actually a wrapper for the built-in &quot;INVOKE&quot; macro in MASM, I imagine that INVOKE actually tries to evaluate all parameters to check that it matches the prototype definition, and only then it assembles the pushes and call. So another $INVOKE call would be evaluated before having pushed the previous parameters. The result in our example is the same as:<br /><pre><code><br />invoke Proc3,2<br />invoke Proc2,1<br />invoke Proc,eax,eax<br />mov Result,eax<br /></code></pre><br />Maybe we could ask the macro champion here (I mean BitRAKE, of course ;) ) to code a new version of this macro, that would produce the correct results... The parameter pushing and the calls can be done in a FOR loop, but the really hard part would be to check the function prototypes (I don't know how, or if, macros can access this information).</div>
+    <div class="meta">Posted on 2003-10-03 14:33:04 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-120548">
+    <div class="subject"><a href="#post-120548">Another $INVOKE warning</a></div>
+    <div class="body">Your still writing for MASM not a HLL.  Invoke was never written to &quot;nest&quot; deeply as your showing.  The point was to simplify some of the simpler routines, like:<br /><br />mov hDC, $invoke( GetDC, hWin )<br /><br />When you write this, you *should* still be thinking what is happening.  If you dont your might as well be using a HLL.<br /><br /><br />To address this point with our OOP lib, we made a series of identical method calling macros, $EBX() $ESI() $EDI() etc.  This allows you to do what your asking for.  So if you make $Invoke_EAX() $Invoke_EBX() $Invoke_ESI() $Invoke_EDI():<br /><br /><pre><code>mov  Result,$invoke_EAX&#40;Proc1, $invoke_ESI&#40;Proc2,1&#41;, $invoke_EDI&#40;Proc3,2&#41; &#41; </code></pre><br /><br />You would get your listing:<pre><code><br />push 2<br />call Proc3<br />&#91;b&#93;mov EDI, EAX&#91;/b&#93;<br />push 1<br />call Proc2<br />&#91;b&#93;mov ESI, EAX&#91;/b&#93;<br />push &#91;b&#93;EDI&#91;/b&#93;<br />push &#91;b&#93;ESI&#91;/b&#93;<br />call Proc1<br />mov Result,&#91;b&#93;EAX&#91;/b&#93;</code></pre><br /><br />Regards,<br />:NaN:</div>
+    <div class="meta">Posted on 2003-10-05 10:33:55 by NaN</div>
+   </div>
+   <div class="post" id="post-120632">
+    <div class="subject"><a href="#post-120632">Another $INVOKE warning</a></div>
+    <div class="body">Thanks for the help, Nan :)<br /><br />I know that macros should be used with care, it's just that this is not an obvious issue when looking at the macro source. The only way to realize that this code does not work as intended is to test it, since MASM will obviously not report any errors. The point of this thread was mostly to spare a headache to other people that uses the $invoke macro, and tried to nest it like that.<br /><br />I'll be taking a look at your invoke macros, they could prove very useful. ;)</div>
+    <div class="meta">Posted on 2003-10-06 12:51:51 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-120655">
+    <div class="subject"><a href="#post-120655">Another $INVOKE warning</a></div>
+    <div class="body">Its not a problem...<br /><br />I urge you to learn up on them.  They are a true asset to assembly programming.... <br /><br />Feel free to ask questions. ;)<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2003-10-06 21:11:57 by NaN</div>
+   </div>
+   <div class="post" id="post-121354">
+    <div class="subject"><a href="#post-121354">Another $INVOKE warning</a></div>
+    <div class="body">My silly $invoke alternative... it still has many flaws, but it may be improved. Please tell me what you think of it :)<br /><pre><code>; This is similar to $invoke... it calls a function, and returns &lt;eax&gt;.<br />; Advantages&#58;<br />;   - It can be nested better than $invoke &#40;calls are interleaved correctly&#41;<br />;   - It does not require a prototype to be defined to call a function<br />;   - You can pass it any pointer, including registers<br />; Drawbacks&#58;<br />;   - It does not check that the correct number of parameters is being passed<br />;   - Does not support the use of ADDR<br />;   - You can only span it across lines using a backslash<br />;   - It only supports the STDCALL convention<br />$call MACRO Fun&#58;REQ, A&#58;VARARG<br />    IFB &lt;A&gt;<br />        call &amp;Fun&amp;<br />    ELSE<br />        FOR Arg, @ArgI&#40;A&#41;<br />            push Arg<br />        ENDM<br />        call &amp;Fun&amp;<br />    ENDIF<br />    EXITM &lt;eax&gt;<br />ENDM</code></pre></div>
+    <div class="meta">Posted on 2003-10-14 17:57:21 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-121366">
+    <div class="subject"><a href="#post-121366">Another $INVOKE warning</a></div>
+    <div class="body">Looks like your getting the hang of them ;)<br /><br />Not 100% on the ArgI() macro, but i believe you can get the same effect from the FOR loop with:<br /><br />FOR Args, &lt;A&gt;<br /><br />However, i didnt test it ;)<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2003-10-14 23:03:00 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

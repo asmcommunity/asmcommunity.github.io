@@ -1,0 +1,160 @@
+<HTML>
+<HEAD>
+   <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=windows-1250">
+   <META NAME="Author" CONTENT="Iczelion">
+   <META NAME="GENERATOR" CONTENT="Mozilla/4.04 [en] (WinNT; I) [Netscape]">
+   <TITLE>Iczelionův Win32asm tutorial část 1: ZÁKLADY</TITLE>
+</HEAD>
+<BODY TEXT="#FFFFFF" BGCOLOR="#000000" LINK="#FF0000" VLINK="#800080" ALINK="#0000FF">
+<CENTER>
+  <H1> <font color="#3333FF" face="verdana">Tutorial 1: Základy</font></H1>
+</CENTER>
+<font color="#CCCCCC" face="verdana" size="2">Tento tutorial předpokládá, že čtenář ví jako používat MASM.
+Pokud nejste obeznámeni s MASM, stáhněte si balíček <a href="files/win32asm.exe">win32asm.exe</a> 
+a prostudujte si texty uvnitř balíčku předtím, než se vrhnete na tento tutorial.<br> Dobře. 
+Nyní jste připraveni. Pojďme na to! :)</font> 
+<H3> <font color="#CC0000" face="verdana">Teorie:</font></H3>
+<p><font color="#CCCCCC" face="verdana" size="2">Win32 programy běží v protected 
+  módu, který je podporován od 80286. Ale 80286 je již nyní dávná historie a my se můžeme v klidu soustředit
+  na 80386 a jeho nástupce. Windows spouští každý Win32 program v odděleném virtuálním prostoru.
+  To znamená, že každý Win32 program bude mít svůj vlastní 4 GB adresovací prostor.
+  To všek neznamená, že každý win32 program má 4GB fyzické paměti, ale jen to, že každý program může adresovat adresu v tomto rozsahu.
+  Windows učiní vše potřebné proto, aby jednotlivé odkazy do paměti byly funkční.
+  Program samozřejmě musí přistoupit na pravidla daná Windows, jinak způsobí onu oblíbenou chybu ochrany.
+  Každý program je sám o sobě ve vlastním adresovém prostoru.
+  To je podstatná změna od dob Win16. Všechny Win16 aplikace se mohly navzájem vidět.
+  Né tak pod Win32. Tenhle rys pomáhá redukovat šanci, že jeden program přepíše druhému kód nebo data.
+  </font> <font face="verdana" size="2" color="#CCCCCC"><BR>
+  Paměťový model je také drasticky odlišný od starého 16-bit světa.
+  Pod Win32 se již vůbec nemusíme zabývat paměťovým modelem nebo segmenty.
+  Existuje pouze jediný model: Flat memory model. Již žádné 64K segmenty. 
+  Paměť je veliký kontinuální prostor o velikosti 4GB. To také znamená, že si již nemusíte
+  hrát se segment registry. Můžete využít libovolný segment registr k adresování jakéhokoliv
+  místa v paměťovém prostoru. To je VELIKÁ pomoc programátorům a je to právě toto, co dělá
+  Win32 programování v assembleru tak snadné jako C.<br>
+  Když programujete pod Win32, musíte znát některá pravidla. Jedno takové pravidlo je,
+  že Windows používá esi, edi, ebp a ebx registry vnitřně a nečeká,
+  že se hodnoty v těchto registrech změní. Takže si zapamatujte pravidlo první:
+  Jestliže použijete jakýkoliv z těchto registrů ve své callback funkci, nezapomeňte
+  ho obnovit předtím, než vrátíte kontrolu Windows. Callback funkce je vaše vlastní funkce,
+  která je volána operačním systémem. Běžným příkladem je Windows procedura.
+  To ale neznamená, že nemůžete používat bezpečně tyto čtyři registry, jen je skutečně musíte 
+  obnovit před předáním kontroly zpět systému.</font></p>
+<H3> <font color="#CC0000" face="verdana">Content:</font></H3>
+<p><font color="#999999" face="verdana" size="2">Zde je základní kostra programu.
+  Jestliže nerozumíte něčemu z kodu, neděste se. Vysvětlím později.
+  </font></p>
+<p><font color="#669999" face="verdana" size="2"><b>.386</b></font> <font color="#669999" size="2" face="verdana"><b><BR>
+  .MODEL Flat, STDCALL <BR>
+  .DATA <BR>
+  &nbsp;&nbsp;&nbsp; &lt;vaše inicializovaná data> <BR>
+  &nbsp;&nbsp;&nbsp; ...... <BR>
+  .DATA? <BR>
+  &nbsp;&nbsp; &lt;vaše neinicializovaná data> <BR>
+  &nbsp;&nbsp; ...... <BR>
+  .CONST <BR>
+  &nbsp;&nbsp; &lt;vaše konstanty> <BR>
+  &nbsp;&nbsp; ...... <BR>
+  .CODE <BR>
+  &nbsp;&nbsp; &lt;label><BR>
+  &nbsp;&nbsp;&nbsp; &lt;váš kód> <BR>
+  &nbsp;&nbsp; ..... <BR>
+  &nbsp;&nbsp;&nbsp; end &lt;label> </b></font></p>
+<p><font face="verdana"><BR>
+  <font color="#CCCCCC" size="2">Toť vše! Pojďme kostru zanalyzovat :).</font></font> 
+</p>
+<P><font face="verdana"><B><FONT COLOR="#CC33CC" size="3">.386</FONT></B> <BR>
+  <B><font color="#808000" size="2">Toto je direktiva assembleru říkající, že budeme užívat
+  80386 instrukční sadu. Můžete také použít .486, .586, ale nejbezpečnější je zůstat u .386.
+  Ve skutečnosti existují dvě téměř identické formy pro každý model CPU.
+  .386/.386p, .486/.486p. Tyto verze &quot;p&quot; jsou nutné
+  pouze když váš program používá privilegované instrukce, což jsou instrukce
+  rezervované CPU/operačním systémem v protected módu, které může užívat pouze privilegovaný kód
+  jako jsou ovladače. Většinu času váš program takto pracovat nebude, takže je bezpečné použít non-p verze.
+  </font></B></font>
+<P><font face="verdana"><B><FONT COLOR="#CC33CC" size="3">.MODEL FLAT, STDCALL</FONT></B> 
+  <BR>
+  <B><font color="#CC33CC" size="2">.MODEL</font><font color="#808000" size="2"> 
+  je direktiva, která specifikuje paměťový model vašeho programu. Pod
+  Win32 je pouze jediný: </font><font color="#3333FF" size="2"> </font><font color="#CC33CC" size="2">FLAT</font><font color="#808000" size="2"> 
+  model.</font></B> <font size="2"><BR>
+  <B><FONT COLOR="#CC33CC">STDCALL</FONT><font color="#808000"> říká MASM o způsobu předání parametrů (konvenci). 
+  Konvence určuje pořadí předávaných parametrů,
+  zleva do prava nebo zprava doleva, a také určuje kdo bude balancovat zásobník
+  po zavolání funkce.</font></B> <BR>
+  <B><FONT COLOR="#CC6600">Pod Win16 jsou dva druhy konvence,
+  </FONT><FONT COLOR="#CC33CC">C</FONT><FONT COLOR="#CC6600"> a </FONT><FONT COLOR="#CC33CC">PASCAL</FONT></B> 
+  <BR>
+  <B><FONT COLOR="#CC33CC">C </FONT><font color="#808000"> konvence předává 
+  parametry zprava doleva, tj. parametr nejvíce vpravo je do zásobníku vložen jako první.
+  Volající je zodpovědný za vybalancování zásobníku po zavolání. Např.
+  pro zavolání funkce pojmenované foo(int prvni_param, int druhy_param, 
+  int treti_param) v C konvenci bude asm kód vypadat takto:</font></B></font> 
+  </font>
+<BLOCKQUOTE><font face="verdana"><B><font color="#FFFF66" size="2">push&nbsp; 
+  [treti_param]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+  ; Vloz (Push) treti parameter</font></B> <font color="#FFFF66" size="2"><BR>
+  <B>push&nbsp; [druhy_param]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+  ; nasleduje druhy</B> <BR>
+  <B>push&nbsp; [prvni_param]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+  ; a nakonec prvni parametr</B> <BR>
+  <B>call&nbsp;&nbsp;&nbsp; foo</B> <BR>
+  <B>add&nbsp;&nbsp;&nbsp; sp, 12&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+  ; Volající balancuje zásobník</B></font></font></BLOCKQUOTE>
+<font face="verdana"><B><font color="#CC33CC" size="2">PASCAL</font><font color="#808000" size="2"> 
+konvence je obrácením C konvence. Předává parametry zleva doprava a volaný je zodpovědný za balancování zásobníku.
+</font></B> <font size="2" color="#808000"><BR>
+<B>Win16 přijalo</B></font><font size="2"><B><FONT COLOR="#3333FF"> </FONT><FONT COLOR="#CC33CC">PASCAL</FONT><font color="#808000"> 
+konvenci, protože produkuje menší kód. C konvence je užitečná, když nevíte kolik parametrů bude předáno funkci, jako v případě funkce wsprintf().
+V případě wsprintf() funkce nemá možnost předem určit počet parametrů, takže nemůže balancovat zásobník.
+</font></B> 
+<BR>
+<B><FONT COLOR="#CC33CC">STDCALL<font color="#808000"> </font></FONT><font color="#808000"> je 
+křížencem mezi C a PASCAL konvencí. Předává paramety zprava doleva, ale za balancování zásobníku je zodpovědný volaný.
+Win32 platforma používá výlučně
+</font><FONT COLOR="#CC33CC">STDCALL</FONT><FONT COLOR="#808000"> konvenci. 
+Kromě jediné vyjímky: wsprintf(). Tam musíte užít C konvenci.</FONT></B> 
+</font></font> 
+<P><font face="verdana"><B><FONT COLOR="#CC33CC" size="3">.DATA</FONT></B> <font size="3"><BR>
+  <B><FONT COLOR="#CC33CC">.DATA?</FONT></B> <BR>
+  <B><FONT COLOR="#CC33CC">.CONST</FONT></B> <BR>
+  <B><FONT COLOR="#CC33CC">.CODE</FONT></B> </font><BR>
+  <B><font color="#808000" size="2">Všechny čtyři direktivy jsou tím co se nazývá sekce.
+  Řekli jsme si, že ve Win32 nemáme segmenty. Ale můžeme rozdělit přidělený adresový prostor
+  do čtyř logických úseků (sekcí). Začátek jedné ze sekcí označuje zároveň konec sekce předchozí.
+  Existují dvě skupiny: data sekce a code sekce. Data sekce 
+  jsou rozdělena do 3 kategorií:</font></B> </font>
+<UL>
+  <LI> <font face="verdana" size="2" color="#CCCCCC"><B><font color="#FFE082">.DATA</font>&nbsp;&nbsp;&nbsp; 
+    Obsahuje inicializovaná data vašeho programu.</B></font></LI>
+  <LI> <font face="verdana" size="2" color="#CCCCCC"><B><font color="#FFE082">.DATA?</font>&nbsp; 
+    Obsahuje neinicializovaná data vašeho programu. Někdy prostě chcete připravit(alokovat)
+    část paměťového prostoru, ale nechcete ho inicializovat. Výhoda je jedna:
+    neinicializovaná data nezabírají místo v EXE souboru. Takže když například alokujete 10,000 bytů
+    v .DATA? sekci, váš exe soubor se o těchto 10,000 bytů nezvětší, jeho velikost zůstane stejná.
+    Jen jste řekli assembleru, kolik místa v paměti budete potřebovat, až se program nahraje do paměti, toť vše.
+    </B></font></LI>
+  <LI> <font face="verdana" size="2" color="#CCCCCC"><B><font color="#FFE082">.CONST</font>&nbsp; 
+    Tato sekce obsahuje deklaraci konstant užívaných v programu. 
+    Konstanty v této sekci nemohou být nikdy změněny ve vašem programu. Jsou prostě jen *konstantami*.</B></font></LI>
+</UL>
+<p><font face="verdana" color="#666600" size="2"><B>Nemusíte však využít všechny tři sekce.
+  Deklarujte pouze ty, které budete potřebovat.</B></font><font face="verdana"><font size="2"><br>
+  <BR>
+  <B><FONT COLOR="#3333FF"> Pro samotný kód je pouze jedna sekce:</FONT><FONT COLOR="#CC33CC">.CODE</FONT><FONT COLOR="#3333FF">. 
+  Zde přebývá váš kód.</FONT></B> </font><BR>
+  <B><font color="#CC33CC" size="2">&lt;label></font></B> <font size="2"><BR>
+  <B><FONT COLOR="#CC33CC">end &lt;label></FONT></B> <BR>
+  <B><FONT COLOR="#3333FF">kde &lt;label> je libovolný label, který určuje prostor, kde je umístěn kód.
+  Oba labely musejí být identičtí.&nbsp; Veškerý kód musí být mezi
+  </FONT><FONT COLOR="#CC33CC">&lt;label></FONT><FONT COLOR="#3333FF"> 
+  a </FONT><FONT COLOR="#CC33CC">end &lt;label></FONT></B> </font><BR>
+  </font> </p>
+<hr WIDTH="100%">
+<center><b><font face="Arial"><font color="#006600"><font size=-1>[<a href="http://win32asm.cjb.net">Iczelion's
+Win32 Assembly HomePage</a>]</font></font></font></b>
+<font size="2"> <br><i> Překlad Shaldan 2006, fx.s@seznam.cz - při četbě a využívání nových poznatků z četby opravdu za nic neručím :)) </i></font>
+</CENTER>
+
+</BODY>
+</HTML>

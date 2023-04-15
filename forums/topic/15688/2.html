@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>WinErr 2.000 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15688" />
+  <link rel="prev" href="../?id=15688&amp;page=1" />  <link rel="next" href="../?id=15688&amp;page=3" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=24">IDE usage &amp; development</a> &raquo; <a href="../?id=15688">WinErr 2.000</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=15688&amp;page=1" style="">&laquo;</a><a href="../?id=15688&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="15688" /><input type="number" name="page" min="1" max="3" step="1" value="2" onchange="this.form.submit();" /><a href="../?id=15688&amp;page=3">&gt;</a><a href="../?id=15688&amp;page=3">&raquo;</a></form>   <div class="post" id="post-122957">
+    <div class="subject"><a href="#post-122957">WinErr 2.000</a></div>
+    <div class="body">Here's the code I'm using to support WinAsm:<br /><pre><code>USE_DOCKING_WINDOWS equ TRUE<br /><br />; -------------------------------------------------------------------------<br />; WinAsm addin support<br />; -------------------------------------------------------------------------<br /><br />include \WinAsm\Inc\WAAddIn.inc<br /><br />GetWAAddInData  proto &#58;DWORD,&#58;DWORD<br />WAAddInLoad     proto &#58;DWORD,&#58;DWORD<br />FrameWindowProc proto &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD<br />DockingProc     proto &#58;DWORD,&#58;DWORD,&#58;DWORD,&#58;DWORD<br />WAAddInUnload   proto<br /><br />.const<br />ifdef USE_DOCKING_WINDOWS<br />sz DockingData<br />endif<br /><br />szAddinsINI db &quot;AddIns\WAAddIns.Ini&quot;,0<br /><br />.data<br />AddInDockData DOCKINGDATA &lt;offset szName,NODOCK,&lt;30,30,180,134&gt;,60,120,180,180&gt;<br /><br />.data?<br />pHandles    dd ?    ;Pointer to WinAsm handles<br /><br />ifdef USE_DOCKING_WINDOWS<br />pOldProc    dd ?    ;Pointer to old window proc for docking window<br />endif<br /><br />align DWORD<br />GetWAAddInData proc lpFriendlyName,lpDescription<br /><br />    invoke MoveMemory,lpFriendlyName,offset szName,sizeof szName<br />    invoke MoveMemory,lpDescription,offset szDesc,sizeof szDesc<br />    ret<br /><br />GetWAAddInData endp<br /><br />align DWORD<br />WAAddInLoad proc uses ebx pWinAsmHandles,features<br />    local IsActiveChildMaximized&#58;DWORD<br /><br />    ifdef USE_DOCKING_WINDOWS<br />        movi fDocking,TRUE<br />    endif<br />    invoke ReadConfig,offset szAddinsINI<br />	mov ebx,pWinAsmHandles<br />	mov pHandles,ebx<br />	push &#91;ebx&#93;.HANDLES.hMain<br />	pop hMain<br />    invoke SendMessage,&#91;ebx&#93;.HANDLES.hClient,WM_MDIGETACTIVE,0,addr IsActiveChildMaximized<br />    mov eax,7   ;7 for AddIns menu<br />    .if IsActiveChildMaximized<br />        inc eax<br />    .endIf<br />	mov AddinMenu,$invoke&#40;GetSubMenu,&#91;ebx&#93;.HANDLES.hMenu,eax&#41;<br />	invoke GetMenuItemCount,eax<br />	dec eax<br />	.if zero?<br />        invoke AppendMenu,AddinMenu,MF_SEPARATOR,0,0<br />	.endif<br />    mov AddinID,$invoke&#40;SendMessage,&#91;ebx&#93;.HANDLES.hMain,WAM_GETNEXTMENUID,0,0&#41;<br />    invoke AppendMenu,AddinMenu,MF_OWNERDRAW,eax,offset szMenuText<br />    ifdef USE_DOCKING_WINDOWS<br />        mov eax,WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_CHILD or STYLE_TWOLINESTITLE<br />        .if fActive<br />            or eax,WS_VISIBLE<br />            push eax<br />            invoke CheckMenuItem,AddinMenu,AddinID,MF_BYCOMMAND or MF_CHECKED<br />            pop eax<br />        .endif<br />        mov hDocking,$invoke&#40;SendMessage,hMain,WAM_CREATEDOCKINGWINDOW,eax,offset AddInDockData&#41;<br />        mov pOldProc,$invoke&#40;SetWindowLong,eax,GWL_WNDPROC,offset DockingProc&#41;<br />        invoke SendMessage,hDocking,WM_CREATE,0,0<br />    else<br />        invoke CreateWorker<br />    endif<br />    xor eax,eax<br />    ret<br /><br />WAAddInLoad endp<br /><br />align DWORD<br />WAAddInUnload proc<br /><br />    mov fActive,FALSE<br />    mov eax,AddinPopup<br />    ifdef USE_DOCKING_WINDOWS<br />        .if fDocking<br />            mov eax,hDocking<br />        .endif<br />    endif<br />    .if eax != 0<br />        invoke IsWindowVisible,eax<br />        .if eax<br />            inc fActive ;TRUE<br />        .endif<br />        ifdef USE_DOCKING_WINDOWS<br />            invoke SendMessage,hDocking,WAM_DESTROYDOCKINGWINDOW,0,0<br />        else<br />            invoke SendMessage,AddinPopup,WM_DESTROY,0,0<br />        endif<br />    .endif<br />    ifndef USE_DOCKING_WINDOWS<br />        invoke PostThreadMessage,IdWorker,WM_QUIT,0,0<br />        invoke WaitForSingleObject,hWorker,INFINITE<br />        invoke CloseHandle,hWorker<br />    endif<br />    invoke GetMenuItemCount,AddinMenu<br />    .if eax == 3<br />        invoke DeleteMenu,AddinMenu,1,MF_BYPOSITION<br />    .endIf<br />    invoke DeleteMenu,AddinMenu,AddinID,MF_BYCOMMAND<br />    invoke WriteConfig<br />    xor eax,eax<br />    ret<br /><br />WAAddInUnload endp<br /><br />align DWORD<br />FrameWindowProc proc hWin,uMsg,wParam,lParam<br />    local iCode &#58;DWORD<br /><br />    .if uMsg == WM_COMMAND<br />        mov eax,wParam<br />        and eax,not 10000h<br />        .if eax == AddinID<br />            ifdef USE_DOCKING_WINDOWS<br />                invoke IsWindowVisible,hDocking<br />                .if eax == FALSE<br />                    movi eax,SW_SHOW<br />                .else<br />                    movi eax,SW_HIDE<br />                .endif<br />                invoke ShowWindow,hDocking,eax<br />            else<br />                invoke PostThreadMessage,IdWorker,WM_USER+100h,TRUE,0<br />            endif<br />            xor eax,eax<br />            inc eax<br />            ret<br />        .endif<br />    .endif<br />    xor eax,eax<br />    ret<br /><br />FrameWindowProc endp<br /><br />ifdef USE_DOCKING_WINDOWS<br />align DWORD<br />DockingProc proc hWin,uMsg,wParam,lParam<br />    local rect&#58;RECT<br /><br />    mov eax,uMsg<br />    .switch eax<br /><br />    .case WM_SIZE<br />        invoke GetWindowLong,hWin,0<br />        .if eax != 0<br />            invoke MoveMemory,offset AddInDockData,eax,sizeof DOCKINGDATA<br />        .endif<br />        invoke SendMessage,hWin,WAM_GETCLIENTRECT,0,addr rect<br />        invoke MoveWindow,AddinPopup,0,0,rect.right,rect.bottom,TRUE<br />        .break<br /><br />    .case WM_SHOWWINDOW<br />        mov eax,wParam<br />        shl eax,3<br />        invoke CheckMenuItem,AddinMenu,AddinID,eax<br />        .break<br /><br />    .case WM_CREATE<br />        invoke CreateDialogParam,hInst,IDD_DIALOG2,hWin,offset DlgProc,0<br />        .if eax != 0<br />            invoke SendMessage,hWin,WAM_GETCLIENTRECT,0,addr rect<br />            mov eax,rect.right<br />            mov edx,rect.bottom<br />            sub eax,rect.left<br />            sub edx,rect.top<br />            invoke MoveWindow,AddinPopup,rect.left,rect.top,eax,edx,TRUE<br />        .else<br />            invoke PostMessage,hWin,WAM_DESTROYDOCKINGWINDOW,0,0<br />        .endif<br />        xor eax,eax<br />        ret<br /><br />    .case WM_DESTROY<br />        invoke SetWindowLong,hWin,GWL_WNDPROC,pOldProc<br /><br />    .endswitch<br />    invoke CallWindowProc,pOldProc,hWin,uMsg,wParam,lParam<br />    ret<br /><br />DockingProc endp<br />endif</code></pre></div>
+    <div class="meta">Posted on 2003-10-30 16:10:36 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123030">
+    <div class="subject"><a href="#post-123030">WinErr 2.000</a></div>
+    <div class="body">Hi,<br /><br />The problem seems to be here:<br /><br /><br />.case WM_SIZE<br /><br />        invoke GetWindowLong,hWin,0<br />        .if eax != 0<br />            invoke MoveMemory,offset AddInDockData,eax,sizeof DOCKINGDATA<br />        .endif<br />        invoke SendMessage,hWin,WAM_GETCLIENTRECT,0,addr rect<br />        invoke MoveWindow,AddinPopup,0,0,rect.right,rect.bottom,TRUE<br />        .break<br /><br /><br />Try this:<br /><br />.case WM_SIZE<br />Invoke SendMessage,hAddIn,WAM_GETCLIENTRECT,0,ADDR Rect<br />MOV EAX,Rect.right<br />SUB EAX,Rect.left<br />MOV ECX,Rect.bottom<br />SUB ECX,Rect.top<br />Invoke MoveWindow,AddinPopup,Rect.left,Rect.top,EAX,ECX,TRUE<br />.break<br /><br />PS1. I guess AddinPopup is your dialog handle.<br /><br />PS2. Attached is a simple Add-In using a <strong>WS_CHILD</strong> dialog hosted in a docking window.<br /><br />Regards,<br /><br />akyprian</div>
+    <div class="meta">Posted on 2003-10-31 06:59:31 by akyprian</div>
+   </div>
+   <div class="post" id="post-123076">
+    <div class="subject"><a href="#post-123076">WinErr 2.000</a></div>
+    <div class="body">hi,<br /><br />It could be interesting if the user could see the number and the constant name at the same time.<br />(maybe by adding the number in dec/hex inside the description).<br /><br />Also it could be interesting if it could run without the window interface (in a tooltip injected inside sources windows or somekind of listbox).<br /><br />h.</div>
+    <div class="meta">Posted on 2003-10-31 12:24:45 by hitchhikr</div>
+   </div>
+   <div class="post" id="post-123246">
+    <div class="subject"><a href="#post-123246">WinErr 2.000</a></div>
+    <div class="body">Still one more to fix... Once I got that one I'll post the new version.<br /><br />@Akyprian:<br /><br />Thanks for the tips! :) I had already catched up on the fact that the client rect of a docking window does not start at (0,0), but I forgot to change the code to handle WM_SIZE (I only changed WM_CREATE). I have also found another error in the dialog box procedure, and fixed it. So now it's <em>almost</em> working... Now for some reason the controls are not being resized properly. In fact they are not even shown :grin: unless I remove this code from the dialog box procedure:<br /><pre><code><br />    .case WM_SIZE<br />        .break .if wParam == SIZE_MINIMIZED<br />        ifdef USE_DOCKING_WINDOWS<br />            .if fDocking<br />                invoke SendMessage,hWin,WAM_GETCLIENTRECT,0,addr rect<br />            .else<br />                invoke GetClientRect,hWin,addr rect<br />            .endif<br />        else<br />            invoke GetClientRect,hWin,addr rect<br />        endif<br />        mov hEdit1,$invoke&#40;GetDlgItem,hWin,IDC_EDIT1&#41;<br />        invoke GetDlgItem,hWin,IDC_COMBO1<br />        invoke MoveWindow,eax,0,0,rect.right,rect.bottom,TRUE<br />        lea edx,rect2<br />        push edx<br />        push hWin<br />        invoke GetWindowRect,hEdit1,edx<br />        call ScreenToClient<br />        mov edx,rect.bottom<br />        sub edx,rect2.top<br />        .if sign?<br />            neg edx<br />        .endif<br />        mov eax,rect.right<br />        sub eax,rect.left<br />        invoke SetWindowPos,hEdit1,0,0,0,eax,edx,SWP_NOMOVE or SWP_NOOWNERZORDER or SWP_NOZORDER<br />        .break<br /></code></pre><br />So my bug must be here... weird because it's working for the other IDEs. :confused:<br /><br />Must be a problem in the way I calculate the control's position from the client rect.<br /><br /><br />@hitchhikr:<br /><br />Updated. Now the addin works as a modeless box in Chrome too. One thing though, the dialog box doesn't seem to be created on startup. When you close the IDE and WinErr was visible, next time you launch the IDE WinErr will show itself on startup. This seems to fail on Chrome... perhaps AddInLoad is called <em>before</em> the MDI frame window is created?<br /><br />I have also implemented your first suggestion, I think it's a very good idea to show the error name and number besides it's description. :alright:<br /><br />As for the second, I didn't understand it much... you mean like a tooltip that pops up when the user double-cliks on an error equate? (sorry for the dumb question).</div>
+    <div class="meta">Posted on 2003-11-02 15:29:41 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123263">
+    <div class="subject"><a href="#post-123263">WinErr 2.000</a></div>
+    <div class="body"><div class="quote"><br />Updated. Now the addin works as a modeless box in Chrome too. One thing though, the dialog box doesn't seem to be created on startup. When you close the IDE and WinErr was visible, next time you launch the IDE WinErr will show itself on startup. This seems to fail on Chrome... perhaps AddInLoad is called before the MDI frame window is created?<br /></div><br /><br />Being used within the AddIns menu, yours have a limited range (the range of a stand-alone tool) as the one that are provided with the distrib.<br />These addins are alive within a single session.<br /><br />Other type of addins exist that can use AddInMenu as a configuration panel or something else (not mandatory).<br />These are primary designed to enhance the core interface of the IDE.<br /><br /><div class="quote"><br />As for the second, I didn't understand it much... you mean like a tooltip that pops up when the user double-cliks on an error equate? (sorry for the dumb question).<br /></div><br /><br />Like when the user leave the mouse pointer on the name of an error constant (in a source) for a short period of time a toolip appears containing the description of that error.<br /><br />example: <br /><br /><pre><code><br />mov eax, ERROR_DIR_NOT_EMPTY<br /></code></pre><br /><br />When the user leave the mouse pointer on the ERROR_DIR_NOT_EMPTY word, the description (with the number) pops up.<br /><br />That's what i call an enhancment of the core interface of the IDE. But i might be done carefully because some other AddIns might want to display a value for other constants (not errors but some others).<br /><br />Btw, i released an update where i removed a bug i found while checking AddInLoad (hMDI was empty).<br /><br />h.</div>
+    <div class="meta">Posted on 2003-11-02 17:33:50 by hitchhikr</div>
+   </div>
+   <div class="post" id="post-123292">
+    <div class="subject"><a href="#post-123292">WinErr 2.000</a></div>
+    <div class="body">Hi Qvasimodo,<br /><br />-There is no difference if the Docking Window is floating or docked. So you should always use WAM_GETCLIENTRECT to get its client rectangle.<br /><br />-I attached a modified version to see how I would handle sizing (not optimized)<br /><br />akyprian</div>
+    <div class="meta">Posted on 2003-11-03 00:30:39 by akyprian</div>
+   </div>
+   <div class="post" id="post-123341">
+    <div class="subject"><a href="#post-123341">WinErr 2.000</a></div>
+    <div class="body"><div class="quote"><br />Hi Qvasimodo,<br /><br />-There is no difference if the Docking Window is floating or docked. So you should always use WAM_GETCLIENTRECT to get its client rectangle.<br /><br />-I attached a modified version to see how I would handle sizing (not optimized)<br /><br />akyprian </div><br />Yes, I know you should use always WAM_GETCLIENTRECT.<br />The fDocking flag only indicates if a docking window is in place (NOT if that window is locked). Remember that I'm sharing that code with the support for the other IDEs.<br />I'm taking a look at you second example anyway. :)</div>
+    <div class="meta">Posted on 2003-11-03 12:05:06 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123342">
+    <div class="subject"><a href="#post-123342">WinErr 2.000</a></div>
+    <div class="body">@hitchhikr: Mhm... it seems a bit complicated, specially thinking of other addins that might want to do something similar. Now I got what you mean, I've added it to my to do list, but first I'll get this version finished.<br />I'm also downloading the latest version of Chrome, maybe that hMDI bug was the cause of the addin not being launched on startup.</div>
+    <div class="meta">Posted on 2003-11-03 12:08:29 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123349">
+    <div class="subject"><a href="#post-123349">WinErr 2.000</a></div>
+    <div class="body">This is what I have so far (under development!)<br />Everything should work fine except under WinAsm, so please tell me of any bugs you might find.<br /><br />EDIT: Attachment removed. Latest version at the beginning of this thread.</div>
+    <div class="meta">Posted on 2003-11-03 12:54:19 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123352">
+    <div class="subject"><a href="#post-123352">Bug</a></div>
+    <div class="body">Since you're addin is returning ADDIN_FINISHED in the AddInLoad proc chrome will run AddInUnload right away<br />but it's seems you do not handle it correctly because AddInUnload never returns when run at startup.<br /><br />Do not assume that AddInMenu has been run before AddInUnload been called.<br /><br />A work around would be to return ADDIN_PERSISTANT (0x1) in AddInLoad but i repeat that your addin do not fall into this category.<br /><br />h.</div>
+    <div class="meta">Posted on 2003-11-03 13:15:34 by hitchhikr</div>
+   </div>
+   <div class="post" id="post-123354">
+    <div class="subject"><a href="#post-123354">WinErr 2.000</a></div>
+    <div class="body">Thanks for the reply. :)<br /><br />I must have forgotten to return ADDIN_PERSISTANT... :P will be fixed.<br /><br />The problem is I wanted to have a modeless dialog box. It is not possible to have one if the message queue does not support it, that's why I create a second thread and try to make the addin persistent.<br /><br />Anyway, when I implement the tooltip feature I will need the addin to be persistant anyway, so this is a good time to implement that. ;)</div>
+    <div class="meta">Posted on 2003-11-03 13:46:57 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123433">
+    <div class="subject"><a href="#post-123433">WinErr 2.000</a></div>
+    <div class="body">Fixed the resizing code (it was really dumb... I got mixed up because I wasn't hosting the dialog inside the docking window before). Anyway it's still failing, but it must be one more of my stupid mistakes. Since I'm only giving to this project some 10 minutes or so every time, my coding tends to be really sloppy. I'll finish debugging the docking window support once I get myself the time to work on this for a good hour or two.<br />Meanwhile, here's version 2.0.2.1 (without docking windows support yet). I've tested it and it seems to work fine.<br /><br />EDIT: Attachment removed. Latest version at the beginning of this thread.</div>
+    <div class="meta">Posted on 2003-11-04 16:09:00 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123554">
+    <div class="subject"><a href="#post-123554">WinErr 2.000</a></div>
+    <div class="body">This version is identical to the one above, but it works with docking windows (yes, I got them to work! :grin: ).<br />However... it seems to fail to save the window position properly... :(<br />I'll ask akyprian about it.<br /><br />EDIT: Deleted the attachment since it was a buggy version.</div>
+    <div class="meta">Posted on 2003-11-05 17:31:53 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123741">
+    <div class="subject"><a href="#post-123741">WinErr 2.000</a></div>
+    <div class="body">Finally fixed. :grin:<br />Thanks akyprian!<br /><br />EDIT: Attachment removed. Latest version at the beginning of this thread.</div>
+    <div class="meta">Posted on 2003-11-07 14:03:31 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123744">
+    <div class="subject"><a href="#post-123744">Phobos....</a></div>
+    <div class="body">...approved :grin: <br /><br />Nice addin !!!! Tx QvasiModo :alright: <br /><br /><br />Regards,</div>
+    <div class="meta">Posted on 2003-11-07 14:42:04 by PhoBos</div>
+   </div>
+   <div class="post" id="post-123746">
+    <div class="subject"><a href="#post-123746">WinErr 2.000</a></div>
+    <div class="body">Hi,<br /><br />Very nice. You need to use WS_CLIPCHILDREN for your <strong>dialog</strong> to reduce flicker.(I do use it in my sample)<br /><br />Cheers,<br /><br />akyprian</div>
+    <div class="meta">Posted on 2003-11-07 15:35:26 by akyprian</div>
+   </div>
+   <div class="post" id="post-123793">
+    <div class="subject"><a href="#post-123793">WinErr 2.000</a></div>
+    <div class="body">Sure. Attachment updated. :)</div>
+    <div class="meta">Posted on 2003-11-08 07:54:05 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-123796">
+    <div class="subject"><a href="#post-123796">WinErr 2.000</a></div>
+    <div class="body">Lovely! :alright:<br /><br />Thanks,<br /><br />akyprian</div>
+    <div class="meta">Posted on 2003-11-08 08:14:41 by akyprian</div>
+   </div>
+   <div class="post" id="post-136127">
+    <div class="subject"><a href="#post-136127">WinErr 2.000</a></div>
+    <div class="body">New version available (2.0.1.5). :)<br />Just a little cosmetic fix under WinAsm - now the addin will add it's menu item in the &quot;View&quot; menu, and will show a check mark if it's window is visible.</div>
+    <div class="meta">Posted on 2004-03-16 13:24:30 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-136195">
+    <div class="subject"><a href="#post-136195">WinErr 2.000</a></div>
+    <div class="body">Thanks,<br /><br />uploaded to my site,<br /><br />akyprian</div>
+    <div class="meta">Posted on 2004-03-17 08:14:01 by akyprian</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=15688&amp;page=1" style="">&laquo;</a><a href="../?id=15688&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="15688" /><input type="number" name="page" min="1" max="3" step="1" value="2" onchange="this.form.submit();" /><a href="../?id=15688&amp;page=3">&gt;</a><a href="../?id=15688&amp;page=3">&raquo;</a></form>  </div>
+ </body>
+</html>

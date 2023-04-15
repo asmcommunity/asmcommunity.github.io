@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Copy ??? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28464" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28464">Copy ???</a></p>
+   <div class="post" id="post-201329">
+    <div class="subject"><a href="#post-201329">Copy ???</a></div>
+    <div class="body">Is there a way to use the shell/explorer copy function with the explorer copy dialogbox?
+
+Thanks.</div>
+    <div class="meta">Posted on 2001-06-19 10:33:00 by hansWurst</div>
+   </div>
+   <div class="post" id="post-201330">
+    <div class="subject"><a href="#post-201330">Copy ???</a></div>
+    <div class="body">Look for SHFileOperation in your Win32.hlp</div>
+    <div class="meta">Posted on 2001-06-19 14:00:00 by bazik</div>
+   </div>
+   <div class="post" id="post-201331">
+    <div class="subject"><a href="#post-201331">Copy ???</a></div>
+    <div class="body">Do you have an example of this? (asm/c++)</div>
+    <div class="meta">Posted on 2001-06-19 14:59:00 by hansWurst</div>
+   </div>
+   <div class="post" id="post-201332">
+    <div class="subject"><a href="#post-201332">Copy ???</a></div>
+    <div class="body">No, Sorry. Try to search google. I'm sure, you find an example in C or ASM.
+I've used it some time ago, but I don't find the source :-(
+But, it's a easy task to implement it (if I remember correctly *g*)</div>
+    <div class="meta">Posted on 2001-06-19 15:46:00 by bazik</div>
+   </div>
+   <div class="post" id="post-201333">
+    <div class="subject"><a href="#post-201333">Copy ???</a></div>
+    <div class="body">I have some VB code that uses it to do rename a file to have a .bak extension. It was supposed to byte patch a file downloaded from yahoo briefcase. Never quite finnished it. Hope this helps:
+
+<pre><code>
+Private Declare Function SHFileOperation Lib "shell32.dll" Alias "SHFileOperationA" (lpFileOp As SHFILEOPSTRUCT) As Long
+
+
+Private Type SHFILEOPSTRUCT
+        hwnd As Long
+        wFunc As Long
+        pFrom As String
+        pTo As String
+        fFlags As Integer
+        fAnyOperationsAborted As Long
+        hNameMappings As Long
+        lpszProgressTitle As String '  only used if FOF_SIMPLEPROGRESS
+End Type
+Private Const FO_RENAME = &H4
+Private Const FOF_SILENT = &H4
+Private Const FOF_RENAMEONCOLLISION = &H8
+
+Dim FilePath As String
+Dim PathOnly As String
+Dim FileOnly As String
+Dim AllOverSize As Long
+
+Private Sub Cmd_Click(Index As Integer)
+Select Case Index
+Case 0
+    If Drive1.ListIndex = -1 Then
+        Text1.Text = Text1.Text + "No Drive Selected" & vbCrLf
+        Exit Sub
+    End If
+    If File1.ListIndex = -1 Then
+        Text1.Text = Text1.Text + "No File Selected" & vbCrLf
+        Exit Sub
+    End If
+    PathOnly = Dir1.Path & "\"
+    Dim Check As Long
+    Dim NumberOfErrors
+    Dim FileOpStruct As SHFILEOPSTRUCT
+    With FileOpStruct
+        .hwnd = Me.hwnd
+        .fFlags = FOF_RENAMEONCOLLISION + FOF_SILENT
+        .wFunc = FO_RENAME
+        .hNameMappings = 0
+        .fAnyOperationsAborted = 0
+        .lpszProgressTitle = 0
+    End With
+    PathOnly = Dir1.Path & "\"
+    
+With File1
+    For i = 0 To File1.ListCount - 1
+        Open PathOnly & .List(i) For Binary As #1
+        AllOverSize = AllOverSize + LOF(1)
+        Close #1
+    Next
+End With
+For i = 0 To File1.ListCount - 1
+  If File1.Selected(i) = True Then
+    FileOnly = File1.List(i)
+    FilePath = PathOnly & FileOnly
+    ProgressBar1.Value = 0
+    Open FilePath For Binary As #1
+    Text1.Text = Text1.Text + "Reading File: " & FileOnly & "..." & vbCrLf
+    NumberOfErrors = FixFile(False)
+    If NumberOfErrors = -1 Then
+        Text1.Text = Text1.Text + "Extra Byte Found. Writing File: " & FileOnly & vbCrLf
+        ProgressBar1.Value = 0
+        FileOpStruct.pFrom = FilePath
+        FileOpStruct.pTo = FilePath + ".bak"
+        Check = SHFileOperation(FileOpStruct)
+        Open FilePath + ".bak" For Binary As #1
+        Open FilePath For Binary As #2
+        NumberOfErrors = FixFile(True)
+        Text1.Text = Text1.Text + CStr(NumberOfErrors) & "Extra Byte(s) found and fixed." & vbCrLf
+    End If
+  End If
+Next
+Case 2
+    With cmd(2)
+        If .Caption = "Pause" Then
+            .Caption = "Continue"
+            Close #1
+            Do
+                DoEvents
+            Loop
+        Else
+            .Caption = "Pause"
+        End If
+    End With
+End Select
+End Sub
+
+Private Function FixFile(DoWrite As Boolean) As Integer
+    Dim RamFile As String
+    Dim FileSize As Long
+    Dim Divider As Integer
+    Dim CurrentRamSize As Long
+    Dim Check As String
+    Dim Check2 As String
+    Dim FoundCheck1 As Long
+    Dim FoundCheck2 As Long
+    Dim LastPos As Long
+    Dim SearchByteFromPos As String
+    Dim BytesCorrected As Integer
+    Dim swap As String
+    
+    If DoWrite Then BytesCorrected = 0 Else BytesCorrected = -1
+    Check1 = Chr(&HA) & Chr(&H2D)
+    Check2 = Chr(&HD) & Chr(&HA) & Chr(&H2D)
+    FileSize = LOF(1)
+    Divider = FileSize \ 65000
+    If FileSize > 65000 Then Divider = Divider + 1
+    For i = 1 To Divider
+        RamFile = Space$(65000)
+        Get #1, , RamFile
+        sthf = Len(RamFile)
+        CurrentRamSize = Len(RamFile)
+        LastPos = 1
+        FoundCheck1 = InStr(LastPos, RamFile, Check1) - 1
+        FoundCheck2 = InStr(LastPos, RamFile, Check2) - 1
+        ProgressBar1.Value = 100 - Round(FileSize / (i * 65000))
+        While Not (FoundCheck1 <= 0 And FoundCheck2 <= 0)
+            DoEvents
+            If FoundCheck1 > FoundCheck2 Then SearchByteFromPos = FoundCheck1 Else SearchByteFromPos = FoundCheck2</div>
+    <div class="meta">Posted on 2001-06-19 16:20:00 by goofee</div>
+   </div>
+   <div class="post" id="post-201334">
+    <div class="subject"><a href="#post-201334">Copy ???</a></div>
+    <div class="body">goofee,
+nice coding style! But I have 2 improvement Ideas:
+
+<pre><code>
+PathOnly = Dir1.Path & "\"
+</code></pre>
+should be changed to
+<pre><code>
+If Len(Dir1.Path) = 3 then 'e.g. "E:\" 
+      PathOnly = Dir1.Path
+else
+      Path Only = Dir1.Path & "\"
+end if
+</code></pre>
+
+and you should insert an error check in your DriveBox (select drive A and you get a runtime error :-) )
+
+Just some little tips. BTW, their is already a source for a briefcase byte patcher avaible. But don't ask me for a link (searching google is the best idea)
+
+regards,
+bAZiK</div>
+    <div class="meta">Posted on 2001-06-19 16:44:00 by bazik</div>
+   </div>
+   <div class="post" id="post-201335">
+    <div class="subject"><a href="#post-201335">Copy ???</a></div>
+    <div class="body">Here's some code to copy files using the SHFileOperation.
+
+<pre><code>
+LOCAL    ShFileOp:SHFILEOPSTRUCT
+
+.
+.
+      INVOKE     lstrlen, addr szOutPath
+         inc     eax
+         mov     szOutPath, 0           ; Insert additional terminator
+
+GetNextFile:
+.
+.
+.
+
+      INVOKE     lstrlen, addr FindData.cFileName
+         inc     eax
+         mov     FindData.cFileName, 0  ; Insert additional terminator
+
+         mov     ShFileOp.wFunc, FO_COPY
+         mov     ShFileOp.hwnd, 0            ; If 0, then no parent can task switch away
+         lea     eax, FindData.cFileName
+         mov     ShFileOp.pFrom, eax
+         lea     eax, szOutPath
+         mov     ShFileOp.pTo, eax
+         mov     ShFileOp.fFlags, FOF_SILENT or FOF_NOCONFIRMATION or FOF_NOCONFIRMMKDIR
+      INVOKE     SHFileOperation, addr ShFileOp
+        test     eax, eax
+          jz     GetNextFile
+.
+.
+</code></pre>
+Ewayne</div>
+    <div class="meta">Posted on 2001-06-19 17:47:00 by Ewayne</div>
+   </div>
+   <div class="post" id="post-201336">
+    <div class="subject"><a href="#post-201336">Copy ???</a></div>
+    <div class="body">Thanks for all the feedback!</div>
+    <div class="meta">Posted on 2001-06-19 18:00:00 by hansWurst</div>
+   </div>
+  </div>
+ </body>
+</html>

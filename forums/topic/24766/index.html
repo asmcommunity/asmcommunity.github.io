@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Help with a lots of CMP - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24766" />
+    <link rel="next" href="../?id=24766&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24766">Help with a lots of CMP</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=24766&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=24766&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="24766" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=24766&amp;page=2">&gt;</a><a href="../?id=24766&amp;page=2">&raquo;</a></form>   <div class="post" id="post-180895">
+    <div class="subject"><a href="#post-180895">Help with a lots of CMP</a></div>
+    <div class="body">hello all ?&nbsp;;)<br /><br />long time no see.... <br />for some reasons im forced to head back ?&nbsp;:lol:<br /><br />i have this loop :<br /><pre><code><br />@_Loop:<br /><br />	mov eax,dword ptr<br />	<br />	cmp eax,&quot;1111&quot;<br />	je @_1111<br />	cmp eax,&quot;2111&quot;<br />	je @_1112<br />	cmp eax,&quot;3111&quot;<br />	je @_1113<br />	cmp eax,&quot;4111&quot;<br />	je @_1114<br />	cmp eax,&quot;2222&quot;<br />	je @_2222<br />	<br />@_Next:<br /></code></pre><br /><br /><br />i have a lots of functions 1111,1112,1113,1114....etc<br />each one makes something.. they are functions ... theres why the JE<br /><br />i was wondering.. for my needs, i need to speed the process up!<br />is there another way to make that?<br />another way to go arround all those CMP ???<br /><br />thanks a lot</div>
+    <div class="meta">Posted on 2006-05-23 18:26:24 by GR33d</div>
+   </div>
+   <div class="post" id="post-180896">
+    <div class="subject"><a href="#post-180896">Re: Help with a lots of CMP</a></div>
+    <div class="body">Hi<br /><br />Depending on the range of data in EAX, if the only difference in the strings is the lower 2 bytes (in decimal) then you can have a maximum of 99 possible combinations. In order to make use of this you create an array of 99 dwords containing the addresses to your functions then use this...<br /><br /><pre><code>array11 dd offset 1111<br />array12 dd offset 1112<br />...<br />array99 dd offset 1199<br /><br />.lop<br />&nbsp; and eax,0FFh<br />&nbsp; sub ax, &quot;00&quot;<br />&nbsp; mov eax, <br />&nbsp; test eax,eax ; test for empty value<br />&nbsp; jnz eax<br />jmp .lop</code></pre></div>
+    <div class="meta">Posted on 2006-05-23 18:36:43 by donkey</div>
+   </div>
+   <div class="post" id="post-180898">
+    <div class="subject"><a href="#post-180898">Re: Help with a lots of CMP</a></div>
+    <div class="body">Sorry,<br /><br />Brain fart, you&#39;re going to have to convert the value in AX from BCD in order for it to work properly. I don&#39;t have the refs at work but I think AAD might do it so it would be<br /><br /><pre><code>array11 dd offset 1111<br />array12 dd offset 1112<br />...<br />array99 dd offset 1199<br /><br />.lop<br />&nbsp; and eax,0FFh<br />&nbsp; sub ax, &quot;00&quot;<br />&nbsp; aad<br />&nbsp; mov eax, <br />&nbsp; test eax,eax ; test for empty value<br />&nbsp; jnz eax<br />jmp .lop</code></pre></div>
+    <div class="meta">Posted on 2006-05-23 18:44:54 by donkey</div>
+   </div>
+   <div class="post" id="post-180899">
+    <div class="subject"><a href="#post-180899">Re: Help with a lots of CMP</a></div>
+    <div class="body">The basic first step would be to analyze your program and put the most frequently used compares at the top of the list.<br /><br />The next basic step, if your list is big enough, is to split the list of compares in halves (and maybe even quarters), in order to speed things up a bit.<br /><br />Here is a basic example assuming you have multiple functions that start <br /><br /><pre><code><br />@_Loop:<br /><br />	mov eax,dword ptr<br /><br />cmp eax,&quot;0002&quot;<br />jge @check_2000<br />	<br />	cmp eax,&quot;1111&quot;<br />	je @_1111<br />	cmp eax,&quot;2111&quot;<br />	je @_1112<br />	cmp eax,&quot;3111&quot;<br />	je @_1113<br />	cmp eax,&quot;4111&quot;<br />	je @_1114<br />check_2000:<br />	cmp eax,&quot;2222&quot;<br />	je @_2222<br />; and so on<br />	<br />@_Next:<br /></code></pre><br /><br />A round-about way is to setup a linked-list of function pointers and use a little bit of math to navigate them, though this could be messy considering the gap you have between 1114 and 2222. Short example (Please forgive me as I favor NASM over MASM and my &quot;grammar&quot; knowledge of MASM is quite weak these days)...<br /><br /><pre><code><br />list_of_functions:<br />&nbsp; .1111 DWORD @_1111<br />&nbsp; .1112 DWORD @_1112<br />&nbsp; .1113 DWORD @_1113<br />&nbsp; .1114 DWORD @_1114<br />&nbsp; .2222 DWORD @_2222<br /><br />@_Loop:<br />&nbsp; mov eax, dword ptr<br />&nbsp; sub eax,1111<br />&nbsp; shl eax,2<br />&nbsp; mov ebx, addr list_of_functions<br />&nbsp; mov edx, dword ptr<br />&nbsp; jmp edx<br /><br />@_Next:<br /></code></pre><br /><br />This would, of course, break as soon as you hit .2222, but I think you get the general idea.<br /><br />You could make this for the entire list of functions, but... Space, Speed, Size... pick any 2 :)<br /><br />Edit: I see donkey beat me to the punch, twice over, hope I was somewhat insightful ;)</div>
+    <div class="meta">Posted on 2006-05-23 18:45:48 by SpooK</div>
+   </div>
+   <div class="post" id="post-180909">
+    <div class="subject"><a href="#post-180909">Re: Help with a lots of CMP</a></div>
+    <div class="body">hey<br /><br />thats a help :)<br /><br />someone could translate that from NASM to MASM :P?&nbsp; dunno how to MASM it <br /><br />oh...<br />and donkey ...<br />whats BCD and AAD ??!??! what does the AAD opcode does?<br /><br />oh and when u mean:<br /><pre><code>array11 dd offset 1111</code></pre><br /><br />u mean :<br /><pre><code>array11 dd offset @_1111</code></pre> ???? the label or the value &quot;1111&quot; <br /><br />can u explain that a bit more ?<br /><br />cause ... the user will input &quot;1111&quot; in string witch means : 31313131 on EAX<br />any way faster i appreciate<br /><br />thanks indeed</div>
+    <div class="meta">Posted on 2006-05-23 20:05:50 by GR33d</div>
+   </div>
+   <div class="post" id="post-180911">
+    <div class="subject"><a href="#post-180911">Re: Help with a lots of CMP</a></div>
+    <div class="body">&quot;offset&quot; suggestions the location in memory of label &quot;1111&quot;.<br /><br />This is a major difference between MASM and NASM. MASM assumes you are addressing a value in memory, instead of a memory location. NASM defaults to memory locations of labels, and you have to specify if you are accessing the value at that memory location. Example...<br /><br /><pre><code><br />;Setting a Variable to a Label&#39;s Memory Location<br />array11 DWORD addr @_1111&nbsp;  ;MASM<br />array11 DD&nbsp; ._1111&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;NASM<br /><br />;Loading/Storing Variables<br />mov eax, array11&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;MASM<br />mov eax, DWORD&nbsp; &nbsp;  ;NASM<br /><br />;Loading Variable Memory Locations (labels)<br />mov eax, addr @_1111&nbsp; &nbsp;  ;MASM<br />mov eax, ._1111&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ;NASM<br /></code></pre></div>
+    <div class="meta">Posted on 2006-05-23 20:31:51 by SpooK</div>
+   </div>
+   <div class="post" id="post-180956">
+    <div class="subject"><a href="#post-180956">Re: Help with a lots of CMP</a></div>
+    <div class="body">and what abou the BCD and AAD stuf?!?!<br /><br />what that means?</div>
+    <div class="meta">Posted on 2006-05-24 07:38:16 by GR33d</div>
+   </div>
+   <div class="post" id="post-180957">
+    <div class="subject"><a href="#post-180957">Re: Help with a lots of CMP</a></div>
+    <div class="body"><div class="quote"><br />and what abou the BCD and AAD stuf?!?!<br /><br />what that means?<br /></div><br /><br />Shooting from the hip...<br /><br />BCD = Binary Coded Decimal (not an actual instruction)<br />AAD = ASCII Adjust before Division (applies to AX IIRC)</div>
+    <div class="meta">Posted on 2006-05-24 07:44:49 by SpooK</div>
+   </div>
+   <div class="post" id="post-180964">
+    <div class="subject"><a href="#post-180964">Re: Help with a lots of CMP</a></div>
+    <div class="body">Hi,<br /><br />SpooK is right BCD is Binary Coded Decimal which is a representation of numbers in binary format where each byte has a range of 0..9. AAD is an instruction that will multiply AH by 10 and add it to AL which in effect converts AX from BCD to binary. <br /><br />BTW as an added bonus there is an undocumented behaviour to AAD which allows you to multiply by any radix, the encoding for AAD is:<br /><br />D5 0A<br /><br />If you manually change the 0A to a different radix (say 08) you can convert to a different number base (octal for 08).</div>
+    <div class="meta">Posted on 2006-05-24 08:14:47 by donkey</div>
+   </div>
+   <div class="post" id="post-180966">
+    <div class="subject"><a href="#post-180966">Re: Help with a lots of CMP</a></div>
+    <div class="body">but .... errmmm<br /><br />sorry my supidness<br /><br />cos im not an real expert<br /><br />but<br /><br />whats all that has to do with my cmps ?<br />is there any good thing in using that?</div>
+    <div class="meta">Posted on 2006-05-24 09:23:29 by GR33d</div>
+   </div>
+   <div class="post" id="post-180971">
+    <div class="subject"><a href="#post-180971">Re: Help with a lots of CMP</a></div>
+    <div class="body">If you do everything right, you can convert a BCD-encoded parameter into an offset to function.<br /><br />LIKE:<br /><br />1) ax= &quot;11&quot; (031h, 031h)<br />2) sub ax, &quot;00&quot;&nbsp; &nbsp; ; now ax == 00101h, because &quot;00&quot; == 03030h<br />3) aad&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ; now ax == 00Bh<br /><br />Now you do some magic (like adding, shifting, or whatever) to create an offset from this 00Bh. Donkey showed you how you can do it.</div>
+    <div class="meta">Posted on 2006-05-24 11:01:56 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-180974">
+    <div class="subject"><a href="#post-180974">Re: Help with a lots of CMP</a></div>
+    <div class="body">Hi GR33d<br /><br />There are several ways to store a number in memory. Two of the most common are binary and BCD (though there are others such as EBCIDIC,SyncSafe etc...). In BCD numbers are stored as a human would read them, for example 99 would be 09,09 in the low order 2 bytes. In binary 99 would be 063h.<br /><br />The CPU does not work directly with BCD numbers so they must be converted to binary before using them for addressing, to do this we use the AAD instruction, it is designed to convert packed BCD to binary. If we did not convert to binary the CPU would assume that we actually mean 0909h which is 2312 and our resulting displacement would be wrong. Obviously, BCD is very wasteful so it is rarely used except when necessary.<br /><br />Donkey</div>
+    <div class="meta">Posted on 2006-05-24 12:32:15 by donkey</div>
+   </div>
+   <div class="post" id="post-180980">
+    <div class="subject"><a href="#post-180980">Re: Help with a lots of CMP</a></div>
+    <div class="body">ohhhhhh<br /><br />so thats veeeryyy nice<br />cause<br />i think this is one of my other big problems<br /><br />there are the functions &quot;1111&quot; &quot;1112&quot; ...etc ( this was resolved .. thx guys )<br /><br />and now i have address in decimal like .. the user will input &quot;00001000&quot; ( only 0..9.. dec as i said ) <br /><br />with the AAD and BCD stuff can i get the real address in HEX ?<br />or i need to make an algo witch converts from the string &quot;00001000&quot; to a values in hex on eax,ebx.. etc?<br /><br />thx<br /><br /><br /></div>
+    <div class="meta">Posted on 2006-05-24 13:53:21 by GR33d</div>
+   </div>
+   <div class="post" id="post-180982">
+    <div class="subject"><a href="#post-180982">Re: Help with a lots of CMP</a></div>
+    <div class="body">If you have an ascii string like &quot;0124362&quot;, you&#39;ll need to convert it to binary computer representation before you can make computations with the number. If you use hutch&#39;s MASM32 package, one of the safe-to-use routines from the m32lib would be &quot;a2dw&quot; or &quot;atodw&quot; or something similar. Or you could check ParseRadix from http://srcvault.scali.eu.org/ .<br /><br />How to progress from there depends a bit on your source. How many functions like &quot;1111&quot;, &quot;1112&quot; etc. are there? Are they contiguous, or are there &quot;holes&quot;? Etc.<br /></div>
+    <div class="meta">Posted on 2006-05-24 14:03:01 by f0dder</div>
+   </div>
+   <div class="post" id="post-180984">
+    <div class="subject"><a href="#post-180984">Re: Help with a lots of CMP</a></div>
+    <div class="body">thx f0dder<br />i will be checking hutchs packages and functions...<br /><br />well<br />im working in a procject with a friend of mine but<br />there would be like ... thousands ... 1000~+ functions<br />theres why the need for a speeded process<br /><br />thx</div>
+    <div class="meta">Posted on 2006-05-24 14:12:10 by GR33d</div>
+   </div>
+   <div class="post" id="post-180986">
+    <div class="subject"><a href="#post-180986">Re: Help with a lots of CMP</a></div>
+    <div class="body">Can you give a few more details?<br /><br />If you have functions like 1000-5000 (or a similar &quot;closed range&quot;), a jump table would probably be a good way to handle branching. If there&#39;s multiple ranges but without too large gaps, a jump table can still be a good solution. If there&#39;s multiple closed ranges with large gaps, a series of jump tables could be used. If there&#39;s a lot of numbers with a lot of &quot;holes&quot;, a binary search could be applied, etc.<br /><br />PS: not to diss the masm32 project, a great deal of work has gone into it, just be advised that some of the m32lib routines are bugged and the code isn&#39;t always top-notch quality. It&#39;s often a good starting point, though.<br /></div>
+    <div class="meta">Posted on 2006-05-24 14:30:44 by f0dder</div>
+   </div>
+   <div class="post" id="post-180999">
+    <div class="subject"><a href="#post-180999">Re: Help with a lots of CMP</a></div>
+    <div class="body">there will be close ranged functions<br />about 5000 functions in the end of the project...<br /><br />my friend just let me know that we can use hex as the function ids .. <br />insted of user input &quot;1111&quot; we can use &quot;1F32&quot; or something like that...<br /><br />the user will input string &quot;2F3E&quot; and i need to goto that function in asm code....<br /><br />is there another way to make the process/jump table with that?<br /><br />thx</div>
+    <div class="meta">Posted on 2006-05-24 19:01:15 by GR33d</div>
+   </div>
+   <div class="post" id="post-181000">
+    <div class="subject"><a href="#post-181000">Re: Help with a lots of CMP</a></div>
+    <div class="body">1) Convert this hex string to a dword value (ascii 2 dword)<br />2) use the result from point 1 as your index in a jump table.</div>
+    <div class="meta">Posted on 2006-05-24 19:21:46 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-181021">
+    <div class="subject"><a href="#post-181021">Re: Help with a lots of CMP</a></div>
+    <div class="body">that seems to work<br /><br />dunno if im making this of a big cause but my only intention is to understand everything very well<br /><br />convert the value string &quot;FE3A&quot; to dword is easy<br />but about the jump tables ?<br /><br />can someone make a small example of a indexed jump table like&nbsp; ti_mo_n said?<br /><br />thanks<br /></div>
+    <div class="meta">Posted on 2006-05-25 07:10:20 by GR33d</div>
+   </div>
+   <div class="post" id="post-181023">
+    <div class="subject"><a href="#post-181023">Re: Help with a lots of CMP</a></div>
+    <div class="body">My first post has an indexed jump table.</div>
+    <div class="meta">Posted on 2006-05-25 08:03:09 by donkey</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=24766&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=24766&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="24766" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=24766&amp;page=2">&gt;</a><a href="../?id=24766&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>socket messages (beware of newbie) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=2400" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=2400">socket messages (beware of newbie)</a></p>
+   <div class="post" id="post-15214">
+    <div class="subject"><a href="#post-15214">socket messages (beware of newbie)</a></div>
+    <div class="body">hi all,<br /><br />i just finished a (working) little client-server-prog.<br />Two primitive programs just to show how it may work.<br />Both server and client create a simple window (don't ask me why, maybe dialogs would be better?), both create sockets. For example, you start the server and it will say something like &quot;initialization ok&quot;...after that, it waits for incoming connections.<br /><br />Now i start the Client, and it responds immediately to the waiting server (receives FD_WRITE).<br />Accordingly, it starts the sending procedure. Twice.:confused: <br />Then, if you click left mouse in the Client window, you may send again - as it should be. <br /><br />My problem is: I don't know why the Client sends twice at startup. Do you know how to avoid that?<br /><br />Another thing is the missing FD_CONNECT message.<br />Maybe it's not missing, but i only get it if i start the Server when the Client is already running.<br /><br />Any comment is highly appreciated<br /><br /><br /><br />thankyou in advance</div>
+    <div class="meta">Posted on 2001-12-17 13:04:16 by sys64738</div>
+   </div>
+   <div class="post" id="post-15218">
+    <div class="subject"><a href="#post-15218">socket messages (beware of newbie)</a></div>
+    <div class="body">You have problems with the same thing as many winsock beginners. Try to get a better understanding of WSAAsyncSelect and it's notification messages (FD_READ, FD_WRITE and so on).<br />An important thing that most beginners tend to forget is that those messages are just notification messages that tell you a specific network event has happened. <br />That's it, nothing more.<br />When you want to send data to the server, you need to time when and which data you want to send. <br />FD_WRITE isn't the right trigger for this. FD_WRITE just means: &quot;The other side is ready for writing <strong>again</strong>&quot;. Nothing more. So everytime the other side is ready for writing, you are sending the same data. That's of course not what you want. I've marked the word 'again' above because FD_WRITE is sent <em>everytime</em> the other side is ready for writing again <em>since you last sent something</em>. So after you sent your data, the message is sent again and that's why your data is sent twice.<br /><br />The right way to use winsock is to carefully plan when you want to send or receive something. I really recommend you to read the documentation of WSAAsyncSelect carefully, there's a lot explained at that page, as well as these threads:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=2086">http://www.asmcommunity.net/board/index.php?topic=2086</a> <br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=2326">http://www.asmcommunity.net/board/index.php?topic=2326</a><br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-12-17 14:40:22 by Thomas</div>
+   </div>
+   <div class="post" id="post-15219">
+    <div class="subject"><a href="#post-15219">hmmm...</a></div>
+    <div class="body">:grin: <br />ok i think i understand what you mean. thank you for the hint.<br />Iczelion for example uses a method to determine the size of the content which will be sent and delivers that amount of bytes,<br />basically the same method that you suggest in the other thread. Correct? <br />Anyway, that makes much more sense when i think about it.<br />I'll try your method. <br /><br />But what about the FD_CONNECT?<br />Does the Client receive this message at all when the specific amount of bytes was sent?<br />Do i have to send data until some counter tells me that all my data has been sent? <br /><br />Let's say I want to send 30000 bytes, so I invoke SEND, and SEND returns 19000. Obviously not enough. So, i have to SEND it all again until the 30000 bytes are transmitted(?), or is it enough to send just the &quot;rest&quot;, like starting from 19001 up 30000 and repeat this as long as necessary?<br /><br />sorry, but :stupid:</div>
+    <div class="meta">Posted on 2001-12-17 15:10:40 by sys64738</div>
+   </div>
+   <div class="post" id="post-15259">
+    <div class="subject"><a href="#post-15259">socket messages (beware of newbie)</a></div>
+    <div class="body"><div class="quote"><br />ok i think i understand what you mean. thank you for the hint. <br />Iczelion for example uses a method to determine the size of the content which will be sent and delivers that amount of bytes, <br />basically the same method that you suggest in the other thread. Correct? <br /></div><br /><br />Yes, you have to be sure about how many bytes you want to send, and how many bytes were actually sent.<br /><br /><div class="quote">Anyway, that makes much more sense when i think about it. <br />I'll try your method. <br /><br />But what about the FD_CONNECT? <br />Does the Client receive this message at all when the specific amount of bytes was sent? <br /></div><br /><br />No, it tells you the socket has just connected to some server. The problem was the messagebox you showed in your WM_SOCKET handler:<br /><pre><code><br />    invoke MsgBox, hWnd, addr SockDATA<br /></code></pre><br /><br />I think messageboxes mess up the window procedure. When you comment the above line, it will work. I've seen this happen before, try to avoid messageboxes on network events.<br /><br /><br /><div class="quote"><br />Do i have to send data until some counter tells me that all my data has been sent? <br /></div><br /><br />Yes that's correct. Otherwise you wouldn't know *if* and *how much* data was actually sent.<br /><br /><div class="quote"><br />Let's say I want to send 30000 bytes, so I invoke SEND, and SEND returns 19000. Obviously not enough. So, i have to SEND it all again until the 30000 bytes are transmitted(?),</div><br /><br />No, because you would send the first 19000 bytes again. It's very unlikely that you can send 30000 bytes with one send call. Try to do say 1024 bytes at a time (every send call).<br /><br /><div class="quote"> or is it enough to send just the &quot;rest&quot;, like starting from 19001 up 30000 and repeat this as long as necessary? <br /></div><br /><br />Yes that's what you need. The return value of send indicates how many bytes *really* have been sent. Add this to your 'current number of bytes already sent'-counter. <strong>Then wait for the next FD_WRITE msg</strong>. Every time you call send, the FD_WRITE message is reactivated (I explained this in detail in the other thread), so it will be sent again as soon as the other side is ready for writing again (which may be immediately). So don't just 'loop' send until all data has been transmitted, as each call to send would cause an FD_WRITE msg to be sent. I've explained a lot of this in the nyook's thread.<br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-12-18 03:59:16 by Thomas</div>
+   </div>
+   <div class="post" id="post-15308">
+    <div class="subject"><a href="#post-15308">hooray</a></div>
+    <div class="body">thank you very much Thomas. it's a bit clearer now. ;)<br />maybe you have seen that i have reserved some lines for the size-problem<br /><br />so, is there a &quot;safe&quot; place for a messagebox?<br />what would you do to get info about the current state of connection?<br /><br />ok greed is not good<br />you wrote a lot to help me and i appreciate that very much<br />thank you (again):alright: <br /><br />cu</div>
+    <div class="meta">Posted on 2001-12-18 11:50:41 by sys64738</div>
+   </div>
+   <div class="post" id="post-15314">
+    <div class="subject"><a href="#post-15314">Re: hooray</a></div>
+    <div class="body"><div class="quote"><em>Originally posted by sys64738 </em><br />thank you very much Thomas. it's a bit clearer now. ;)<br />maybe you have seen that i have reserved some lines for the size-problem<br /><br />so, is there a &quot;safe&quot; place for a messagebox?<br />what would you do to get info about the current state of connection?<br /></div><br />It seems to work okay when you put them inside the .IFs that check for FD_CONNECT etc, but not before them.<br />However if you can, avoid them. Somehow they interfere with the window procedure and mess up things. <br />You can also show a listbox or something like that on your main window, which you can add items too that say 'connected', 'sending data' etc. <br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-12-18 13:22:52 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

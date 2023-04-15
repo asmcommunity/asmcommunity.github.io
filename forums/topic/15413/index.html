@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>opimized way for bit operation - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=15413" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=15413">opimized way for bit operation</a></p>
+   <div class="post" id="post-119770">
+    <div class="subject"><a href="#post-119770">opimized way for bit operation</a></div>
+    <div class="body">If I wanna re-arrange the bit order of a byte, eg. move the 3rd bit to 1st bit and mov the 2nd bit to 5th bit, what's the optimized way to do that?</div>
+    <div class="meta">Posted on 2003-09-28 00:14:34 by optimus</div>
+   </div>
+   <div class="post" id="post-119835">
+    <div class="subject"><a href="#post-119835">opimized way for bit operation</a></div>
+    <div class="body">Maybe like this:<br /><pre><code><br />push orderhigh<br />pop edx<br />mov ecx,orderlow<br />again&#58;<br />shr eax,1<br />rcl bl,cl<br />shrd ecx,edx,5<br />shr edx,5<br />test cl,31<br />jnz again<br /></code></pre></div>
+    <div class="meta">Posted on 2003-09-28 08:34:35 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-119846">
+    <div class="subject"><a href="#post-119846">opimized way for bit operation</a></div>
+    <div class="body"><div class="quote">... re-arrange the bit order of a byte, eg. move the 3rd bit to 1st bit ...</div>Using the above quoted example, is your &quot;re-arranging&quot; intention to simply &quot;replace&quot; the 1st bit by the 3rd bit without changing the content of the 3rd bit, or do you want to &quot;exchange&quot; the content of those 2 bits?<br /><br />If it's only replacement, you could use the following, which assumes the main value is in EAX:<br /><pre><code>mov  cl,replacement_bit_number       ;0 based<br />inc  cl<br />rcr  eax,cl       ;get that bit value in the C flag<br />pushfd            ;save that C flag<br />rcl  eax,cl       ;reinstate the value in EAX<br />mov  cl,bit_number_to_be_changed     ;0 based<br />inc  cl<br />rcr  eax,cl       ;get rid of that bit value in the C flag<br />popfd             ;retrieve the replacement bit<br />rcl  eax,cl       ;done</code></pre><br />Raymond</div>
+    <div class="meta">Posted on 2003-09-28 10:18:06 by Raymond</div>
+   </div>
+   <div class="post" id="post-119863">
+    <div class="subject"><a href="#post-119863">opimized way for bit operation</a></div>
+    <div class="body">not bad!<br />but still not too much more efficient than my code.<br />x86 does not contain any direct bit operation code, right?</div>
+    <div class="meta">Posted on 2003-09-28 12:06:28 by optimus</div>
+   </div>
+   <div class="post" id="post-119865">
+    <div class="subject"><a href="#post-119865">opimized way for bit operation</a></div>
+    <div class="body"><div class="quote"><br />x86 does not contain any direct bit operation code, right?</div>BT/BTC/BTS/BTR are the bit instructions.<br /><br />bt eax,0<br />rcl edx,1<br />bt eax,2<br />rcl edx,1<br /><br />bt eax,4<br />rcl edx,1<br />bt eax,6<br />rcl edx,1<br /><br />bt eax,1<br />rcl edx,1<br />bt eax,3<br />rcl edx,1<br /><br />bt eax,5<br />rcl edx,1<br />bt eax,7<br />rcl edx,1<br /><br />The above code scrabbles the bits of AL from 76543210 to 02461357 located in DL (upper bits of EDX are changed, EAX is not changed).  There is a way to exchange two bits using the parity flag (thanks to <strong>Nexo</strong> for pointing this out):<pre><code>i=0<br />rept 16<br />	test eax,80000000h shr i+1 shl i<br />	jnp @F<br />	xor eax,80000000h shr i+1 shl i<br />@@&#58;	i=i+1<br />endm</code></pre></div>
+    <div class="meta">Posted on 2003-09-28 12:11:32 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-121319">
+    <div class="subject"><a href="#post-121319">opimized way for bit operation</a></div>
+    <div class="body">that's quite useful!</div>
+    <div class="meta">Posted on 2003-10-14 08:35:28 by optimus</div>
+   </div>
+   <div class="post" id="post-121322">
+    <div class="subject"><a href="#post-121322">opimized way for bit operation</a></div>
+    <div class="body">Bitrake,<br /><br />Nice code. I never thought of that before.</div>
+    <div class="meta">Posted on 2003-10-14 09:28:05 by roticv</div>
+   </div>
+   <div class="post" id="post-121330">
+    <div class="subject"><a href="#post-121330">opimized way for bit operation</a></div>
+    <div class="body">There is actually an error in <strong>Nexo</strong>'s code.  The Intel manual states the parity flag is only valid for the lower eight bits of the resulting calculation.  Additionally, the parity flag is only set when the number of bits set is even in count (0,2,4,8).  This macro outlines the constraints of this method:<pre><code>bitEXCHANGE MACRO memreg&#58;REQ, bit0&#58;REQ, bit1&#58;REQ<br />  LOCAL bitMASK<br /><br />  IF bit0 NE bit1<br />    IF bit0 LT 8 AND bit1 LT 8<br />      bitMASK = &#40;1 SHL bit0&#41; OR &#40;1 shl bit1&#41;<br /><br />      test	memreg, bitMASK<br />      jp	@F	; nothing to do if the bits are the same<br />      xor	memreg, bitMASK	; swap different bits<br />    ENDIF<br />  ENDIF<br />ENDM<br /><br /><br />	mov	al, 080h<br />	bitEXCHANGE al, 7, 5<br />	bitEXCHANGE al, 7, 5<br /><br />	or	eax, 020h<br />	bitEXCHANGE eax, 7, 5</code></pre>Therefor, it is not possible to exchange the bits of a DWORD with this method.</div>
+    <div class="meta">Posted on 2003-10-14 12:09:19 by bitRAKE</div>
+   </div>
+  </div>
+ </body>
+</html>

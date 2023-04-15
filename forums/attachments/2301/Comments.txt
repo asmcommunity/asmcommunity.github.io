@@ -1,0 +1,217 @@
+; +=========================================================================================================================
+; | Brief: KDT (Keyboard Descriptor Table) Format
+; |
+; |
+; | Functions as: Lookup Table (Block Variable).
+; |
+; |
+; | Description:  KDT stands for Keyboard Descriptor Table and it holds values of keys that
+; |               can be handled by keyboard handlers.
+; |
+; |               Each KDT entry is 8 bytes long and is divided into 2 main DWORDs.
+; |               DWORD #0: holds the settings of the key including its scan code and etc
+; |               DWORD #1: holds the 4-byte procedure address which is given control and invoked
+; |                         by the keyboard handler upon certain circumstances. See below.
+; |
+; |
+; | Format: DWORD #0 +-> Byte #0             = Scan code of the key pressed
+; |                  |-> Byte #1             = Upper-Case character of the key
+; |                  |-> Byte #2             = Lower-Case character of the key
+; |                  |-> Byte #3  +-> Bit #0 = Key is Handled
+; |                               |-> Bit #1 = Reserved
+; |                               |-> Bit #2 = Reserved
+; |                               |-> Bit #3 = Reserved
+; |                               |-> Bit #4 = Reserved
+; |                               |-> Bit #5 = Reserved
+; |                               |-> Bit #6 = Reserved
+; |                               |-> Bit #7 = Reserved
+; |         DWORD #1 = Offset of the procedure which should take care of handling the key.
+; |
+; |
+; | Consideration(s): Each KDT entry is put into the KDT uninitialized variable in the .BSS section.
+; |                   The [__SetKDTEntry] procedure is responsible for filling the KDT variable and
+; |                   allowing the programmer to put correct values into the KDT through two parameters.
+; |
+; |                   The [KDTR] variable in the .DATA section is responsible for holding the number of
+; |                   bytes inside the KDT and also the base address of this table. The [__KeyboardHandler]
+; |                   procedure accesses this variable to retrieve the base address and the length of the KDT.
+; |
+; |                   The [__KeyboardHandler] procedure is normally called by the [__IRQ1Handler] procedure
+; |                   which itself handles IRQs that are sent to the CPU through the Master 8259A PIC for
+; |                   Keyboard events.
+; |
+; |
+; | Notes:  1) The DWORD #1 for each KDT entry contains the offset of a procedure
+; |            that should be responsible for handling that key. If this value is set to 0x00000000,
+; |            or zero in other words, the [__KeyboardHandler] procedure will handle the key itself,
+; |            according to the settings of the DWORD #0 in that KDT entry.
+; |         2) The [KeyboardHandler] variable holds the offset of the [__KeyboardHandler] procedure.
+; |            If this variable is set to zero, the Kernel assumes that there are no keyboard handlers
+; |            specified and will ignore all IRQs sent from the keyboard.
+; |
+; |
+; | If changed, change: 1)  The definition of the [__SetKDTEntry] procedure.
+; |                     2)  The values passed to the [__SetKDTEntry] procedure when initializing the kernel.
+; |                     3)  Consider changing the [KDT_ENTRY_COUNT] constant.
+; +=========================================================================================================================
+
+
+
+
+; +=========================================================================================================================
+; | Brief: IRQ 1 Handler (Keyboard IRQs)
+; |
+; |
+; | Functions as: Procedure.
+; |
+; |
+; | Prototype: void Interrupt __IRQ1Handler (void)
+; |
+; |
+; | Description:  The IDT is set to handle IRQs sent from the MASTER 8259A PIC, starting from
+; |               the 32nd slot in the IDT (Zero based). This means that IDT entry #32 (Zero based) refers
+; |               to the code for the IRQ 1 Handler procedure.
+; |
+; |               This procedure is responsible for receiving the IRQ, retrieving the scan code of
+; |               the key which is pressed and then call another procedure. The procedure which is called
+; |               should be a keyboard handler and should be able to deal with KDT (See KDT).
+; |               The IRQ 1 Handler procedure passes one parameter called [PressedKey] to the keyboard
+; |               handler that is registered for the system by the [__RegisterKeyboardHandler] procedure.
+; |
+; |
+; | Consideration(s): The order in which keys are handled in the shell is:
+; |
+; |                   1) IRQ 1 Handler (Only one)
+; |                      Handles: Keys press and key release scan codes sent by the keyboard
+; |                      Prototype: void IRQ1Handler (void)
+; |
+; |                   2) Keyboard Handler (Only one; can vary; can be registered)
+; |                      Handles: Key events according to the scan codes and the KDT
+; |                      Prototype: DWORD KeyboardHandler (DWORD PressedKey)
+; |
+; |                   3) Individual Key Handlers (Up to n handlers, can vary, can be registered)
+; |                      Handles: Individual keys not handled by the Keyboard Handler such as Modifier Keys
+; |                      Prototype: void IndividualKeyHandler (DWORD KDTSettings, DWORD PressedKey, DWORD ModifierKeys)
+; |
+; |
+; | Notes:  1) The IRQ 1 Handler should send a DWORD parameter called [PressedKey] to the Keyboard Handler.
+; |            The format for the [PressedKey] parameter is given below:
+; |
+; |              PressedKey  +-> Byte #0        = Scan code of the key pressed
+; |                          |-> Byte #1        = 0xE0 for extended keys, 0x00 for normal keys
+; |                          |-> Byte #2        = Reserved, Normally 0x00
+; |                          |-> Byte #3        = Reserved, Normally 0x00
+; |
+; |            The KeyboardHandler should search in the KDT for the scan code (Byte #0)
+; |            provided by the [PressedKey] parameter and then decide what it should do. See the description
+; |            for Keyboard Handlers for more information.
+; |
+; |         2) The IRQ 1 Handler procedure stores the key information in a 32-bit variable.
+; |            This variable will have the same format as the [PressedKey] parameter sent to Keyboard Handlers.
+; |            In fact, the value of the [PressedKey] parameter is a copy of the value of this variable.
+; |            The IRQ1 Handler stores the extended key 0xE0 in Byte #1 of this variable and asks for the next
+; |            byte from the Master 8259A PIC when an extended key is pressed. Once the second byte of the extended
+; |            key is pressed, the IRQ 1 Handler Procedure sends the [PressedKey] parameter to the Keyboard Handler
+; |            procedure and invokes this procedure.
+; |
+; |         3) The [__IRQ1Handler] procedure stores the information pertaining to the keys being pressed
+; |            in the [KeyInformation] variable. The format of this parameter is the same as that
+; |            DWORD created by this procedure which is called [PressedKey] and is sent as a parameter
+; |            to the Keyboard Handler. For more information, see below for description of the
+; |            [PressedKey] value.
+; |
+; |
+; | If changed, change: 1) Consider changing the Keyboard Handler (__KeyboardHandler)
+; |                     2) Consider changing Individual Key Handlers (__KeyHandlerBackSpace, etc)
+; +=========================================================================================================================
+
+
+
+; +=========================================================================================================================
+; | Brief: Set KDT Entry procedure.
+; |
+; |
+; | Functions as: Procedure.
+; |
+; |
+; | Prototype: void __SetKDTEntry (void* KDTAddress, DWORD Index, DWORD Settings, DWORD ProcAddress)
+; |
+; |
+; | Description:  All entries in the KDT are set using this procedure. KDT entries are saved
+; |               in the KDT and each of them is 8 bytes long. See KDT (Keyboard Descriptor Table)
+; |               for more information.
+; |
+; |
+; |               The KDT procedure is responsible for retrieving 4 parameters that hold information
+; |               such as the offset of the KDT, the index in which the entry should be inserted and two
+; |               DWORDs pertaining to each KDT Entry.
+; |
+; |
+; | Consideration(s): 1) The [__SetKDTEntry] procedure is responsible for setting KDT entries in the KDT.
+; |                      The KDT can be relocated into another place in the memory, therefore, this procedure
+; |                      should allow the offset of the KDT to be set as one of the parameters.
+; |
+; |                   2) The [__SetKDTEntry] procedure puts only 8 bytes into the KDT for the corresponding
+; |                      KDT entry with a given index.
+; |
+; |
+; | Notes:  1) The [__SetKDTEntry] procedure has the below prototype:
+; |
+; |             void __SetKDTEntry (void* KDTAddress, DWORD Index, DWORD Settings, DWORD ProcAddress)
+; |
+; |               void* KDTAddress  = The address of the KDT in memory.
+; |               DWORD Index       = Zero based index of the KDT entry to set up.
+; |               DWORD Settings    = The DWORD #0 of the KDT entry.
+; |               DWORD ProcAddress = The DWORD #1 of the KDT entry.
+; |
+; |         2) The formula by which the memory location of the destination entry in the KDT is
+; |            is calculated is:
+; |
+; |               Destination = Offset of KDT + (Index * 8)
+; |
+; |            The 8 multiplier is because each entry in the KDT is 8 bytes long.
+; |
+; |         3) For more information about the [Settings] and the [ProcAddress] parameters of this procedure,
+; |            see the description for KDT.
+; |
+; |
+; | If changed, change: 1) Consider changing the KDT's format.
+; |                     2) Consider changing the Keyboard Handler
+; |                     3) Consider changing Individual Key Handler(s).
+; |=========================================================================================================================
+
+
+
+; +=========================================================================================================================
+; | Brief: Move Video Cursor to next line.
+; |
+; |
+; | Functions as: Procedure.
+; |
+; |
+; | Prototype: void __NextLine (void)
+; |
+; |
+; | Description:  Movex the screen cursor to the beginning of the next line and scrolls the screen
+; |               up if necessary. This procedure uses the [__CarriageReturn] and the [__LineFeed] functions
+; |               in order to apply CRLF to the screen. For more information, read the description for these
+; |               the mentioned procedures/functions.
+; |
+; |
+; | Consideration(s): 1) The [__SetKDTEntry] procedure is responsible for setting KDT entries in the KDT.
+; |                      The KDT can be relocated into another place in the memory, therefore, this procedure
+; |                      should allow the offset of the KDT to be set as one of the parameters.
+; |
+; |                   2) The [__SetKDTEntry] procedure puts only 8 bytes into the KDT for the corresponding
+; |                      KDT entry with a given index.
+; |
+; |
+; | Notes:  1) The [__NextLine] procedure sets the [LineFeedCount] parameter of the [__LineFeed] procedure
+; |            to 0x00000001, causing the procedure to generate only one line feed and not more.
+; |
+; |         2) The [__NextLine] procedure indirectly uses the [VideoCursor] global register to access and modify
+; |            the video cursor on the screen.
+; |
+; |
+; | If changed, change: 1) Consider changing the [__KeyHandlerEnter] procedure
+; |=========================================================================================================================

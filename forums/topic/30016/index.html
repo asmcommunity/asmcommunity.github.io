@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bootstrap Issues (NASM) - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30016" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=30016">Bootstrap Issues (NASM)</a></p>
+   <div class="post" id="post-211907">
+    <div class="subject"><a href="#post-211907">Bootstrap Issues (NASM)</a></div>
+    <div class="body">Hi, I am having a lot of trouble with this code.<br /><br /><pre><code><br />;disk buffer<br />	mov ax, word &nbsp;  ; 0x1000<br />	mov es, ax<br />	xor bx, bx<br />	<br />	mov ax, 0x90	;start at 4:0-1 (144 sector) :: TEMP -- will obtain sector via code eventually<br />	<br />.loop:<br />	pusha<br />	call linear_to_chs&nbsp; &nbsp; &nbsp; ; checked, OK<br />	call kread_cylinder&nbsp; &nbsp; ; checked, OK<br />	popa<br />	<br />	pusha<br />	add word , 512<br />	mov ax, <br />	mov es, ax<br />	xor bx, bx<br />	popa<br />	<br />	add ax, 18		;progress next 18 sectors<br />	<br />	pusha<br />	xor dx, dx<br />	test dx, dx<br />	jnz .no_marker<br />	;progress marker<br />	;mov al, 0xDB<br />	;call kputchar<br />.no_marker:<br />	popa		<br />	<br />	cmp ax, 0x91 + ((0x400*24)/0x200)<br />	jle .loop<br /><br />	;stop motor<br />	mov dx, 0x3F2<br />	xor al, al<br />	out dx, al<br />	<br />	push ds<br />	push es<br />	pushad<br /><br />	mov cx, 0<br />	mov es, cx<br />	mov ds, cx<br />	mov esi, 0x10000<br />	mov edi, 0x100000<br />	mov ecx, (0x400*24)/4&nbsp;  ; size of kernel :: TEMP -- will obtain actual size via code eventually<br />	a32 rep movsd<br />	<br />	popad<br />	pop es<br />	pop ds<br /><br />	ret<br /></code></pre><br /><br />What happens is I begin in real mode and I jump to org 0x2000. Then I setup A20 and GDT stuff, after which I enter Unreal Mode and I then attempt to run the above code which should load my kernel from floppy disk into memory at 0x100000. <br /><br /><pre><code><br />	cli<br /><br />	mov eax, cr0<br />	or al, 1<br />	mov cr0, eax<br /><br />	jmp dword 0x8: _protected ; switch to 32 bits<br /><br /><br /><br />_protected:<br /><br />	mov ax, 0x10<br />	mov ds, ax<br />	mov es, ax<br />	mov ss, ax<br />	mov fs, ax<br />	mov gs, ax<br /><br />	mov esp, 0x200000 - 0x10<br />	<br />	push vbe_info<br />	<br />	call 0x100000	; start kernel<br /></code></pre><br /><br />I then jump to Protected Mode and I attempt to then jmp to 0x100000, but the system hangs. I verified that I have loaded the entire kernel to the address 0x100000 correctly by comparing the data at 0x100000 to an incbin&#039;d copy of the same kernel. I also double-checked my results against a hex editor. I am loading a flat binary, so I should be able to jump right to it, but for some reason I cannot. I am hoping that someone with better ASM skills than I can take a look at my code and help me fix it. I am completely stuck in this one spot and I would really appreciate the help. So, thanks in advance.<br /><br />Dave</div>
+    <div class="meta">Posted on 2010-06-02 18:33:50 by DaveT</div>
+   </div>
+   <div class="post" id="post-211909">
+    <div class="subject"><a href="#post-211909">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">Your attempt to relocate the kernel will (should) fail. To ensure that Unreal Mode is achieved, the segment selectors in question must be set while in Protected Mode. Any attempt to change them while back in Real Mode can be unpredictable.<br /><br />Also, DS/ES, if intended to be used via Unreal Mode, would be invalid in your example... GDT entry 0 is designed to be a NULL entry.<br /><br />Please review <a target="_blank" href="http://wiki.osdev.org/Unreal_Mode">Unreal Mode @ OSDev.org Wiki</a> for a working example.</div>
+    <div class="meta">Posted on 2010-06-02 18:52:38 by SpooK</div>
+   </div>
+   <div class="post" id="post-211911">
+    <div class="subject"><a href="#post-211911">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">Hi, I do enter unreal mode by first switching to protected mode. I&#039;m sorry I didn&#039;t say all that originally. Here is that code.<br /><br /><pre><code><br />enter_unreal_mode:<br />	mov eax, cr0<br />	inc ax<br />	mov cr0, eax<br />	jmp 8:.pm_entry<br /><br />.pm_entry:<br />	mov ax, 0x10<br />	mov ds, ax<br />	mov es, ax<br /><br />	mov ax, 0x38<br />	mov ds, ax<br />	mov es, ax<br />	mov fs, ax<br />	mov gs, ax<br />	mov ss, ax<br />	jmp 0x30:.pm_return<br /><br /><br />.pm_return:<br />	mov eax, cr0<br />	dec ax<br />	mov cr0, eax<br />	jmp 0:.rm_entry<br /><br />.rm_entry:<br />	xor ax, ax<br />	mov ds, ax<br />	mov es, ax<br />	mov fs, ax<br />	mov gs, ax<br />	mov ss, ax<br /><br />	ret<br /></code></pre><br /><br />Shouldn&#039;t I be able to relocate my kernel having done the above?<br /><br /></div>
+    <div class="meta">Posted on 2010-06-02 19:30:15 by DaveT</div>
+   </div>
+   <div class="post" id="post-211912">
+    <div class="subject"><a href="#post-211912">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><div class="quote"><br />Shouldn&#039;t I be able to relocate my kernel having done the above?<br /></div><br /><br />I don&#039;t see any reference to the GDT you are using. Please list that information as well.</div>
+    <div class="meta">Posted on 2010-06-02 22:56:21 by SpooK</div>
+   </div>
+   <div class="post" id="post-211913">
+    <div class="subject"><a href="#post-211913">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">Hi, here is my GDT:<br /><br /><pre><code><br />gdt:<br />	dw 0, 0, 0, 0	<br /><br />	db 0xFF		<br />	db 0xFF		<br />	db 0x00<br />	db 0x00<br />	db 0x00<br />	db 10011010b<br />	db 0xCF<br />	db 0x00<br /><br />	db 0xFF		<br />	db 0xFF		<br />	db 0x00<br />	db 0x00<br />	db 0x00<br />	db 10010010b<br />	db 0xCF<br />	db 0x00<br /><br />	db 0xFF		<br />	db 0xFF		<br />	db 0x00<br />	db 0x00<br />	db 0x00<br />	db 11111010b<br />	db 0xCF<br />	db 0x00<br /><br />	db 0xFF<br />	db 0xFF<br />	db 0x00<br />	db 0x00<br />	db 0x00<br />	db 11110010b	<br />	db 0xCF		<br />	db 0x00<br /><br />	db 0x00		<br />	db 0x00<br />	db 0x00<br />	db 0x00<br />	db 0x00<br />	db 0; 10001001b<br />	db 0; 01000000b<br />	db 0x00<br /><br />	;; code segment for realmode<br />	db 0xFF, 0xFF<br />	db 0, 0, 0<br />	db 0x9A<br />	db 0x8F, 0<br /><br />	;; data segment for realmode<br />	db 0xFF, 0xFF<br />	db 0, 0, 0<br />	db 0x92<br />	db 0x8F, 0<br /><br />gd_reg:<br />	dw 8192<br />	dd gdt<br /></code></pre><br /><br />I hope this helps. I&#039;ve been banging my head against the wall for a week because of my inability to move past this. Thanks for helping me with this.</div>
+    <div class="meta">Posted on 2010-06-03 00:59:29 by DaveT</div>
+   </div>
+   <div class="post" id="post-211914">
+    <div class="subject"><a href="#post-211914">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><div class="quote"><br />Hi, here is my GDT:<br /></div><br /><br />Also where you use the <strong>lgdt</strong> instruction.<br /><br />At this rate, it&#039;s better to attach/upload all the files that comprise the boot loader... easier to analyze as a whole.</div>
+    <div class="meta">Posted on 2010-06-03 01:42:54 by SpooK</div>
+   </div>
+   <div class="post" id="post-211916">
+    <div class="subject"><a href="#post-211916">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">Well, I&#039;ve pretty much gave you everything relevant to my issue. I load the GDT right at the start of my loader. This would be the second stage. I setup the stack: mov sp, 0xFFF0, install A20 and trust me, there is nothing of interest there. Then I xor ax and mov it into ds. Next I lgdt my GDT. And, then a plethora of irrelevant things occur. Next, we come to the code I am having issues with (i.e., relocating the kernel and jumping to it). And, that is basically everything. I hope this helps.</div>
+    <div class="meta">Posted on 2010-06-03 01:51:37 by DaveT</div>
+   </div>
+   <div class="post" id="post-211919">
+    <div class="subject"><a href="#post-211919">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">Conventionally -- between your code, explanation and analysis -- it looks like it should work.<br /><br />Is the kernel code you are loading set to do nothing but <em>jmp $</em>, as a sanity check?</div>
+    <div class="meta">Posted on 2010-06-03 03:33:12 by SpooK</div>
+   </div>
+   <div class="post" id="post-211920">
+    <div class="subject"><a href="#post-211920">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><strong>DaveT</strong>,<br /><br />Below is small working example (FASM) of loading flat descriptor for <strong>ds</strong> and using it to display blinking smiling face in upper-left corner.<br /><pre><code><br />&nbsp; &nbsp; &nbsp; &nbsp; org&nbsp; &nbsp;  0x7C00<br />&nbsp; &nbsp; &nbsp; &nbsp; cli<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  eax, cr0<br />&nbsp; &nbsp; &nbsp; &nbsp; push&nbsp; &nbsp; eax<br />&nbsp; &nbsp; &nbsp; &nbsp; or&nbsp; &nbsp; &nbsp; eax, 1<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  cr0, eax<br />&nbsp; &nbsp; &nbsp; &nbsp; lgdt&nbsp; &nbsp; <br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  ax, 8<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  ds, ax<br />&nbsp; &nbsp; &nbsp; &nbsp; pop&nbsp; &nbsp;  eax<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  cr0, eax<br />&nbsp; &nbsp; &nbsp; &nbsp; sti<br />&nbsp; &nbsp; &nbsp; &nbsp; mov&nbsp; &nbsp;  , word 0x8f01<br />&nbsp; &nbsp; &nbsp; &nbsp; jmp&nbsp; &nbsp;  $<br /><br />gdtr:&nbsp;  dw&nbsp; &nbsp; &nbsp; gdt.limit<br />&nbsp; &nbsp; &nbsp; &nbsp; dd&nbsp; &nbsp; &nbsp; gdt<br /><br />gdt&nbsp; &nbsp;  dq&nbsp; &nbsp; &nbsp; 0<br />&nbsp; &nbsp; &nbsp; &nbsp; dw&nbsp; &nbsp; &nbsp; -1, 0&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;  ; flat r/w PL 0 present 16-bit data descriptor (selector 8)<br />&nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; &nbsp; 0, 10010010b, 10001111b, 0<br />gdt.limit = $-gdt-1<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; rb&nbsp; &nbsp; &nbsp; $$+510-$<br />&nbsp; &nbsp; &nbsp; &nbsp; db&nbsp; &nbsp; &nbsp; 0x55, 0xAA<br /></code></pre><br /><br />Compare it to your code and decide what you&#039;ve got wrong.</div>
+    <div class="meta">Posted on 2010-06-03 03:36:54 by baldr</div>
+   </div>
+   <div class="post" id="post-211921">
+    <div class="subject"><a href="#post-211921">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">Oh, no I hope this wasn&#039;t supposed to jump out at me. Here is what I do:<br /><br /><pre><code><br />	xor ax, ax<br />	mov ds, ax<br /><br />	lgdt  ; install GDT<br /></code></pre><br /><br />I thought I should also mention that my code was originally working before I decided to further develop it. I was originally incbin my kernel and I would load a bunc of sectors to memory, then right before the jmp to my kernel, I would rep movsd the start of the incbin&#039;d kernel, and jmp to the kernel at 0x100000.<br /><br />No, my kernel is a fully working kernel, it should load right up and present a shell terminal.<br /><br />And, don&#039;t let all this code fool you. It took me a very long time to get this far and ASM is not my best language. Thanks for all the help. Any more ideas?</div>
+    <div class="meta">Posted on 2010-06-03 04:11:24 by DaveT</div>
+   </div>
+   <div class="post" id="post-211922">
+    <div class="subject"><a href="#post-211922">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><strong>DaveT</strong>,<br /><br />Well, I have one. How do you think, what all those <strong>mov <em>segreg</em>, ax</strong> after <strong>.rm_entry: xor ax, ax</strong> will do to corresponding descriptors you&#039;ve loaded in PM?</div>
+    <div class="meta">Posted on 2010-06-03 05:47:08 by baldr</div>
+   </div>
+   <div class="post" id="post-211928">
+    <div class="subject"><a href="#post-211928">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><div class="quote"><br />Well, I have one. How do you think, what all those <strong>mov <em>segreg</em>, ax</strong> after <strong>.rm_entry: xor ax, ax</strong> will do to corresponding descriptors you&#039;ve loaded in PM?<br /></div><br /><br />I&#039;ve expressed this concern in my initial reply, and I never do it that way, but according to <a target="_blank" href="http://wiki.osdev.org/Unreal_Mode">Unreal Mode @ OSDev.org Wiki</a>, this should not be an issue.<br /><br />Still, it&#039;s worth a shot to see if that theory holds.<br /><br />Also, and unless you are loading more than 512KB of kernel in one shot, you could simply relocate the kernel right before the jump to 0010:0000, after you are already in Protected Mode. Obviously, if you have more than 64KB of kernel you&#039;ll have to deal with real mode segmenting issues as usual, but that&#039;s easy to automate. Even if you don&#039;t want to do it this way, it may be a good step in determining what the problem is, as your kernel is only around 9KB anyhow and thus doesn&#039;t cross any segment boundaries at the moment.</div>
+    <div class="meta">Posted on 2010-06-03 10:00:32 by SpooK</div>
+   </div>
+   <div class="post" id="post-211929">
+    <div class="subject"><a href="#post-211929">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">I think you might have uncovered something that I haven&#039;t noticed. My kernel is 24 KB, I thought I loaded all of it correctly, what made you think it was 9KB? Whatever that was, might be my issue.</div>
+    <div class="meta">Posted on 2010-06-03 14:23:24 by DaveT</div>
+   </div>
+   <div class="post" id="post-211930">
+    <div class="subject"><a href="#post-211930">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><div class="quote"><br />I think you might have uncovered something that I haven&#039;t noticed. My kernel is 24 KB, I thought I loaded all of it correctly, what made you think it was 9KB? Whatever that was, might be my issue.<br /></div><br /><br />No, the only thing I&#039;ve uncovered is that I need to get more sleep :|<br /><br />It is Indeed 24KB, but that is still under 64KB and is good enough to test in the manner indicated in my last reply.</div>
+    <div class="meta">Posted on 2010-06-03 14:35:30 by SpooK</div>
+   </div>
+   <div class="post" id="post-211931">
+    <div class="subject"><a href="#post-211931">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">lol, that&#039;s OK. I wouldn&#039;t be surprised at all if any of my calculations are off. :)<br /><br />I tried a few things with that. I tried removing it, I tried setting it to various values, until I realized that I had no idea what I was doing and none of it worked anyway, so I kind of started looking somewhere else. I can tell you this with all certainty. If I incbin my kernel, I could load an <em>n</em> amount of sectors to let&#039;s say 0x400000, then once i come out of unreal mode and then jump into protected mode, right before I make the jump to kernel, I could relocate the kernel and make the jump successfully. I guess this tells me that I am not loading the kernel correctly. But, if I read the buffer starting at 0x100000, after all had been loaded, I run it through 256 bytes at a time, and I can confirm that it is all there by comparing it to a hex editor. But, then again, when I test the buffers (i.e., my incbin kernel and the loaded kernel), I notice after 32*256 bytes, they differ, but I just assumed this was probably a mistake I made in my kdump32 routine, since it it compares just fine to the hex editor I used to view my kernel in. I guess I&#039;m not really sure what needs to be different. I don&#039;t see it or don&#039;t know what it needs to be different. To me, it looks like it should work too. I don&#039;t know. <br /><br />I&#039;ve just confirmed this: <br />So, despite all that happens before it. <br />If I incbin my kernel:<br /><pre><code><br />krnl32Bin:<br />incbin &#039;kernel&#039;<br /></code></pre><br /><br />I can do this:<br /><pre><code><br /><br /><br />_protected:<br /><br />	mov ax, 0x10<br />	mov ds, ax<br />	mov es, ax<br />	mov ss, ax<br />	mov fs, ax<br />	mov gs, ax<br /><br />	mov esp, 0x200000 - 0x10<br />	<br />	mov esi, krnl32Bin			;start of kernel<br />	mov edi, 0x100000				;kernel origin (0x00100000)<br />	mov ecx, (0x400*24/4) + 1 &nbsp;	;end of kernel<br />	rep movsd<br />	<br />	call 0x100000	; start kernel<br /></code></pre><br /><br />And, my kernel loads right up. </div>
+    <div class="meta">Posted on 2010-06-03 14:53:59 by DaveT</div>
+   </div>
+   <div class="post" id="post-211933">
+    <div class="subject"><a href="#post-211933">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">How about <strong>add word , (512 &gt;&gt; 4)</strong> instead of <strong>add word , 512</strong>?</div>
+    <div class="meta">Posted on 2010-06-03 15:38:27 by SpooK</div>
+   </div>
+   <div class="post" id="post-211934">
+    <div class="subject"><a href="#post-211934">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">You almost made me choke on my sandwich. lol. That did it!!!!!!!!!!!!!!!! I had to do ((512*18) &gt;&gt; 4) and it worked! Thank you so much. Words can&#039;t express how happy I am. Thank you!</div>
+    <div class="meta">Posted on 2010-06-03 15:50:17 by DaveT</div>
+   </div>
+   <div class="post" id="post-211935">
+    <div class="subject"><a href="#post-211935">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">No problem. I overlooked that about 5 times, as initially it sounded like your loading mechanism was working as expected.<br /><br />When you said <em>32*256</em>, I thought 32*256 = 8192 = 0x2000 = (0x0200 &lt;&lt; 4), with 0x0200 (512) obviously being the standard sector size, which lead me to double check your segmentation arithmetic.<br /><br /></div>
+    <div class="meta">Posted on 2010-06-03 15:58:14 by SpooK</div>
+   </div>
+   <div class="post" id="post-211936">
+    <div class="subject"><a href="#post-211936">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body"><div class="quote"><br />I&#039;ve expressed this concern in my initial reply, and I never do it that way, but according to <a target="_blank" href="http://wiki.osdev.org/Unreal_Mode">Unreal Mode @ OSDev.org Wiki</a>, this should not be an issue.<br /><br />Still, it&#039;s worth a shot to see if that theory holds.<br /></div><br /><br />I stand corrected: <strong>mov <em>segreg</em>, <em>value</em></strong> appears to update only descriptor&#039;s base (with 0x10*<em>value</em>). Yet I remember those issues back in the 486 days (limit was reset to 64 KiB) on something like Am5x86/Cx6x86. They probably were built up to Intel specs (while in fact only <strong>cs</strong> descriptor&#039;s limit behaved so).<br /><br />----8&lt;----<br /><strong>DaveT</strong>,<br /><br />It seems that I&#039;ve spotted something. Your <strong>ss</strong> descriptor is 16-bit (B bit is 0), so when IRQ occurs, only <strong>ip</strong> is saved/restored, and after <strong>iret</strong> CPU lands somewhere in first 64 KiB (I don&#039;t have ICE hardware, this was tested under Bochs and, partially, on real CPU; also see CPU manual).<br /><br />The same for <strong>jmp/j<em>cc</em></strong>: without opsize prefix target offset is masked with 0xFFFF.<br /><br />Probably you may try to address HMA as usual (0xFFFF:offset), though this will limit the kernel to 64 Ki-16 bytes.</div>
+    <div class="meta">Posted on 2010-06-03 17:10:30 by baldr</div>
+   </div>
+   <div class="post" id="post-211938">
+    <div class="subject"><a href="#post-211938">Re: Bootstrap Issues (NASM)</a></div>
+    <div class="body">As far as i&#039;m concerned, the info in the link posted <br /><div class="quote">When this register given a &quot;selector&quot;, a &quot;segment descriptor cache register&quot; is filled with the descriptor values, including the size (or limit). After the switch back to real mode, these values are not modified, regardless of what value is in the 16-bit segment register.</div><br />is incorrect.<br />As said, unreal mode just consists in using cr0.pe = 1 in order to alter the LIMIT field of some segment descriptors, which are not accessible in real mode, except the BASE value through segregs. Once altered, jusmp back to RM and everything is as usual except the limit field, so you can use 32b offsets. Before doing this, you could use 32b offsets via data size override prefixes too but it would hang on exception.<br />So, on return, it acts like before : moving things to seg regs alters BASE value the same way as before : linear base = value *16.<br />Else ints and irqs, which do things like pop cs or ds, would not work anymore.<br /><br />Interesting to see people still struggling with this :)<br /></div>
+    <div class="meta">Posted on 2010-06-04 00:20:38 by HeLLoWorld</div>
+   </div>
+  </div>
+ </body>
+</html>

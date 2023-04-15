@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>What process is unloading my DLL - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16253" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16253">What process is unloading my DLL</a></p>
+   <div class="post" id="post-126208">
+    <div class="subject"><a href="#post-126208">What process is unloading my DLL</a></div>
+    <div class="body">When using a DLL based hook procedure I would like to have it unload automatically when my program terminates. This can be accomplished by unhooking in the DLL_PROCESS_DETACH reason of DLLMain. The problem is with a system hook, if another process ends before mine the process sends a detach and will remove the hook. Is there any way from within DLLMain to tell which process is calling it ?<br /><br /><pre><code>DllMain proc hInst&#58;HINSTANCE, reason&#58;DWORD, reserved1&#58;DWORD<br />	mov eax,hInst<br />	mov hInstance,eax<br /><br />	.IF reason== DLL_PROCESS_DETACH<br />		.IF hHook<br />			invoke UnhookWindowsHookEx,hHook<br />		.ENDIF<br />	.ENDIF<br /><br />	mov eax,TRUE<br />	ret<br />DllMain endp</code></pre></div>
+    <div class="meta">Posted on 2003-12-01 20:47:19 by donkey</div>
+   </div>
+   <div class="post" id="post-126212">
+    <div class="subject"><a href="#post-126212">What process is unloading my DLL</a></div>
+    <div class="body">Why don't you make a reference counter?</div>
+    <div class="meta">Posted on 2003-12-01 21:04:25 by comrade</div>
+   </div>
+   <div class="post" id="post-126213">
+    <div class="subject"><a href="#post-126213">What process is unloading my DLL</a></div>
+    <div class="body">Also, GetCurrentProcess() and GetCurrentProcessId() do not work?</div>
+    <div class="meta">Posted on 2003-12-01 21:05:25 by comrade</div>
+   </div>
+   <div class="post" id="post-126214">
+    <div class="subject"><a href="#post-126214">What process is unloading my DLL</a></div>
+    <div class="body">Check if this applies.<br /><br />From the MSDN docs<br /><br />The entry-point function should perform only simple initialization or termination tasks. It must not call the LoadLibrary or LoadLibraryEx function (or a function that calls these functions), because this may create dependency loops in the DLL load order. This can result in a DLL being used before the system has executed its initialization code. Similarly, the entry-point function must not call the FreeLibrary function (or a function that calls FreeLibrary), because this can result in a DLL being used after the system has executed its termination code.<br /><br />It is safe to call other functions in Kernel32.dll, because this DLL is guaranteed to be loaded in the process address space when the entry-point function is called. It is common for the entry-point function to create synchronization objects such as critical sections and mutexes, and use TLS. Do not call the registry functions, because they are located in Advapi32.dll. If you are dynamically linking with the C run-time library, do not call malloc; instead, call HeapAlloc.<br /><br /><strong><br />Calling imported functions other than those located in Kernel32.dll may result in problems that are difficult to diagnose. For example, calling User, Shell, and COM functions can cause access violation errors, because some functions in their DLLs call LoadLibrary to load other system components. Conversely, calling those functions during termination can cause access violation errors because the corresponding component may already have been unloaded or uninitialized.<br /></strong><br /><br />Regards,<br />Art</div>
+    <div class="meta">Posted on 2003-12-01 21:05:29 by art_sands</div>
+   </div>
+   <div class="post" id="post-126216">
+    <div class="subject"><a href="#post-126216">What process is unloading my DLL</a></div>
+    <div class="body">Hi Art,<br /><br />Yes, I read the entry in MSDN but if I know that it is my process that is unloading the DLL I can control the order it is unloaded in. If my program exits then the DLL will unload the hook as User32 will not yet be unloaded until I call ExitProcess. If another process detaches there is no call to UnhookWindowsHookEx so there is no problem with dependancies.<br /><br />Hi comrade,<br /><br />Should have thought of the current processes, I will try them. The reference count won't work as there can be any number of references when my program exits (every process loads a copy of the DLL), all I know is that there will be 0 when it is installed.</div>
+    <div class="meta">Posted on 2003-12-01 21:15:34 by donkey</div>
+   </div>
+   <div class="post" id="post-126217">
+    <div class="subject"><a href="#post-126217">What process is unloading my DLL</a></div>
+    <div class="body">so if you get the solution, please post it here.<br /><br />Regards,<br />Art</div>
+    <div class="meta">Posted on 2003-12-01 21:25:27 by art_sands</div>
+   </div>
+   <div class="post" id="post-126218">
+    <div class="subject"><a href="#post-126218">What process is unloading my DLL</a></div>
+    <div class="body">Hi Art,<br /><br />This works, thanks comrade :alright:<br /><br /><pre><code>.data<br />hProcess dd 0<br />.code<br />DllMain proc hInst&#58;HINSTANCE, reason&#58;DWORD, reserved1&#58;DWORD<br /><br />	.IF reason== DLL_PROCESS_DETACH<br />		invoke GetCurrentProcessId<br />		.IF eax == hProcess<br />			invoke UnhookWindowsHookEx,hHook<br />		.ENDIF<br /><br />	.ELSEIF reason== DLL_PROCESS_ATTACH<br />		.IF !hProcess<br />			invoke GetCurrentProcessId<br />			mov hProcess,eax<br />		.ENDIF<br /><br />	.ENDIF<br /><br />	mov eax,hInst<br />	mov hInstance,eax<br /><br />	mov eax,TRUE<br />	ret<br />DllMain endp</code></pre></div>
+    <div class="meta">Posted on 2003-12-01 21:28:01 by donkey</div>
+   </div>
+   <div class="post" id="post-126514">
+    <div class="subject"><a href="#post-126514">What process is unloading my DLL</a></div>
+    <div class="body">Donkey, are you guaranteed that the first DLL_PROCESS_ATTACH you get is for your main app? I can't see why it shouldn't be, but is this <strong>guaranteed?</strong><br /><br />For my own hooks, I tend to let the main app call a UnregisterMe function in the DLL before it terminates.</div>
+    <div class="meta">Posted on 2003-12-04 07:07:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-126549">
+    <div class="subject"><a href="#post-126549">What process is unloading my DLL</a></div>
+    <div class="body">Yes, it is guaranteed. I cannot install the hook until my process loads the DLL, since other processes do not load it until the hook is installed there is no possiblilty of another process ID other than mine being the first one passed. The reason behind this was that if my program exits in error before it can unhook, the other processes will still have the hook running in their address space, this solves that problem as even in a gpf I think that Windows performs a cleanup and unloads the dll with the proper process ID. At least that is what it looked like in my tests, I could be wrong about it but better safe than sorry.<br /><br />For example I installed the hook then did this:<br /><br />xor eax,eax<br />jmp eax<br /><br />to gpf the application and the Unhook still executed from the DLL even though the main application GPFed.</div>
+    <div class="meta">Posted on 2003-12-04 10:26:42 by donkey</div>
+   </div>
+   <div class="post" id="post-126811">
+    <div class="subject"><a href="#post-126811">What process is unloading my DLL</a></div>
+    <div class="body">Hi :)<br />Very good snippet, donkey! I'll be adding it to my hooklib. :alright:</div>
+    <div class="meta">Posted on 2003-12-06 11:25:32 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-126881">
+    <div class="subject"><a href="#post-126881">What process is unloading my DLL</a></div>
+    <div class="body">hoho<br /><br />nice, tehre's another donkey here. hi donkey, wassup?</div>
+    <div class="meta">Posted on 2003-12-07 06:46:45 by evil__donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

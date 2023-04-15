@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Is there a limit on IF nesting? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28528" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28528">Is there a limit on IF nesting?</a></p>
+   <div class="post" id="post-201803">
+    <div class="subject"><a href="#post-201803">Is there a limit on IF nesting?</a></div>
+    <div class="body">I've tried this code in a number of ways and it always throws a fit if I:<pre><code>
+  .DATA
+xxx dd -1
+xxy dd -2
+  .CODE
+    @mov xxx, xxy
+</code></pre>
+...I want to test M3 for being blank or a register to print a warning, but it seems to have reached a nesting limit.  Or am I just not doing something right? thX
+<pre><code>
+mv MACRO M1, M2, M3
+  IFIDN <M1>,<M2>
+    ECHO MACRO Warning:mv:M1=M2 Move ignored.
+  ELSE
+    IF (OPATTR (M2)) AND 00010000y ;; source is a register
+      mov M1,M2
+    ELSEIF (OPATTR (M2)) AND 00000100y ;; source is constant
+      IF M2 EQ 0
+        IF (OPATTR (M1)) AND 00010000y ;; destination is register
+          xor M1,M1
+        ELSE
+          and M1,0
+        ENDIF
+      ELSEIF M2 EQ -1
+        or M1,-1
+      ELSE
+        mov M1,M2
+      ENDIF
+    ELSE ;; source is memory
+      IF (OPATTR (M1)) AND 00010000y ;; destination is a register
+        mov M1,M2
+      ELSE
+        IF (OPATTR (M3)) AND 00010000y
+          mov M3,M2
+          mov M1,M3
+        ELSE ;; try to make an object file anyway
+          IFNB M3
+            ECHO MACRO Warning:mv:M3 should be a register.
+          ENDIF
+          push M2
+          pop M1
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
+ENDM
+
+@mov MACRO args:VARARG
+  LOCAL m2, mX
+  mX = 0
+  FOR m1, <args>
+    IFE mX
+      m2 EQU m1
+      mX = -1
+    ELSE
+%     mv m2, m1
+      mX = 0
+    ENDIF
+  ENDM
+ENDM</code></pre></div>
+    <div class="meta">Posted on 2001-06-25 17:57:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201804">
+    <div class="subject"><a href="#post-201804">Is there a limit on IF nesting?</a></div>
+    <div class="body">Bitrake,
+
+I just checked with the old MASM help file in DOS and there is
+no mention of a nesting limit, it does not mean that there is
+not a limit but the documentation does not mention any at all.
+
+It might be worth writing a test piece seperate from the macro
+you are developing to see if there is a functional limit that
+is not shown in the documentation.
+
+Regards,
+
+hutch@pbq.com.au</div>
+    <div class="meta">Posted on 2001-06-25 18:55:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-201805">
+    <div class="subject"><a href="#post-201805">Is there a limit on IF nesting?</a></div>
+    <div class="body">I think masm's macro-parsing routine is reentrant, and therefore is limited only by stack size, which surely is okay in this case. Also, the macro @mov breaks down on the second pass through the FOR loop (on the line % mv m2,m1), but not on the first pass.
+Will @mov ever take more than three parameters? If not, I would settle for:
+@mov macro m1,m2,m3
+IFB <m3>
+...
+ELSE
+...
+ENDIF
+endm</div>
+    <div class="meta">Posted on 2001-06-25 19:27:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201806">
+    <div class="subject"><a href="#post-201806">Is there a limit on IF nesting?</a></div>
+    <div class="body">@mov is designed to take as many pairs as of values as you want to pass (ex. <pre><code>@mov eax,edx, xxx,xxy, ecx,esi</code></pre>). mv is designed to take two or three values.  Yes, I could strip the code out for the third parameter and integrate it into @mov, but I use them separately.  @mov is meant to be a substitution for yours without the limiting factor of six pairs, <strong>Larry</strong>. ;)
+
+Simple fix, <img src=" http://www.hiroshimator.com/asmcommunity/messageboard/images/smiley8.gifsilly me<img src=" http://www.hiroshimator.com/asmcommunity/messageboard/images/smiley8.gif:<pre><code>
+.CODE
+mv MACRO M1:REQ, M2:REQ, M3
+  IFIDN <M1>,<M2>
+    ECHO MACRO Warning:mv:M1=M2 Move ignored.
+  ELSE
+    IF (OPATTR (M2)) AND 00010000y ;; source is a register
+      mov M1,M2
+    ELSEIF (OPATTR (M2)) AND 00000100y ;; source is constant
+      IF M2 EQ 0
+        IF (OPATTR (M1)) AND 00010000y ;; destination is register
+          xor M1,M1
+        ELSE
+          and M1,0
+        ENDIF
+      ELSEIF M2 EQ -1
+        or M1,-1
+      ELSE
+        mov M1,M2
+      ENDIF
+    ELSE ;; source is memory
+      IF (OPATTR (M1)) AND 00010000y ;; destination is a register
+        mov M1,M2
+      ELSE
+        IFB <M3> ;; no temp register
+          push M2
+          pop M1
+        ELSE
+          IF (OPATTR (M3)) AND 00010000y ;; Must be a register
+            mov M3,M2
+            mov M1,M3
+          ELSE ;; try to make an object file anyway
+            ECHO MACRO Warning:mv:M3 should be a register.
+            push M2
+            pop M1
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
+ENDM
+
+@mv MACRO args:VARARG
+  LOCAL m1, m2, m3, mX
+  mX = 1
+  FOR m1, <args>
+    m3 EQU m1 ;; Get last value: should error on even parms!
+    mX = mX + 1
+  ENDM
+  IF (mX AND 1)
+    .ERR MACRO Error:@mv:Register to use not specified.
+  ELSE
+    mX = 0
+    FOR m1, <args>
+      IFE mX
+        m2 EQU m1
+        mX = -1
+      ELSE
+        mX = 0
+%       mv m2, m1, m3
+      ENDIF
+    ENDM
+  ENDIF
+ENDM
+
+@mov MACRO args:VARARG
+  LOCAL m1, m2, mX
+  mX = 0
+  FOR m1, <args>
+    IFE mX
+      m2 EQU m1
+      mX = -1
+    ELSE
+      mX = 0
+%     mv m2, m1
+    ENDIF
+  ENDM
+ENDM
+;===================================================================
+START:
+ mv xxx,xxy, eax
+ mv xxx,eax
+ mv eax,xxy
+ mv eax,0
+ mv eax,-1
+ mv xxx,0
+ mv xxx,-1
+
+ @mov eax,0, ecx,xxx, edx,ecx, esi,-1, xxy,xxz, xxz,-1, ebp,ebp
+
+ @mv eax,0, ecx,xxx, edx,ecx, esi,-1, xxy,xxz, xxz,-1, ebp,ebp, eax
+
+    .DATA
+xxx dd 0
+xxy dd 0
+xxz dd 0
+
+END START
+;==================================================================</code></pre>
+...works like a charm, still looking for more errors and added functionality...just do a listing of this little program and you'll understand what the macros do.
+
+This message was edited by bitRAKE, on 6/25/2001 11:18:53 PM</div>
+    <div class="meta">Posted on 2001-06-25 21:40:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-201807">
+    <div class="subject"><a href="#post-201807">Is there a limit on IF nesting?</a></div>
+    <div class="body">BitRake,   <<<< nice isn't it????
+
+
+You mean you want a multi-moves Macro? (i am not sure i understand...)
+
+If yes, may be this would be an example of what is a powerfull
+Macros System. Powerfull means first easy to use. Example in
+SpAsm:
+
+
+
+To be used (no limit) as:
+
+mov eax 1, ebx 2, D§MyData 3, D 25, ...
+
+
+betov.</div>
+    <div class="meta">Posted on 2001-06-26 02:54:00 by Betov</div>
+   </div>
+   <div class="post" id="post-201808">
+    <div class="subject"><a href="#post-201808">Is there a limit on IF nesting?</a></div>
+    <div class="body">OOpppsss!
+
+got it!!!! don't mind...
+
+This makes me think again of something:
+
+How many of you do effectively use conditional assembling
+inside Macros definitions?
+
+Real life examples would be nice...
+
+
+betov.</div>
+    <div class="meta">Posted on 2001-06-26 07:44:00 by Betov</div>
+   </div>
+  </div>
+ </body>
+</html>

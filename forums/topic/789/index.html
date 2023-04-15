@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Problem using select in non-blocking mode - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=789" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=8">Networking</a> &raquo; <a href="../?id=789">Problem using select in non-blocking mode</a></p>
+   <div class="post" id="post-4860">
+    <div class="subject"><a href="#post-4860">Problem using select in non-blocking mode</a></div>
+    <div class="body">Hi!<br /><br />I am having problems using select in that it seems to suceed and fail at the same time....<br /><br />; --------------------------------------------------------------------------<br /><br />invoke connect,sock,ADDR sin,SIZEOF sin<br /><br />invoke select, NULL, addr mysocket, NULL, NULL, addr timeout<br /><br />.if eax==0<br /><br />invoke MessageBox,hWnd,addr unableconnect,addr caption,MB_OK<br /><br />.elseif eax==SOCKET_ERROR<br /><br />invoke MessageBox,hWnd,addr sockerror,addr caption,MB_OK<br /><br />.else<br /><br />invoke MessageBox,hWnd,addr connected,addr caption,MB_OK<br /><br />.endif<br /><br />; --------------------------------------------------------------------------<br /><br />when it cant connect its fine and shows the MessageBox.<br />but when it can connect it shows the unable to connect message but still connects.<br /><br />all i want to do is establish whether the connection was successfull.<br /><br />Please help... ...<br />thanks.<br />skud.</div>
+    <div class="meta">Posted on 2001-08-25 14:28:32 by skud</div>
+   </div>
+   <div class="post" id="post-4862">
+    <div class="subject"><a href="#post-4862">Problem using select in non-blocking mode</a></div>
+    <div class="body">The problem is the wrong use of select: select wants an FD_SET structure as parameters, not just a pointer to the socket handle alone.<br />An FD_SET structure starts with one DWORD that identifies the number of sockets you want to check something for, in your case 1. Then immediately following this DWORD, there is a DWORD array of socket handles. <br />The easiest solution for you is to do this:<br /><pre><code><br />.data?<br />;FD_SET structure starts here<br />SockSet     dd  ?<br />mysocket    dd  ?<br />;FD_SET structure ends here<br />;do not rearrange both variables!<br /></code></pre><br />Then in your code still use mysocket, but the select becomes:<br /><pre><code><br />mov SockSet, 1 ;this sets the first dword &#40;sockhandle count&#41; to 1 socket<br />invoke select, NULL, addr SockSet, NULL, NULL, addr timeout <br /></code></pre><br />That should do it<br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-08-25 14:48:14 by Thomas</div>
+   </div>
+   <div class="post" id="post-4871">
+    <div class="subject"><a href="#post-4871">Problem using select in non-blocking mode</a></div>
+    <div class="body">i have done that already:<br /><br />.data?<br /><br />SOCKSET STRUCT<br />   dwCount  DWORD ?<br />   dwSocket DWORD ?<br />SOCKSET ENDS<br /><br />mysocket     SOCKSET &lt;?&gt;<br />timeout      timeval &lt;?&gt;<br /><br />...<br /><br />	mov     mysocket.dwSocket, eax<br />	mov     mysocket.dwCount, 1<br />	mov     timeout.tv_sec, 3<br />	mov     timeout.tv_usec, NULL<br /><br />it is working properly... kind of....<br />its just not doing what i want :D<br /><br />thanks anyway ;)<br />skud.</div>
+    <div class="meta">Posted on 2001-08-25 15:43:50 by skud</div>
+   </div>
+   <div class="post" id="post-4879">
+    <div class="subject"><a href="#post-4879">Problem using select in non-blocking mode</a></div>
+    <div class="body">:( Sorry I missed that, should have seen you used two different variables.. anyways, they only reason I can think of is that 0 indicates timeout has expired, not that the connection has failed, maybe 3 seconds is too short...but seems unlikely..<br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-08-25 17:14:25 by Thomas</div>
+   </div>
+   <div class="post" id="post-4881">
+    <div class="subject"><a href="#post-4881">Problem using select in non-blocking mode</a></div>
+    <div class="body">yeah 3000ms is quite a long time :) ... especially as im testing it on my local computer.<br /><br />should i check for writeability or readibility to tell whether the connection is established??<br /><br />thx.<br />skud.</div>
+    <div class="meta">Posted on 2001-08-25 17:24:03 by skud</div>
+   </div>
+   <div class="post" id="post-4882">
+    <div class="subject"><a href="#post-4882">Problem using select in non-blocking mode</a></div>
+    <div class="body">hmm no should not be a problem on a local computer :grin:, are you working with blocking sockets? in that case, you don't need select:<br /><pre><code><br />Return Values &#40;of connect&#41;<br /><br />If no error occurs, connect returns zero. Otherwise, it returns SOCKET_ERROR, and a specific error code can be retrieved by calling WSAGetLastError.<br />On a blocking socket, the return value indicates success or failure of the connection attempt.<br /></code></pre><br /><br />Thomas</div>
+    <div class="meta">Posted on 2001-08-25 17:40:14 by Thomas</div>
+   </div>
+   <div class="post" id="post-4886">
+    <div class="subject"><a href="#post-4886">Problem using select in non-blocking mode</a></div>
+    <div class="body">non-blocking mode<br />&quot;Problem using select in non-blocking mode&quot;<br /><br />:)</div>
+    <div class="meta">Posted on 2001-08-25 18:01:44 by skud</div>
+   </div>
+   <div class="post" id="post-4926">
+    <div class="subject"><a href="#post-4926">Problem using select in non-blocking mode</a></div>
+    <div class="body">Hmm I think I see the problem here, shouldn't you use the writefds parameter instead of the readfds parameter?<br /><br /><div class="quote"><br /><strong>readfds:</strong><br /><ul><br />[*]	If listening, a connection is pending, accept will succeed<br />[*]	Data is available for reading (includes OOB data if SO_OOBINLINE is enabled)<br />[*]	Connection has been closed/reset/terminated<br /><br /><br /><strong>writefds:</strong><br /><ul><br />[*]	If connecting (nonblocking), connection has succeeded<br />[*]	Data can be sent<br /><br /></div></div>
+    <div class="meta">Posted on 2001-08-26 03:18:42 by Thomas</div>
+   </div>
+   <div class="post" id="post-4929">
+    <div class="subject"><a href="#post-4929">Problem using select in non-blocking mode</a></div>
+    <div class="body">i have tried both :P<br /><br />when i check for write and it shouldnt connect, then it says connnected after the timeout, ie. it doesnt return NULL or SOCKET_ERROR....<br /><br />if it should be able to connect then it returns instantly.<br /><br />my code:<br /><br />; ---------------------------------------------------------------------<br /><br />.data?<br /><br />wsadata      WSADATA &lt;?&gt;<br />sin          sockaddr_in &lt;?&gt;<br />mysocket     SOCKSET &lt;?&gt;<br />timeout      timeval &lt;?&gt;<br /><br />SOCKSET STRUCT<br />   dwCount  DWORD ?<br />   dwSocket DWORD ?<br />SOCKSET ENDS<br /><br />.code<br /><br />...<br /><br />invoke connect,sock,ADDR sin,SIZEOF sin<br /><br />invoke select, NULL, NULL, addr mysocket, NULL, addr timeout<br /><br />.if eax==0<br /><br />invoke MessageBox,hWnd,addr unableconnect,addr caption,MB_OK<br /><br />.elseif eax==SOCKET_ERROR<br /><br />invoke MessageBox,hWnd,addr sockerror,addr caption,MB_OK<br /><br />.else<br /><br />invoke MessageBox,hWnd,addr connected,addr caption,MB_OK<br /><br />.endif<br /><br />; ---------------------------------------------------------------------<br /><br />If anyone has a working example of using select to check if the connection was successfull (non-blocking mode) then that would be great.... or any other method at that.<br /><br />thx.<br />skud.</div>
+    <div class="meta">Posted on 2001-08-26 04:13:42 by skud</div>
+   </div>
+   <div class="post" id="post-4988">
+    <div class="subject"><a href="#post-4988">Problem using select in non-blocking mode</a></div>
+    <div class="body">I only use select on blocking mode sockets, and WSAsyncSelect on non-blocking sockets, with WSAsyncSelect, the notifications are correct...</div>
+    <div class="meta">Posted on 2001-08-26 17:16:47 by Thomas</div>
+   </div>
+  </div>
+ </body>
+</html>

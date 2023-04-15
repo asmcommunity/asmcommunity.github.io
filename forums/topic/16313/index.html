@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>vb to asm dll problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16313" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16313">vb to asm dll problem</a></p>
+   <div class="post" id="post-126721">
+    <div class="subject"><a href="#post-126721">vb to asm dll problem</a></div>
+    <div class="body">im trying to figure out how to change this code from vb to asm... i run into a problem when i try to call the addr function , the dll loads no problem<br /><pre><code><br />&quot;EOptions String&quot;=&quot;6YiKVQXOg5M.hfINNdY-&quot;<br />&quot;Yahoo! User ID&quot;=&quot;xillwillx&quot;<br /> <br />declare &quot;ycrwin32.dll&quot; as YCRYPTO<br />text1.text is the username/yahoo id<br />text2.text  will be the eoptions/encrypted password<br /> <br />Public Sub Grab&#40;RegistryKey As String, RegistryInformation As String, Grab As Integer&#41;<br />Dim WSHShell, RegTemp<br />Set WSHShell = CreateObject&#40;&quot;WScript.Shell&quot;&#41;<br />  If Grab = 1 Then<br />  RegTemp = WSHShell.RegRead&#40;RegistryKey&#41;<br />  Text1.Text = RegTemp<br />End If<br />End Sub<br /> <br />Public Sub Grab1&#40;RegistryKey As String, RegistryInformation As String, Grab1 As Integer&#41;<br />Dim WSHShell, RegTemp<br />Set WSHShell = CreateObject&#40;&quot;WScript.Shell&quot;&#41;<br />  If Grab1 = 1 Then<br />  RegTemp = WSHShell.RegRead&#40;RegistryKey&#41;<br />  Text2.Text = RegTemp<br />End If<br />End Sub<br /> <br />Private Sub Command2_Click&#40;&#41;<br />Dim ycc As New YCrypto                  <br />Call ycc.Init&#40;1, 1, Text1.Text&#41;  <br />Text3.Text = ycc.Decrypt&#40;Text2.Text&#41;<br />End Sub<br />Private Sub Command1_Click&#40;&#41;<br />On Error GoTo error<br />Call Grab&#40;&quot;HKEY_CURRENT_USER\Software\Yahoo\pager\Yahoo! User ID&quot;&#41;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-12-05 16:56:51 by illwill</div>
+   </div>
+   <div class="post" id="post-126722">
+    <div class="subject"><a href="#post-126722">vb to asm dll problem</a></div>
+    <div class="body">this is the two ways i tried to do it<br /><br /><pre><code><br />.386                    <br />.model flat,stdcall <br />option casemap&#58;none <br />include \masm32\include\windows.inc <br />include \masm32\include\user32.inc <br />include \masm32\include\kernel32.inc <br />includelib \masm32\lib\user32.lib <br />includelib \masm32\lib\kernel32.lib <br />include \masm32\include\masm32.inc<br />includelib \masm32\lib\masm32.lib<br />.data<br />TheDLL      db &quot;C&#58;\Program Files\Yahoo!\Messenger\ycrwin32.dll&quot;,0<br />TheFunction db &quot;Init&quot;,0<br />UserName    db &quot;xillwillx&quot;,0<br />EncPass     db &quot;6YiKVQXOg5M.hfINNdY-&quot;,0<br />.data?<br />TheFuncAddr dd ?       ; the address of the TheFunction<br />hLib        dd ?<br />PasswordSend byte 255 dup &#40;?&#41;<br />.code <br />start&#58;<br />                             push OFFSET TheDLL<br />                             call LoadLibrary   ;///  Load the dll into our process<br />                             push OFFSET TheFunction<br />                             push eax<br />                             call GetProcAddress   ;///  Get address of init function<br />                             push 1<br />                             push 1<br />                             push OFFSET TheFuncAddr<br />                             push OFFSET UserName   ;/// Encrypted pass from registry<br />                             push OFFSET EncPass   ;/// user from registry<br />                             call eax   ;/// Call init function &#40;returned from GetProcAddress&#41;<br />                             invoke lstrcat, addr PasswordSend,eax    ;add password to to the passwordsend buffer <br />                             invoke MessageBox,0,addr TheFunction,PasswordSend,0<br /> invoke ExitProcess,0 <br />end start<br /> ------------------------------------------------------------------------------------------------------------<br />or <br /> <br />.386                    <br />.model flat,stdcall <br />option casemap&#58;none <br />include \masm32\include\windows.inc <br />include \masm32\include\user32.inc <br />include \masm32\include\kernel32.inc <br />includelib \masm32\lib\user32.lib <br />includelib \masm32\lib\kernel32.lib <br />include \masm32\include\masm32.inc<br />includelib \masm32\lib\masm32.lib<br />.data<br />TheDLL BYTE &quot;C&#58;\Program Files\Yahoo!\Messenger\ycrwin32.dll&quot;,0<br />TheFunction BYTE &quot;Init&quot;,0<br />UserName BYTE &quot;xillwillx&quot;,0<br />EncPass BYTE &quot;6YiKVQXOg5M.hfINNdY-&quot;,0<br />.data?<br />TheFuncAddr dd ?       ; the address of the TheFunction<br />hLib        dd ?<br />PasswordSend byte 255 dup &#40;?&#41;<br />.code <br />start&#58;<br /> invoke LoadLibrary,offset TheDLL ;///  Load the DLL&#40;ycrwin32.dll&#41; into our process<br />     .if eax==NULL <br />         invoke MessageBox,0,addr TheDLL,0,0  ; error if we cant load the dll<br />     .else <br /> mov hLib,eax  ; pointer to the dll<br /> invoke GetProcAddress,hLib,addr TheFunction ;/// push the function 'Init'<br />     .if eax==NULL <br />         invoke MessageBox,0,addr TheFunction,0,0  ; the function failed ****heres the problem<br />     .else <br />         mov TheFuncAddr,eax<br />         push 1<br />         push 1<br />         push OFFSET UserName<br />         call &#91;TheFuncAddr&#93;<br />         invoke MessageBox,0,addr TheFunction,eax,0 <br />     .endif <br />          invoke FreeLibrary,hLib <br />     .endif <br /> invoke ExitProcess,0 <br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2003-12-05 16:58:06 by illwill</div>
+   </div>
+   <div class="post" id="post-126745">
+    <div class="subject"><a href="#post-126745">vb to asm dll problem</a></div>
+    <div class="body">im not sure if its like an active x dll and you have to use COM to call its function</div>
+    <div class="meta">Posted on 2003-12-05 20:55:51 by illwill</div>
+   </div>
+   <div class="post" id="post-126766">
+    <div class="subject"><a href="#post-126766">vb to asm dll problem</a></div>
+    <div class="body">Hi, <br /><br />this sample create a WSH object just to read some registry data.<br />In ASM you can call registry functions directly :) . Use RegOpenKey, RegQueryValue,...</div>
+    <div class="meta">Posted on 2003-12-06 01:31:35 by japheth</div>
+   </div>
+   <div class="post" id="post-126803">
+    <div class="subject"><a href="#post-126803">vb to asm dll problem</a></div>
+    <div class="body">yea i know the registry part of it ... im trying to use the info i get and push it to the dll like the vb code does<br /><br />this is easy to get reg info<br /><pre><code><br />.data<br />   szKey          db &quot;Software\Yahoo\pager\&quot;,0<br />   szValue        db &quot;Yahoo! User ID&quot;,0<br />   szValue1        db &quot;EOptions String&quot;,0<br />   KeySize        DWORD 255<br />   KeySize1        DWORD 255<br /><br />.data?<br />    hReg         dd ?<br />    szKeyData    db 256 dup&#40;?&#41;<br />    szKeyData1    db 256 dup&#40;?&#41;<br />.code<br />start&#58;<br />     invoke RegOpenKeyEx, HKEY_CURRENT_USER,addr szKey,0,KEY_READ,addr hReg<br />     invoke RegQueryValueEx,hReg,addr szValue,0,0,addr szKeyData, addr KeySize ;the username is in szKeyData<br />     invoke RegQueryValueEx,hReg,addr szValue1,0,0,addr szKeyData1, addr KeySize1 ;the password is in szKeyData<br />     invoke RegCloseKey , hReg<br /> invoke MessageBox,0,addr szKeyData1,addr szKeyData,0<br /> invoke ExitProcess,0<br />end start<br /></code></pre></div>
+    <div class="meta">Posted on 2003-12-06 09:24:16 by illwill</div>
+   </div>
+   <div class="post" id="post-126856">
+    <div class="subject"><a href="#post-126856">vb to asm dll problem</a></div>
+    <div class="body">Just took a quick look at the DLL using exescope, it's not really a dll per se, it's a COM object as alluded to in a previous post. If you take a look at the export table for this so called dll, you will be able to confirm this yourself.</div>
+    <div class="meta">Posted on 2003-12-06 21:48:19 by Homer</div>
+   </div>
+   <div class="post" id="post-126866">
+    <div class="subject"><a href="#post-126866">vb to asm dll problem</a></div>
+    <div class="body">ahh evilhomer just the person i was waiting for to reply :alright: <br />i know ernie or someone show how to use com in asm.. is it worthwhile to persue it for this app or is it gonna be a real pain in the balls to get it working?</div>
+    <div class="meta">Posted on 2003-12-07 00:04:27 by illwill</div>
+   </div>
+   <div class="post" id="post-130554">
+    <div class="subject"><a href="#post-130554">vb to asm dll problem</a></div>
+    <div class="body">still trying to figure this out<br /><br />i seen a program called COMView which generated<br /> <pre><code><br /><br />;--- Generated .INC file by COMView<br />;--- typelib name=YCRWIN32Lib<br />;--- documentation=YCRWin32 1.0 Type Library<br />;--- GUID=&#123;390CE9E4-C4A0-11D4-8A92-0090271D4F88&#125;<br />;--- Version 1.0, LCID 0<br /><br />;--- prototypes too complex for MASM may exist<br />;--- if such ones reside in a vtable they will be replaced by dummies<br />;--- search for occurances of ';+++' to have a closer look at these<br /><br />sTLBID_YCRWIN32Lib textequ &lt;GUID &#123;0390CE9E4h,0C4A0h,011D4h,&#123;08Ah,092h,000h,090h,027h,01Dh,04Fh,088h&#125;&#125;&gt;<br />_MajorVer_YCRWIN32Lib equ 1<br />_MinorVer_YCRWIN32Lib equ 0<br /><br />;--- IYCrypto, Type=INTERFACE, GUID=&#123;390CE9F1-C4A0-11D4-8A92-0090271D4F88&#125;<br /><br />ifndef IYCryptoVtbl<br />BEGIN_INTERFACE IYCrypto, IUnknown<br />	STDMETHOD	Init	, &#58;SDWORD,&#58;SDWORD,&#58;BSTR<br />	STDMETHOD	Encrypt	, &#58;BSTR,&#58;ptr BSTR<br />	STDMETHOD	Decrypt	, &#58;BSTR,&#58;ptr BSTR<br />	STDMETHOD	Encrypt_MD5	, &#58;BSTR,&#58;ptr BSTR<br />END_INTERFACE<br />endif<br /><br />sIID_IYCrypto textequ &lt;IID &#123;0390CE9F1h,0C4A0h,011D4h,&#123;08Ah,092h,000h,090h,027h,01Dh,04Fh,088h&#125;&#125;&gt;<br /><br />;--- YCrypto, Type=COCLASS, GUID=&#123;390CE9F2-C4A0-11D4-8A92-0090271D4F88&#125;<br /><br />sCLSID_YCrypto textequ &lt;GUID &#123;0390CE9F2h,0C4A0h,011D4h,&#123;08Ah,092h,000h,090h,027h,01Dh,04Fh,088h&#125;&#125;&gt;<br /><br />;--- end of type library ---<br /><br /></code></pre> <br /><br />how an i use this to call the INIT function from the DLL ..  ive been trying this for a month and still cant figure ouyt .. i was using a vb.dll i made to do this automatically but i want this to be pure assembly and not some VB dll added as a resource... can anyone help?:stupid:</div>
+    <div class="meta">Posted on 2004-01-13 19:46:20 by illwill</div>
+   </div>
+   <div class="post" id="post-130555">
+    <div class="subject"><a href="#post-130555">vb to asm dll problem</a></div>
+    <div class="body">heres the dll file</div>
+    <div class="meta">Posted on 2004-01-13 19:57:02 by illwill</div>
+   </div>
+  </div>
+ </body>
+</html>

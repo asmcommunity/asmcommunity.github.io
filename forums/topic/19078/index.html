@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Short conditinal and unconditinal code - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=19078" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=19078">Short conditinal and unconditinal code</a></p>
+   <div class="post" id="post-147514">
+    <div class="subject"><a href="#post-147514">Short conditinal and unconditinal code</a></div>
+    <div class="body">Working on some condition-control block<br />I ran to a small problem that might be interesting<br />from academic &quot;size-optimization&quot; point of view<br />for fun.<br />Problem:<br /><pre><code><br />We have eax = &#91;0..5&#93;<br />and to closely placed vars&#58;<br />cond_0 db<br />cond_1 db<br />if eax &lt; 3<br /> cond_0 &lt;- al<br />else &#40;eax &gt;=3&#41;<br /> cond_1 &lt;- &#40;al-3&#41;<br /></code></pre><br />other regs - undefind<br />so problem summary is <br />1) to reflect value in al this way:<br />0-&gt;0<br />1-&gt;1<br />2-&gt;2<br />3-&gt;0<br />4-&gt;1<br />5-&gt;2<br />2)if eax was &gt;=3 then shift pointer by one <br />(in wich direction depends on what offset you placed for initial<br />pointer)<br /> <br />Task is create<br />1. Smallest unbranchable code<br />2. Smallest branchable code<br /><br />After first akward ideas like<br />branch:<br /><pre><code><br /> mov edi,offset cond_1<br /> sub eax,3<br /> jnc @F<br /> 	dec edi<br />	add eax,3<br />@@&#58;<br /> stosb<br /></code></pre><br />unbranch:<br /><pre><code><br /> mov edi,offset cond_0<br /> sub eax,3<br /> sbb edx,edx<br /> sub edi,edx<br /> and edx,3<br /> add eax,edx<br /> stosb<br /></code></pre><br /><br />It's occured to me that al/3 has reminder needed for value to place<br />and quontient as value to correct pointer.<br />The thing is to find a way to use fact of quontient value<br />for correction the shortest way (if there is one) is escaping<br />my mind, might be you can find a shorter way ;)<br />Or even find complitly different algorithm shorter than this one.<br />For now I have:<br /><br />branche:<br /><pre><code><br /> mov edi,offset cond_0<br /> db 0D4h, 03<br /> test ah,ah<br /> jt @F<br /> inc edi<br /> stosb<br /></code></pre><br /><br />unbranche ver.1:<br /><pre><code><br /> mov edi,offset cond_1 <br /> db 0D4h,03 <br /> sub ah,1 ;or cmp ah,1<br /> sbb edi,0 <br /> stosb<br /></code></pre><br /><br />unbranche ver.2:<br /><pre><code><br /> mov edi,offset cond_1<br /> cmp eax,3<br /> sbb edi,0<br /> db 0D4h,03<br /> stosb<br /></code></pre><br /><br />Any ideas to shorten it?</div>
+    <div class="meta">Posted on 2004-08-06 06:35:10 by The Svin</div>
+   </div>
+   <div class="post" id="post-147518">
+    <div class="subject"><a href="#post-147518">Short conditinal and unconditinal code</a></div>
+    <div class="body">First thought:<pre><code> cmp eax,3<br /> sbb edi,edi<br /> db 0D4h,03<br /> add edi,offset cond_1<br /> stosb</code></pre>...no really bright ideas, yet.<br /><br />What about the flags set by AAM?</div>
+    <div class="meta">Posted on 2004-08-06 08:26:17 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-147519">
+    <div class="subject"><a href="#post-147519">Short conditinal and unconditinal code</a></div>
+    <div class="body">I dont have all my assembly references with me here, and this might or might<br />not be the correct syntax (or any faster), but I thought a jump table might help...<br /><br />Something close to:<br /><pre><code><br />.DATA<br />	JmpTbl	DD	ADDR cond_0, ADDR cond_0, ADDR cond_0<br />		DD	ADDR cond_1, ADDR cond_1, ADDR cond_1<br /><br />	cond_0	DB	?<br />	cond_1	DB	?<br /><br />.CODE<br />	mov	EDX, EAX<br />	lea	ECX, &#91;JmpTbl&#93;<br />	and	EDX, 03h<br />	mov	&#91;ECX+EAX&#93;, BYTE PTR EDX<br /></code></pre></div>
+    <div class="meta">Posted on 2004-08-06 08:57:43 by Graebel</div>
+   </div>
+   <div class="post" id="post-147524">
+    <div class="subject"><a href="#post-147524">Short conditinal and unconditinal code</a></div>
+    <div class="body"><div class="quote"><br />First thought:<br /></div><br />Good one!<br /><br />Graebel,<br />your code is much longer :)</div>
+    <div class="meta">Posted on 2004-08-06 09:58:14 by The Svin</div>
+   </div>
+   <div class="post" id="post-147525">
+    <div class="subject"><a href="#post-147525">Short conditinal and unconditinal code</a></div>
+    <div class="body">AAM seems to be the most efficient way to get remainder, in terms of size.  I thought about maybe adding one to EAX if greaterthan two, then adjusting EDI based on bit-2:<br /><br />cmp eax, 3<br />cmc<br />adc eax, 0<br />btr eax, 2<br />adc edi, 0<br />stosb<br /><br />...but I haven't thought of a way to reduce code size.<br /><br /><br />cmp eax, 3<br />sbb edi, edi<br />cmc<br />adc eax, 0<br />btr eax, 2<br />add edi, offset cond_1<br />stosb<br /><br />...really no help. :stupid:</div>
+    <div class="meta">Posted on 2004-08-06 10:00:54 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-147527">
+    <div class="subject"><a href="#post-147527">Short conditinal and unconditinal code</a></div>
+    <div class="body">I was confused a little bit what is h_Window,<br />I think, the code should be like<br /><pre><code><br />..<br />cond_0 db <br />cond_1 db<br />...<br /> cmp eax,3<br /> sbb edi,edi<br /> db 0D4h,03<br /> add edi,offset cond_1 	;edi = offset cond_1 if eax &gt;3;  <br />			;else edi=&#40;offset cond_1&#41; -1<br /> stosb<br /></code></pre><br /><br />pointer handling size is the same size as in<br /><pre><code><br /> mov edi,offset ..<br /> cmp eax,3<br /><br /> adc edi,0 (or sbb edi,0)<br /> ...<br /><pre><code><br /><br />(5+3 (mov reg,imm + adc reg,imm8) vs. 6+2 (sbb reg,imm8 + add reg,imm32)<br />Yet it's another way to do the job that's what I like about it.</div>
+    <div class="meta">Posted on 2004-08-06 10:16:57 by The Svin</div>
+   </div>
+   <div class="post" id="post-147528">
+    <div class="subject"><a href="#post-147528">Short conditinal and unconditinal code</a></div>
+    <div class="body">Drat, well it was worth a shot.  Without my references im blind... :cool:<br /><br />Its about time I corrected that.<br />I think im going to install some things over lunch time today.</div>
+    <div class="meta">Posted on 2004-08-06 10:37:00 by Graebel</div>
+   </div>
+   <div class="post" id="post-147537">
+    <div class="subject"><a href="#post-147537">Short conditinal and unconditinal code</a></div>
+    <div class="body"><div class="quote"><br />Drat, well it was worth a shot<br /></div><br />Of course it was. It always does.<br />PS.<br />A little bit knowlige about opcode format structure, could help if you don't have refferences.<br />Usually when you know it, most of the time you know size without debugger or refference.</div>
+    <div class="meta">Posted on 2004-08-06 14:34:11 by The Svin</div>
+   </div>
+   <div class="post" id="post-147568">
+    <div class="subject"><a href="#post-147568">Short conditinal and unconditinal code</a></div>
+    <div class="body">The following two are both 11 bytes in size:<br /><pre><code>push 3<br />pop ecx<br />idiv ecx<br />mov &#91;cond_0+eax&#93;,dl</code></pre><br /><pre><code>db 0d4h,3<br />movzx ecx,ah<br />mov &#91;cond_0+ecx&#93;,al</code></pre></div>
+    <div class="meta">Posted on 2004-08-06 19:13:27 by Sephiroth3</div>
+   </div>
+   <div class="post" id="post-147577">
+    <div class="subject"><a href="#post-147577">Short conditinal and unconditinal code</a></div>
+    <div class="body"><strong>Sephiroth3</strong>, you are continually impressive! :cool:</div>
+    <div class="meta">Posted on 2004-08-06 20:28:22 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-147609">
+    <div class="subject"><a href="#post-147609">Short conditinal and unconditinal code</a></div>
+    <div class="body"><strong>Sephiroth3</strong><br />That is it! Though it was obvious that quotient can be used as displacement I've trapped myself with prejustive conclusion that moving intial pointer to edi with consequent stosb would be the shortest way :)<br />I should have forgotten about &quot;edi-stosb&quot; for a while to consider different ways using quontien as displacement.<br />Thank you. That is exactly what I called &quot;escaping my mind&quot;</div>
+    <div class="meta">Posted on 2004-08-07 06:49:04 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

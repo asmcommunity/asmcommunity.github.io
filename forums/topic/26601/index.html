@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Changing border style for edit controls - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26601" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26601">Changing border style for edit controls</a></p>
+   <div class="post" id="post-192298">
+    <div class="subject"><a href="#post-192298">Changing border style for edit controls</a></div>
+    <div class="body">Hi,
+I'm writing a small utility app consisting of a dialog box as the main window with a number of child edit controls (app will convert from different number bases) I wanna know how I can change the appearance of the edit controls depending on the position of the mouse cursor, ie:
+
+ 
+Status        :           Style
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`
+mouse not over, edit control not in focus : no border   ;
+mouse over, edit control not in focus : single border    ;
+edit control in focus : double border                  
+
+
+any help is appreciated
+btw this'll be my first Win32asm app that actually does something.
+
+Oh yeah, another thing I wanted to know.. How can you put pictures next to the menu items in menus? ie for File->Save As.. you might have a pic of a floppy disc?
+
+thanx</div>
+    <div class="meta">Posted on 2001-01-15 15:06:00 by Dee-Jon</div>
+   </div>
+   <div class="post" id="post-192299">
+    <div class="subject"><a href="#post-192299">Changing border style for edit controls</a></div>
+    <div class="body">When you create your Edit controls (with CreateWindowEx), you specify their style with 
+dwStyle & dwExStyle. Usaly for a Edit controls you have WS_EX_CLIENTEDGE, this tells windows to draw the sunken edge on it.
+
+What you would have to do, would be to detect whenever the mouse is over the control, and then change its style accordingly.
+
+The second bit is more simple (To change the style of a window), so ill explain that first....its actualy really simple:
+
+invoke SetWindowLong ,hEdit,GWL_STYLE,dwNewStyle      
+invoke SetWindowLong ,hEdit,GWL_EXSTYLE,dwNewExStyle
+
+Whereas dwNewStyle & dwNewExStlye contain the new style or Extended Style respectivly. This is the same as would be specified to CreateWindowEx.
+
+The first part (detecting if the mouse is over the edit control) is a little more complicated, first of all you would have to subclass the edit controls, which is done in another call to SetWindowLong.
+
+invoke SetWindowLong ,hEdit,GWL_WNDPROC,Offset NewProc
+mov lpOldProc,eax
+
+This 'redirects' all of the messages for the edit control to a new procedure. This new procedure is exactly the same as any other WndProc.
+
+Of course you dont want to process all the mesasages for the Edit control, so you pass them on to the control, and let it deal with them normal. Kinda creating a chain of MsgProcs. One of iczlion's tutorials explains this in much better detail.
+
+Now to get on to capturing the mouse, whenever the mouse is moved over a window, windows sends a WM_MOUSEMOVE message to the window, so if you SubClass your Edit Control as explained above, and filter out the WM_MOUSEMOVE you can tell when the mouse enters the Edit Control. Unfortantly (and anybody correct me if im wrong) windows does not tell your app when the mouse leaves your window, so, you have to stick in some (more) processing test that. All of this stuck together would go something like this
+
+;note: i have used the 3 styles in this:
+; WS_EX_CLIENTEDGE - Focus & Mouseover
+; WS_EX_STATICEDGE - Just focus
+; NULL             - neither of the above
+
+invoke SetWindowLong ,hEdit1,GWL_WNDPROC,Offset NewEditProc
+mov lpOldEditProc,eax
+.
+.
+.
+.
+
+NewEditProc proc hWnd:HWND,uMsg:UINT,wParam:WPARAM,lParam:LPARAM
+LOCAL pt:POINT
+.data?
+ fCapture BYTE ?
+.code
+
+.IF uMsg==WM_MOUSEMOVE
+    .IF fCapture==FALSE
+        mov fCapture,TRUE
+
+        invoke SetCapture ,hWnd
+
+        invoke Getfocus
+        .IF eax!=hWnd
+            invoke GetWindowLong ,hWnd,GWL_EXSTYLE
+            and eax,NOT WS_EX_CLIENTEDGE
+            or eax,WS_EX_STATICEDGE
+            invoke SetWindowLong ,hWnd,GWL_EXSTYLE,eax
+        .ENDIF
+    .ENDIF
+
+    mov eax,lParam
+    and eax,0fffh
+    mov pt.x,eax
+    mov eax,lParam
+    shr eax,16
+    mov pt.y,eax
+    invoke WindowFromPoint ,ADDR pt
+    .IF eax!=hWnd
+        mov fCapture,FALSE
+
+        push eax
+        invoke ReleaseCapture
+        pop eax
+
+        invoke SendMessage ,eax,WM_MOUSEMOVE,wParam,lParam
+
+        invoke GetFocus
+        .IF eax!=hWnd
+            invoke GetWindowLong ,hWnd,GWL_EXSTYLE
+            and eax,NOT WS_EX_STATICEDGE
+            invoke SetWindowLong ,hWnd,GWL_EXSTYLE,eax
+        .ENDIF 
+
+        xor eax,eax
+        jmp End_func  
+    .ENDIF
+.ELSEIF uMsg==WM_SETFOCUS
+    invoke GetWindowLong ,hWnd,GWL_EXSTYLE
+    and eax,NOT WS_EX_STATICEDGE
+    or eax,WS_EX_CLIENTEDGE
+    invoke SetWindowLong ,hWnd,GWL_EXSTYLE,eax
+.ELSEIF uMsg==WM_KILLFOCUS
+    .IF fCapture==TRUE
+        invoke GetWindowLong ,hWnd,GWL_EXSTYLE
+        and eax,NOT WS_EX_CLIENTEDGE
+        or eax,WS_EX_STATICEDGE
+        invoke SetWindowLong ,hWnd,GWL_EXSTYLE,eax
+    .ENDIF
+.ENDIF
+          
+invoke CallWindowProc ,lpOldEditProc,hWnd,uMsg,wParam,lParam
+
+ret
+NewEditProc endp
+
+That should do it, i havn't tested it, or comented it cause i have gotta go, so there will be some bugs in it, but yeah, use that code for whateve you want its your</div>
+    <div class="meta">Posted on 2001-01-17 03:32:00 by manimal </div>
+   </div>
+   <div class="post" id="post-192300">
+    <div class="subject"><a href="#post-192300">Changing border style for edit controls</a></div>
+    <div class="body">To draw a custom border, you must subclass the edit control and process WM_NCPAINT. When the edit control receives WM_NCPAINT, you can use the GDI functions to create a custom pen and use it to draw the custom border. You may need to call SetWindowPos with SWP_DRAWFRAME to direct Windows to update the change immediately.
+To your menu bitmap question, there is an example on my site in the source code section, menu-weblink, that does exactly what you want</div>
+    <div class="meta">Posted on 2001-01-17 06:44:00 by Iczelion </div>
+   </div>
+  </div>
+ </body>
+</html>

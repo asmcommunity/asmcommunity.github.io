@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>BitBlt ... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28279" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28279">BitBlt ...</a></p>
+   <div class="post" id="post-200342">
+    <div class="subject"><a href="#post-200342">BitBlt ...</a></div>
+    <div class="body">I copied a background bitmap to my window with the following steps:
+
+1. GetDC
+2. CreateCompatibleDC
+3. SelectObject
+4. BitBlt
+5. DeleteObject
+6. DeleteDC
+7. ReleaseDC
+
+But I have to bitmaps which have to be copied into the mainwindow! Thats the best way to copy the second bitmap without repeating the whole procedure (GetDC,...ReleaseDC)?</div>
+    <div class="meta">Posted on 2001-06-04 06:42:00 by hansWurst</div>
+   </div>
+   <div class="post" id="post-200343">
+    <div class="subject"><a href="#post-200343">BitBlt ...</a></div>
+    <div class="body">hansWurst,
+
+After you have BitBlt'd the first bitmap, you can select the second bitmap into the compatible DC then Blt again, there's no need to go through the whole process again :-
+
+1. GetDC
+2. CreateCompatibleDC
+3. SelectObject (first bitmap)
+4. BitBlt
+5. SelectObject (second bitmap)
+6. BitBlt
+7. DeleteObject
+8. DeleteDC
+9. ReleaseDC
+
+
+umbongo</div>
+    <div class="meta">Posted on 2001-06-04 06:59:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-200344">
+    <div class="subject"><a href="#post-200344">BitBlt ...</a></div>
+    <div class="body">Theres also a function, SetDIBitsToDevice or something like that, you'll find working code for it in the ShowDib example with masm32. This allows you to copy a 32bit dib (ie bitmap) directly to a hdc, no creation of tmp dc and selecting objects into it. It probably also works for 16bit and 24bit but I never tried it.
+
+I have a question regarding this though, does anyone know if its any faster or slower than BitBlt. I found that for large bitmaps ie 512*512 it got too slow for game graphics, I never got around to rewriting the code to BitBlt to compare speed but if someone else haas then maybe they'd share their findings.</div>
+    <div class="meta">Posted on 2001-06-04 13:17:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-200345">
+    <div class="subject"><a href="#post-200345">BitBlt ...</a></div>
+    <div class="body">According to win32.hlp, BitBlt is faster
+than SetDIBitsToDevice, and should be
+preffered for animation.</div>
+    <div class="meta">Posted on 2001-06-24 09:55:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-200346">
+    <div class="subject"><a href="#post-200346">BitBlt ...</a></div>
+    <div class="body">Depending on how much of a resource hog you care to be, you can create some DC's once, load the bitmaps to them, then keep them around for a while (even from program start to program finish).
+
+This way, you always have the bitmaps mounted and ready to blit from. Just be aware you are hogging resources this way, and use it sparingly.</div>
+    <div class="meta">Posted on 2001-06-24 11:10:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-200347">
+    <div class="subject"><a href="#post-200347">BitBlt ...</a></div>
+    <div class="body">Yes, I just managed to rewrite my BitBlting procedure from SetDIB... to BitBlt and its alot faster.
+
+One more question, are API hardware accelerated, I just changed my tnt2 to a Radeon All-in-Wonder and the speed of the routines doubled. Actually for large bitmaps its almost four times as fast.
+Is it just a better card, or could the dirivers or something be hardware accelerating BitBlt, I don't think this is possible though.</div>
+    <div class="meta">Posted on 2001-06-25 18:13:00 by Zadkiel</div>
+   </div>
+   <div class="post" id="post-200348">
+    <div class="subject"><a href="#post-200348">BitBlt ...</a></div>
+    <div class="body">The GDI routines will use video memory if they can, I suspect your card has more RAM that the last one, so it will store you bitmaps in the gfx RAM rather than system RAM.
+
+This will make it alot faster.
+
+umbongo
+
+This message was edited by umbongo, on 6/25/2001 7:07:58 PM</div>
+    <div class="meta">Posted on 2001-06-25 19:07:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-200349">
+    <div class="subject"><a href="#post-200349">BitBlt ...</a></div>
+    <div class="body">Here is a tip for fast manipulation of DCs by nesting creation and setting of DCs with push/pop.
+
+Since 'SelectObject' returns the handle to the deselection handle of the GDI object, you don't need to save the GDI object in a memory variable. When you 'pop' the value you had returned from SelectObject, you can immediately 'Deselect' the object by calling SelectObject again.
+
+The following snippet creates a DC compatible with the screen, then creates and selects into it a bitmap, then creates and selects into it a brush and pen.
+
+The example uses just one memory variable and cleaning up GDI after the DC has been used is just a question of calling:
+ pop eax
+ invoke SelectObject,hDC,eax 
+ invoke DeleteObject,eax
+
+:- to match the number of times the DC had selected objects during the creation.
+
+
+LOCAL hDC    :DWord
+
+
+   invoke CreateCompatibleDC,0
+   mov hDC,eax
+
+   invoke CreateCompatibleBitmap,hDC,100,100
+   invoke SelectObject,hDC,eax
+   push eax
+
+         invoke CreateSolidBrush,0ffh
+         invoke SelectObject,hDC,eax
+         push eax
+
+
+         invoke CreatePen,PS_SOLID,1,0ffh
+         invoke SelectObject,hDC,eax
+         push eax
+
+            
+             ;------------------
+             ;       Use hDC
+             ;------------------- 
+         pop eax
+         invoke SelectObject,hDC,eax
+         invoke DeleteObject,eax
+             
+         pop eax
+         invoke SelectObject,hDC,eax
+         invoke DeleteObject,eax
+
+   pop eax
+   invoke SelectObject,hDC,eax
+   invoke DeleteObject,eax
+
+invoke DeleteDC,hDC</div>
+    <div class="meta">Posted on 2001-06-26 02:41:00 by Chris</div>
+   </div>
+  </div>
+ </body>
+</html>

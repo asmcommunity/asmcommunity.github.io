@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>listview help - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27318" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27318">listview help</a></p>
+   <div class="post" id="post-195629">
+    <div class="subject"><a href="#post-195629">listview help</a></div>
+    <div class="body">ive been looking over tutorial 31 and i dont like all the extra clutter included in the asm file. all i want is a stripped down version that assembles but only displays the listview box and a few headers so i can study it. someone willing to strip it down for me and post a working asm?
+
+thank ya
+smurf</div>
+    <div class="meta">Posted on 2001-03-21 04:12:00 by smurf</div>
+   </div>
+   <div class="post" id="post-195630">
+    <div class="subject"><a href="#post-195630">listview help</a></div>
+    <div class="body">well I happen to have a little code for this lying around, I won't put it all here, because I hate long messages, so create a program using prostart then add this :-
+<pre><code>
+; before the .data section
+
+include \masm32\include\comctl32.inc
+includelib \masm32\lib\comctl32.lib
+LVS_EX_GRIDLINES equ 1
+LVM_SETEXTENDEDLISTVIEWSTYLE equ 4150
+LVS_EX_FULLROWSELECT equ 32
+
+; in the .data section
+
+hListView		dd 0
+szListViewClass	db "SysListView32",0
+col	 LVCOLUMN <?>
+item	 LVITEM   <?>
+szListViewColumTitle db "Col Title",0
+
+; in the .code bit for WM_CREATE:-
+
+    .elseif uMsg == WM_CREATE
+		invoke InitCommonControls 
+
+	invoke CreateWindowEx,WS_EX_CLIENTEDGE,ADDR szListViewClass,0,
+		WS_VSCROLL or WS_VISIBLE or \
+		WS_BORDER or WS_CHILD or \
+		LVS_REPORT or LVS_EDITLABELS,\
+		0,0,470,200,hWin,1000,hInstance,NULL
+
+	mov	hListView,eax
+
+	invoke SendMessage,hListView,LVM_SETEXTENDEDLISTVIEWSTYLE,0,LVS_EX_GRIDLINES or LVS_EX_FULLROWSELECT
+
+	InsertColumn hListView,"Width",120
+	InsertColumn hListView,"Length",120
+	InsertColumn hListView,"Amount",120
+	InsertColumn hListView,"Item",70
+	InsertColumn hListView,"#",20
+
+	InsertItem hListView,"1"
+	SetItemText hListView,"Wood",0,1
+	SetItemText hListView,"50",0,2
+	SetItemText hListView,"2 feet",0,3
+	SetItemText hListView,"3 feet",0,4
+
+</code></pre>
+
+
+umbongo</div>
+    <div class="meta">Posted on 2001-03-21 04:30:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195631">
+    <div class="subject"><a href="#post-195631">listview help</a></div>
+    <div class="body">hi Umbongo my code now looks like this but i get error at build time. InsertColumn, InsertItem and SetItemText are the syntax errors that show up. Sorry for the long code.
+
+; #########################################################################
+
+      .386
+      .model flat, stdcall  ; 32 bit memory model
+      option casemap :none  ; case sensitive
+
+      include shane.inc     ; local includes for this file
+
+; #########################################################################
+
+
+
+include \masm32\include\comctl32.inc
+includelib \masm32\lib\comctl32.lib
+LVS_EX_GRIDLINES equ 1
+LVM_SETEXTENDEDLISTVIEWSTYLE equ 4150
+LVS_EX_FULLROWSELECT equ 32
+
+.data
+hListView      dd 0
+szListViewClass   db "SysListView32",0
+col    LVCOLUMN <?>
+item    LVITEM   <?>
+szListViewColumTitle db "Col Title",0
+
+.code
+
+start:
+      invoke GetModuleHandle, NULL
+      mov hInstance, eax
+
+      invoke GetCommandLine
+      mov CommandLine, eax
+
+      invoke WinMain,hInstance,NULL,CommandLine,SW_SHOWDEFAULT
+      invoke ExitProcess,eax
+
+; #########################################################################
+
+WinMain proc hInst     :DWORD,
+             hPrevInst :DWORD,
+             CmdLine   :DWORD,
+             CmdShow   :DWORD
+
+      ;====================
+      ; Put LOCALs on stack
+      ;====================
+
+      LOCAL wc   :WNDCLASSEX
+      LOCAL msg  :MSG
+      LOCAL Wwd  :DWORD
+      LOCAL Wht  :DWORD
+      LOCAL Wtx  :DWORD
+      LOCAL Wty  :DWORD
+
+      ;==================================================
+      ; Fill WNDCLASSEX structure with required variables
+      ;==================================================
+
+      invoke LoadIcon,hInst,500    ; icon ID
+      mov hIcon, eax
+
+      szText szClassName,"Project_Class"
+
+      mov wc.cbSize,         sizeof WNDCLASSEX
+      mov wc.style,          CS_HREDRAW or CS_VREDRAW \
+                             or CS_BYTEALIGNWINDOW
+      mov wc.lpfnWndProc,    offset WndProc
+      mov wc.cbClsExtra,     NULL
+      mov wc.cbWndExtra,     NULL
+      m2m wc.hInstance,      hInst
+      mov wc.hbrBackground,  COLOR_BTNFACE+1
+      mov wc.lpszMenuName,   NULL
+      mov wc.lpszClassName,  offset szClassName
+      m2m wc.hIcon,          hIcon
+        invoke LoadCursor,NULL,IDC_ARROW
+      mov wc.hCursor,        eax
+      m2m wc.hIconSm,        hIcon
+
+      invoke RegisterClassEx, ADDR wc
+
+      ;================================
+      ; Centre window at following size
+      ;================================
+
+      mov Wwd, 500
+      mov Wht, 350
+
+      invoke GetSystemMetrics,SM_CXSCREEN
+      invoke TopXY,Wwd,eax
+      mov Wtx, eax
+
+      invoke GetSystemMetrics,SM_CYSCREEN
+      invoke TopXY,Wht,eax
+      mov Wty, eax
+
+      invoke CreateWindowEx,WS_EX_LEFT,
+                            ADDR szClassName,
+                            ADDR szDisplayName,
+                            WS_OVERLAPPEDWINDOW,
+                            Wtx,Wty,Wwd,Wht,
+                            NULL,NULL,
+                            hInst,NULL
+      mov   hWnd,eax
+
+      invoke LoadMenu,hInst,600  ; menu ID
+      invoke SetMenu,hWnd,eax
+
+      invoke ShowWindow,hWnd,SW_SHOWNORMAL
+      invoke UpdateWindow,hWnd
+
+      ;===================================
+      ; Loop until PostQuitMessage is sent
+      ;===================================
+
+    StartLoop:
+      invoke GetMessage,ADDR msg,NULL,0,0
+      cmp eax, 0
+      je ExitLoop
+      invoke TranslateMessage, ADDR msg
+      invoke DispatchMessage,  ADDR msg
+      jmp StartLoop
+    ExitLoop:
+
+      return msg.wParam
+
+WinMain endp
+
+; #########################################################################
+
+WndProc proc hWin   :DWORD,
+             uMsg   :DWORD,
+             wParam :DWORD,
+             lParam :DWORD
+
+    LOCAL var    :DWORD
+    LOCAL caW    :DWORD
+    LOCAL caH    :DWORD
+    LOCAL Rct    :RECT
+    LOCAL hDC    :DWORD
+    LOCAL Ps     :PAINTSTRUCT
+    LOCAL buffer1[128]:BYTE  ; these are two spare buffers
+    L</div>
+    <div class="meta">Posted on 2001-03-21 12:10:00 by smurf</div>
+   </div>
+   <div class="post" id="post-195632">
+    <div class="subject"><a href="#post-195632">listview help</a></div>
+    <div class="body">I am sooo stupid... I forgot to include the Macros, thats why you're getting the errors, I'll find them and post them here. 
+
+sorry
+
+umbongo</div>
+    <div class="meta">Posted on 2001-03-21 14:20:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195633">
+    <div class="subject"><a href="#post-195633">listview help</a></div>
+    <div class="body">ok, I don't have them here, I will post them from work tomorrow....
+
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-03-21 14:27:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195634">
+    <div class="subject"><a href="#post-195634">listview help</a></div>
+    <div class="body">Back in work now, here are the macros:-
+
+<pre><code>
+
+InsertColumn MACRO handle,txt,width
+	LOCAL	lbl
+	LOCAL strng
+	jmp	lbl
+	strng db txt,0
+	lbl:
+	mov	col.imask,LVCF_TEXT or LVCF_WIDTH
+	mov	col.fmt,0
+	mov	col.lx,width
+	mov	col.pszText,offset strng
+	invoke	lstrlen,offset strng
+	mov	col.cchTextMax,eax
+	invoke	SendMessage,handle,LVM_INSERTCOLUMN,0,addr col
+ENDM
+
+InsertItem MACRO handle,txt
+	LOCAL lbl
+	LOCAL strng
+	jmp lbl
+	strng db txt,0
+	lbl:
+	mov	item.imask,LVIF_TEXT
+	mov	item.iItem,0
+	mov	item.iSubItem,0
+	mov	item.pszText,offset strng
+	invoke	lstrlen,offset strng
+	mov	item.cchTextMax,eax
+	invoke	SendMessage,handle,LVM_INSERTITEM,0,addr item
+ENDM
+
+SetItemText MACRO handle,txt,itemnumber,subitemnumber
+	LOCAL lbl
+	LOCAL strng
+	jmp lbl
+	strng db txt,0
+	lbl:
+	mov	item.imask,LVIF_TEXT
+	mov	item.iItem,itemnumber
+	mov	item.iSubItem,subitemnumber
+	mov	item.pszText,offset strng
+	invoke	lstrlen,offset strng
+	mov	item.cchTextMax,eax
+	invoke	SendMessage,handle,LVM_SETITEMTEXT,0,addr item
+ENDM
+</code></pre>
+
+umbongo</div>
+    <div class="meta">Posted on 2001-03-22 02:51:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-195635">
+    <div class="subject"><a href="#post-195635">listview help</a></div>
+    <div class="body">thank you for your time and it works like a charm. ive been waiting for this :)
+
+smurf</div>
+    <div class="meta">Posted on 2001-03-22 03:17:00 by smurf</div>
+   </div>
+  </div>
+ </body>
+</html>

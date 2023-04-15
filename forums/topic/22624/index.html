@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Halt a thread - HLT? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22624" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22624">Halt a thread - HLT?</a></p>
+   <div class="post" id="post-169681">
+    <div class="subject"><a href="#post-169681">Halt a thread - HLT?</a></div>
+    <div class="body">I have a single threaded program that does heavy processing, writes to a file, then resumes heavy processing. On a Pentium III 1066 running Windows XP, the data is not saved properly. How can I pause the processing until the data is written please?<br /><br />I have a dual threaded version of this program. Can I signal the second thread to HLT until resumed? Then how can it be resumed please.<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2006-01-19 06:05:47 by V Coder</div>
+   </div>
+   <div class="post" id="post-169682">
+    <div class="subject"><a href="#post-169682">Re: Halt a thread - HLT?</a></div>
+    <div class="body">HLT is a privileded instruction. There are plenty of <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/synchronization.asp">synchronization methods on Windows OS</a>es.</div>
+    <div class="meta">Posted on 2006-01-19 06:38:16 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-169686">
+    <div class="subject"><a href="#post-169686">Re: Halt a thread - HLT?</a></div>
+    <div class="body">VCoder, the data isn&#39;t saved properly even if you call WriteFile? Have you set your thread priority to realtime or something similarly foolish?<br /></div>
+    <div class="meta">Posted on 2006-01-19 07:54:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-169690">
+    <div class="subject"><a href="#post-169690">Re: Halt a thread - HLT?</a></div>
+    <div class="body"><div class="quote"><br />VCoder, the data isn&#39;t saved properly even if you call WriteFile? Have you set your thread priority to realtime or something similarly foolish?</div><br />Nope. Priority is set to Normal or can be set to Idle. The program calls the save routine, which writes and closes the files (which can be up to hundreds of MB at this time). Upon return from save, the program immediately picks back up processing.</div>
+    <div class="meta">Posted on 2006-01-19 09:32:24 by V Coder</div>
+   </div>
+   <div class="post" id="post-169691">
+    <div class="subject"><a href="#post-169691">Re: Halt a thread - HLT?</a></div>
+    <div class="body">...and still the data isn&#39;t saved correctly? This sounds very weird. Have you run chkdsk lately?<br /><br />Are you synchronizing the access to the data-to-be-saved properly?</div>
+    <div class="meta">Posted on 2006-01-19 09:39:09 by f0dder</div>
+   </div>
+   <div class="post" id="post-169718">
+    <div class="subject"><a href="#post-169718">Re: Halt a thread - HLT?</a></div>
+    <div class="body">Why not use the old mutex trick. Create a global variable which takes two states (that being said it doesn&#39;t even have to take up much room, it can be a single byte). Then when you begin accessing the file, place the byte into an on state, so that when anything else tries to access it, they will fail.<br /><br /><pre><code><br />STATE_ON equ 1<br />STATE_OFF equ 0<br />.data<br />&nbsp; &nbsp;  g_lock&nbsp; &nbsp;  db STATE_OFF<br />...<br />.code<br />ProcedureOne proc<br />&nbsp; &nbsp;  .while ( g_lock == STATE_ON )<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; invoke&nbsp; &nbsp;  Sleep, 200<br />&nbsp; &nbsp;  .endw<br />&nbsp; &nbsp;  mov&nbsp; &nbsp;  g_lock, STATE_ON<br />&nbsp; &nbsp;  ; do your processing<br />&nbsp; &nbsp;  mov&nbsp; &nbsp;  g_lock, STATE_OFF<br />ProcedureOne endp<br />...<br /></code></pre><br /><br />As shown in the above code, you can&nbsp; create two threads using the same procedure, but the procedures will only really processes the code one at a time, because the second time the procedure is ran, it will become stuck in the while loop until the procedure finishes and sets the g_lock state to STATE_OFF which will break the while look of the second procedure being ran.<br /><br />SO, in your case, you could have your procedure which does the heavy processing run, with very few breaks using the while loop above, then when your File writing begins, simple activate the g_lock which will pause execution of your other procedure until the g_lock variable is turned back off.<br /><br />Regards,<br />Bryant Keller</div>
+    <div class="meta">Posted on 2006-01-19 23:43:32 by Synfire</div>
+   </div>
+   <div class="post" id="post-169719">
+    <div class="subject"><a href="#post-169719">Re: Halt a thread - HLT?</a></div>
+    <div class="body">Better use a CRITICAL_SECTION instead of handcoding it...<br /></div>
+    <div class="meta">Posted on 2006-01-19 23:47:05 by f0dder</div>
+   </div>
+   <div class="post" id="post-169720">
+    <div class="subject"><a href="#post-169720">Re: Halt a thread - HLT?</a></div>
+    <div class="body">Thanks for the tip f0dder, I wasn&#39;t actually aware that there was a WinAPI for doing mutex&#39;s, of course I&#39;ve not done any multithreading code since I was assisting in the design of a C HTTP server using mutex_lock() and mutex_unlock()<br /></div>
+    <div class="meta">Posted on 2006-01-19 23:54:59 by Synfire</div>
+   </div>
+   <div class="post" id="post-169721">
+    <div class="subject"><a href="#post-169721">Re: Halt a thread - HLT?</a></div>
+    <div class="body">There&#39;s lots of neat synchronization APIs in windows.&nbsp; The nice thing about critrical sections is that first it&#39;ll try &quot;spinning&quot; for the lock, and if it doesn&#39;t get the lock fairly soon it&#39;ll WaitForSingleObject (ie, 0% CPU time until the lock is freed). The spinning is done to avoid a costly user-&gt;kernel-&gt;user transition if the lock is released fast.<br /></div>
+    <div class="meta">Posted on 2006-01-19 23:57:12 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

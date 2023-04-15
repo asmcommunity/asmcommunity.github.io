@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>No CMOV on CPU ? then add it - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24714" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24714">No CMOV on CPU ? then add it</a></p>
+   <div class="post" id="post-180493">
+    <div class="subject"><a href="#post-180493">No CMOV on CPU ? then add it</a></div>
+    <div class="body">I was recently pondering how I could use CMOV in my applications but still be backward compatible with older processors. The usual answer is to set up multiple execution paths depending on the processor type. That is a very laborious and space wasting solution as you have to have multiple copies of code blocks for each eventuality. I decided there must be a better way, I wanted to ensure that on newer processors the code would run optimally and was not concerned with speed on older ones so I thought why not use the exception hanlder to do this. In the following example I have used UD2 (undefined opcode 2) but you can easily set it up for any opcode.<br /><br />The example uses the final exception handler to trap and analyze the error then sets EAX to -1 and continues. If the error is not what we expect, it passes the exception on to the next handler (usually the JIT debugger)<br /><br /><pre><code>// Set the exception handler (this should be at the entry point)<br />invoke SetUnhandledExceptionFilter,OFFSET FinalHandler<br /><br />....<br /><br />FinalHandler FRAME pExceptInfo<br />	uses esi,edi<br /><br />	mov eax,<br />	mov edi,<br />	mov esi,<br /><br />	// EXCEPTION_ILLEGAL_INSTRUCTION<br />	// Check to see if this is an undefined opcode<br />	mov eax,<br />	cmp eax,EXCEPTION_ILLEGAL_INSTRUCTION<br />	jne &gt;&gt;.NEXTHANDLER<br /><br />	// The 2 bytes at EIP should be UD2 (0B0Fh)<br />	// Note that B90Fh is also gauranteed to be undefined<br />	mov eax,<br />	mov eax,<br />	and eax,0FFFFh<br />	cmp eax,0B0Fh<br />	jne &gt;&gt;.NEXTHANDLER<br /><br />	// Increment the instruction pointer past the undefined opcode<br />	mov eax,<br />	add eax,2<br />	mov ,eax<br /><br />	// Set the return value of EAX to 0FFFFFFFFh<br />	mov D,0FFFFFFFFh<br /><br />	// continue execution<br />	mov eax,EXCEPTION_CONTINUE_EXECUTION<br />	ret<br /><br />	.NEXTHANDLER<br />	// Pass the exception to the next handler<br />	mov eax,EXCEPTION_CONTINUE_SEARCH<br />	ret<br /><br />ENDF</code></pre><br /><br />I have not coded the complete CMOV instruction as of yet but it should be an interesting project. Ofcourse it will be VERY slow on processors that do not support the instruction but since if the processor supports the instruction there is no exception it allows optimal execution on those.</div>
+    <div class="meta">Posted on 2006-05-07 09:38:43 by donkey</div>
+   </div>
+   <div class="post" id="post-180496">
+    <div class="subject"><a href="#post-180496">Re: No CMOV on CPU ? then add it</a></div>
+    <div class="body">I&#39;m a bit confused wrt. your use of UD2... is this only as an example?<br /><br />I assume your method (as opposed to the sample) is to just CMOV all you want, and trap CMOV instructions on old CPUs, and handle them in the exception handler? Sounds doable, althouh (as you point out yourself) quite slow on the older machines, that will be slow enough to start with :)<br /><br />Now, if you NOP-padded all CMOV instructions to be &quot;large enough&quot;, you could set up an elaborate JIT that compiled code so you don&#39;t have to rely on exceptions... but that&#39;s probably quite overkill ^_^</div>
+    <div class="meta">Posted on 2006-05-07 11:05:42 by f0dder</div>
+   </div>
+   <div class="post" id="post-180498">
+    <div class="subject"><a href="#post-180498">Re: No CMOV on CPU ? then add it</a></div>
+    <div class="body">Hi f0dder,<br /><br />I used UD2 only for the example as I have not finished coding the CMOV stuff (as I said). I have WinExplorer users who are running it on an old 486 box, no RDTSC (it&#39;s priviledged) and no CMOV. Since these boxes are getting rarer every day it seems to be overkill to set up execution paths but I still would like to support them albiet at a snails pace hence my little idea. It allows me to cut and paste a routine to make my apps backward compatible without much effort.<br /><br />CMOV is an excellent instruction to work with since it is always 3 byte long 0F/cc/rm as it only works with 32 bit registers and no memory or immediate operands. RDTSC also makes a great target for this as it does not use operands at all and is fixed length.</div>
+    <div class="meta">Posted on 2006-05-07 11:16:26 by donkey</div>
+   </div>
+   <div class="post" id="post-180499">
+    <div class="subject"><a href="#post-180499">Re: No CMOV on CPU ? then add it</a></div>
+    <div class="body">It should be noted as well that this method can be used to obfuscate code quite well, using UD2 to execute a procedure as opposed to calling it is very effective in making code less traceable. Since you control the value of EIP you can even use operands to indicate which proc to execute.</div>
+    <div class="meta">Posted on 2006-05-07 11:22:21 by donkey</div>
+   </div>
+   <div class="post" id="post-180600">
+    <div class="subject"><a href="#post-180600">Re: No CMOV on CPU ? then add it</a></div>
+    <div class="body"><div class="quote"><br />CMOV is an excellent instruction to work with since it is always 3 byte long 0F/cc/rm as it only works with 32 bit registers and no memory or immediate operands. RDTSC also makes a great target for this as it does not use operands at all and is fixed length.<br /></div><br />The source operand could be 16/32-bit register or 16/32-bit memory.</div>
+    <div class="meta">Posted on 2006-05-11 03:12:44 by MazeGen</div>
+   </div>
+   <div class="post" id="post-180602">
+    <div class="subject"><a href="#post-180602">Re: No CMOV on CPU ? then add it</a></div>
+    <div class="body">And -like many other instructions- can have up to four 1-byte prefixes in no particular order.</div>
+    <div class="meta">Posted on 2006-05-11 03:33:16 by ti_mo_n</div>
+   </div>
+   <div class="post" id="post-180605">
+    <div class="subject"><a href="#post-180605">Re: No CMOV on CPU ? then add it</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote"><br />CMOV is an excellent instruction to work with since it is always 3 byte long 0F/cc/rm as it only works with 32 bit registers and no memory or immediate operands. RDTSC also makes a great target for this as it does not use operands at all and is fixed length.<br /></div><br />The source operand could be 16/32-bit register or 16/32-bit memory.<br /></div><br /><br />Hi Mazegen,<br /><br />I should have qualified that with &quot;for my purposes&quot;, I only use CMOV for register to register moves to date, that may change in the future but for now I only wrote an implementation for r32.<br /><br />Donkey</div>
+    <div class="meta">Posted on 2006-05-11 12:45:02 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

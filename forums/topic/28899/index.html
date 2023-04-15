@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>File Mapping - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28899" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=28899">File Mapping</a></p>
+   <div class="post" id="post-204299">
+    <div class="subject"><a href="#post-204299">File Mapping</a></div>
+    <div class="body">&nbsp; If in File mapping, the file is on disk except for a memory image then what do they mean by view of? Is it the whole file or just what you see when you open it. I have a problem loading large files and maintaining my edit controls. Do I need to UnMapViewOf and remapView?</div>
+    <div class="meta">Posted on 2008-01-01 11:26:17 by mrgone</div>
+   </div>
+   <div class="post" id="post-204301">
+    <div class="subject"><a href="#post-204301">Re: File Mapping</a></div>
+    <div class="body">The &quot;view of&quot; part could be a little difficult to intercept. Here is the deal. In processors with paging, there was this technique that was used by programmers called file mapping. This means that a file becomes virtually a part of the process&#039;s address space. Therefore, when you access Megabyte 1 of your process&#039;s address space, that means you could be accessing Byte#0 of a file that is mapped into that address. The mapping of the file to pages is done by the Operating System and you don&#039;t have to worry about all the mutual exclusion on the handles and keeping the most recent version of the file viewable to applications, caching and etc.<br /><br />Now let us say you open a file using the CreateFile() Win32 API. Now you create a mapping object using the CreateFileMapping() Win32 API. This function will take care of mapping the file&#039;s contents into the process&#039;s virtual address space. Therefore, think of this function as somebody who pulls your file&#039;s contents into your application&#039;s virtual address space.<br /><br />Then you will have to call the MapViewOfFile() Win32 API to actually &quot;address&quot; or &quot;access&quot; the contents of your file. So think of it this way:<br /><br /><ul><br />&nbsp; [*]CreateFileMapping(): creates the mapping object for you. Maps the file into your application&#039;s virtual address space.<br />&nbsp; [*]MapViewOfFile(): Allows your application to actually &quot;access&quot; the contents of the mapped file.<br />&nbsp; [*]UnmapViewOfFile(): Removes the file from your application&#039;s virtual address space. This will include mirroring all the changed contents to the disk.<br /></ul><br /><br />So for example, once you have a valid return value of the MapViewOfFile() Win32 API, you could use it as a pointer to the contents of the file. So you could create an empty file using the CreateFile() Win32 API, mapping it using CreateFileMapping() function, then viewing its empty contents using MapViewOfFile() and using the return value of the latter Win32 API to write to the file. For example, you could use that handle to call the lstrcpy() function to write a null-terminated string to the file. The good thing is that all of these will be done on the memory which makes it faster than reflecting the changes immediately to the disk. Once you are done, you will call the UnmapViewOfFile() Win32 API to reflect your changes to the mapping object, into the disk.<br /><br />I hope this was helpful</div>
+    <div class="meta">Posted on 2008-01-01 14:48:32 by XCHG</div>
+   </div>
+   <div class="post" id="post-204307">
+    <div class="subject"><a href="#post-204307">Re: File Mapping</a></div>
+    <div class="body">Changes are reflected to disk not just when you UnmapViewOfFile().<br /><br />Both reading and writing to memory mapped files heavily depend on the processor exception handling, page faults in particular. When you MapViewOfFile, the file&#039;s data isn&#039;t automatically loaded into the view, it isn&#039;t done until you touch the bytes - which generates a #PF, specifically handled to do a PageIn operation. Things are slightly more complicated than this because of read-ahead caching, but it&#039;s the basics.<br /><br />Similar for writing, you get a #PF, possibly triggering copy-on-write, and definitely adding the pages to the system&#039;s Dirtly-list, which the system&#039;s lazy page writer will eventually PageOut to disk. NOT just when you UnmapViewOfFile or FlushFileBuffers.<br /><br />And yes, when dealing with 32bit systems, don&#039;t expect to be able to fully map files. Find a &quot;view size&quot; that fits you well, and process the files in chunks... because you&#039;re limited to ~2 gigs of memory space usable for file mapping <strong>and other things</strong>, I&#039;d suggest not even doing 1gig mappings, but probably sticking to something more conservative like 512 or 256t megabyte <strong>max</strong>. And if you want Win9x support, notice that memory mappings are allocated in the <strong>shared</strong> part of system space, so you should definitely never go above ~256 meg or so.<br /><br />Even for 64bit system where you don&#039;t have a limited address space, I&#039;d still suggest a &quot;chunked&quot; approach (possibly several gigabyte large chunks, though), since each page of mapped memory requires some system memory. I&#039;m not sure whether windows uses Large Pages for filemapping on windows x86-64 or if it sticks to standard 4kb pages. Btw. iirc large pages in x86-64 mode are 2meg large, not 4meg.</div>
+    <div class="meta">Posted on 2008-01-01 16:43:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-204311">
+    <div class="subject"><a href="#post-204311">Re: File Mapping</a></div>
+    <div class="body"><div class="quote">I&#039;m not sure whether windows uses Large Pages for filemapping on windows x86-64 or if it sticks to standard 4kb pages. Btw. iirc large pages in x86-64 mode are 2meg large, not 4meg.<br /></div><br />But such mix is possible? Having pages 4 KB sized and larger pages for filemapping on the same process or even in the whole system?</div>
+    <div class="meta">Posted on 2008-01-01 19:16:59 by LocoDelAssembly</div>
+   </div>
+   <div class="post" id="post-204313">
+    <div class="subject"><a href="#post-204313">Re: File Mapping</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">I&#039;m not sure whether windows uses Large Pages for filemapping on windows x86-64 or if it sticks to standard 4kb pages. Btw. iirc large pages in x86-64 mode are 2meg large, not 4meg.<br /></div><br />But such mix is possible? Having pages 4 KB sized and larger pages for filemapping on the same process or even in the whole system?<br /></div><br /><br />Yes it is. For the x86-64, the entries in the Page Directory have a a specific bit (PS) to indicate whether the memory pointed to is a Page Table (4KB pages) or a whole 2MB section of RAM.<br /><br />From what I have heard/seen around, there is even support for 1GB pages. It will be quite some time before those are utilized, perhaps when 1TB of RAM becomes common place or for very specific systems.</div>
+    <div class="meta">Posted on 2008-01-01 19:22:50 by SpooK</div>
+   </div>
+   <div class="post" id="post-204314">
+    <div class="subject"><a href="#post-204314">Re: File Mapping</a></div>
+    <div class="body"><div class="quote"><br /><div class="quote">I&#039;m not sure whether windows uses Large Pages for filemapping on windows x86-64 or if it sticks to standard 4kb pages. Btw. iirc large pages in x86-64 mode are 2meg large, not 4meg.<br /></div><br />But such mix is possible? Having pages 4 KB sized and larger pages for filemapping on the same process or even in the whole system?<br /></div><br />Theoretically possible, yes. Done in practice? no idea.<br /><br />I don&#039;t know if windows uses any large pages at all for user-mode stuff. Only place I know for certain they&#039;ve been used was related to AGP memory buffers, and only because some AMD CPUs have bugs wrt. AGP memory, and the fix for the problem was to set LargePageMinimum=-1 ....</div>
+    <div class="meta">Posted on 2008-01-01 19:23:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-204315">
+    <div class="subject"><a href="#post-204315">Re: File Mapping</a></div>
+    <div class="body">&nbsp; Thanks alot XCHG! Yeah that&#039;s very helpful. I see you guys discussing the memory allocation. I beleive you are exactly right....4K pages. So I&#039;m not sure what to do because if I use null parameters I get the whole original file. But what I did was to create a new file and transfer the contents so I could operate on it and send it back. But the new file is by my calculation 5X the original size. It will transfer the whole file in it&#039;s blown up version to the new file for veiwing but I loose my edit controls?????<br /><br />Is there a way to use NULL parameters and get feedback from Windows on the size loaded so I can do an estimate on new file size?</div>
+    <div class="meta">Posted on 2008-01-01 19:37:42 by mrgone</div>
+   </div>
+   <div class="post" id="post-204316">
+    <div class="subject"><a href="#post-204316">Re: File Mapping</a></div>
+    <div class="body">At least for 32bit XP and the file access pattern used when calculating a md5sum of a file, file mapping seems to indeed do 4kb pages, without too much readahead - dividing the filesize/4096 by the amount of process pagefaults gave a result very close to 1.<br /><br />Don&#039;t worry too much about the memory allocation part of things, filemapping go from the filesystem cache, and will thus be discarded/flushed when necessary, and relatively efficiently.<br /><br />As for file sizes... use GetFileSize on the source file, and be sure to read what MDSN says about handling 64-bit file sizes cleanly (involving call to GetLastError). Specify proper offset/sizes when doing your copy, and do the mapping in &quot;chunks&quot; as I described earlier.<br /><br />And really, if what you&#039;re doing is file copying, you&#039;re probably better off using ReadFile+WriteFile, probably with the &quot;no buffering&quot; flag, and possibly with overlapped (AKA async) I/O. Filemapping has higher CPU overhead than ReadFile/WriteFile because of all the pagefaults...</div>
+    <div class="meta">Posted on 2008-01-01 19:45:45 by f0dder</div>
+   </div>
+   <div class="post" id="post-204318">
+    <div class="subject"><a href="#post-204318">Re: File Mapping</a></div>
+    <div class="body">&nbsp; Move it in chunks? Oh crap! That&#039;s probably it because everything works fine with smaller files.&nbsp; :mad:</div>
+    <div class="meta">Posted on 2008-01-01 20:04:42 by mrgone</div>
+   </div>
+   <div class="post" id="post-204325">
+    <div class="subject"><a href="#post-204325">Re: File Mapping</a></div>
+    <div class="body"><div class="quote"><br />&nbsp; Move it in chunks? Oh crap! That&#039;s probably it because everything works fine with smaller files.&nbsp; :mad:<br /></div><br />Well, you&#039;d need files in the gigatebytes+ range before doing it in one big go would fail...</div>
+    <div class="meta">Posted on 2008-01-02 03:52:17 by f0dder</div>
+   </div>
+   <div class="post" id="post-204326">
+    <div class="subject"><a href="#post-204326">Re: File Mapping</a></div>
+    <div class="body">FileMapping has finite limits, which to me is perfectly reasonable.<br />Treat it as a sliding window, mapping a VIEW of (a small part of) the file, and you are treating it as was originally intended. It is NOT a Jacobs Ladder or some kind of magical doorway to infinity.<br />The term &#039;reasonable&#039; is what we might debate, and my answer to that would be &#039;as small as your implementation can allow while being a clean multiple of the system&#039;s page granularity, in our case multiples of 4kb&#039;.</div>
+    <div class="meta">Posted on 2008-01-02 07:07:11 by Homer</div>
+   </div>
+   <div class="post" id="post-204327">
+    <div class="subject"><a href="#post-204327">Re: File Mapping</a></div>
+    <div class="body"><div class="quote"><br />FileMapping has finite limits, which to me is perfectly reasonable.<br />Treat it as a sliding window, mapping a VIEW of (a small part of) the file, and you are treating it as was originally intended. It is NOT a Jacobs Ladder or some kind of magical doorway to infinity.<br />The term &#039;reasonable&#039; is what we might debate, and my answer to that would be &#039;as small as your implementation can allow while being a clean multiple of the system&#039;s page granularity, in our case multiples of 4kb&#039;.<br /></div><br />Actually you need to query the granularity to use, and it is <strong>not</strong> page granularity! Using page granularity might <strong>seem</strong> to work, but what you need is SYSTEM_INFO.dwAllocationGranularity, and no - please don&#039;t hardcode to 64kb.<br /><br />Also, for reasonable window/view size, don&#039;t go too small, since Map/UnmapViewOfFile do have performance penalty. I tend to use 128-256meg on 32bit windows when dealing with &quot;a few large files&quot;... if you want to support win9x, you might want to go as low as 64meg if you need multiple open files, simply because of the shared address space.<br /><br />And as for processing, if you&#039;re doing linear start-&gt;end processing of files, memory mapping will be slow than ReadFile. You will obviously spend to same wall-clock time with both methods, since harddisk I/O is the limiting factor, but using memory mapping consumes more CPU time. Whether you care about this depends on whether you plan to run only on the last-generation CPUs, or if you want to support old stuff, play nice on terminal services, etc.<br /></div>
+    <div class="meta">Posted on 2008-01-02 09:29:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-204343">
+    <div class="subject"><a href="#post-204343">Re: File Mapping</a></div>
+    <div class="body">Sorry fellas, I&#039;ve been busy looking at how this assembly company botched my design. They really screwed up the DC-DC converter section.<br /><br />Anyway, what the hell is sys info gonna do? I already know all about the sys. The problem is user mode where I must suffer the dictates of Microsoft. I&#039;m not gonna do it in chunks, forget about it! There is another way I am sure. I think there is something wrong with my ordering or I need to take it to another layer. It get confusing. What if I do a create file and allocate enough memory to it. Then can I Map that file into my window by taking over the handles and so forth?</div>
+    <div class="meta">Posted on 2008-01-03 07:47:27 by mrgone</div>
+   </div>
+   <div class="post" id="post-204344">
+    <div class="subject"><a href="#post-204344">Re: File Mapping</a></div>
+    <div class="body">When you call CreateFileMapping(), specifying 0 for dwMaximumSize{High,Low} is just fine, unless you want to create/grow a file.<br /><br />But when you MapViewOfFile(), <strong>do it in chunks</strong>, <em>don&#039;t expect to be able to map entire file contents</em>, unless you know you will only be dealing with tiny files. And do check what MSDN/PlatformSDK has to say about mapViewOfFile()... You need to call GetSystemInfo() and pay attention to the dwAllocationGranularity member of the structure it returns; FileOffset must be aligned to dwAllocationGranularity.<br /></div>
+    <div class="meta">Posted on 2008-01-03 07:57:39 by f0dder</div>
+   </div>
+   <div class="post" id="post-204348">
+    <div class="subject"><a href="#post-204348">Re: File Mapping</a></div>
+    <div class="body"><div class="quote"><br />When you call CreateFileMapping(), specifying 0 for dwMaximumSize{High,Low} is just fine, unless you want to create/grow a file.<br /><br />But when you MapViewOfFile(), <strong>do it in chunks</strong>, <em>don&#039;t expect to be able to map entire file contents</em>, unless you know you will only be dealing with tiny files. And do check what MSDN/PlatformSDK has to say about mapViewOfFile()... You need to call GetSystemInfo() and pay attention to the dwAllocationGranularity member of the structure it returns; FileOffset must be aligned to dwAllocationGranularity.<br /><br /></div><br /><br />You got to be kidding. With all that memory? Tell me about this grow a file. What function calls do I use and will it screw up the orginal length of the file I opened? What I want to do is move the contents to a new location but blown up about five times. Then manipulate that file and in closing, recompact it bak down to original size.</div>
+    <div class="meta">Posted on 2008-01-03 12:56:59 by mrgone</div>
+   </div>
+   <div class="post" id="post-204349">
+    <div class="subject"><a href="#post-204349">Re: File Mapping</a></div>
+    <div class="body">What about this one?<br /><br />The VirtualProtect function changes the access protection on a region of committed pages in the virtual address space of the calling process. This function differs from VirtualProtectEx, which changes the access protection of any process.</div>
+    <div class="meta">Posted on 2008-01-03 13:20:01 by mrgone</div>
+   </div>
+   <div class="post" id="post-204350">
+    <div class="subject"><a href="#post-204350">Re: File Mapping</a></div>
+    <div class="body"><div class="quote">When the process needs data from a portion of the file other than what is in the current file view, it can unmap the current file view, then create a new file view.</div><br /><br />What about this? It should be automatic right? It&#039;s the editing I loose. The edit functions. This is puzzling. It will do one backspace &amp; stop. </div>
+    <div class="meta">Posted on 2008-01-03 13:54:59 by mrgone</div>
+   </div>
+   <div class="post" id="post-204353">
+    <div class="subject"><a href="#post-204353">Re: File Mapping</a></div>
+    <div class="body"><div class="quote"><br />You got to be kidding. With all that memory? Tell me about this grow a file. What function calls do I use and will it screw up the orginal length of the file I opened? What I want to do is move the contents to a new location but blown up about five times. Then manipulate that file and in closing, recompact it bak down to original size.<br /></div><br />Yes, even &quot;with all that memory&quot;, since the max you can have mapped is somewhat below 2 gigabytes. And, as already mentioned, if you want Win9x support, memory mapped files are not per-process as under NT but allocated from the shared pool, thus putting <strong>quite</strong> a limit on the size you can have mapped.<br /><br />Growing mapped files... can only be done with CreateFileMapping. Either you specify &quot;use current file size&quot;, or you give a file size yourself and that&#039;s what you&#039;re locked to unless you close the filemapping and create a new. And you should never mix memory mapped I/O with regular I/O, it will eventually bite you in the ass.<br /></div>
+    <div class="meta">Posted on 2008-01-03 18:36:55 by f0dder</div>
+   </div>
+   <div class="post" id="post-204356">
+    <div class="subject"><a href="#post-204356">Re: File Mapping</a></div>
+    <div class="body">&nbsp; I never saw that function.....a**&nbsp; :lol: I here ya.&nbsp; Thanks for support. I tried to jump in and do something real quick and just have to wait now. Got other work to finish.</div>
+    <div class="meta">Posted on 2008-01-04 17:01:22 by mrgone</div>
+   </div>
+  </div>
+ </body>
+</html>

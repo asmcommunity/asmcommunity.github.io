@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Nasm32 Linux - INVOKE arg count? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28703" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28703">Nasm32 Linux - INVOKE arg count?</a></p>
+   <div class="post" id="post-202767">
+    <div class="subject"><a href="#post-202767">Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">Hi, All!<br /><br />I&#039;m new to asm, so please bear with me on this.<br /><br />I was wondering how I would go about determining the number of arguments passed via INVOKE, if the proc I&#039;m calling were to support a variable number of arguments that are terminated with a zero?<br /><br />In looking at the Invoke macro, I figure that I can either divide %$args by four, or I can introduce a new macro var and increment it by one everytime %$args is incremented by four.<br /><br />Then, just before call _proc, I push the value in the new var onto the stack.&nbsp; This should end up after the terminating zero mentioned above, correct?<br /><br /><br />What I&#039;m trying to accomplish is being able to use the proc like so (not real code):<br /><br /><pre><code><br />invoke myproc,1,2,3,4,5<br /></code></pre><br /><br />and have myproc call an external function, in a loop<br /><br /><pre><code><br />proc myproc<br />argcnt argd<br /><br />loop1:<br />&nbsp; invoke extfunc,argv(something)<br />&nbsp; cmp &lt;register&gt;,argcnt<br />&nbsp; je somewhere<br />&nbsp; dec argcnt ; **probably need to use a register<br />&nbsp; jmp loop1<br />endproc<br /></code></pre><br /><br />I know this is ugly and incorrect code, but I&#039;m thinking this through before starting the actual code.&nbsp; ;)<br /><br />Thanks in advance for your replies!<br /><br />AIR.<br /></div>
+    <div class="meta">Posted on 2007-08-29 14:13:16 by Airr</div>
+   </div>
+   <div class="post" id="post-202768">
+    <div class="subject"><a href="#post-202768">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">Ah, I should have read the nasm manual.&nbsp; It appears that %0 is what I was looking for... :oops:<br /><br />AIR.</div>
+    <div class="meta">Posted on 2007-08-29 15:38:34 by Airr</div>
+   </div>
+   <div class="post" id="post-202769">
+    <div class="subject"><a href="#post-202769">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body"><div class="quote"><br />Ah, I should have read the nasm manual.&nbsp; It appears that %0 is what I was looking for... :oops:<br /><br />AIR.<br /></div><br /><br />Yep. Keep that manual handy, as just when you think of a complex way to do things in NASM... a simpler one usually exists and just requires &quot;discovery&quot; ;)</div>
+    <div class="meta">Posted on 2007-08-29 19:51:02 by SpooK</div>
+   </div>
+   <div class="post" id="post-202771">
+    <div class="subject"><a href="#post-202771">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">I don&#039;t think the %0 macro directive is going to help you much here. It&#039;s for obtaining the number of parameters passed to a macro, in this case your problem is finding out how many arguments you have on the stack. Probably the easiest way to achieve this for you would be to do your procedure similar to what you are already doing but making a few minor changes.<br /><br /><pre><code>invoke myproc,7,10,21,13,42,73,85,88<br />invoke myproc,9,94,16,44,55,12,52,62,30,78<br />...<br />;-------------------------------------------<br />; myproc(argcnt,...)<br />; argcnt - number of arguments in &#039;...&#039;<br />;-------------------------------------------<br />proc myproc<br />argcnt argd ; contains the number of arguments on the stack<br /><br />; Note the numbers I used, I based argcnt on 1 index instead<br />; of 0 index. This adjusts for argcnt to be on the stack, we are<br />; just skipping over it in our loop. Also take into account in this<br />; loop we are executing through them right to left, just use an<br />; extra register to execute through them left to right and test the<br />; register against argcnt.<br /><br />&nbsp; mov ecx, argcnt<br />.loop1:<br />&nbsp; invoke extfunc,argv(ecx*4)<br />&nbsp; cmp ecx, 1<br />&nbsp; je .done<br />&nbsp; dec ecx<br />&nbsp; jmp .loop1<br />.done:<br />&nbsp; ret<br />endproc</code></pre><br /><br />I didn&#039;t test this code because I&#039;m in the middle of class right now, but it&#039;s the basic idea that matters in this case. When I get home, if I remember I might throw some demo-code together for you. I hope this helps you.<br /><br />Regards,<br />Bryant Keller</div>
+    <div class="meta">Posted on 2007-08-29 20:56:05 by Synfire</div>
+   </div>
+   <div class="post" id="post-202772">
+    <div class="subject"><a href="#post-202772">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">True. Using %0 will only work with things like INVOKE where there is a 1:1 correlation between arguments and parameters *AND* assuming that all parameters are DWORD values.<br /><br />Didn&#039;t think about it too much since he specified NASM32/INVOKE.</div>
+    <div class="meta">Posted on 2007-08-29 21:26:45 by SpooK</div>
+   </div>
+   <div class="post" id="post-202773">
+    <div class="subject"><a href="#post-202773">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">What I was thinking of doing with %0 was pushing it on the stack last (from within the invoke macro), and then in the proc using argd to retrieve the count.&nbsp; This would eliminate the need to specify the number of arguments manually in the invoke &quot;call&quot;, as Synfire suggested.&nbsp; If it works. <br /><br />I *think* this might work, I&#039;ll let you know how it turns out....<br /><br />AIR.<br /><br /></div>
+    <div class="meta">Posted on 2007-08-29 22:55:07 by Airr</div>
+   </div>
+   <div class="post" id="post-202774">
+    <div class="subject"><a href="#post-202774">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">Yea, that would work if you modified invoke, or made an invoke wrapper.<br /><br /><pre><code>%imacro vinvoke 1-*<br /> %define fname %1<br /> %assign %$args 0<br /> %rep %0-1<br />&nbsp; %rotate -1<br />&nbsp;  %ifstr %1<br />&nbsp; &nbsp; jmp %%endstr_%$args<br />&nbsp; &nbsp; %%str_%$args: db %1, 0<br />&nbsp; &nbsp; %%endstr_%$args:<br />&nbsp; &nbsp; push dword %%str_%$args<br />&nbsp;  %else<br />&nbsp; &nbsp; push dword %1<br />&nbsp;  %endif<br />&nbsp; %assign %$args %$args+4<br /> %endrep<br /> invoke fname, %0<br /> %undef fname<br />%endmacro</code></pre><br /><br />Or design it from the ground up. If you go from the ground up, make sure to pay close attention to how the various macros work together internally. Due to the vague reply I was under the impression that you were going to try and use %0 in the procedure itself, not create a new invoke macro. It was my bad.</div>
+    <div class="meta">Posted on 2007-08-29 23:57:06 by Synfire</div>
+   </div>
+   <div class="post" id="post-202787">
+    <div class="subject"><a href="#post-202787">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">One suggestion for Variable Argument procedures or functions: Use a calling convention such as STDCALL where parameters are pushed from right to left into the stack. After having pushed all of the parameters, then <strong>push the number of parameters that you have pushed onto the stack and not a zero</strong>. So if you have pushed 5 parameters onto the stack namely Param1, Param2, Param3, Param4 and Param5, then you have to push them like this:<br /><br /><pre><code>&nbsp; <br />&nbsp; PUSH&nbsp; &nbsp; Param5&nbsp; &nbsp; ; Last Parameter<br />&nbsp; PUSH&nbsp; &nbsp; Param4&nbsp; &nbsp; ; Second to last parameter<br />&nbsp; PUSH&nbsp; &nbsp; Param3&nbsp; &nbsp; ; Third parameter<br />&nbsp; PUSH&nbsp; &nbsp; Param2&nbsp; &nbsp; ; Second parameter<br />&nbsp; PUSH&nbsp; &nbsp; Param1&nbsp; &nbsp; ; First parameter<br />&nbsp; PUSH&nbsp; &nbsp; DWORD 5&nbsp;  ; Total number of parmaters passed onto the stack</code></pre><br /><br /><br />In your code, you can then simply access the last parameter pushed onto the stack and determine how many parameters are pushed in total.</div>
+    <div class="meta">Posted on 2007-08-30 23:52:39 by XCHG</div>
+   </div>
+   <div class="post" id="post-202794">
+    <div class="subject"><a href="#post-202794">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body"><div class="quote">After having pushed all of the parameters, then <strong>push the number of parameters that you have pushed onto the stack and not a zero</strong>.</div><br /><br />That&#039;s what is being done. The %0 is a NASM macro directive which returns the number of arguments passed to a macro. So if invoke was called with 5 parameters %0 would be 5.<br /><br /><strong>Correction to my code:</strong><br />The line: invoke fname, %0<br />Should be: invoke fname, %0-1<br /><br />I typed it up pretty quick and forgot to take into account the function name in the parameter list.</div>
+    <div class="meta">Posted on 2007-08-31 17:05:30 by Synfire</div>
+   </div>
+   <div class="post" id="post-202810">
+    <div class="subject"><a href="#post-202810">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">I think there was a misinterpretation on my side. Bryant, I did not post that code to give you the idea; in fact, I hadn&#039;t read any of the replies. I had just read the original post and when I noticedthat  was talking about pushing a zero to the stack, I thought he/she wanted to push the DWORD value of 0x00000000 into the stack to mark the end of the arguments&#039; list. I was not at all judging the accuracy of your code.</div>
+    <div class="meta">Posted on 2007-09-01 10:05:09 by XCHG</div>
+   </div>
+   <div class="post" id="post-202811">
+    <div class="subject"><a href="#post-202811">Re: Nasm32 Linux - INVOKE arg count?</a></div>
+    <div class="body">The correction to my code was just a side note because I noticed it while replying. Sorry for not really separating it better. :oops:</div>
+    <div class="meta">Posted on 2007-09-01 10:54:13 by Synfire</div>
+   </div>
+  </div>
+ </body>
+</html>

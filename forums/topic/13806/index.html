@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Cannot set Selector. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13806" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=13806">Cannot set Selector.</a></p>
+   <div class="post" id="post-106862">
+    <div class="subject"><a href="#post-106862">Cannot set Selector.</a></div>
+    <div class="body">I cannot set the selector. It causing the system rebooting. GRUB, how to make it autorun my program?</div>
+    <div class="meta">Posted on 2003-06-12 05:02:51 by realvampire</div>
+   </div>
+   <div class="post" id="post-107000">
+    <div class="subject"><a href="#post-107000">Cannot set Selector.</a></div>
+    <div class="body">actually i don't get it why you create a new thread, but um... ok.<br /><br />first, i want to spot you on senseless code:<br /><pre><code><br /> mov cx,#14 ;&lt;---<br /> mov dx,0e     <br />                <br /> out al,dx ;get a byte from port 0x0e &#40;which one is that? what does it do?&#41;<br /> jcxz -3 ;and jump back if cx==0. but cx can't be zero, you've put 14 in this register before<br /></code></pre><br /><br />second, it would be interresting how you test your code. do you boot it from a disk or do you launch it from dos? if so, you have to calculate the bases of the selectors differently. this is the most likely fault.<br /><br />third, this part could also reset the system.<br /><pre><code><br /> mov ax,cs<br /> mov es,ax<br /><br /> cli<br /> smsw ax ;&lt;-- msw to ax, ax modified!!<br /> or al,1<br /> lmsw ax<br /> <br /> prefix ;&lt;-- what's that for?<br /> cld<br /> mov ss,ax<br /></code></pre><br />ax contains the msw, NOT the cs-value (marked). furthermore you don't set ds.<br /><br />fourth, you <strong>have</strong> to do the far jump! this is to set cs:eip simultaneously. the code gets launched from 0000:7C00, i.e. cs is zero. if you then just set the pe-bit cs won't be used as a segment anymore, it will be a selector. since cs is still zero, the NULL-descriptor will be used, which is not valid.<br /><br /><strong>debugging</strong>:<br />it's hard work to find out where's the fault. if you practice the direct way (i.e. you wrote a bootloader which loads up your kernel and executes it, as i did) you can set an endless slope on important places:<br /><pre><code><br />&#58;<br />&#58;<br /> mov ax,bp<br /> add ax,#46<br /> call ax <br /> <br /> mov ax,4f02<br /> mov bx,118<br /> int 10 <br /><br />  jmp -2 ;endless slope, computer hangs<br /></code></pre><br />if the computer doesn't reset and reboot you know the code works to this spot.<br />another possibility is to write something on the textscreen:<br /><pre><code><br />mov ax,0xb800<br />mov es,ax<br />mov byte &#91;es&#58;0000&#93;,'1'<br /></code></pre><br />on the topleft corner a '1' appreas. note that the second char is at , the third on  and so on.<br /><br />hope this helps</div>
+    <div class="meta">Posted on 2003-06-13 13:47:24 by hartyl</div>
+   </div>
+   <div class="post" id="post-107207">
+    <div class="subject"><a href="#post-107207">Hi hartyl</a></div>
+    <div class="body">When I try to use Jmp far ( I use EA C0 DE 08 00 ) It rebooted. LMSW ax doesnot rebooted, I think the GDT succesfully loaded, but it seem to be invalid. Can you tell me whats your mistake when you made a pmode switch?. I upload a new source, hope you can find me whats my mistake. Im not using it as my boot sector anymore, its too difficult, and it causing my diskette damaged rewriting it all the day<br /><br /><br /><pre><code><br /><br />Prefix &lt;&lt; This one mean, &#91;use32&#93; bits on NASM or FASM<br /><br /></code></pre><br /><br /><br />I use MS-DOS to test it, I dont know how to use GRUB.</div>
+    <div class="meta">Posted on 2003-06-15 20:28:34 by realvampire</div>
+   </div>
+   <div class="post" id="post-107245">
+    <div class="subject"><a href="#post-107245">Cannot set Selector.</a></div>
+    <div class="body">oh man, are you crazy?! when you write a bootloader, the first sector is loaded to 0000:7c00, but if you write a .com-file and test it with ms-dos it's loaded at cs:0100, where cs is assigned by dos (everytime different) and cs==ds. so you have to fix up <strong>all</strong> bases of your gdt.<br /><br /><pre><code><br /> mov cx,#31999    ; Still in Real segment<br /> cld              ; Tell our code are work 'till here<br /> rep              ; Only SS valid till here<br /> movsb            ; <br /></code></pre><br />what the hell does this code? you move 32000 bytes  from ds:si to es:di - where do you set the values?<br />i told you that after setting you have a 16/32bit mix, you sould do a far jump immediately after setting the pe-bit. afterwards set the selectors.<br />i hope you know that the 0008:00DAC0DE-address was just an example - <strong>not</strong> the real address you should jump to.<br /><br />i'm currently at school, so i can't rewrite your code - i'll do that at home if i have time.</div>
+    <div class="meta">Posted on 2003-06-16 04:23:52 by hartyl</div>
+   </div>
+   <div class="post" id="post-107265">
+    <div class="subject"><a href="#post-107265">Hi hartyl</a></div>
+    <div class="body">I almost give-up. It really difficult. I dont know whats my mistakes. Yes DS  and cs always changed.</div>
+    <div class="meta">Posted on 2003-06-16 09:54:47 by realvampire</div>
+   </div>
+   <div class="post" id="post-107278">
+    <div class="subject"><a href="#post-107278">Cannot set Selector.</a></div>
+    <div class="body">ok, i'll cheer you up now. i have found a tutorial which is like <strong>made for you</strong>. here it comes:</div>
+    <div class="meta">Posted on 2003-06-16 11:22:31 by hartyl</div>
+   </div>
+   <div class="post" id="post-107313">
+    <div class="subject"><a href="#post-107313">Hi hartyl</a></div>
+    <div class="body">I already have it. But thanks. Im still trying and trying. Its been a month I get stuck in Pmode switch. :alright:  Im never give up.<br /><br />I have Jump, but it still rebooted. I use jmp 0010:021a, because my next code put there. Can you rewrite my code, please?</div>
+    <div class="meta">Posted on 2003-06-16 21:48:49 by realvampire</div>
+   </div>
+   <div class="post" id="post-107324">
+    <div class="subject"><a href="#post-107324">New Hope</a></div>
+    <div class="body">I heard a BIOS Call can set it automatically. Int 0x15 ah=0x89. Can I have the sample or the site containing it?<br /><br /><br />Hi, it work. This is my mistakes.<br /><br />GDT db FF,FF,0,0,0,9a,CF,0  ; It was not valid<br />GDT db FF,FF,0,0,0,9a,0F,0   ; Valid<br /><br />I use linier jump with CF on it. I have changed it to 0F. :alright:  Thank you hartyl.<br /><br />BTW: Can I see your code? My GDT are not completely right. I need a working gdt.</div>
+    <div class="meta">Posted on 2003-06-16 23:40:20 by realvampire</div>
+   </div>
+   <div class="post" id="post-107471">
+    <div class="subject"><a href="#post-107471">Done...</a></div>
+    <div class="body">:)  I cant believe it, my 286 byte .com program control the whole computer. But why Call are not allowed? What selector should I use?The current selector code? But it containing a base. Maybe I must made a new selector.:alright:  I love it.</div>
+    <div class="meta">Posted on 2003-06-18 09:36:09 by realvampire</div>
+   </div>
+   <div class="post" id="post-110872">
+    <div class="subject"><a href="#post-110872">Cannot set Selector.</a></div>
+    <div class="body">Hi<br /><br />I recently coded (from DOS prompt) a program that loads my GDT/IDT to XMS without any memory manager, full 32-bit... It was very hard to debug, but I learnt a lot from it, and I started with Alexei Frounze's tutorial (C is more understandable at the beginning ; now I translated the whole project to asm with Fasm 1.47).<br /><br />Good luck</div>
+    <div class="meta">Posted on 2003-07-17 06:05:59 by valy</div>
+   </div>
+   <div class="post" id="post-129571">
+    <div class="subject"><a href="#post-129571">You call the selector</a></div>
+    <div class="body">and use IRET</div>
+    <div class="meta">Posted on 2004-01-01 22:16:00 by mrgone</div>
+   </div>
+  </div>
+ </body>
+</html>

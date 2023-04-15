@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Screwing about with AnimationController scripting - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=25525" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=25525">Screwing about with AnimationController scripting</a></p>
+   <div class="post" id="post-186489">
+    <div class="subject"><a href="#post-186489">Screwing about with AnimationController scripting</a></div>
+    <div class="body">Over the past few days, I&#39;ve been dusting off and polishing my animated skinmesh baseclass (CModel.inc), and thinking a lot about how best to implement support functionality for performing blending of animations / transitioning between animations.<br /><br />What I really *don&#39;t* want to do is to implement this stuff in each &#39;Character class&#39; derived from CModel, really I think that this stuff ought to be implemented in the generic CModel class, thus decoupling it from the specifics of a given model or class of models (for example &#39;biped&#39;).<br /><br />I&#39;m tempted to implement this via a homemade scripting language (with full support for timed sound effects etc), and I am curious to know if anyone has already been down this road (I&#39;m curious to see what kind of semantics other people used).<br /><br /></div>
+    <div class="meta">Posted on 2006-11-10 22:09:29 by Homer</div>
+   </div>
+   <div class="post" id="post-186490">
+    <div class="subject"><a href="#post-186490">Re: Screwing about with AnimationController scripting</a></div>
+    <div class="body">An excerpt from an AI &quot;behaviour&quot;, which takes care of animation, sound, particles and other actions&nbsp; (it&#39;s C code) :<br /><pre><code><br />		if(me-&gt;life&lt;100 &amp;&amp; age&amp;1 &amp;&amp; x&gt;-50)NewDebris(6,x,y);<br />		ON(150)me-&gt;dx--;<br />		ON(160)me-&gt;dy--;<br />		ON(170)me-&gt;dy--;<br />		ON(300)me-&gt;dy+=2;<br />		ON(310)me-&gt;dx+=2;<br />		ON(450)me-&gt;dx--;<br />		ON(600)me-&gt;dy-=2;<br />		EVERY(19){<br />			SHOOT3(7,-3,3+age&amp;7);<br />			SHOOT3(7, 0,3+age&amp;7);<br />			SHOOT3(7, 3,3+age&amp;7);<br />			SHOOT(5);<br />		}<br />		<br />		<br />		EVERY(60){<br />			for(i=4;i;i--){<br />				SHOOT3(7,-5,4+i);<br />				SHOOT3(7,-3,4+i);<br />				SHOOT3(7, 0,4+i);<br />				SHOOT3(7, 3,4+i);<br />				SHOOT3(7, 5,4+i);<br />			}<br />			SHOOT(14);<br />		}<br />		EVERY(100){SHOOT2(6,-20,0);SHOOT2(6,0,0);SHOOT2(6,20,0);}<br />		EVERY(128){<br />			SHOOT3(6,-4,5);<br />			SHOOT3(6,-2,4);<br />			SHOOT3(6, 0,4);<br />			SHOOT3(6, 2,4);<br />			SHOOT3(6, 4,5);<br />		}<br /></code></pre><br /><br />An excerpt of another type of &quot;scripting&quot; I&#39;ve used is (this needs a custom compiler)<br /><pre><code><br />// Time :	type	x	y	dx	dy	rz	flags	behaviour<br /><br />10	:	1	120	-90	-3	2	0	0	14<br />15	:	1	80	-70	-3	2	0	0	14<br />20	:	1	40	-90	-3	2	0	0	14<br />25	:	1	10	-40	-3	2	0	0	14<br /><br /><br />60	:	6	200	-10	-4	3	3	0	25<br />75	:	27	0	-20	0	1	32	0	25<br />90	:	6	-200	-10	4	2	3	0	25<br /><br />110	:	1	-40	-90	3	2	0	0	14<br />120	:	1	-40	-90	3	2	0	0	14<br /></code></pre><br />This one will be easier to sequence, and makes it easy to save a game to a file. <br /><br /><br /><br />You might really not need a script-compiler, but use masm macros to generate+compile the script into an array of bytes. Some of the &quot;opcodes&quot; can be directly calls to predefined functions, and the following bytes/dwords would be the parameters to the func. <br /><br />P.S. I know it&#39;s not exactly what you asked for, but this point of view could help you in the design of a scripting lang. </div>
+    <div class="meta">Posted on 2006-11-11 01:47:25 by Ultrano</div>
+   </div>
+   <div class="post" id="post-186499">
+    <div class="subject"><a href="#post-186499">Re: Screwing about with AnimationController scripting</a></div>
+    <div class="body">This is exactly what I was trying to avoid - hardcoding stuff.<br />Whether I write a bunch of data to a binfile from a custom tool, or embed it in an exe using exotic macros, I&#39;m forced into a position where the user (currently myself) can&#39;t fine-tune anything without a rebuild.<br /><br />I&#39;m not scared of writing a script engine, I could just override one or two of the components from my assembler project.. what I was really interested in was the semantics of script animation.. the syntax of the language used.. stuff like that.<br /><br />What we&#39;re working with is a little like a mixing bench you&#39;d find in a sound studio, we have N tracks, and each track has N properties such as Speed, Position and Weight.<br />That is to say, the AnimationController is a Finite State Machine (FSM).<br />We want to define keyframed transitions (as linear interpolations) from one State to another, but generally we&#39;re not adjusting all the fields, often just one.<br />Unfortunately, m$ decided for whatever reason NOT to define Animation Track as an object.<br />The way it is now, we have access to an AnimationController object which has N methods for manipulating Tracks and for keying future Events on those tracks.. its really inefficient to define full state transitions for the AnimController, the solution needs to be flexible and able to be implemented at runtime (as opposed to buildtime).<br />Either I write dedicated transition and blend editing tools (since they do not exist as such), or it gets scripted (plaintext or not).<br />It&#39;s a shame masm can&#39;t produce compiled binary data files eh?<br /></div>
+    <div class="meta">Posted on 2006-11-11 10:00:33 by Homer</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Basics of Asm32 in opt. examples #2 - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27421" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27421">Basics of Asm32 in opt. examples #2</a></p>
+   <div class="post" id="post-196215">
+    <div class="subject"><a href="#post-196215">Basics of Asm32 in opt. examples #2</a></div>
+    <div class="body">Part2 lea operation and JCC
+(based of optimization of procs ustr2dw(comrade) and atodw(T.Roberts + me) 
+------
+For beginners
+1. About LEA
+The LEA instruction is useful for many purposes because it can do a shift,
+two additions, and a move in just one instruction taking one clock cycle.
+Example:
+<pre><code>
+LEA EAX,
+</code></pre>
+is much faster than
+<pre><code>
+MOV EAX,ECX / SHL EAX,3 / ADD EAX,EBX / SUB EAX,1000</code></pre>
+2. About JCC
+The most often mistake for beginners is using
+test, cmp or reg,reg .ect commands to set flags for
+JCC though conditions are already clear from some
+previous instruction such as dec, inc, sub .ect
+--------------------
+Optimizations:
+Look at original ustr2dw:
+<pre><code>
+ustr2dw proc pszString:DWORD
+	mov	esi, 
+	xor	eax, eax
+	xor	edx, edx
+	jmp	@@chkz
+@@redo:	sub	dl, "0"
+	mov	ecx, eax
+	add	eax, eax
+	shl	ecx, 3
+	inc	esi		;!
+	add	eax, ecx
+	add	eax, edx
+@@chkz:	mov	dl, 
+	test	dl, dl
+	jnz	@@redo
+	ret
+
+ustr2dw endp
+</code></pre>
+1. First thing I can see the proc uses esi but doesn't
+preserve \ restore its original value.
+It's really bad!
+2. All this five instructions <pre><code>
+	mov	ecx, eax
+	add	eax, eax
+	shl	ecx, 3
+	add	eax, ecx
+	add	eax, edx</code></pre>
+
+maybe replaced with the 2:<pre><code>
+	lea eax, ;sum*5
+	lea eax, ;sum*2+new value in dl</code></pre>
+For better paring to remove dependences we can replace this
+6 instructions:<pre><code>
+	mov	ecx, eax
+	add	eax, eax
+	shl	ecx, 3
+	inc	esi		;!
+	add	eax, ecx
+	add	eax, edx</code></pre>
+with this 3:<pre><code>
+	lea eax, ;sum*5
+	inc esi
+	lea eax, ;sum*2+new value in dl</code></pre>
+3. Actually after that is clear that we don't need to use esi
+(wich would make us preserve and restore it) we can do it with ecx
+as a pointer wich can be undefined or changed upon return:
+<pre><code>
+	mov	ecx,  ;!
+	xor	eax, eax
+	xor	edx, edx
+	jmp	@@chkz
+@@redo:	sub	dl, "0"
+	lea eax, ;sum*5
+	inc ecx ;!
+	lea eax, ;sum*2+new value in dl
+@@chkz:	mov	dl,  ;!
+	test	dl, dl
+	jnz	@@redo
+	ret</code></pre>
+4. Now about JCC
+Let's ask ourself what possible value may be in the string we
+are converting?
+Array of ASCII for figures: 30h,31h,...39h
+and zero :)
+We are already substructing from dl and in zero case the operation
+will set sf (sign flag)
+so we don't need to use test dl,dl at all we can uses affect of
+sub al,30h
+on flags.
+So the final optimized proc will be this one:
+<pre><code>
+ustr2dw proc pszString:DWORD
+	mov	ecx, 
+	xor	eax, eax
+	xor	edx, edx
+	jmp	@@chkz
+@@redo:	
+	lea	eax,
+	inc	ecx
+	lea	eax,
+@@chkz:	mov	dl, 
+	sub	dl,30h	;it do 2 jobs for us 
+			;1 - convert ASCII to figure
+	jns	@@redo  ;2 - check if it is zero
+	ret
+ustr2dw endp
+
+;Steve, may you consider the original ustr2dw with this one above?
+;Size is shorten and speed increased.
+The same approah for checking and substructing we can use in atodw.
+The good thing about it is that we don't just optimized size and
+speed of code, but we do it with code wich is in loop - and it
+is major aim for optimizations in any algo.
+The optimized version dwtoa (replace the existing one):
+atodw proc uses edi esi String:PTR BYTE  
+
+      ;---------------------------------------- 
+      ; Convert decimal string into dword value       ; return value in eax 
+      ;----------------------------------------       
+
+      xor eax, eax 
+      mov esi,        
+      xor ecx, ecx
+      xor edx, edx 
+      mov al, 
+      inc esi
+      cmp al, 2Dh
+      jne proceed 
+      mov al, byte ptr 
+      not edx
+      inc esi
+      jmp proceed  
+again:
+      lea ecx, dword ptr  
+      lea ecx, dword ptr 
+      mov al, byte ptr 
+      inc esi 
+proceed:
+      sub al, 30h 
+      jns again
+      lea eax, dword ptr  
+      xor eax, edx 
+      ret  
+      atodw endp  
+</code></pre>
+The Svin.
+
+
+
+
+
+
+
+This message was edited by Hiroshimator, on 3/29/2001 4:04:48 PM</div>
+    <div class="meta">Posted on 2001-03-28 04:00:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196216">
+    <div class="subject"><a href="#post-196216">Basics of Asm32 in opt. examples #2</a></div>
+    <div class="body">.While teaching and preaching
+I discivered something funny about my own .code
+.endw
+:))
+It is exactly about what I was warning the others in this
+thread :) JCC
+I was caught by it with help of HLL in MASM.
+Well people... keep yourself away from those .whiles while
+you still can control your own code.
+OK - to buisness.
+Look at this construction:
+
+.while esi !=0
+....;here is some code
+ dec esi
+.endw
+Isn't it funny?
+I think it is... 'cause it results in the code:
+
+	jmp chekcond
+while:	....
+	dec esi
+	or esi,esi
+endw:   jne while
+
+In other words there is one needless instruction wich its one clock
+every iteration of while
+The code needs to be reorganized to avoid it:
+
+	inc esi
+	jmp endw
+while:
+	....
+endw:	dec esi
+	jne while
+Here is the proc from M32LIB which needs to be replaced with
+newer version (I comment what needs to be removed and put ;! what
+needs to be added):
+<pre><code>
+htodw proc uses ebx edi esi String:DWORD
+
+    ;------------------------------------
+    ; Convert hex string into dword value
+    ; Return value in eax
+    ;------------------------------------
+
+      mov edi, String
+      mov esi, String 
+
+	ALIGN 4
+again:  mov	al,
+	inc	edi
+	or	al,al
+	jnz	again
+	sub	esi,edi
+	xor 	ebx,ebx
+	add	edi,esi
+        xor 	edx,edx
+	not	esi   ;esi = lenth
+	inc 	esi   ;!
+	jmp	chekz ;!
+
+;      .while esi != 0
+@@:     mov al, 
+	cmp al,'A'
+	jb figure
+	sub al,'a'-10
+	adc dl,0
+	shl dl,5 ;if cf set we get it bl 20h else - 0
+	add al,dl
+	jmp next
+figure: sub al,'0'
+next:  
+	lea ecx,
+        and eax, 0Fh
+	shl ecx,2	;mul ecx by log 16(2)
+	shl eax,cl	;eax * 2^ecx
+        add ebx, eax
+        inc edi
+chekz:  dec esi
+        jne @B
+;	.endw
+
+    mov eax,ebx
+    ret
+
+htodw endp
+
+</code></pre>
+
+	
+
+
+This message was edited by Hiroshimator, on 3/29/2001 4:05:49 PM</div>
+    <div class="meta">Posted on 2001-03-28 13:25:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-196217">
+    <div class="subject"><a href="#post-196217">Basics of Asm32 in opt. examples #2</a></div>
+    <div class="body">Alex,
+
+as a favour, would you also send me any algorithms that you work
+on and post as I don't always catch them on the forum. The code
+you have posted here is very well done and it is excellent
+optimisation technique.
+
+One more thing, to make you code a lot more readable in the forum
+if you put on a seperate line befor the code "["code"]" and after the
+code "["/code"]", (without the ( " ) either side), all of your formatting is preserved and it reads a
+lot easier.
+
+Adding some commenting on how the code works is very useful as reading
+a highly optimised algorithm without it can be very hard work.
+
+Regards and keep up the good work.
+
+hutch@pbq.com.au
+
+This message was edited by hutch--, on 3/28/2001 6:33:39 PM</div>
+    <div class="meta">Posted on 2001-03-28 17:28:00 by hutch--</div>
+   </div>
+   <div class="post" id="post-196218">
+    <div class="subject"><a href="#post-196218">Basics of Asm32 in opt. examples #2</a></div>
+    <div class="body">Hey, Alex,
+If it's easier for you just put the <pre><code><pre><code></code></pre> tag at the begining and forget the one at the end :P
+bitRAKE
+
+nope that won't work, both tags need to be used
+
+-H-
+
+This message was edited by Hiroshimator, on 3/29/2001 4:07:07 PM</div>
+    <div class="meta">Posted on 2001-03-28 19:39:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-196219">
+    <div class="subject"><a href="#post-196219">Basics of Asm32 in opt. examples #2</a></div>
+    <div class="body">I don't know how many times this has been re-invented.
+
+How about replacing
+<pre><code>
+      ;=========
+      inc esi
+      jmp endw
+while:
+      ....
+endw: dec esi
+      jne while
+</code></pre>
+with
+<pre><code>
+      ;=========
+      test esi,esi
+      jz   endw2
+while:
+      ....
+      dec  esi
+      jne  while
+endw2:
+</code></pre>
+
+This message was edited by tank, on 3/28/2001 8:45:22 PM</div>
+    <div class="meta">Posted on 2001-03-28 19:44:00 by tank</div>
+   </div>
+   <div class="post" id="post-196220">
+    <div class="subject"><a href="#post-196220">Basics of Asm32 in opt. examples #2</a></div>
+    <div class="body">Thanks, tank! Were you've been for so long?
+You need to look though all my code and teach me lessons!
+Moving in pointed direction I figure out how to replace not two instruction
+but TREE using your aproach, in this particular proc.
+We can at once culculate size and check if its zero:
+<pre><code>
+;^ is it what need to kill the smiles?
+htodw proc uses ebx edi esi String:DWORD
+
+    ;------------------------------------
+    ; Convert hex string into dword value
+    ; Return value in eax
+    ;------------------------------------
+
+      mov edi, String
+      mov esi, String 
+
+	ALIGN 4
+again:	mov	al,
+	inc	edi
+	or	al,al
+	jnz	again	;culculate size there is not point to call additional proc
+	sub	esi,edi	;'cause code calling calculating code almost the same size
+	xor 	ebx,ebx   ;but mutch slower - we expect very short string <= 8 bytes.
+	add	edi,esi
+	xor 	edx,edx
+;	not	esi   ;esi = lenth
+	xor	esi,-1 ;the same as not esi but sets the flags
+	jz	endw2  ;we did 2 things - calucaled str. size and cheked
+;	inc 	esi   ;! if it is 0
+;	jmp	chekz ;!
+
+;      .while esi != 0
+@@:     mov al, 
+	cmp al,'A'
+	jb figure
+	sub al,'a'-10
+	adc dl,0
+	shl dl,5 ;if cf set we get it bl 20h else - 0
+	add al,dl
+	jmp next
+figure: sub al,'0'
+next:  
+	lea ecx,
+	and eax, 0Fh
+	shl ecx,2	;mul ecx by log 16(2)
+	shl eax,cl	;eax * 2^ecx
+	add ebx, eax
+	inc edi
+chekz:      dec esi
+        	jne @B
+;	.endw
+endw2:
+	mov eax,ebx
+	ret
+
+	htodw endp
+</code></pre>
+The Svin.</div>
+    <div class="meta">Posted on 2001-03-30 05:00:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How do I pass literal text to a proc? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26609" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26609">How do I pass literal text to a proc?</a></p>
+   <div class="post" id="post-192323">
+    <div class="subject"><a href="#post-192323">How do I pass literal text to a proc?</a></div>
+    <div class="body">I want to pass literal text (in quotes) to a procedure.
+How do I declare the variable to receive the text?
+
+Xtreme</div>
+    <div class="meta">Posted on 2001-01-16 23:58:00 by xtreme</div>
+   </div>
+   <div class="post" id="post-192324">
+    <div class="subject"><a href="#post-192324">How do I pass literal text to a proc?</a></div>
+    <div class="body">Give an example of what you'd like to do.
+
+Usually for any API calls you give the procedure a DWORD address to the memory location of the text. Which is what you should use in your own procedure's too.
+
+- Ben</div>
+    <div class="meta">Posted on 2001-01-17 00:02:00 by cyberben </div>
+   </div>
+   <div class="post" id="post-192325">
+    <div class="subject"><a href="#post-192325">How do I pass literal text to a proc?</a></div>
+    <div class="body">usaly its something like this, say if you want to display a MessageBox with the title "Happy" & the text "We are all happy":
+
+.data ;Tell masm to open the data section
+ szTitle BYTE "Happy",0 ;Declare a symbolic referances to NULL terminated strings
+ szMessage BYTE "We are all happy",0 
+.code
+
+invoke MessageBox ,ADDR szMessage,ADDR szTitle,NULL</div>
+    <div class="meta">Posted on 2001-01-17 00:34:00 by manimal </div>
+   </div>
+   <div class="post" id="post-192326">
+    <div class="subject"><a href="#post-192326">How do I pass literal text to a proc?</a></div>
+    <div class="body">You can declare a 'variable' for text like so:
+
+.data
+MyString  BYTE "Some text here", 0
+
+By convention, all strings have zero as the ending ("zero terminated"). This is a static string, defined in your .data area. "MyString" is the name of the address where it is stored. This is 'slightly' confusing because if you later do this:
+
+.code
+mov eax, MyString
+
+then eax will have the 'value' of "e" "o" "m" and "S", ('Some backwards). This is because MASM automatically assumes you mean the CONTENTS of an address, not the address.
+
+Should you wish to send this string to a procedure, you should do so as follows:
+
+invoke SomeProc, ADDR MyString
+
+This pushes the address of the string to the procedure. Most procedures are built to accept the address of the string.
+
+NOW, should you wish to have a string sent back to you from a procedure, it gets a bit more complicated. You need to set aside an area of memory for the largest string you could possibly be sent. If the proc goes past the end of your string buffer, disaster could result as other data gets corrupted.
+
+SO... you must have soime idea how big the string coming back will be. MAX_PATH is a windows constant, it's equal to 500+ or so, and is the largest string a path may be. If you don't know, it's a nice choice.
+
+There are several ways to make a buffer. Here's a simple one:
+
+invoke GetProcessHeap
+invoke HeapAlloc, eax, NULL, MAX_PATH
+
+eax now has the address of this buffer. I prefer to save that address in memory.
+
+mov pBuffer, eax   ; got the pointer for later
+
+Now you can send this buffer to a proc so IT may write a string to it for you:
+
+invoke SomeOtherProc, pBuffer 
+
+Note since pBuffer holds the address of our buffer, and MASM assumes we mean the contents, no ADDR is needed. (Read that over a few times till it makes sense) 
+
+(I really mean that.)
+
+Finally, when you are thru with your buffer, let it go away:
+
+invoke GetProcessHeap ; had we saved this before we wouldn't
+; have to look it up again now
+invoke HeapFree, eax, NULL, pBuffer
+
+I hope I helped  :-)</div>
+    <div class="meta">Posted on 2001-01-17 02:16:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192327">
+    <div class="subject"><a href="#post-192327">How do I pass literal text to a proc?</a></div>
+    <div class="body">Actually what I want to is package the creation of common
+controls into one line of code for my xasm32.lib. Like this:
+
+invoke, xCtrlButton, hWin, hInst, 0, 0, 100, 50, 500, "My Button"
+invoke, xCtrlStatusbar, ..., ..."For Help, press F1"
+invoke, xCtrlProgress ... 
+
+The last parameter is literal text. Inside the xCtrlXXX proc
+it makes the literal text a db and passes the address to the
+createwindow function. 
+
+jmp @@@1
+btnClass db "BUTTON",0
+szLabel db Text,0
+@@@1:
+
+invoke CreateWindowEx, dwEXFlags, ADDR btnClass, addr szLabel,
+dwWSFlags, left, top, wt, ht, hParent, ID, hInst, NULL
+
+Thank you for your help!!!
+
+BTW does the entire lib get added to a finshed exe or just
+the functions I call? Do I need to ship my Lib with my exe?</div>
+    <div class="meta">Posted on 2001-01-17 02:45:00 by xtreme </div>
+   </div>
+   <div class="post" id="post-192328">
+    <div class="subject"><a href="#post-192328">How do I pass literal text to a proc?</a></div>
+    <div class="body">you can' t pass a literal text as a parameter.
+parameters are pushed, that means, they must be contained in a dword. you can push a maximum of four letters (32bits).
+
+only the procs you use in the lib will be used.</div>
+    <div class="meta">Posted on 2001-01-17 13:38:00 by roy </div>
+   </div>
+   <div class="post" id="post-192329">
+    <div class="subject"><a href="#post-192329">How do I pass literal text to a proc?</a></div>
+    <div class="body">You can't include, nor do you want to include literal text as a proc parameter. You do want to include a pointer to it.
+
+This is easily accomplished with a macro like this:
+
+szText MACRO TextName:req, TheText:req
+ LOCAL TextDef
+ .data
+ TextName   BYTE  TheText, 0
+ p&TextName  EQU  {OFFSET &TextName} ; should be in straight brackets 
+; but can't draw those here.
+ .code
+ENDM
+
+This macro changes the segment to .data, defines a string, then sets it back to .code, so text can be defined inline like so:
+
+szText szHelp, "For Help, press F1"
+invoke, xCtrlStatusbar, ..., ...pszHelp
+
+As far as making your lib goes...
+
+Libraries are a collection of asm code compiled to the object level. Depending on how you write it, you can pull in as small a bit as you choose, down to individual .data items or procedures.
+
+At link time, the linker looks at the libs it was given to resolve any unknowns it is holding. Should something in the lib depend on something else in the lib, the linker will also resolve this and bring it in too.
+
+See the masm32 lib or the colib for examples.</div>
+    <div class="meta">Posted on 2001-01-17 14:09:00 by Ernie</div>
+   </div>
+   <div class="post" id="post-192330">
+    <div class="subject"><a href="#post-192330">How do I pass literal text to a proc?</a></div>
+    <div class="body">Thanks everyone
+
+I think I'm gonna make the Procs into Macros so I
+can pass the "literal text" like the szText Macro
+does. Creating new variables, every few lines, just
+to hold barely signifigant data feels clumsy. I know
+the Macro will be doing the same thing but it just
+seems cleaner... Thanks again.</div>
+    <div class="meta">Posted on 2001-01-19 05:43:00 by xtreme </div>
+   </div>
+  </div>
+ </body>
+</html>

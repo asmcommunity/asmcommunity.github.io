@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>It its possible to modify the jump table at runtime? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28477" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28477">It its possible to modify the jump table at runtime?</a></p>
+   <div class="post" id="post-201446">
+    <div class="subject"><a href="#post-201446">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">Im asking this because I want to have different matrix functions on a DLL one for plain pentium, one for SMID and one for 3DNow. 
+
+They take exactly the same arguments and do exacly the same thing, but their speed are very different. 
+
+So has anyone tried to modify the jump tables at runtime. If so, will it work on Windows95/98/ME and NT/2000? :confused:</div>
+    <div class="meta">Posted on 2001-06-20 14:03:00 by dxantos</div>
+   </div>
+   <div class="post" id="post-201447">
+    <div class="subject"><a href="#post-201447">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">you mean the iat? if yes then i did it
+and i doesn't worked... i don't know why
+but if i used a debugger everything worked
+ok but without my modification are ignored.
+hm i had to patch a program to change intern
+code structures so i searched for other
+solutions in ended in learning how viruses
+work, how to inject my own code in others
+pe's without crashing them... so i increased
+the last section injected my code changes
+the entrypoint and changed the api calls i
+wanted to hook from there... hm but this is 
+like shooting with big guns on little birds so
+i overthought everything and now i've got
+a LEGAL inmem patcher :)
+
+good luck</div>
+    <div class="meta">Posted on 2001-06-20 15:35:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-201448">
+    <div class="subject"><a href="#post-201448">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">dxantos, it is quite possible to modify the import table during runtime, you only need to make sure that you've got write access to the section containing it (which you should by default).</div>
+    <div class="meta">Posted on 2001-06-20 17:38:00 by Tola</div>
+   </div>
+   <div class="post" id="post-201449">
+    <div class="subject"><a href="#post-201449">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">i used virtualprotect for this purpose but it still
+not worked then i rendered all sections as writable
+in a loop but nothing happens...</div>
+    <div class="meta">Posted on 2001-06-21 05:46:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-201450">
+    <div class="subject"><a href="#post-201450">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">hello _drcmda,
+
+VirtualProtect works fine. The following code demonstrates it (it works whether started from a debugger or not):
+
+
+<pre><code>
+
+    .386
+    .model flat,stdcall
+
+ExitProcess proto stdcall a1:dword
+VirtualProtect proto stdcall a1:dword,a2:dword,a3:dword,a4:dword
+MessageBoxA proto stdcall a1:dword,a2:dword,a3:dword,a4:dword
+
+MB_OK          equ 0
+PAGE_READWRITE equ 4
+
+    .data
+
+externdef   _imp__MessageBoxA@16:dword
+
+data1 db "start with normal MessageBox",0
+data2 db "message from MessageBox",0
+data3 db "message from NewMessageBox",0
+dwOldProc dword 0
+
+    .code
+
+
+NewMessageBox proc a1:dword, a2:dword,a3:ptr byte,a4:dword
+
+
+    push  0
+    push  0
+    push  offset data3
+    push  0
+    call  dword ptr dwOldProc
+    ret
+
+NewMessageBox endp
+
+WinMainCRTStartup proc
+
+local dwOldStat:dword
+
+    invoke MessageBoxA,0,addr data1,0,MB_OK
+
+    invoke VirtualProtect,addr _imp__MessageBoxA@16,4,PAGE_READWRITE,addr dwOldStat
+
+    mov    eax,offset NewMessageBox
+    xchg   eax,_imp__MessageBoxA@16
+    mov    dwOldProc,eax
+
+    invoke MessageBoxA,0,addr data2,0,MB_OK
+
+    mov    eax,dwOldProc
+    xchg   eax,_imp__MessageBoxA@16
+
+    invoke MessageBoxA,0,addr data2,0,MB_OK
+
+    invoke ExitProcess,0
+                
+WinMainCRTStartup endp
+
+    end
+</code></pre>
+
+the code exchanges address of MessageBox with the address of a self-written proc. The program displays all 3 defined texts
+
+japheth</div>
+    <div class="meta">Posted on 2001-06-21 07:10:00 by japheth</div>
+   </div>
+   <div class="post" id="post-201451">
+    <div class="subject"><a href="#post-201451">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">Another idea is to poke in the PE section
+table so that .rdata becomes writeable.
+I'm going to try it myself. But can I get
+the IAT address and size at run time, in
+order to modify a chunk of it in one move,
+or do I need to modify import symbols
+addresses one by one?</div>
+    <div class="meta">Posted on 2001-06-21 10:03:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201452">
+    <div class="subject"><a href="#post-201452">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">ahm yes i think all you need is the modulehandle.
+from there you'll find the data-table just after the
+image-optional-header. from there you can get the
+address and size (consider a pe manual) of the iat.
+but i am still not sure if it works.
+
+japheth looks interesting i will try it out.</div>
+    <div class="meta">Posted on 2001-06-21 12:45:00 by _drcmda</div>
+   </div>
+   <div class="post" id="post-201453">
+    <div class="subject"><a href="#post-201453">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">Thanks _drcmda. I take it that the module
+handle is always just the base address?</div>
+    <div class="meta">Posted on 2001-06-21 13:26:00 by Larry Hammick</div>
+   </div>
+   <div class="post" id="post-201454">
+    <div class="subject"><a href="#post-201454">It its possible to modify the jump table at runtime?</a></div>
+    <div class="body">yes...
+use GetModuleHandle at runtime
+or the imagebase value in the pe
+header.</div>
+    <div class="meta">Posted on 2001-06-21 13:34:00 by _drcmda</div>
+   </div>
+  </div>
+ </body>
+</html>

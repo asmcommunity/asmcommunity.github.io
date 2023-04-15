@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>accept() - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26634" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26634">accept()</a></p>
+   <div class="post" id="post-192406">
+    <div class="subject"><a href="#post-192406">accept()</a></div>
+    <div class="body">Florianopolis, january 19 - 2001
+
+
+        Dear Friends :
+
+        I have a question, if you could help me:
+
+        I am making an app that will be a server for remote imaging...
+
+        In my connection part, I need to now the IP of the client who
+is connecting to it. I can do it by calling the getpeername() function
+or in the accept, and then calling inet_ntoa function.
+
+        The problem is that the IP I get, in both cases, is never the
+actual one (I get allways the same - 114.79.64.0 -, independently
+from what machine I connect to this server).My machines have the IPs :
+192.168.0.100 and 192.168.0.200 and the port is 3248.
+
+
+        Any help will be greatly apreciated..
+
+        Thanks again :
+
+            Sergio A.S. de Aguiar
+
+        ssaguiar@users.daex.ufsc.br
+
+
+
+    My code is :
+
+
+.data
+
+        .
+        .
+        .
+        .
+
+        sin             sockaddr_in <>
+        client          sockaddr_in <>
+        sockadlen       byte 0
+
+        .
+        .
+        .
+
+.code
+
+        .
+        .
+        .
+
+;
+#########################################################################
+
+;       Initialize the Winsock
+;
+#########################################################################
+
+    invoke  WSAStartup,101h,ADDR wsadata
+
+        .if eax != NULL
+
+            szText  tbMsgWsock,"WInsock Error!"
+            invoke  MessageBox,hWnd,ADDR tbMsgWsock,ADDR
+szDisplayName,MB_OK
+
+        .endif
+
+;
+#########################################################################
+
+;       Initialize the socket...
+;
+#########################################################################
+
+    invoke  socket,PF_INET,SOCK_STREAM,IPPROTO_IP
+
+        .if eax != INVALID_SOCKET
+
+            mov     sock,eax
+
+            mov     sin.sin_family,AF_INET
+            mov     sin.sin_addr.S_un.S_addr,INADDR_ANY
+            invoke  htons,port
+            mov     sin.sin_port,ax
+
+        .else
+
+            szText  tbMsgSock1,"Socket Error!"
+            invoke  MessageBox,hWnd,ADDR tbMsgSock1,ADDR
+szDisplayName,MB_OK
+
+        .endif
+
+;
+#########################################################################
+
+;       Register the socket options...
+;
+#########################################################################
+
+    invoke WSAAsyncSelect,sock,hWnd,WM_SOCKET, FD_ACCEPT
+
+        .if eax==SOCKET_ERROR
+
+            szText  tbMsgWsaasync,"Socket Options Error!"
+            invoke  MessageBox,hWnd,ADDR tbMsgWsaasync,ADDR
+szDisplayName,MB_OK
+
+        .else
+
+            invoke  bind,sock,addr sin,sizeof sin
+            invoke  listen,sock,5
+            invoke  gethostname,ADDR ServerIp,LenServIp
+            invoke  SendMessage,hStatus,SB_SETTEXT,0,offset Wsaasync
+
+       .endif
+
+;
+#########################################################################
+
+;       OK! Now, let's start the real thing!
+;
+#########################################################################
+
+        .
+        .
+        .
+        .
+
+;
+#########################################################################
+
+; Window Messages Processing
+;
+#########################################################################
+
+    .if uMsg == WM_SOCKET
+
+                mov     eax,lParam
+                and     eax,0FFFFh
+
+            .if         ax == FD_ACCEPT
+
+                mov     sockadlen,sizeof client
+                invoke  accept,sock,addr client,addr sockadlen
+                mov     sock_,eax
+
+                    .if     sock_ == INVALID_SOCKET
+
+                        szText  tbMsgWsck,"ACCEPT Error!"
+                        invoke  MessageBox,hWnd,ADDR tbMsgWsck,ADDR
+szDisplayName,MB_OK
+
+                    .else
+
+                        invoke
+WSAAsyncSelect,sock_,hWnd,WM_SOCKET,FD_READ or FD_CLOSE
+
+                        .if     eax == 0
+
+                            invoke  inet_ntoa,offset client.sin_addr
+                            invoke  SendMessage,hStatus,SB_SETTEXT,0,eax</div>
+    <div class="meta">Posted on 2001-01-19 18:06:00 by ssaguiar</div>
+   </div>
+   <div class="post" id="post-192407">
+    <div class="subject"><a href="#post-192407">accept()</a></div>
+    <div class="body">Why go to the trouble of calling getpeername? Check your winsock api reference carefully, the second parameter to accept() is the address of a sockaddr structure.
+<pre>addr	An optional pointer to a buffer which receives the address of the connecting entity, as known to the communications layer.  The exact format of the addr argument is determined by the address family established when the socket was created.</pre>
+In our case, it's sockaddr_in structure.
+<pre>
+sockaddr_in STRUCT
+  sin_family    WORD      ?
+  sin_port      WORD      ?
+  sin_addr      in_addr <>
+  sin_zero      BYTE 8 dup (?)
+sockaddr_in ENDS
+</pre>
+So you can extract the IP address of the client from sin_addr</div>
+    <div class="meta">Posted on 2001-01-19 19:26:00 by Iczelion </div>
+   </div>
+   <div class="post" id="post-192408">
+    <div class="subject"><a href="#post-192408">accept()</a></div>
+    <div class="body">Yes.. I know that this is the structure to use, but, as I said,
+it doesn't work.
+As you can see in the code, I use the accept to pass the data
+to the client structure (it's actually a sockaddr_in <> structure). After that, I call the inet_ntoa :
+invoke inet_ntoa,addr client.sin_addr
+and, at the end of it a call to the SendMessage, to display the
+client's IP in the status bar:
+invoke SendMessage,hStatus,SB_SETTEXT,0,eax
+where eax is the pointer to the IP string, obtained from the
+call to inet_ntoa function.
+
+I also tryed to call peername instead of filling the client's
+structure data with accept.
+I made it just after the accept, and after that, I called the 
+inet_ntoa and the SendMessage, as above, and results were the
+same.
+
+      Sergio A.S. de Aguiar</div>
+    <div class="meta">Posted on 2001-01-19 21:41:00 by ssaguiar </div>
+   </div>
+   <div class="post" id="post-192409">
+    <div class="subject"><a href="#post-192409">accept()</a></div>
+    <div class="body">I found the error :
+
+When I call the inet_ntoa, in place of :
+
+invoke inet_ntoa,offset client.sin_addr
+
+The right call form is :
+
+invoke inet_ntoa,client.sin_addr.S_un.S_addr
+
+Now, everything works fine...
+
+Thanks
+
+ssaguiar</div>
+    <div class="meta">Posted on 2001-01-21 07:07:00 by ssaguiar </div>
+   </div>
+  </div>
+ </body>
+</html>

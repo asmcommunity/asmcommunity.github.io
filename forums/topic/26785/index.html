@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>MMXdw2hex? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=26785" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=26785">MMXdw2hex?</a></p>
+   <div class="post" id="post-192996">
+    <div class="subject"><a href="#post-192996">MMXdw2hex?</a></div>
+    <div class="body">Hi.
+<pre><code>
+One quote from 7-th issue of ASSEMBLY  PROGRAMMING JOURNAL (Dec 99 - Feb 00), http://asmjournal.freeservers.com/issues/apj_7.txt
+==================================================================
+; MMX ltostr by Cecchinel Stephan
+; Summary:     Convert long  value to an ASCII string
+; Compatibility: MMX
+; Notes:  Converts a number in EAX to an 8 bytes hexadecimal
+;         string at 
+;         14 clocks on a Celeron-333
+
+Sum1  dd 0x30303030, 0x30303030
+Comp1 dd 0x09090909, 0x09090909
+Mask1 dd 0x0f0f0f0f, 0x0f0f0f0f
+Hex32:
+bswap eax
+movq  mm2,   
+movq  mm3,   
+movq  mm4,   
+movq  mm5,   mm3
+psubb mm5,   mm4
+movd  mm0,   eax
+movq  mm1,   mm0
+psrlq mm0,   4
+pand  mm0,   mm2
+pand  mm1,   mm2
+punpcklbw mm0,mm1
+movq  mm1,   mm0
+pcmpgtb mm0, mm4
+pand  mm0,   mm5
+paddb mm1,   mm3
+paddb mm1,   mm0
+movq  , mm1
+ret
+==================================================================
+Excellent!!!.
+Apparently, this is not a MASM code, so I've rewritten the proc. The core portion
+bswap eax
+. . .
+paddb mm(1), mm(0)
+took only 9 clocks on my Athlon !!!
+Furthermore, I've reordered the instructs to reduce the read-write dependencies and MMX reg-isters stalls, so code became messy, but now to output a string representation of dword in EAX into mm(1) register costs ~7 clocks only !!!
+Finally:
+==================================================================
+.586
+.MMX
+.model flat, stdcall
+option casemap:none		; case sensitive
+option PROLOGUE:None	; suppress prologue generation 
+option EPILOGUE:None	; suppress epilogue generation 
+
+.data
+Bias	  dq 3030303030303030h
+Sieve	  dq 0f0f0f0f0f0f0f0fh
+DHBarrier dq 0909090909090909h
+.code
+; Convert dword to Hex string representation
+; Declarations:
+; MASM  - MMXdw2hex proto :dword, :dword
+; C(++) - void MMXdw2hex(unsigned int, char*)
+; 
+MMXdw2hex proc num:DWORD, buff:DWORD
+	mov   eax, 
+	movq  mm(3), Bias
+	movq  mm(2), Sieve
+	bswap eax
+	movq  mm(5), mm(3)
+	movq  mm(4), DHBarrier
+	movd  mm(0), eax
+	psubb mm(5), mm(4)
+	movq  mm(1), mm(0)
+	psrlq mm(0), 4
+	pand  mm(1), mm(2)
+	pand  mm(0), mm(2)
+	punpcklbw mm(0),mm(1)
+	movq  mm(1), mm(0)
+	pcmpgtb mm(0), mm(4)
+	pand  mm(0), mm(5)
+	paddb mm(1), mm(3)
+	paddb mm(1), mm(0)
+	mov   eax,  
+	movq  qword ptr , mm(1)
+	mov   byte  ptr , 0
+	ret 8
+MMXdw2hex endp
+end
+============================================================
+The proc takes 51h bytes in .code and 18h bytes in .data only.
+Now, in some code
+============================================================
+. . .
+MMXdw2hex proto :dword, :dword
+. . .
+.data
+. . .
+num	dd 123456ABh
+. . .
+buff	db 9 dup(0)
+. . .
+.code
+. . .
+	invoke MMXdw2hex, num, addr buff
+. . .
+============================================================
+it costs for invoke 14 clocks only to output sz "123456ab" into buff, all PUSHs/CALL/RET accounting!!!
+Notes:
+1. You may modify/extend the proc to format the output as "123456AB", "123456ABh", "0x123456ab" etc.
+2. To handle sdword (signed int), insert the following code
+PUSH EBX
+MOV EBX, EAX
+NEG EAX
+CMOVS EAX,EBX
+POP EBX
+somewhere between  mov eax, and bswap eax instructs in dw2hex to obtain abs(num) in EAX and use SF for conditional formatting negative value representation (none of the proc's instructs affects it).
+3. The proc isn't safe, because it destroys the contents of 6 MMX registers and (on Pentium) the whole FPU state. On Athlon you may freely use FPU/MMX instructs concurrently without any penalty or data loss. More over, it is very difficult to make it safe, as far as it doesn't know, do you need to preserve the current environment, and, if so, which registers should be preserved (saving/restoring the whole FPU/MMX engine state is VERY expensive, on Athlon ~300 clocks as per doc - I didn't check it in real code as it doesn't bother me). So the proper instructs should be issued before/after dw2hex call if you need to save/restore registers. For mm's situation isn't very bad - invoke MMXdw2hex toge</div>
+    <div class="meta">Posted on 2001-02-05 22:21:00 by DVA</div>
+   </div>
+  </div>
+ </body>
+</html>

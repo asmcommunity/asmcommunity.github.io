@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>process open state - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18998" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18998">process open state</a></p>
+   <div class="post" id="post-146988">
+    <div class="subject"><a href="#post-146988">process open state</a></div>
+    <div class="body">what's the easiest way to find out if a process which was previously opened is still open?<br />i.e. i opened the process myself with OpenProcess and I have both the PID and the handle.<br />How can I test to see if the process has closed?<br /><br />Also, can you call KillTimer within the timers own callback proc?<br />For some reason when I do that it doesn't work. Timer continues to run.<br /><br />I have something like this: <br /><br /><br /><pre><code><br />#define TIMER_INTERVAL = 500;<br />UINT timer = 0;<br />DWORD pid = 0;<br /><br /><br /><br />int WINAPI WinMain  &#40;HINSTANCE hInst, HINSTANCE hPrevInst, char * cmdParam, int cmdShow&#41;<br />&#123;<br />     //open process, store pid and handle in global vars<br />     //set a polling timer<br />     timer = SetTimer&#40;NULL, TIMER_INTERVAL, TIMER_INTERVAL, timerProc&#41;;<br />     .......<br />&#125;<br /><br /><br />void CALLBACK timerProc&#40;HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime &#41;<br />&#123;<br />	if&#40;!OpenProcess&#40;PROCESS_VM_OPERATION | PROCESS_VM_WRITE, FALSE, pid&#41;&#41;<br />	&#123;<br />		<br />		MessageBox&#40;NULL, &quot;Command &amp; Conquer no longer running. Please<br />run Command &amp; Conquer and then try again.&quot;, &quot;Error&quot;, MB_OK | MB_SYSTEMMODAL | MB_ICONWARNING&#41;;<br />		DestroyWindow &#40;&#40;HWND&#41;TheInstance&#41;;<br />		KillTimer&#40;NULL, timer&#41;;<br />        return;<br />	&#125;<br />	if&#40;!moneyActive &amp;&amp; !powerActive&#41; KillTimer&#40;NULL, timer&#41;;	<br />	if&#40;moneyActive&#41; pokeMoney&#40;&#41;;<br />	if&#40;powerActive&#41; pokePower&#40;&#41;;<br />&#125;</code></pre></div>
+    <div class="meta">Posted on 2004-07-28 01:43:15 by </div>
+   </div>
+   <div class="post" id="post-146990">
+    <div class="subject"><a href="#post-146990">process open state</a></div>
+    <div class="body"><a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/getexitcodeprocess.asp">GetExitCodeProcess</a> is the API for that. To have your program wait for the process to end use <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/dllproc/base/waitforsingleobject.asp">WaitForSingleObject</a> using the process handle.</div>
+    <div class="meta">Posted on 2004-07-28 03:05:10 by donkey</div>
+   </div>
+   <div class="post" id="post-147008">
+    <div class="subject"><a href="#post-147008">process open state</a></div>
+    <div class="body">Do a single OpenProcess call at the start of you app (paired with a CloseHandle once you no longer need to poke arond in the process).<br /><br />Then there's two ways to handle the check for process termination. WaitForSingleObject is good if you just want to wait for process termination and use the least possible resources while doing so.<br /><br />However, considering the structure of your program (and that you're going to check with 500ms intervals and not do constant polling), it's probably smartest to call GetExitCodeProcess and check for STILL_ACTIVE.<br /><br />The handle you get with OpenProcess will, by the way, *not* become invalid when the process terminates. Windows will keep the kernel-mode object in memory until the process is terminated <strong>and all handles are closed</strong> - which is why you should always remember to call CloseHandle.</div>
+    <div class="meta">Posted on 2004-07-28 08:27:55 by f0dder</div>
+   </div>
+   <div class="post" id="post-147041">
+    <div class="subject"><a href="#post-147041">process open state</a></div>
+    <div class="body">Thanks. GetExitCodeProcess and check for STILL_ACTIVE works great.</div>
+    <div class="meta">Posted on 2004-07-28 16:48:19 by </div>
+   </div>
+   <div class="post" id="post-147293">
+    <div class="subject"><a href="#post-147293">process open state</a></div>
+    <div class="body">ehrm..I am a bit off topic here with my question but could it be possible in my own program which is running at ring 3 level to check if it was opened by some other process using OpenProcess ?</div>
+    <div class="meta">Posted on 2004-08-03 04:35:31 by DZA</div>
+   </div>
+   <div class="post" id="post-147300">
+    <div class="subject"><a href="#post-147300">process open state</a></div>
+    <div class="body">Yes,<br /><br />You can use my system.lib library and use the function GetParentPID9x or GetParentPIDNT to get the name and PID of the process that opened yours.</div>
+    <div class="meta">Posted on 2004-08-03 07:24:49 by donkey</div>
+   </div>
+   <div class="post" id="post-147355">
+    <div class="subject"><a href="#post-147355">process open state</a></div>
+    <div class="body">really nice code donkey :) thanks</div>
+    <div class="meta">Posted on 2004-08-04 03:17:56 by DZA</div>
+   </div>
+   <div class="post" id="post-147372">
+    <div class="subject"><a href="#post-147372">process open state</a></div>
+    <div class="body"><div class="quote"><br />Thanks. GetExitCodeProcess and check for STILL_ACTIVE works great. </div><br /><br />Just a side note, it's not a bulletproof method. If the process happens to return the value of STILL_ACTIVE in ExitProcess, your code won't detect it. :(<br /><br />As an alternative (but it's some more work) you could create another thread, which will call WaitForSingleObject to wait for the process to finish, and then send a message to your main window using SendMessage.<br /><br />Come to think of it, tf you also need to be able to quit while waiting, then WaitForMultipleObjects would be better. Create an event object and make your secondary thread wait for both the process and the event. :)</div>
+    <div class="meta">Posted on 2004-08-04 13:24:53 by QvasiModo</div>
+   </div>
+  </div>
+ </body>
+</html>

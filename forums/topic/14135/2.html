@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Baby steps off the diving board - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14135" />
+  <link rel="prev" href="../?id=14135&amp;page=1" />   </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=14135">Baby steps off the diving board</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=14135&amp;page=1" style="">&laquo;</a><a href="../?id=14135&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="14135" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>   <div class="post" id="post-110886">
+    <div class="subject"><a href="#post-110886">Baby steps off the diving board</a></div>
+    <div class="body">Nevermind, you answered my question, and thanks.<br />Now I'll try to implement this lite dispatch interface and we'll see what happens.<br />Basically I wasn't handling the unknowns myself.</div>
+    <div class="meta">Posted on 2003-07-17 09:34:28 by Homer</div>
+   </div>
+   <div class="post" id="post-110986">
+    <div class="subject"><a href="#post-110986">Baby steps off the diving board</a></div>
+    <div class="body">I'm defining my sink interface as follows:<br /><br />LPTHIS typedef ptr<br />MyQueryInterface        proto :LPTHIS,:DWORD,:DWORD<br />MyAddRef                    proto :LPTHIS<br />MyRelease                 proto :LPTHIS<br />MyGetTypeInfoCount  proto :LPTHIS,:ptr DWORD<br />MyGetTypeInfo            proto :LPTHIS,:dword, :LCID, :ptr ptr ITypeInfo<br />MyGetIDsOfNames     proto :LPTHIS,:ptr IID,:ptr,:dword,:LCID,:ptr DISPID<br />MyInvoke_	             proto :LPTHIS,:DISPID,:ptr IID,:LCID,:dword,:ptr DISPPARAMS,:ptr VARIANT,:ptr EXCEPINFO,:ptr DWORD<br /><br />IMyDispatch STRUCT<br />    IMyDispatch_QueryInterface      dd ?<br />    IMyDispatch_AddRef                  dd ?<br />    IMyDispatch_Release                dd ?<br />    IMyDispatch_GetTypeInfoCount dd ?<br />    IMyDispatch_GetTypeInfo          dd ?<br />    IMyDispatch_GetIDsOfNames    dd ?<br />    IMyDispatch_Invoke_                 dd ?<br /> IMyDispatch ENDS<br /><br /> MyDispatch IMyDispatch &lt;offset MyQueryInterface, offset MyAddRef,      \<br />                                            offset MyRelease,offset MyGetTypeInfoCount, \<br />                                            offset MyGetTypeInfo,offset MyGetIDsOfNames,offset MyInvoke_ &gt;<br /><br /><br />does that look ok thus far?</div>
+    <div class="meta">Posted on 2003-07-18 02:33:22 by Homer</div>
+   </div>
+   <div class="post" id="post-110993">
+    <div class="subject"><a href="#post-110993">Baby steps off the diving board</a></div>
+    <div class="body">yes, no problem<br /><br />you may look at include file disphlp.inc. There a IDispatch event sink interface is defined in macro DEFINE_EVENTHELPER, which may give you some clues.</div>
+    <div class="meta">Posted on 2003-07-18 03:15:52 by japheth</div>
+   </div>
+   <div class="post" id="post-111131">
+    <div class="subject"><a href="#post-111131">Baby steps off the diving board</a></div>
+    <div class="body">Ok good, I made progress, but unfortunately I've hit a wall.<br />When I call IConnectionPoint_Advise, my IUnknown_QueryInterface procedure is getting a request from the object for a pointer to the Events Interface (it's sending me the Events IID in the request), but my IDispatch_Invoke never gets hit. Yours does, I've just found your handy dandy events notifications window in ur comview tool :)<br />Strange, the &quot;Cookie&quot; handed back by the Advise method looks awfully like the interface pointer I hand back from QueryInterface too ... does Advise actually manipulate the vtable of the source interface in some way? If so, since this is an InProc server, do I have write access to do this myself? <br /><br />Here's my Unknown_QueryInterface handler code - look ok ?<br />Only the first case ever gets triggered by this object it seems.<br /><br /><br /><br />.data<br />det dd ?<br />.code<br />MyQueryInterface proc pThis:LPTHIS,pid:LPGUID, peepee:DWORD<br />mov esi,pid<br />mov edi,peepee<br />invoke CmpGUID,esi,addr IID_IYAcsEvents,16       ;This is it<br />.if eax==TRUE<br />    lea eax,MyDispatch<br />    mov det,eax<br />    lea eax,det<br />    mov dword ptr,eax<br />    return S_OK<br />.endif<br />invoke CmpGUID,esi,addr IID_IUnknown,16<br />.if eax==TRUE<br />    lea eax,MyDispatch<br />    mov det,eax<br />    lea eax,det<br />    mov dword ptr,eax<br />    return S_OK<br />.endif<br />invoke CmpGUID,esi,addr IID_Dispatch,16<br />.if eax==TRUE<br />    lea eax,MyDispatch<br />    mov det,eax<br />    lea eax,det<br />    mov dword ptr,eax<br />    return S_OK<br />.endif<br />mov dword ptr,0<br />invoke MessageBox,0,CTXT(&quot;An unhandled Interface Request was received..&quot;),CTXT(&quot;Weirdness?&quot;),MB_OK<br />return E_NOINTERFACE<br />MyQueryInterface ENDP<br /><br />Sidenote - I am not &quot;locking&quot; or &quot;activating&quot; this windowless object, I've been assuming that CoCreateInstance handles all that... safe assumption?<br />Thanks for your time.</div>
+    <div class="meta">Posted on 2003-07-18 23:26:12 by Homer</div>
+   </div>
+   <div class="post" id="post-111139">
+    <div class="subject"><a href="#post-111139">Baby steps off the diving board</a></div>
+    <div class="body">Hi EvilHomer2k,<br /><br />your source looks not so good.<br /><br />1. your proc modifies esi and edi. like in win32 api these (and ebx) should be save before<br />2. when your QUeryInterface gets called, you have already supplied an object to the server (with <br />IConnectionPoint::Advise. Parameter pThis should point to that object. But now in QueryInterface you are about to return totally different addressesm which is bad, and that in a global variable, which is even worse.<br />3. If a QueryInterface is successful, you should logically call IUnknown::AddRef, that is increment an internal object reference pointer.<br /><br />Japheth<br /><br /><br />Although I have already mentioned to look at disphlp.inc for a sample here are the steps to make a minimal event sink<br />1. create object: allocate 8 bytes from heap, mov address of vtable in first dword, set second dword to 1 (is object reference pointer).<br />2. supply this address to IConnectionPoint::Advise<br />3. In QueryInterface do: compare your interface IIDs,  if found one, get pThis and increment second dword. return pThis as interface, not a global var. save registers!<br /></div>
+    <div class="meta">Posted on 2003-07-19 01:47:27 by japheth</div>
+   </div>
+   <div class="post" id="post-111176">
+    <div class="subject"><a href="#post-111176">Baby steps off the diving board</a></div>
+    <div class="body">Ok I'll clean up my dirty code .. is it really necessary to allocate the object on the heap? The calling process has loaded and attached all the support dlls like ole32, and inproc servers share the process space of their client when the client is local, yes? What I mean is that just defining the interface in the data segment of the calling client is somehow not a good idea ?? I know COM is a set of rules and this constitutes a breach, but I'm always curious where the boundaries lay.<br />Regardless, I'll implement my interface in heap memory and preserve my registers like I should and we'll see if it makes the difference :)</div>
+    <div class="meta">Posted on 2003-07-19 11:42:31 by Homer</div>
+   </div>
+   <div class="post" id="post-111197">
+    <div class="subject"><a href="#post-111197">Baby steps off the diving board</a></div>
+    <div class="body">Hi EvilHomer2k<br /><br />&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;<br />is it really necessary to allocate the object on the heap?<br />&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;<br /><br />No, of course not.  The rule you should comply is that addresses of interfaces your client returns to the server remain constant. So if you are sure you need only one instance of your sink, define it in global memory. And if you dont require any resources which should be freed on termination, you may even omit the reference counter.</div>
+    <div class="meta">Posted on 2003-07-19 16:51:31 by japheth</div>
+   </div>
+   <div class="post" id="post-111229">
+    <div class="subject"><a href="#post-111229">Baby steps off the diving board</a></div>
+    <div class="body">w00t.<br />I correctly preserve registers in MyQueryInterface.<br />I don't implement the object in heap memory.<br />I don't implement the internal counter for the object.<br />I use dummy procedures for AddRef and Release.<br />All I did was define pvtbl at vtbl-4 <br />It's working :)<br /><br />I'm joyously writing casecode for the various dispids that hit MyInvoke procedure :)<br /><br />Thankyou for your continual support - I think I popped my cherry :)<br />I'll tidy everything up, work on the gui a little, then I'll post it all here for the benefit of all. I've come to the conclusion that this stuff is where we're all going in the next decade, and I'm glad to learn how to apply my lowlevel approach to higher code objects.</div>
+    <div class="meta">Posted on 2003-07-19 22:43:01 by Homer</div>
+   </div>
+   <div class="post" id="post-111246">
+    <div class="subject"><a href="#post-111246">Baby steps off the diving board</a></div>
+    <div class="body">Congratulations, EvilHomer2k :alright: <br /><br />I'm looking forward to the great app you will supply soon ;) <br /><br />Japheth</div>
+    <div class="meta">Posted on 2003-07-20 01:35:14 by japheth</div>
+   </div>
+   <div class="post" id="post-111569">
+    <div class="subject"><a href="#post-111569">Baby steps off the diving board</a></div>
+    <div class="body">Sigh.<br />The object does implement security against my client.<br />Furthermore it breaches the COM contract in many, many ways.<br /><br />The project folder is online...please let me know if any files are missing.<br /><a target="_blank" href="http://fnx.free-bsd.org/users/h/homer/homervox/">http://fnx.free-bsd.org/users/h/homer/homervox/</a> <br /><br />I managed to ascertain so far that the object manipulates its own vtbl and typelib at runtime, and it has some unlisted functions in the dll which are initialisation functions, and that the entire object is meant to be instanced by a higher object, which I am now examining more closely. This higher object contains a dummy interface with a whole set of bad pointers, whose values are correctly set by a callback in the lower object (actually a seh triggered by a bad float).<br />Very strange, very interesting :)<br /><br />This might all be sounding a little like RE, which it is, but the intent is not commercial nor malicious, the intent is to learn - of course :)<br /><br />I won't use this space to comment on the nature of the beast , except to mention that I'm more curious than ever :)</div>
+    <div class="meta">Posted on 2003-07-23 03:17:58 by Homer</div>
+   </div>
+   <div class="post" id="post-111574">
+    <div class="subject"><a href="#post-111574">Baby steps off the diving board</a></div>
+    <div class="body">I just looked at this directory. Surely it is better to zip these files and attach them to your post. I assume that the server binary is needed as well (or is it a &quot;standard&quot; com object?)</div>
+    <div class="meta">Posted on 2003-07-23 05:19:09 by japheth</div>
+   </div>
+   <div class="post" id="post-111713">
+    <div class="subject"><a href="#post-111713">Baby steps off the diving board</a></div>
+    <div class="body">It's Yahoo! Inc. 's interface to Lerner and Hauspie TruSpeech Codec...<br />this is basically an implementation of RFC1889 - the RTP protocol.<br />Technically I'm not in breach of either their TOS or any copyright law including wipo and dmca, and I'm not breaching the etiquette of the board. <br />I won't discuss the internal workings of this commercial atl object, but I will release source as appropriate in the spirit of education and open source.<br /><br />This object is installed during installation of either yahoo messenger or by using their java-based applet. The applet itself requires no formal authoritative or legal waiver or disclaimer, although TOS are binding for accounts. <br />Nonetheless, the property is not mine, I appreciate the legal rights of its owners regardless, and have no commercial interest in this project.</div>
+    <div class="meta">Posted on 2003-07-24 09:00:02 by Homer</div>
+   </div>
+   <div class="post" id="post-212254">
+    <div class="subject"><a href="#post-212254">Re: Baby steps off the diving board</a></div>
+    <div class="body">I vote for the one-way valve, since it could make a big difference in the usefulness of the helmet. As for <br /><br />the danger part, I have no problem with the danger involved, as I also have done some fool things in my <br /><br />life. I understand there&#039;s a chance this could end your life, but if I were there, I&#039;d want to try the damn <br /><br />thing too.</div>
+    <div class="meta">Posted on 2010-07-08 21:17:46 by Dreamza</div>
+   </div>
+   <div class="post" id="post-212255">
+    <div class="subject"><a href="#post-212255">Re: Baby steps off the diving board</a></div>
+    <div class="body">mmk</div>
+    <div class="meta">Posted on 2010-07-09 01:19:57 by Homer</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=14135&amp;page=1" style="">&laquo;</a><a href="../?id=14135&amp;page=1" style="">&lt;</a><input type="hidden" name="id" value="14135" /><input type="number" name="page" min="1" max="2" step="1" value="2" onchange="this.form.submit();" /></form>  </div>
+ </body>
+</html>

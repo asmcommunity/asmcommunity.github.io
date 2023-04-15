@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Turn based game style message loop? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27672" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27672">Turn based game style message loop?</a></p>
+   <div class="post" id="post-197465">
+    <div class="subject"><a href="#post-197465">Turn based game style message loop?</a></div>
+    <div class="body">Figured out Directx.  I can start my program, write to the screen, and exit out without error.  Now I  neeed to learn more about how the windows message loop works.  I probaly just missing some small peice of the logic puzzle.  My turned bassed game will be in a window, so I cannot consider all keyboard and mouse input as 'mine'. 
+
+My current message loop:
+ <pre><code>
+WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+
+	.IF uMsg==WM_PAINT
+		invoke PaintPrimary ,hWnd
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam	.ELSEIF uMsg==WM_CLOSE
+		call CloseApp
+		invoke ExitProcess, 0
+	.ELSEIF uMsg==WM_RBUTTONDOWN
+		invoke SendMessage, hWnd, WM_CLOSE, 0, 0
+	.ELSEIF
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam		
+		ret
+	.ENDIF
+
+		invoke PaintSecondary, hWnd
+	 xor eax,eax
+	ret
+WndProc endp
+</code></pre>
+
+Right now unless I close it, or move it around to genrtate a WM_PAINT message, it should always call PaintSecondary.  PaintSecondary currently calls PaintPrimary.  This struture might work, but all my screendraw/ai/etc will all have to be done as sub-procs in PaintSecondary.  The forced page-flip might seem convinent, but I'm geeting the feeling it'll cause more problems that its worth.  Therefore, PaintSecondary in the message loop will probaly be replaced with proc like GameMain.  All the work being done in GameMain and lets me be more selective when I want to do a page-flip.  Alright, I've talked abit about structure, now for the questions:
+
+Is the bottom of the message loop the best place for GameMain?  It it the best way for me to have turn based? Think Ultima-4 and similar.
+
+Next, I'm thinking about keyboard/mouse input.  An old pro-game programmer friend told me that you use the message loop to pass states into variables that you use in main game loop/procs.  So, just to add a little:
+
+
+
+ <pre><code>
+WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+
+	.IF uMsg==WM_PAINT
+		invoke PaintPrimary ,hWnd
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam	.ELSEIF uMsg==WM_CLOSE
+		call CloseApp
+		invoke ExitProcess, 0
+	.ELSEIF uMsg==WM_RBUTTONDOWN
+		invoke SendMessage, hWnd, WM_CLOSE, 0, 0
+	.ELSEIF uMsg==WM_LBUTTONDOWN
+                mov AttackState, 1
+        .ELSEIF
+
+		invoke DefWindowProc,hWnd,uMsg,wParam,lParam		
+		ret
+	.ENDIF
+
+		invoke PaintSecondary, hWnd
+	 xor eax,eax
+	ret
+WndProc endp
+</code></pre>
+
+Now I have a check for the left-mouse button that sets the global Variable AttackState = 1.  That should mean that AttackState will be in scope in GameMain, and presumabaly set back to 0 once I'm done wth the information it conveys.  Is there a better way of getting this information to GameMain that making a bunch of global state variables??
+
+I guess those are my questions.  Any other wisdom, is of course appreciated.  Oh and if it wont work, I'd like to know that too.</div>
+    <div class="meta">Posted on 2001-04-16 23:30:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-197466">
+    <div class="subject"><a href="#post-197466">Turn based game style message loop?</a></div>
+    <div class="body">I dont have the time (exams) to go into any strong detail here, and there is far more experienced people with this stuff anyways to help you out, so my only suggestion for your Direct X work is this:
+
+Go out and buy a surprisingly good book on DirectX game programming, called:
+
+<strong>Windows Game Programming for Dummies</strong>
+<em>by Andre LaMothe (A Video Game programming Guru)</em>
+IDG Books
+ISBN: 0-7645-0337-5
+
+Its very consise and informative, however it is written for Visual C++, but it follows all Microsoft conventions (Hungarian notation) so with a basic understanding of C++ you can translate it easily to ASM.
+
+The reason I suggest this book is because it specifically outlines the answer to your post in one of its earlier chapters, explaining the gaming loop, how it fits in with the Windows Message loop, and how to use Direct Input etc.  Basically it outlines all the Abstration needed to organise an effecient game stucture, and then goes into more detail with the individual DirectX components.. (Covers them all to some detail). 
+
+For 30$ US, you cant beat it...
+
+Anywho, just my suggestion, im sure someone around here will give you more immediate specifics :)
+
+NaN</div>
+    <div class="meta">Posted on 2001-04-17 00:06:00 by NaN</div>
+   </div>
+   <div class="post" id="post-197467">
+    <div class="subject"><a href="#post-197467">Turn based game style message loop?</a></div>
+    <div class="body">asm_happy,
+
+Here I am again answering all your questions :)
+
+The way most of this is done is using a game loop in a separate process, the things you need to do are:-
+
+1. Read Input
+2. Update Game State
+3. Redraw
+4. Go To 1
+
+Now with windows, Number 1 (Read Input) is being done for you, all you have to do is get the current state, like your friend said, you can use a global structure to do this, so you'd have 
+
+<pre><code>
+MouseX dd 0
+MouseY dd 0
+MouseClick dd 0
+</code></pre>
+
+In WM_MOUSEMOVE you can update the MouseX and MouseY and in WM_LBUTTONDOWN you can set MouseClick, and in WM_LBUTTONUP you clear it.
+
+This will work fine, however, I would recommend getting to grips with DirectInput, it's pretty easy to use and it uses the same style as DirectX, so you're already familiar with that.
+
+Finally I'd take a look here If you're short of the $30 suggested by NaN, it has lots of articles about design, using directX etc etc.... look at the articles from the bottom of the page up, the older ones are the most basic discuassions about designing games.
+
+Good luck!
+
+Umbongo</div>
+    <div class="meta">Posted on 2001-04-17 11:13:00 by umbongo</div>
+   </div>
+   <div class="post" id="post-197468">
+    <div class="subject"><a href="#post-197468">Turn based game style message loop?</a></div>
+    <div class="body">I've got the directx part down.  I'll look into directinput.
+A global STRUCT for the game-state variables is better than my idea.  The concise version of the game loop should help me.  I'm probably just getting tripped up knowing that the user will have access to the desktop.  This is my first windows program and first directx program, once I understand the fundamentals, I can usually figure out the rest. Right now I'm trying to understand the fundamentals of the message loop :)  
+Thanks guys..</div>
+    <div class="meta">Posted on 2001-04-17 14:48:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-197469">
+    <div class="subject"><a href="#post-197469">Turn based game style message loop?</a></div>
+    <div class="body">Turn based or real time, usually games use a modifyed game loop to do things when windows dosent do message processing.
+
+You can use PeekMessageA instead of GetMessageA in the window loop *with PM_NOREMOVE flag) in order to "peek" if windows has a message for you, if it does...do the usual stuff, if it dosent: DO YOUR GAME STUFF....
+
+this is basic tehnic for GDI and simple DX games...
+Advantages: easy and relative error prone
+Disadvantages: you will notice your game working slower (noticeably) when windows does Input processing for you (like on heavy mouse move :) )
+
+For faster more advanced methods: 
+1.go full screen
+2.use DirectInput to read the input yourself and dump windows message loop...except Alt+Tab and Ctrl+Esc ... system keys stuff
+3. Make your Game loop (redraw) on a sepparate thread...
+4. ... experiment yourself
+
+but all this is harder and harder...just start with PeekMessage first :D</div>
+    <div class="meta">Posted on 2001-04-17 17:53:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-197470">
+    <div class="subject"><a href="#post-197470">Turn based game style message loop?</a></div>
+    <div class="body">Here is an example from our old game message loop
+we have moved to multithreading for some time now
+but a lot of our early game versions where made this way
+
+Hope this helps (take care not very nice structured code)
+
+<pre><code>
+;************************************
+; WinMain MESSAGE LOOP STARTS HERE
+;************************************
+
+msg_loop:
+
+;==========================================================
+; we use PeekMessage in order to detect idle (no messages)
+; time we can use
+;========================================================
+	push    PM_NOREMOVE
+	push    0
+	push    0
+	push    0
+	push    offset msg
+	call    PeekMessageA
+
+;===============================
+; test: do we have messages?
+;==============================
+	cmp	eax, 0
+	je	nu_sunt_msg			; happy jump if we dont
+
+; ===============================
+; but no so happy.. 
+; if we have to handle them
+; this will reduce our FPS :)
+; ===============================
+	push	0
+	push	0
+	push	0
+	push	offset msg
+	call	GetMessageA
+
+;===================================
+; test: is this message  WM_QUIT ?
+; =================================
+	cmp	eax,0				; GetMessageA will return zero if it is...?
+	je	end_loop			; EXIT PROGRAM IF TRUE!!!!
+
+;================================================
+; default action (let windows do it's dirty job)
+; for all other messages
+;================================================
+	push	offset msg
+	call	TranslateMessage
+
+	push	offset msg
+	call	DispatchMessageA
+
+;=========================================
+; and jump back to do it all over again
+;======================================
+	jmp	msg_loop
+
+;=================================
+; Here ENDS Our Program (normaly)
+;==================================
+end_loop:
+	push	
+	call	ExitProcess		;exit to windows
+
+;===================================
+; we should never reach this point
+;===================================
+	ret
+
+
+;=========================================
+; so...there are no win messages....
+; HERE we do our GAME MAIN LOOP
+;=========================================
+
+nu_sunt_msg:
+	push    eax		; save allmost all stuff
+	push	ebx
+	push	ecx
+	push	edx
+
+	push	esi
+	push	edi
+
+
+  call update_game_state
+  call redraw_game_all
+
+;==================================
+; done...just return to WIN message loop
+;=================================
+
+	pop	edi
+	pop	esi
+
+	pop	edx
+	pop	ecx
+	pop	ebx
+	pop	eax			
+;====================================
+; return to main Message Loop
+;====================================
+	jmp	msg_loop
+
+</code></pre></div>
+    <div class="meta">Posted on 2001-04-17 18:14:00 by BogdanOntanu</div>
+   </div>
+   <div class="post" id="post-197471">
+    <div class="subject"><a href="#post-197471">Turn based game style message loop?</a></div>
+    <div class="body">Wow, thanks for all that stuff. You game is a real-time game however.  My loop should work more like this:
+
+wait for user input
+run game proc/ update screen
+wait for user input
+cont....
+
+Being turn based like this, it wont be very graphic intensive.  I', just trying to make sure I have a good understanding of design considerations.  Because I want to use a window, I'm purposely trying to avoid heavy graphics.  If I try to make the program too fancy, I'll never finish it.;)</div>
+    <div class="meta">Posted on 2001-04-17 21:25:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-197472">
+    <div class="subject"><a href="#post-197472">Turn based game style message loop?</a></div>
+    <div class="body">Excuse BogdanOntanu, would be possible to we study a little about your multithreading code? (sorry the intromission)
+Thanks in advance. :)</div>
+    <div class="meta">Posted on 2001-04-18 06:39:00 by wolfao</div>
+   </div>
+   <div class="post" id="post-197473">
+    <div class="subject"><a href="#post-197473">Turn based game style message loop?</a></div>
+    <div class="body">Well i think you can have some animations even when waiting for user input...after all is a game not a spreadsheet :)
+so i still recommend the PeekMessage thing, but if you dont like it you can allways use a menu or a button like "End Turn/Next Turn" or something...but doing so will make animations very "uneven"....and i don think timers (the alternative) can help games much :D
+
+to wolfao:
+===========
+make a separate "thread" for this question and we cant talk it there :)</div>
+    <div class="meta">Posted on 2001-04-18 08:38:00 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

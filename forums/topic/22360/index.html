@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>EBP and thread termination - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=22360" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=22360">EBP and thread termination</a></p>
+   <div class="post" id="post-167862">
+    <div class="subject"><a href="#post-167862">EBP and thread termination</a></div>
+    <div class="body">My program launches a thread (in the WM_CREATE) handler.<br /><br />When this thread exits naturally, if it changes the value of ebp before exitting, then the program terminates, without apparently processing WM_CLOSE or WM_DESTROY. If on the other hand the thread ends with ebp intact, the program waits for closure (click the x) and exits with WM_CLOSE and WM_DESTROY.<br /><br />Why does this happen please?<br /><br />Also, does exitting a thread automatically give any signal to the main program? Or does one need to send the message in another way? Thanks.</div>
+    <div class="meta">Posted on 2005-11-13 22:24:47 by V Coder</div>
+   </div>
+   <div class="post" id="post-167866">
+    <div class="subject"><a href="#post-167866">Re: EBP and thread termination</a></div>
+    <div class="body">Register preservation rules, mate - EBX,ESI,EDI,EBP must be preserved in callbacks (including threads). When you &quot;RET&quot; from a thread, you go back to some OS cleanup code, which likely depends on local variables accessed through EBP.<br /><br />Also, if you use a standard PROC in masm, not preserving EBP well mess up your stack when doing RET; if ESP is not inside the range defined in the TEB, windows will terminate your prorgram silently.<br /><br />Exiting a thread doesn&#39;t automatically send any signal to the main app (it does to DLLs though). When you create a thread, though, the return value is a HANDLE that you can wait on (WaitForSingleObject() or one of the other wait functions). You should always remember to call CloseHandle() on this value when you&#39;re done with it (if, if you don&#39;t WaitFor*Object, CloseHandle() right away).<br /></div>
+    <div class="meta">Posted on 2005-11-14 00:47:22 by f0dder</div>
+   </div>
+   <div class="post" id="post-167879">
+    <div class="subject"><a href="#post-167879">Re: EBP and thread termination</a></div>
+    <div class="body">To add to f0dder&#39;s post, this is what a default prelude looks like:<br /><br /><pre><code><br />push ebp<br />mov ebp, esp<br />sub esp, size_of_locals<br /></code></pre><br /><br />And the default epilogue:<br /><br /><pre><code><br />mov esp, ebp<br />pop ebp<br />retn number_of_arguments<br /></code></pre><br /><br />Where &quot;size_of_locals&quot; and &quot;number_of_arguments&quot; are placeholders for the actual values. These are added automatically by MASM to each of your procedures. This is how local variables are accessed:<br /><br /><pre><code><br />mov eax, <br /></code></pre><br /><br />Where again &quot;offset_to_local&quot; is a placeholder.<br /><br />So trashing EBP causes two effects: one, the procedure will try to access it&#39;s local variables from the wrong places, most likely crashing your app; two, the epilogue will try to restore ESP from the value of EBP, now the thread is trying to access it&#39;s whole stack at the wrong place. The latter makes your program crash so bad that Windows can&#39;t even show an error message, and your app dies silently.</div>
+    <div class="meta">Posted on 2005-11-14 09:21:31 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-169417">
+    <div class="subject"><a href="#post-169417">Re: EBP and thread termination</a></div>
+    <div class="body">My WM_COMMAND launches the active thread of my program, which launches a second thread if a hyper-threading CPU is present. Can thread2 terminate after thread1, will that cause problems? How should I preserve registers? With pusha at the start and popa at the end, or should I just use temporary variables for ebp, esi, edi, ebx?<br /><br />Thanks.</div>
+    <div class="meta">Posted on 2006-01-09 20:48:05 by V Coder</div>
+   </div>
+   <div class="post" id="post-169418">
+    <div class="subject"><a href="#post-169418">Re: EBP and thread termination</a></div>
+    <div class="body">Just push the value of the register you want to preserve onto the stack, then pop it to preserve the value. Like for example if you are messing around with ebp, you can do<br /><br /><pre><code><br />push ebp<br />mov ebp,1<br />;...<br />pop ebp<br /></code></pre></div>
+    <div class="meta">Posted on 2006-01-09 22:28:50 by roticv</div>
+   </div>
+   <div class="post" id="post-169429">
+    <div class="subject"><a href="#post-169429">Re: EBP and thread termination</a></div>
+    <div class="body"><div class="quote">Can thread2 terminate after thread1, will that cause problems?<br /></div><br />it can, unless you call ExitProcess in the main thread :P. For me it looks this way: 1st thread has its work done and it<br />calls ExitThread, when the 2nd thread&#39;s work is done it(2nd thread) calls ExitProcess which will do most of the needed cleanup.</div>
+    <div class="meta">Posted on 2006-01-10 06:22:02 by k3Eahn</div>
+   </div>
+   <div class="post" id="post-169430">
+    <div class="subject"><a href="#post-169430">Re: EBP and thread termination</a></div>
+    <div class="body">Okay, once the thread terminates, the program can start another thread if it wants.<br /><br />How do I make the WinProc detect when either or both threads is terminated please so as to reenable the appropriate menu items. Thanks.</div>
+    <div class="meta">Posted on 2006-01-10 06:36:30 by V Coder</div>
+   </div>
+   <div class="post" id="post-169431">
+    <div class="subject"><a href="#post-169431">Re: EBP and thread termination</a></div>
+    <div class="body"><br />GetExitCodeThread will quickly tell you if a thread is still running or not.<br /></div>
+    <div class="meta">Posted on 2006-01-10 08:02:14 by japheth</div>
+   </div>
+   <div class="post" id="post-169432">
+    <div class="subject"><a href="#post-169432">Re: EBP and thread termination</a></div>
+    <div class="body">Rather than polling GetExitCodeThread, you could have your threads send messages to your winproc when they exit.<br /></div>
+    <div class="meta">Posted on 2006-01-10 09:57:46 by f0dder</div>
+   </div>
+   <div class="post" id="post-169435">
+    <div class="subject"><a href="#post-169435">Re: EBP and thread termination</a></div>
+    <div class="body">Or you call WaitForMultipleObjects and pass it the thread handles. But I prefer the message queue solution.</div>
+    <div class="meta">Posted on 2006-01-10 10:45:45 by QvasiModo</div>
+   </div>
+   <div class="post" id="post-169438">
+    <div class="subject"><a href="#post-169438">Re: EBP and thread termination</a></div>
+    <div class="body">Yeah, WFMO isn&#39;t very suitable if he needs the WndProc to handle thread creation and menu (re)-enabling :)<br /></div>
+    <div class="meta">Posted on 2006-01-10 14:28:23 by f0dder</div>
+   </div>
+   <div class="post" id="post-169445">
+    <div class="subject"><a href="#post-169445">Re: EBP and thread termination</a></div>
+    <div class="body">Thanks I was also thinking about using PostMessage.</div>
+    <div class="meta">Posted on 2006-01-10 19:37:53 by V Coder</div>
+   </div>
+  </div>
+ </body>
+</html>

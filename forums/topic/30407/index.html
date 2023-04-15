@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>read file from offset? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=30407" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=30407">read file from offset?</a></p>
+   <div class="post" id="post-213773">
+    <div class="subject"><a href="#post-213773">read file from offset?</a></div>
+    <div class="body">Hello,<br /><br />Is it possible to read only a portion of a file into memory, without starting at the beginning?<br /><br />Thanks, Allasso</div>
+    <div class="meta">Posted on 2011-01-01 11:47:31 by Allasso</div>
+   </div>
+   <div class="post" id="post-213776">
+    <div class="subject"><a href="#post-213776">Re: read file from offset?</a></div>
+    <div class="body">Yeah... open the file and &quot;lseek&quot; to the desired offset, then read it. &quot;lseek&quot; takes three parameters - the file descriptor (obtained from &quot;open&quot;), the offset, and an integer &quot;whence&quot;: from the start of file, from the current position in the file, and from the end of file (offset can be negative). It returns the new offset - can be used (lseek to an offset of zero from the end of the file) to find the file length. Also look into &quot;llseek&quot; for larger files, and &quot;mmap&quot; (mmap2).<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2011-01-01 15:45:22 by fbkotler</div>
+   </div>
+   <div class="post" id="post-213777">
+    <div class="subject"><a href="#post-213777">Re: read file from offset?</a></div>
+    <div class="body">ah, yes, of course&nbsp; :-)<br /><br />thanks muchly.<br /><br />Allasso</div>
+    <div class="meta">Posted on 2011-01-01 17:09:05 by Allasso</div>
+   </div>
+   <div class="post" id="post-213781">
+    <div class="subject"><a href="#post-213781">Re: read file from offset?</a></div>
+    <div class="body">Is it slower to read a file from and offset? (not from beginning)&nbsp; I thought I read that, but I am not sure if I am interpreting it correctly.</div>
+    <div class="meta">Posted on 2011-01-01 19:32:10 by Allasso</div>
+   </div>
+   <div class="post" id="post-213782">
+    <div class="subject"><a href="#post-213782">Re: read file from offset?</a></div>
+    <div class="body">Probably - the &quot;lseek&quot; must take some time. Further, we can only read (physically... from a disk file) a whole sector at a time. Experiment with it! My observation has been that the &quot;first&quot; read (after a reboot, say, or reading another large file) is much slower than a subsequent read from the same (or &quot;nearby&quot;?) file. I suspect OS buffering policy comes into it. If you&#039;re using libC, the &quot;buffered I/O&quot; functions &quot;fopen()&quot;, &quot;fread()&quot;, etc. are much faster. We can provide our own buffering, of course.<br /><br />As a silly example, s&#039;pose we wanted to find the first letter &#039;x&#039; in a file. Opening the file and reading it one byte at a time (with either int 80h or calling &quot;read()&quot;) would be very slow. Reading a buffer-full and searching the buffer would be much faster. If we wanted the first &#039;x&#039; after the first 100 bytes, simply skipping the first 100 bytes of the first buffer-full would probably be okay. If we wanted the first &#039;x&#039; after the first megabyte, the lseek might be worthwhile. I suspect mmap would be the biggest win.<br /><br />The &quot;best&quot; (fastest?) way probably depends on exactly what you&#039;re doing. Do you have something in particular in mind?<br /><br />Best,<br />Frank<br /><br /></div>
+    <div class="meta">Posted on 2011-01-01 21:48:38 by fbkotler</div>
+   </div>
+   <div class="post" id="post-213784">
+    <div class="subject"><a href="#post-213784">Re: read file from offset?</a></div>
+    <div class="body">Hi, Frank,<br /><br />I hadn&#039;t considered the sector thing. &nbsp;Regarding what you said about subsequent reads being faster, I think that you are correct about the OS buffering. &nbsp;I am only starting to learn about this subject, but I think that (modern) OS&#039;s that use virtual memory and paging, map what is already in memory, so once the file is already in memory, on subsequent reads, the program can work on what is already there. &nbsp;Then there is caching, which, it being likely that the same file (or portion of it) is in the cache, is faster yet.<br /><br />The scenario I am dealing with presently is this: &nbsp;I am playing around with creating an algorithm to index and search a (flat file) database. &nbsp;In the search routine, the first operation is to extract from a search term, the address to an entry on a table which will provide the pointer to the appropriate bucket to search in the index, which is in another file. (didja get all that?) &nbsp;The entries on the table start at the beginning of the file, and each entry is 8 bytes long. &nbsp;The table can be as long as 8kB. &nbsp;It makes more sense to me to just read in the 8 bytes that I am interested in, rather than 8kb. &nbsp;There is also another operation similar to this that follows, and the file in that case could possibly be a 1 - 2 hundred kB, depending on the vocabulary of the database.<br /><br />Now it may be possible that it would be better to determine an optimum range of addresses, determine which range the desired address falls into, and load that entire segment. &nbsp;This range could be dependent on the sector size, as you say, or the page size of the OS. &nbsp;It would seem, however, that using a hardware parameter such as the sector size/range would be meaningless. &nbsp;It seems that is the territory of the OS. &nbsp;But I really don&#039;t know on this.<br /><br />On the hand... I have a hunch that the OS is already doing all of that figuring for you anyway, on a modern system using virtual memory. &nbsp;So it may be that, I lseek to my desired address and read my little 16 bytes, and the system loads a page in anyway, and does it all correctly. &nbsp;If this is true, then even if I could figure out the optimum range, is the OS going to say, &quot;hey, this guy knows what he&#039;s doin&#039;. &nbsp;We don&#039;t need to figure this now.&quot;?<br /><br />Regarding lseek taking time, I think that is insignificant compared to reading data from a disk into memory. &nbsp;I have observed this to be the case with 100 MB files.<br /><br />I agree with your advice to &quot;experiment with it&quot;, however I have found in the past that I have been fooled often by results from speed tests, even when the results were <em>very</em> consistent during a session. &nbsp;It almost seems like you need a machine totally dedicated to doing this - lightweight OS, no gui, no networking going on, as few daemons running as possible, to really get accurate results. &nbsp;I could be all wet about this; I don&#039;t know how &quot;they&quot; do it, but that is how it seems to me. &nbsp;Of course I am kinda terminally anal retentive :-)<br /><br />BTW, I really appreciate this board. &nbsp;It is the clearest, cleanest, fastest, most straightforward board I have ever posted on. &nbsp;And it&#039;s all about assembly :-) &nbsp;(which I am new to, but I really like it) &nbsp;It was hard to find, but maybe that&#039;s what makes it so good.</div>
+    <div class="meta">Posted on 2011-01-02 07:31:32 by Allasso</div>
+   </div>
+  </div>
+ </body>
+</html>

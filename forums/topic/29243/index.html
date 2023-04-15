@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>More noob questions - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29243" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29243">More noob questions</a></p>
+   <div class="post" id="post-206572">
+    <div class="subject"><a href="#post-206572">More noob questions</a></div>
+    <div class="body">Hey all, I was wondering about something<br />I&#039;m making some vector/matrice classes to use with OpenGL, DirectX has D3DX with all you can think off, and I wanted something for OpenGL so I thought it would be a good opportunity to program some inline ASM I asked intel for their manuals and they kindly sent me 5 of them including the instruction reference (a-m &amp; n-z) I was looking around (just to see if I could find some useful instructions) when I saw PSHUFD - Shuffle Packed Double Words I felt a anime cartoon with a sweat drop on my face because until now I was using SHUFPS to (sorry if it&#039;s the wrong word) broadcast, what&#039;s the diference? =| I mean, the commands are different of course, one takes the values of 1 register and put into another and the other uses the values of 2 registers, but in the case of broadcasting, PSHUFD is MUCH simplier O_O is there anything wrong with my line of thinking? because I only see SHUFPS in code examples around (for broadcast/rorder a register =|) is SHUFPS faster or something?<br /><br />Sorry, I think it&#039;s quite a noob question but I&#039;m kinda curious =|<br /><br />EDIT: What I mean by broadcast is change the order of the register&#039;s dwords, here&#039;s an example http://www.songho.ca/misc/sse/sse.html</div>
+    <div class="meta">Posted on 2008-12-27 15:46:01 by Melanikus</div>
+   </div>
+   <div class="post" id="post-206576">
+    <div class="subject"><a href="#post-206576">Re: More noob questions</a></div>
+    <div class="body">It&#039;s a SSE2 instruction, so there are bound to be fewer examples of it than of shufps. <br />Latencies of SSEx change with each new generation, you&#039;ll have to benchmark the different implementations. (sending here a cmdline benchmark for us to run on different cpus/systems is easily accepted)</div>
+    <div class="meta">Posted on 2008-12-28 13:49:34 by Ultrano</div>
+   </div>
+   <div class="post" id="post-206578">
+    <div class="subject"><a href="#post-206578">Re: More noob questions</a></div>
+    <div class="body">How would one do a benchmark we can thrust? I used to get a clock(); before and after , subtract and display in miliseconds, so would be like: a hundred million calls takes 700miliseconds... but then I found a instruction that measures the amount of clockcicles since the program started (sorry, don&#039;t remember the instruction right now) but there&#039;s a &quot;catch&quot; with the instruction, you must pass it to a local variable (in memory) and in case of (speculation) a cache miss, it takes much more clocks(clocks added to the total call clocks) if you measure the clocks to a cache miss sometimes there&#039;s no cache miss =p so you end up getting 0 clocks, what I do is like<br /><br />time1 = getClocksHere<br />for (i &lt; 100000000)<br />callInlineAsmInlineFunc<br />time2 = getClocksHere<br /><br />totalTime = time2 - time1 / 100000000<br /><br />A very large number makes the cache miss time less significative, but it&#039;s still there, maybe there&#039;s a way to force time1 &amp; time2 variables to be in cache? (prefetch0?)<br /><br />Well... is there anyway to KNOW FOR SURE how many clocks took for an instruction to run? or it&#039;s all speculation/best guess/trust intel/amd specs?</div>
+    <div class="meta">Posted on 2008-12-28 18:54:50 by Melanikus</div>
+   </div>
+   <div class="post" id="post-206580">
+    <div class="subject"><a href="#post-206580">Re: More noob questions</a></div>
+    <div class="body">Here&#039;s my reliable way:<br /><pre><code><br />;=====[[ Benchmarking macros START_TEST/END_TEST &gt;&gt;===\<br />TEST_ITERS equ 10000000<br />TEST_SUBCYCLE = 1 ; 0 or 1, whether to show FP result<br /><br />TEST_ID = 0 ; internal thingie<br />START_TEST macro where:REQ<br />	local where2<br />	@START_TEST_VAR textequ &lt;where&gt;<br />	mov where,-1<br />	<br />	<br />	invoke GetModuleHandle,0<br />	invoke SetPriorityClass,eax,HIGH_PRIORITY_CLASS<br />	invoke GetCurrentThread<br />	invoke SetThreadAffinityMask,eax,1<br />	<br />	invoke SwitchToThread<br />	<br />	TEST_ID = TEST_ID + 1<br />	rdtsc<br />	push eax<br />	push edx<br />	mov ecx,TEST_ITERS<br />	align 16<br />	@CatStr(&lt;testlabl&gt;,%TEST_ID,&lt;:&gt;)<br />endm<br />END_TEST macro<br />	dec ecx<br />	jnz @CatStr(&lt;testlabl&gt;,%TEST_ID)<br />	nop<br />	nop<br />	nop<br />	nop<br />	<br />	rdtsc<br />	sub eax,<br />	sbb edx,<br />&nbsp; if TEST_SUBCYCLE EQ 0<br />	add esp,8<br />	mov ecx,TEST_ITERS<br />	div ecx<br />	.if eax&lt;@START_TEST_VAR<br />		mov @START_TEST_VAR,eax<br />	.endif<br />	<br />	invoke GetModuleHandle,0<br />	invoke SetPriorityClass,eax,NORMAL_PRIORITY_CLASS<br />	<br />	%@CatStr(&lt;print &gt;,@START_TEST_VAR)<br /> else<br />	mov ,edx<br />	mov ,eax<br />	fild qword ptr<br />	mov dword ptr,TEST_ITERS<br />	fidiv dword ptr<br />	fstp @START_TEST_VAR<br />	add esp,8<br />	<br />	invoke GetModuleHandle,0<br />	invoke SetPriorityClass,eax,NORMAL_PRIORITY_CLASS<br />	<br />	%@CatStr(&lt;PrintFloat &gt;,@START_TEST_VAR)<br />endif<br />endm<br /><br />;=======/<br /></code></pre><br />Example usage:<br /><br /><pre><code><br />main proc<br />	local time1,time2<br />	<br />	START_TEST time1<br />	inc ebx<br />	inc ebx<br />	inc ebx<br />	inc ebx<br />	inc ebx<br />	<br />	END_TEST<br />	<br />	START_TEST time2<br />	add ebx,1<br />	add ebx,1<br />	add ebx,1<br />	add ebx,1<br />	add ebx,1<br />	END_TEST<br />	<br />	<br />	<br />	ret<br />main endp<br /></code></pre><br />Note that I avoid benchmarking a single instruction, as it could have its latency hidden during the looping (being executed while jumping). <br />It&#039;s best to benchmark a whole proc-call that has i.e 30+ instructions in it. <br />Then also try with and without warming-up caches. <br /><br />The &quot;print&quot; macro is actually the VKDebug PrintDec, renamed</div>
+    <div class="meta">Posted on 2008-12-28 22:21:38 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

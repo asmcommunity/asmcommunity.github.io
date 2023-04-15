@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>combobox-type behavior within a listview - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=17333" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=17333">combobox-type behavior within a listview</a></p>
+   <div class="post" id="post-134304">
+    <div class="subject"><a href="#post-134304">combobox-type behavior within a listview</a></div>
+    <div class="body">I hope that the subject was descriptive enough.  :)<br /><br />I'd like to implement a combobox within a listview.  I'm not sure how to phrase this though, so my searches haven't really pulled up much results.  The only example that I can think of is Microsoft Access.  Maybe it's not actually a combobox but just a listbox, edit control, and a button?<br /><br />Does anyone know how to do this?<br /><br />thanks,<br />will<br /><br />Screenshot:</div>
+    <div class="meta">Posted on 2004-02-20 13:53:59 by Will</div>
+   </div>
+   <div class="post" id="post-134308">
+    <div class="subject"><a href="#post-134308">combobox-type behavior within a listview</a></div>
+    <div class="body">Just see how Access does this :) - when you click on a cell, it creates a new combo-box controls (CreateWindowEx), and fills in the data from it.<br />It probably starts a GetMessage/TranslateMessage/DispatchMessage loop right after creating the control, and exits that loop when the control is destoyed.</div>
+    <div class="meta">Posted on 2004-02-20 15:00:33 by Ultrano</div>
+   </div>
+   <div class="post" id="post-134313">
+    <div class="subject"><a href="#post-134313">combobox-type behavior within a listview</a></div>
+    <div class="body">Hiya, I did that recently in my UpdateManager project. It is a bit complicated, basically what you do is this:<br /><br />On an NM_DBLCLK notification you check to see which item/sub item has been clicked using LVM_SUBITEMHITTEST<br /><br />You then get the bounding rectangle for the item using LVM_GETSUBITEMRECT<br /><br />At that point you create a combobox of that size and at that position that is a child of the ListView<br /><br />Fill the combobox with what you want and you're all done.<br /><br />You will have to take care to watch for mouse clicks outside of the area of the combo box and destroy it when necessary. This is the code to create it in GoAsm syntax, note that my combo was owner draw so it needs a bit more handling. Also the text in the subitem starts with a single digit (1. item) so I use that to keep track of where to initialize the combo box...<br /><br /><pre><code>.NM_DBLCLK<br />cmp D&#91;edi+NMHDR.code&#93;,NM_DBLCLK<br />jnz &gt;&gt;.NM_CUSTOMDRAW<br />	invoke SendDlgItemMessage,&#91;hListView&#93;,999,WM_CLOSE,0,0<br />	invoke GetMessagePos<br />	movzx ecx,ax<br />	mov &#91;lvhi.pt.x&#93;,ecx<br />	shr eax,16<br />	movzx ecx,ax<br />	mov &#91;lvhi.pt.y&#93;,ecx<br />	invoke ScreenToClient,&#91;hListView&#93;,OFFSET lvhi.pt<br />	invoke SendMessage,&#91;hListView&#93;, LVM_SUBITEMHITTEST, 0, OFFSET lvhi<br />	; returns the column and item that was clicked in lvhi<br />	cmp D&#91;lvhi.iItem&#93;,-1<br />	je &gt;&gt;.WMN_DONE<br />	cmp D&#91;lvhi.iSubItem&#93;,4<br />	jne &gt;&gt;D1<br />		; Display the update type combo box<br />		mov eax,&#91;lvhi.iSubItem&#93;<br />		mov &#91;rect.top&#93;,eax<br />		mov D&#91;rect.left&#93;,LVIR_LABEL<br />		invoke SendMessage,&#91;hListView&#93;,LVM_GETSUBITEMRECT,&#91;lvhi.iItem&#93;,OFFSET rect<br /><br />		; Get the current selection number<br />		mov D&#91;lvi.imask&#93;,LVIF_TEXT<br />		mov eax,&#91;lvhi.iItem&#93;<br />		mov &#91;lvi.iItem&#93;,eax<br />		mov eax,&#91;lvhi.iSubItem&#93;<br />		mov &#91;lvi.iSubItem&#93;,eax<br />		mov D&#91;lvi.pszText&#93;,OFFSET cbstring<br />		mov D&#91;lvi.cchTextMax&#93;,255<br />		invoke SendMessage,&#91;hListView&#93;,LVM_GETITEMTEXT,&#91;lvhi.iItem&#93;,OFFSET lvi<br />		mov eax,OFFSET cbstring<br />		mov B&#91;cbstring+1&#93;,0<br />		invoke asciitodword,OFFSET cbstring<br />		mov D&#91;iCBItem&#93;,eax<br /><br />		mov eax,&#91;rect.bottom&#93;<br />		sub eax,&#91;rect.top&#93;<br />		push eax<br />		mov ecx,&#91;rect.right&#93;<br />		sub ecx,&#91;rect.left&#93;<br />		sub D&#91;rect.top&#93;,1<br />		invoke CreateWindowEx,NULL,&quot;COMBOBOX&quot;,NULL,\<br />			CBS_OWNERDRAWFIXED+CBS_HASSTRINGS+WS_VSCROLL+\<br />			WS_CHILD+WS_VISIBLE+CBS_DROPDOWNLIST,&#91;rect.left&#93;,\<br />			&#91;rect.top&#93;,ecx,100,&#91;hListView&#93;,999,&#91;hInstance&#93;,NULL<br /><br />		mov ebx,eax<br />		invoke SendMessage,ebx,WM_SETFONT,&#91;hCBFont&#93;,TRUE<br />		CB_SetContent&#40;ebx,OFFSET szaComboBox&#41;<br />		invoke SendMessage,ebx,CB_SETCURSEL,&#91;iCBItem&#93;,0<br />		pop eax<br />		; less the borders<br />		sub eax,4<br />		invoke SendMessage,ebx,CB_SETITEMHEIGHT,-1,eax<br />		invoke SetFocus,ebx<br /></code></pre><br /><br />EXE only to show you that it works :)</div>
+    <div class="meta">Posted on 2004-02-20 15:38:13 by donkey</div>
+   </div>
+   <div class="post" id="post-134316">
+    <div class="subject"><a href="#post-134316">combobox-type behavior within a listview</a></div>
+    <div class="body">Have a look at:<br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=16849">http://www.asmcommunity.net/board/index.php?topic=16849</a><br /><br />Manos.</div>
+    <div class="meta">Posted on 2004-02-20 16:02:00 by Anonymous</div>
+   </div>
+   <div class="post" id="post-134325">
+    <div class="subject"><a href="#post-134325">combobox-type behavior within a listview</a></div>
+    <div class="body">Thanks donkey!  :)<br /><br />that's perfect,<br />will</div>
+    <div class="meta">Posted on 2004-02-20 18:05:25 by Will</div>
+   </div>
+  </div>
+ </body>
+</html>

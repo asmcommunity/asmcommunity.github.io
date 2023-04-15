@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Bug in MultiByteToWideChar - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29544" />
+    <link rel="next" href="../?id=29544&amp;page=2" /> </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29544">Bug in MultiByteToWideChar</a></p>
+<form class="pagination" action="../" method="get"><a href="../?id=29544&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=29544&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="29544" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=29544&amp;page=2">&gt;</a><a href="../?id=29544&amp;page=2">&raquo;</a></form>   <div class="post" id="post-208642">
+    <div class="subject"><a href="#post-208642">Bug in MultiByteToWideChar</a></div>
+    <div class="body">Heads Up!!<br /><br />While messing with my new MovieMixer code recently, I discovered what I believe is a bug in the MultiByteToWideChar api.<br /><br />Basically, the api only writes one Zero Terminator byte to the end of the WIDE output string - and if the buffer was not previously filled with zeros, then the string is not correctly terminated - and this caused me a lot of headaches with &#039;file not found&#039; errors.<br /><br />It&#039;s worth knowing that OA32&#039;s Str2UStr function does not suffer this flaw.<br /></div>
+    <div class="meta">Posted on 2009-09-08 06:35:12 by Homer</div>
+   </div>
+   <div class="post" id="post-208646">
+    <div class="subject"><a href="#post-208646">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">Interesting!<br /><br />Duplicated here, Win7-64 .<br /><br /><pre><code>#include &lt;windows.h&gt;<br />#include &lt;stdio.h&gt;<br /><br />#define lengthof(x) sizeof(x)/sizeof(x[0])<br /><br />char *source = &quot;halløj æøåÆØÅ!&quot;;<br /><br />int main()<br />{<br />	WCHAR	dest[100];<br /><br />	memset(dest, &#039;@&#039;, sizeof(dest));<br />	MultiByteToWideChar(CP_ACP, 0, source, -1, dest, lengthof(dest));<br /><br />	FILE *f = fopen(&quot;out.bin&quot;, &quot;wb&quot;);<br />	fwrite(dest, 1, sizeof(dest), f);<br />	fclose(f);<br />}</code></pre><br /><br /><span class="strike">I haven&#039;t been bitten by this bug since I tend to stay away from ugly NUL-terminated strings - I use bytelength-without-NUL for conversion, and keep my strings in std::string / std::wstring . But this is pretty nasty, MS should be contacted.</span><br /><br />EDIT: as can clearly be seen from the attached screenshot, there isn&#039;t any problem, and there&#039;s a proper 16-bit NUL terminator - I&#039;m a moron for a couple of hours after getting out of bed :)</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=2857" target="_blank">MBTWC_bug.png</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2009-09-08 10:59:09 by f0dder</div>
+   </div>
+   <div class="post" id="post-208647">
+    <div class="subject"><a href="#post-208647">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">MultiByteToWideChar was designed to be interfaced with C/C++ style code. Due to this, it&#039;s common practice with dealing with any C string conversion or input routines to have the user &#039;\0&#039; terminate the string. For example scanf/fscanf is regularly used like so (for the same reason):<br /><br /><pre><code>char * buf;<br />buf = (char*)malloc( 1025 );<br /><br />...<br /><br />// scan string from file stopping at newline and null terminate.<br />buf[ (int)fscanf( fd, &quot;%1024[^\n]&quot;, buf ) ] = &#039;\0&#039;;</code></pre><br /><br />So it&#039;s probably not considered a bug as much as a, &quot;terminate your own string&quot; style situation which is present in a lot of HL languages.</div>
+    <div class="meta">Posted on 2009-09-08 10:59:53 by Synfire</div>
+   </div>
+   <div class="post" id="post-208648">
+    <div class="subject"><a href="#post-208648">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><div class="quote">So it&#039;s probably not considered a bug as much as a, &quot;terminate your own string&quot; style situation which is present in a lot of HL languages.</div><br /><br /><span class="strike">It&#039;s clearly a bug since</span> the NUL terminator <strong>*IS*</strong> processed, <span class="strike">but only a single byte is output.</span> Let me quote MSDN as well (emphasis mine):<br /><br /><div class="quote"><em>cbMultiByte</em><br /> Size, in bytes, of the string indicated by the lpMultiByteStr parameter. Alternatively, this parameter can be set to -1 if the string is null-terminated. Note that, if cbMultiByte is 0, the function fails. <br /><strong>If this parameter is -1, the function processes the entire input string, including the null terminator. <em>Therefore, the resulting wide character string has a null terminator</em>, and the length returned by the function includes the terminating null character.</strong><br /><br />If this parameter is set to a positive integer, the function processes exactly the specified number of bytes. If the provided size does not include a null terminator, the resulting wide character string is not null-terminated, and the returned length does not include the terminating null character.</div><br /><br />I updated the code above to printf() the result of MBTWC, and it returned 15 - that&#039;s the length of the source string <strong>including</strong> the NUL char.<br /><br />EDIT: It&#039;s Not A Bug<sup>TM</sup></div>
+    <div class="meta">Posted on 2009-09-08 11:10:50 by f0dder</div>
+   </div>
+   <div class="post" id="post-208649">
+    <div class="subject"><a href="#post-208649">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">PS: I hope you don&#039;t write code like the above, it&#039;s &quot;somewhat flawed&quot; :) (think of EOF return value... and remember that the return value is number of fields captured, not charlength).</div>
+    <div class="meta">Posted on 2009-09-08 11:19:06 by f0dder</div>
+   </div>
+   <div class="post" id="post-208651">
+    <div class="subject"><a href="#post-208651">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><div class="quote"><br />PS: I hope you don&#039;t write code like the above, it&#039;s &quot;somewhat flawed&quot; :) (think of EOF return value... and remember that the return value is number of fields captured, not charlength).<br /></div><br /><br />Actually I do write code like that. The above code is the equivalent of doing a getline with the exception that it truncates to the maximum specified length instead of throwing a failbit error. Also, take a close look at the &quot;regex&quot; I&#039;m using &quot;%1024[^\n]&quot;, it effectively matches all characters except a newline meaning that even if the EOF is reached, it will have already made it&#039;s first match (either a valid token or &#039;\n&#039; forcing a return of 0). The only real case in which EOF would be returned by using this routine would be if a read error occurred.. So I suppose it is wrong on that behalf and would warrant something more like:<br /><br /><pre><code>int x; char buf[1025];<br />buf[ (((x=(int)fscanf( fd, &quot;%1024[^\n]&quot;, buf ))&gt;0)?x:0) ]=&#039;\0&#039;;</code></pre><br /><br />However I&#039;ve never personally had a case where the prior had failed.</div>
+    <div class="meta">Posted on 2009-09-08 17:54:09 by Synfire</div>
+   </div>
+   <div class="post" id="post-208652">
+    <div class="subject"><a href="#post-208652">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">So, it&#039;s just that Homer set the argument cchMultiByte=strlen(s) , right? </div>
+    <div class="meta">Posted on 2009-09-08 18:02:12 by Ultrano</div>
+   </div>
+   <div class="post" id="post-208653">
+    <div class="subject"><a href="#post-208653">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><div class="quote"><br />So, it&#039;s just that Homer set the argument cchMultiByte=strlen(s) , right?</div>That wouldn&#039;t include the NUL, then. Notice my code - I use -1 for the length, which according to MSDN: &quot;<em>If this parameter is -1, the function processes the entire input string, including the null terminator</em>&quot;... and results in a <span class="strike"><strong>single</strong> NUL byte, not a</span> NUL word as it&#039;s supposed to be.<br /><br />EDIT:</strong> It&#039;s Not A Bug<sup>TM</sup></div>
+    <div class="meta">Posted on 2009-09-08 18:04:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-208654">
+    <div class="subject"><a href="#post-208654">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">Ultrano,<br />Yea, f0dder is right, it&#039;s definitely a bug. Given that the documentation states that it should NULL terminate upon the use of a -1 argument. Although generally speaking it&#039;s always a good idea to set your own NULL terminators just to be on the safe side.</div>
+    <div class="meta">Posted on 2009-09-08 18:08:05 by Synfire</div>
+   </div>
+   <div class="post" id="post-208655">
+    <div class="subject"><a href="#post-208655">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><strong>Synfire</strong>: getting EOF result value might be very unlikely, but it&#039;s not good practice not to handle it. Furthermore, what&#039;s with the (int) cast? - fscanf already returns int. And finally, fscanf returns the number of <strong>fields</strong>, not bytes, read... so you&#039;ll be getting your NUL terminator at index 1, not at the end of the string (at least that&#039;s consistent with MSDN, K&amp;R and empirical testing).<br /><br />PS: the single-line statement might be &quot;cute&quot;, but personally I&#039;d introduce an &quot;int result&quot; to keep the code clearer &amp; cleaner. Sure, code increases to two or three lines, but I&#039;m willing to sacrifice that for clarity.</div>
+    <div class="meta">Posted on 2009-09-08 18:16:35 by f0dder</div>
+   </div>
+   <div class="post" id="post-208656">
+    <div class="subject"><a href="#post-208656">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">I still see absolutely no problem. That &quot;extra&quot; or &quot;just one&quot; zero-byte is the higher-byte from the last little-endian WORD. <br />If you specify -1 , then obviously internally cchMultiByte=strlen(s)+1. This &quot;-1&quot; is just sugar on the top, beside which the function makes no assumptions that the input and output string are zero-terminated! The func-output is an array, not a szString. </div>
+    <div class="meta">Posted on 2009-09-08 18:22:01 by Ultrano</div>
+   </div>
+   <div class="post" id="post-208657">
+    <div class="subject"><a href="#post-208657">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><strong>Ultrano:</strong> perhaps you should re-read what MSDN has to say about the function?<br /><br /><div class="quote">MultiByteToWideChar does not null-terminate an output string if the input string length is explicitly specified without a terminating null character. To null-terminate an output string for this function, the application should pass in -1 or explicitly count the null terminator for the input string. </div><br /><br />In other words, passing strlen+1 or -1 as argument, you should get a NUL terminated output string. A 1-byte NUL isn&#039;t exactly appropriate for UTF-16 output.<br /><br />EDIT: ...which is why it&#039;s good and correct that MBTWC outputs a 2-byte NUL :P</div>
+    <div class="meta">Posted on 2009-09-08 18:24:49 by f0dder</div>
+   </div>
+   <div class="post" id="post-208658">
+    <div class="subject"><a href="#post-208658">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">P.S. it&#039;s quite understandable why the output should be an assumed to be a szString: the same func can be used for a wide variety of tasks: 1) bulk-handling of many szStrings, 2) transcode of just parts of a text, 3) transcode into Pascal/Java type of strings. </div>
+    <div class="meta">Posted on 2009-09-08 18:27:41 by Ultrano</div>
+   </div>
+   <div class="post" id="post-208659">
+    <div class="subject"><a href="#post-208659">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">WinXP SP2:<br /><pre><code><br />.data<br />	z1 db &quot;hello&quot;,0<br />	z2 dw 40 dup (0CCCCh)<br />.code<br />main proc<br />	invoke MultiByteToWideChar,CP_ACP,0,addr z1,-1,addr z2,40	<br />	movzx ecx,z2[10]<br />	print ecx ; ecx = 0	 *******<br />	ret<br />main endp<br /></code></pre><br /><br />No problem here...</div>
+    <div class="meta">Posted on 2009-09-08 18:30:00 by Ultrano</div>
+   </div>
+   <div class="post" id="post-208660">
+    <div class="subject"><a href="#post-208660">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">I just fired up a XP32 VMware, and it did a word-sized NUL for my sample code above - so clearly the bug has been introduced later. PS: your code is buggy, the last argument is <em><strong>cch</strong>WideChar</em>, not <em><strong>cb</strong>WideChar</em> :)</div>
+    <div class="meta">Posted on 2009-09-08 18:34:33 by f0dder</div>
+   </div>
+   <div class="post" id="post-208661">
+    <div class="subject"><a href="#post-208661">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><div class="quote"><br /><strong>Synfire</strong>: getting EOF result value might be very unlikely, but it&#039;s not good practice not to handle it. Furthermore, what&#039;s with the (int) cast? - fscanf already returns int. And finally, fscanf returns the number of <strong>fields</strong>, not bytes, read... so you&#039;ll be getting your NUL terminator at index 1, not at the end of the string (at least that&#039;s consistent with MSDN, K&amp;R and empirical testing).<br /><br />PS: the single-line statement might be &quot;cute&quot;, but personally I&#039;d introduce an &quot;int result&quot; to keep the code clearer &amp; cleaner. Sure, code increases to two or three lines, but I&#039;m willing to sacrifice that for clarity.<br /></div><br /><br />I typecast as an old habit. When I first started out with C I hated having issues with &quot;converting types&quot; when I knew good and well the values were essentially the same thing. So I got myself into the habit of typecasting any function in which I grab a value from.<br /><br />As for the reason for the reduced one-liner, it has nothing to do with &quot;cuteness&quot; rather than what&#039;s actually generated. Whereas using the extended version (int result) generates a 144 byte &lt;main&gt;, the one-liner generated 134 byte &lt;main&gt; (built with GNU-C). Little optimizations like this are useful. I&#039;m by far a C expert but I try to keep code size down as much as possible no matter what language I&#039;m writing in.</div>
+    <div class="meta">Posted on 2009-09-08 18:39:47 by Synfire</div>
+   </div>
+   <div class="post" id="post-208662">
+    <div class="subject"><a href="#post-208662">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">f0dder: then on that attached MBTWC_bug.png .... what are those 2 zeroes doing at 1Ch :) , if that&#039;s on another OS? </div>
+    <div class="meta">Posted on 2009-09-08 18:42:20 by Ultrano</div>
+   </div>
+   <div class="post" id="post-208663">
+    <div class="subject"><a href="#post-208663">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><div class="quote"><br />I typecast as an old habit. When I first started out with C I hated having issues with &quot;converting types&quot; when I knew good and well the values were essentially the same thing. So I got myself into the habit of typecasting any function in which I grab a value from.</div>Ugh... that&#039;s pretty bad coding practice. When the compiler tells you there&#039;s an issue, there&#039;s usually a reason for it (C++ and the PlatformSDK is painful, though - less so in C mode). But doing this as a general coding practice is <strong>bad</strong>.<br /><br /><div class="quote"><br />As for the reason for the reduced one-liner, it has nothing to do with &quot;cuteness&quot; rather than what&#039;s actually generated. Whereas using the extended version (int result) generates a 144 byte &lt;main&gt;, the one-liner generated 134 byte &lt;main&gt; (built with GNU-C). Little optimizations like this are useful. I&#039;m by far a C expert but I try to keep code size down as much as possible no matter what language I&#039;m writing in.</div>You might want to move to a decent compiler, or at least a more recent version of GCC? With VC2008 (and also lot older versions, I expect) introducing the temporary variable results in exactly the same code as doing the one-liner.</div>
+    <div class="meta">Posted on 2009-09-08 18:48:31 by f0dder</div>
+   </div>
+   <div class="post" id="post-208664">
+    <div class="subject"><a href="#post-208664">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body"><div class="quote"><br />f0dder: then on that attached MBTWC_bug.png .... what are those 2 zeroes doing at 1Ch :) , if that&#039;s on another OS? </div>Now I&#039;ll be damned - I could&#039;ve sworn there was only a single one of them... that&#039;s what I get for doing code stuff right when I&#039;ve gotten out of bed :oops:<br /><br />Sounds like Homer probably *is* passing strlen-without-NUL, unless he&#039;s on a OS version that actually <strong>is</strong> buggy :)</div>
+    <div class="meta">Posted on 2009-09-08 18:52:48 by f0dder</div>
+   </div>
+   <div class="post" id="post-208665">
+    <div class="subject"><a href="#post-208665">Re: Bug in MultiByteToWideChar</a></div>
+    <div class="body">Told ya :)<br />The beer is strong in us tonight :P<br /><br />The whole world would collapse if that func was buggy in that way. </div>
+    <div class="meta">Posted on 2009-09-08 18:56:36 by Ultrano</div>
+   </div>
+<form class="pagination" action="../" method="get"><a href="../?id=29544&amp;page=1" style="visibility:hidden;">&laquo;</a><a href="../?id=29544&amp;page=0" style="visibility:hidden;">&lt;</a><input type="hidden" name="id" value="29544" /><input type="number" name="page" min="1" max="2" step="1" value="1" onchange="this.form.submit();" /><a href="../?id=29544&amp;page=2">&gt;</a><a href="../?id=29544&amp;page=2">&raquo;</a></form>  </div>
+ </body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>VARIANTS and IDispatch uses - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=9799" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=116">Windows</a> &raquo; <a href="../?id=9799">VARIANTS and IDispatch uses</a></p>
+   <div class="post" id="post-72842">
+    <div class="subject"><a href="#post-72842">VARIANTS and IDispatch uses</a></div>
+    <div class="body">I have a question that i've been trying to solve for 2 days now and not doing so well :rolleyes:<br /><br />Im trying to do something trivial (of course) and making the application become visible.  Origionally the &quot;put_Visible&quot; method was translated to have only a :BOOL param.<br /><br />So i tried:<br /><br />invoke vf( pExcelApp, _Application, put_Visible), TRUE<br /><br />And it failed, with an invlid param type error... After alot of running around and confimation, i realized one and only one clue: The param :BOOL is wrong, its actually indicated as VARIANT_BOOL, in the IDL <pre><code>        &#91;id&#40;0x0000022e&#41;, propget, helpcontext&#40;0x0001022e&#41;&#93;<br />        HRESULT Visible&#40;<br />                        &#91;in, lcid&#93; long lcid, <br />                        &#91;out, retval&#93; VARIANT_BOOL* RHS&#41;;<br />        &#91;id&#40;0x0000022e&#41;, propput, helpcontext&#40;0x0001022e&#41;&#93;<br />        HRESULT Visible&#40;<br />                        &#91;in, lcid&#93; long lcid, <br />                        &#91;b&#93;&#91;in&#93; VARIANT_BOOL RHS&#41;;&#91;/b&#93;</code></pre><br />I then tried manually formating and using a variant:<br /><br /><pre><code><br />vv VARIANT &lt;&gt;<br /><br />invoke VariantInit, addr vv<br />mov vv.vt, VT_BOOL<br />mov vv.boolVal, TRUE<br /></code></pre><br />Modified the Proto from :BOOL to :VARIANT and tried again. No luck. <br /><br />So im stumped with too many Variables to play with...<br /><br />Does anyone know how VARIANTS are to be uses 'properly' with displatchable methods? <br /><br />Does anyone know what the &quot;RHS&quot; means following the proto definition above??<br /><br />Im guessing its the assumed proto type is now my problem (might not be :VARIANT )<br /><br />Please help if you think you have something to add ;)<br /><br />Thanx alot!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-26 23:48:15 by NaN</div>
+   </div>
+   <div class="post" id="post-72865">
+    <div class="subject"><a href="#post-72865">VARIANTS and IDispatch uses</a></div>
+    <div class="body">Hi NaN,<br /><br />the RHS possibly is the name of the variable.<br /><br />Where did you get the IDL from? Im asking because the lcid parameter doesnt appear in my excel typeinfos.<br /><br />In a VBScript app, there is a simple code:<br /><br /><pre><code><br />Set objXL = WScript.CreateObject&#40;&quot;Excel.Application&quot;&#41;<br />objXL.Visible = TRUE<br /></code></pre><br /><br />which works and is without lcid (I use office 2000)<br /><br />BTW: VARIANT_BOOL isnt a VARIANT, in VC its simple defined as WORD (which may be a problem sometimes with MASM because of the invoke bug). You will need variants only if you call methods throu IDispatch::Invoke.</div>
+    <div class="meta">Posted on 2002-12-27 05:59:26 by japheth</div>
+   </div>
+   <div class="post" id="post-72886">
+    <div class="subject"><a href="#post-72886">VARIANTS and IDispatch uses</a></div>
+    <div class="body">The LCID value is the 'This' param of the interface from which the Visible method is called from.<br /><br />I found that VARIANT_BOOL is a WORD last night, but i tried:<br /><br />xor eax, eax<br />mov ax, TRUE<br />invoke (pExcelApp, _Application, put_Visible), ax<br /><br />and it also failed :rolleyes: .  Is this affected by the 'invoke' bug you spoke of?<br /><br />Anywho, im baffled too as I've done the VB script before as you got it, and works everytime.....<br /><br />I know i got the App Interface working correctly (From trial and error methods).<br />I also know that the Vtbl offset is correct in the assembly transcriptions.<br /><br />Im truely puzzled..<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-27 09:15:49 by NaN</div>
+   </div>
+   <div class="post" id="post-72890">
+    <div class="subject"><a href="#post-72890">VARIANTS and IDispatch uses</a></div>
+    <div class="body"><div class="quote"><br />The LCID value is the 'This' param of the interface from which the Visible method is called from.</div><br /><br />Ok....<br /><br />I <em><span style="font-size:72>finally</span></em> got it to work this morning!  And it was from your tip.  I was assuming the LCID was the pointer to the interface that is normally passed with every method call... I was wrong.  I double checked some other IDL's i had and none of them indicate this param (since they will *always* be included).<br /><br />This ment that your suspicisons are correct and this LCID param has some special meaning... one that i have no clue what its for.  But i tried placing a NULL in its place and it took right off!<br /><br />The problem is the COMView tool transcribed this:<pre><code><br />   STDMETHOD   get_Visible , &#58;ptr BOOL<br />   STDMETHOD   put_Visible , &#58;VARIANT_BOOL  ;; &#58;BOOL</code></pre><br /><br />And the accepted method is:<pre><code><br />   STDMETHOD   get_Visible , lcid &#58;DWORD, &#58;ptr BOOL<br />   STDMETHOD   put_Visible , lcid &#58;DWORD, &#58;VARIANT_BOOL  ;; &#58;BOOL</code></pre><br /><br />Which now makes me wonder if the tool is overlooking something... ??<br />As well i saw alot of HRESULTS showing up in the params at the end, for a out return type.  I havent confirmed this, but i suspect this is an error as well since HRESULT is normally the COM return status, not an out-return from the method.  The 'wires' might be crossed here, and need further filtering for both PVOID and HRESULT return types ;)<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-27 10:30:43 by NaN</div>
+   </div>
+   <div class="post" id="post-72895">
+    <div class="subject"><a href="#post-72895">VARIANTS and IDispatch uses</a></div>
+    <div class="body">I was right with the assumption, the tool is making another error:<br /><br />Here is the generated code for IWindow:<pre><code>   STDMETHOD   get_ActiveCell , &#58;ptr ptr Range, &#58;ptr HRESULT<br />   STDMETHOD   get_ActiveChart   , &#58;ptr ptr Chart, &#58;ptr HRESULT<br />   STDMETHOD   get_ActivePane , &#58;ptr ptr Pane, &#58;ptr HRESULT<br />   STDMETHOD   get_ActiveSheet   , &#58;ptr ptr IDispatch, &#58;ptr HRESULT<br />   STDMETHOD   get_Caption , &#58;ptr VARIANT, &#58;ptr HRESULT<br />   STDMETHOD   put_Caption , &#58;VARIANT, &#58;ptr HRESULT</code></pre><br />And here is the IDL for the same area:<pre><code>        &#91;propget, helpcontext&#40;0x00010131&#41;&#93;<br />         HRESULT _stdcall ActiveCell&#40;&#91;out, retval&#93; Range** RHS&#41;;<br /><br />        &#91;propget, helpcontext&#40;0x000100b7&#41;&#93;<br />        HRESULT _stdcall ActiveChart&#40;&#91;out, retval&#93; Chart** RHS&#41;;<br /><br />        &#91;propget, helpcontext&#40;0x00010282&#41;&#93;<br />        HRESULT _stdcall ActivePane&#40;&#91;out, retval&#93; Pane** RHS&#41;;<br /><br />        &#91;propget, helpcontext&#40;0x00010133&#41;&#93;<br />        HRESULT _stdcall ActiveSheet&#40;&#91;out, retval&#93; IDispatch** RHS&#41;;<br /><br />        &#91;propget, helpcontext&#40;0x0001008b&#41;&#93;<br />        HRESULT _stdcall Caption&#40;&#91;out, retval&#93; VARIANT* RHS&#41;;<br /><br />        &#91;propput, helpcontext&#40;0x0001008b&#41;&#93;<br />        HRESULT _stdcall Caption&#40;&#91;in&#93; VARIANT RHS&#41;;</code></pre><br /><br />As you can see there is not to be a &quot;HRESULT&quot; out param by the methods for both the property put and property get type methods...<br /><br />(Sorry, not trying to irritate you, just make your tool better ;) )<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-27 10:46:38 by NaN</div>
+   </div>
+   <div class="post" id="post-72897">
+    <div class="subject"><a href="#post-72897">VARIANTS and IDispatch uses</a></div>
+    <div class="body">NaN,<br /><br />the &quot;this&quot; parameter is invisible in the protos defined by comview, but it is there of course.<br /><br /><pre><code><br />STDMETHOD	macro name&#58;req,arguments&#58;VARARG<br />local prototype,pointer,function<br />ifnb &lt;arguments&gt;<br />;---------------------------------------------------------------!------------------------- its here<br />prototype	catstr ?Interface,&lt;_&gt;,&lt;name&gt;,&lt; typedef proto  &#58;ptr      ,arguments&gt;<br />else<br />prototype	catstr ?Interface,&lt;_&gt;,&lt;name&gt;,&lt; typedef proto &#58;ptr&gt;<br />endif<br />pointer	catstr	&lt;p&gt;,?Interface,&lt;_&gt;,&lt;name&gt;,&lt; typedef ptr &gt;,?Interface,&lt;_&gt;,&lt;name&gt;<br />function	catstr &lt;name&gt;,&lt; p&gt;,?Interface,&lt;_&gt;,&lt;name&gt;,&lt; ?&gt;<br /><br />prototype<br />pointer<br />function<br /> endm<br /><br /></code></pre><br /><br />The prototype for put_Visible property takes 2 real parameters, &quot;this&quot; and a VARIANT_BOOL, thats all. (VARIANT_BOOL, although it is a WORD, must be pushed as DWORD to keep stack dword aligned)</div>
+    <div class="meta">Posted on 2002-12-27 10:47:59 by japheth</div>
+   </div>
+   <div class="post" id="post-72899">
+    <div class="subject"><a href="#post-72899">VARIANTS and IDispatch uses</a></div>
+    <div class="body">Well there is a third REAL param &quot;LCID&quot;... Cause it took a week of my real time to find this problem... ???  Maybe this is a one time fluke or maybe there is something being overlooked here... i dunno..<br /><br />Thanx for the stack info tho.. I see your point here.<br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-27 11:10:03 by NaN</div>
+   </div>
+   <div class="post" id="post-72969">
+    <div class="subject"><a href="#post-72969">VARIANTS and IDispatch uses</a></div>
+    <div class="body">NaN, you are right.<br /><br />For TKIND_DISPATCH typeinfo there may exist a (somewhat hidden) referenced TYPEINFO.<br /><br />From MSDN:<br /><br /><pre><code><br />If the TKIND_DISPATCH type description is for a dual interface, the TKIND_INTERFACE type description can be<br /> obtained by calling GetRefTypeOfImplType with an index of ?1, and by passing the returned pRefType handle to <br />GetRefTypeInfo to retrieve the type information.<br /></code></pre><br /><br />I missed that up to now. With this info you get these &quot;hidden&quot; parameters lcid and retval, no more special handling for include generation is required.<br /><br />I will adjust comview accordingly<br /><br />japheth</div>
+    <div class="meta">Posted on 2002-12-28 05:27:40 by japheth</div>
+   </div>
+   <div class="post" id="post-72979">
+    <div class="subject"><a href="#post-72979">VARIANTS and IDispatch uses</a></div>
+    <div class="body">I really didnt understand all to much from that quote ;)  So im glad you understand it, and secondly I wish to to thank you for being willing to improve your COMView tool (I realize you have other projects on the go).<br /><br />I realy dont anticipate any more problems beyond this and the HRESULT business i posted above... (which i assume is also an ez fix...)<br /><br />Thanx alot Japheth, let me know when your got things worked out..<br /><br />To perhaps help you out, here is the Excel .OLB which i have been using to cause all these problems ;) --&gt; <a target="_blank" href="http://www.asmcommunity.net/board/attachment.php?s=&amp;postid=72004">Download</a><br /><br />Also, here is the IDL i was given by Gunner.  I assume it was transcribed with a VC++ tool  --&gt; <a target="_blank" href="http://members.tripod.com/semper.fi/files/excel8idl.zip">Download</a><br /><br />The interface that showed some problems with these hidden types was <strong>_Application</strong> .  The methods <strong>get_Visible</strong> and <strong>put_Visible</strong> were the onces that brought this business to light.<br /><br />As well the interface <strong>IWindow</strong> is where i noticed the extra method param <strong>:HRESULT</strong> being tack on that should not be there..<br /><br /><br />Thanx again Japheth for everything,<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-28 06:10:38 by NaN</div>
+   </div>
+   <div class="post" id="post-72999">
+    <div class="subject"><a href="#post-72999">VARIANTS and IDispatch uses</a></div>
+    <div class="body">I 've go the next version to work, but regard it as preliminary, I want to have a &quot;stable&quot; version this time and so need some more testing.<br /><br />Please report errors you may find</div>
+    <div class="meta">Posted on 2002-12-28 09:11:20 by japheth</div>
+   </div>
+   <div class="post" id="post-73003">
+    <div class="subject"><a href="#post-73003">VARIANTS and IDispatch uses</a></div>
+    <div class="body">It all looks great!<br /><br />But time will truely tell (still have to edit out the transcription to work... The excel TLib has methods with over 20 VARIANT params, this causes masm32 to complain about lines being to long... ;)  (Not your problem, dont worry!)<br /><br />However, if i may add some constructive feedback..  When i work with such big com headers.. i copy the interface/class name with the GUID to the top of the file and comment it out to form an index:<pre><code><br />;;sIID__Application textequ &lt;IID &#123;0000208D5h,00000h,...&#125;&#125;&gt;<br />;;sIID__Chart textequ       &lt;IID &#123;0000208D6h,00000h,...&#125;&#125;&gt;<br />;;sIID__Worksheet textequ   &lt;IID &#123;0000208D8h,00000h,...&#125;&#125;&gt;<br />;;sIID__Global textequ      &lt;IID &#123;0000208D9h,00000h,...&#125;&#125;&gt;<br />;;sIID__Workbook textequ    &lt;IID &#123;0000208DAh,00000h,...&#125;&#125;&gt;<br />;;sIID__IOLEObject textequ  &lt;IID &#123;0000208A2h,00001h,...&#125;&#125;&gt;<br />;;sIID__IQueryTable textequ &lt;IID &#123;000024428h,00001h,...&#125;&#125;&gt;</code></pre><br />This way by double clicking on the name &quot;sIID__Application&quot; and hitting F3 it jumps to the interface description for quick referencing.. (saves time in the long run).<br /><br />I dont know if it would be a pain in the arse or not to include this, but if it would be relatively painless, i think it would be a handy to have... <br /><br />As well the double ';;' is for the assembler.  It will absolutely ignore a double ; in the file, however, it will still copy/include the single semicolon stuff on a pre-compile.  Adding some speed relief.<br /><br />Thanx again Japheth!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-28 09:39:53 by NaN</div>
+   </div>
+   <div class="post" id="post-73009">
+    <div class="subject"><a href="#post-73009">VARIANTS and IDispatch uses</a></div>
+    <div class="body">After fixing line too long, and some less likely text label errors (ie. Comment, Label, RGB, Arc, Rectangle)<br /><br />It recompiled perfectly and ran Excel as it should!<br /><br />I think you got it with this one...<br />Great work!<br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-28 09:58:13 by NaN</div>
+   </div>
+   <div class="post" id="post-73029">
+    <div class="subject"><a href="#post-73029">VARIANTS and IDispatch uses</a></div>
+    <div class="body">How did you fix the &quot;line too long&quot; errors, NaN?<br /><br />I tested with excel.inc now, and found as only &quot;solution&quot; to cut the parameter line.<br /><br />And I had some troubles with &quot;structure redefines&quot; (duplicate definitions in office.inc and excel.inc).<br />That can be avoided by generating ifdefs.<br /><br />Now here is my &quot;final&quot; version :) . Still you have to fix some errors manually (parameter names), but its done it one minute.</div>
+    <div class="meta">Posted on 2002-12-28 12:47:37 by japheth</div>
+   </div>
+   <div class="post" id="post-73046">
+    <div class="subject"><a href="#post-73046">VARIANTS and IDispatch uses</a></div>
+    <div class="body">You can get around 512 char lengths by replacing key words with smaller text equates:<br /><pre><code><br />VT TEXTEQU &lt;&#58;VARIANT &gt;<br /><br />STDMETHOD _WSFunction,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,VT,&#58;PTR</code></pre><br /><br />(This compiles with 30 Variants and an extra output Variant pointer)<br /><br /><br />As well, i did also encounter all the other stuff, but chose not to bother you with it.  Adding ifdef's is not too much swet off my back, and symbol redef's are rare if any.. <br /><br />:alright:<br />NaN</div>
+    <div class="meta">Posted on 2002-12-28 14:07:20 by NaN</div>
+   </div>
+   <div class="post" id="post-73531">
+    <div class="subject"><a href="#post-73531">VARIANTS and IDispatch uses</a></div>
+    <div class="body">Nan,<br /><br /> The LCID is the Locale Identifyer, a number that specifies which language/dialect you're using. Sending NULL means use the computer's default.<br /><br />If you want to know some more, look in the language.inc file from my stuff. <br /><br />(whack me if I didn't include it in my published stuff and I'll post it here)<br /><br /><br /><br /><br />I have zero idea what that &quot;RHS' could be.</div>
+    <div class="meta">Posted on 2002-12-30 15:13:24 by Ernie</div>
+   </div>
+   <div class="post" id="post-73543">
+    <div class="subject"><a href="#post-73543">VARIANTS and IDispatch uses</a></div>
+    <div class="body">Thanx Ernie..<br /><br />I evenually discovered that when working out the InvokeHelper fucntion in the other thread... <a target="_blank" href="http://www.asmcommunity.net/board/showthread.php?s=&amp;postid=73510.msg73510">Here...</a><br /><br />Thanx alot tho Ernie :alright:<br />:NaN:</div>
+    <div class="meta">Posted on 2002-12-30 15:49:16 by NaN</div>
+   </div>
+  </div>
+ </body>
+</html>

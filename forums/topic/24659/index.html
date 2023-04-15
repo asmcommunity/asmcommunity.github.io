@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Transferring big chunks of data with Winsock - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=24659" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=24659">Transferring big chunks of data with Winsock</a></p>
+   <div class="post" id="post-180188">
+    <div class="subject"><a href="#post-180188">Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Im writing this code that enumerates all subkeys of a specific registry keys and is supposed to send it to the client side. i am using Winsock 1.1 and the sockets are both in the non-blocking mode. what is the best way of transferring the enumerated keys over to the client side ? <br /><br />Btw the getsockopt() with SO_SNDBUF returns the value of 8192 so i guess i can&#39;t try to transfer the whole string in one shot can i ?</div>
+    <div class="meta">Posted on 2006-04-27 22:55:11 by XCHG</div>
+   </div>
+   <div class="post" id="post-180190">
+    <div class="subject"><a href="#post-180190">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Yeah - send as much data in a single chunk as you like.. the network subsystem will package your data into 1500-ish byte packets, which under tcp, are guaranteed to arrive in the correct order... make the client responsible for reconstructing the data - and here&#39;s a hint.. add several bytes to the &quot;front&quot; of the data which indicate the expected payload size, so the client can figure out which is the last &quot;partial payload packet&quot;.. make sense?<br /><br />Note : what you just did is implement your own transport protocol on top of tcp - your &#39;custom protocol packetheader&#39; describes the total number of bytes in a given &#39;send job&#39;.. </div>
+    <div class="meta">Posted on 2006-04-28 00:40:15 by Homer</div>
+   </div>
+   <div class="post" id="post-180192">
+    <div class="subject"><a href="#post-180192">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Be sure to check return-values from Send(), though - you *could* risk not being able to send all data in one go. I prefer sending &quot;chunked&quot; anyway, to not have to lock too much kernel mode memory for the send buffer.<br /></div>
+    <div class="meta">Posted on 2006-04-28 04:43:52 by f0dder</div>
+   </div>
+   <div class="post" id="post-180296">
+    <div class="subject"><a href="#post-180296">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">So basically i shouldnt care how big the data that im trying to send through the socket is huh ? would it be okay if i send each of the enumerated keys one by one while using the registry enumeration APIs ?<br /><br />btw, thanks for the replies guys</div>
+    <div class="meta">Posted on 2006-05-01 20:56:50 by XCHG</div>
+   </div>
+   <div class="post" id="post-180305">
+    <div class="subject"><a href="#post-180305">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">No - that will result in lots of small packets being sent, with 54 bytes of tcp header for each packet, I know I&#39;m pedantic, but that&#39;s a waste of bandwidth.<br />The network subsystem will cut up oversized packets for you, but it won&#39;t cache undersized packets for you.. you should do this yourself, here&#39;s how:<br /><br />I recommend collecting up the results in a small buffer and sending data whenever the buffer contains more than 1.5kb... and then finally sending whatever&#39;s left in the buffer when enumeration is completed. <br />This will guarantee that the fewest possible packets are sent, meaning the smallest amount of &#39;tcp packet header overhead&#39; being sent.<br />It will mean the packets you are sending are &quot;full&quot;.<br /><br />Of course, you could just collect up ALL the data into a LARGE buffer, and Send it all in one hit, leaving the network subsystem to chop up the data into max. sized packets, but that depends on you knowing how large a buffer is required, which you may not be able to easily determine (as in your case)... and there&#39;s still no guarantee that the network subsystem will be able to &quot;swallow your load&quot; - for example, if we try to send 118kb of data in a single send, it might report that 12kb was sent (depends on what else your tcp/ip stack is doing at the time). Always check how much actually got sent !!<br /><br /></div>
+    <div class="meta">Posted on 2006-05-02 01:15:07 by Homer</div>
+   </div>
+   <div class="post" id="post-180307">
+    <div class="subject"><a href="#post-180307">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body"><div class="quote"><br />No - that will result in lots of small packets being sent, with 54 bytes of tcp header for each packet, I know I&#39;m pedantic, but that&#39;s a waste of bandwidth.<br />The network subsystem will cut up oversized packets for you, but it won&#39;t cache undersized packets for you.. you should do this yourself, here&#39;s how:<br /></div><br /><a target="_blank" href="http://en.wikipedia.org/wiki/Nagle%27s_algorithm">Nagle&#39;s Algorithm?</a><br /><br /><div class="quote"><br />Of course, you could just collect up ALL the data into a LARGE buffer, and Send it all in one hit, leaving the network subsystem to chop up the data into max. sized packets,<br /></div><br />Pretty bad to do if you have a lot of data, because the buffer will have to be physmem locked until the send is done.<br /></div>
+    <div class="meta">Posted on 2006-05-02 02:29:51 by f0dder</div>
+   </div>
+   <div class="post" id="post-180312">
+    <div class="subject"><a href="#post-180312">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body"><br />Yeah, I was only really stating the obvious, that cutting corners is a bad idea, that the &#39;easy way&#39; to do something is usually the &#39;worst way&#39; imaginable, and that managing your own buffers is generally a good idea.<br /><br />I&#39;d forgotten about Nagle&#39;s algorithm, is that enabled by default though?</div>
+    <div class="meta">Posted on 2006-05-02 04:47:44 by Homer</div>
+   </div>
+   <div class="post" id="post-180314">
+    <div class="subject"><a href="#post-180314">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Yep, Nagle is on by default - you have to turn it off if you don&#39;t want it (things like SSH/telnet connections might not want it).<br /><br />But I agree, you should &quot;do the right thing&quot; and not depend on Nagle. Better performance, less kernel/usermode transitions.<br /></div>
+    <div class="meta">Posted on 2006-05-02 05:09:19 by f0dder</div>
+   </div>
+   <div class="post" id="post-180318">
+    <div class="subject"><a href="#post-180318">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Or, if you could use Winsock 2, then you might find the <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winsock/winsock/transmitfile_2.asp">TransmitFile</a> and <a target="_blank" href="http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winsock/winsock/transmitpackets_2.asp">TransmitPacket</a> functions make things easier.</div>
+    <div class="meta">Posted on 2006-05-02 09:07:40 by stormix</div>
+   </div>
+   <div class="post" id="post-180319">
+    <div class="subject"><a href="#post-180319">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Hmm interesting, TransmitFile exists even on win9x and NT3.51? :O<br /><br />A thing to keep in mind: iirc TransmitFile() is limited to two concurrent transmits on NT workstation, but can do any amount on server versions of windows.<br /></div>
+    <div class="meta">Posted on 2006-05-02 09:16:20 by f0dder</div>
+   </div>
+   <div class="post" id="post-180395">
+    <div class="subject"><a href="#post-180395">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Cool thang, thanks for all the help</div>
+    <div class="meta">Posted on 2006-05-04 22:41:38 by XCHG</div>
+   </div>
+   <div class="post" id="post-180475">
+    <div class="subject"><a href="#post-180475">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Uh, i have this protocol which consumes the first four bytes of a packet which tells either the client or the server what the content of the package is, i guess i can not send the whole packet in one shot because the four byte signature would only be transferred the first time right ?</div>
+    <div class="meta">Posted on 2006-05-07 00:53:12 by XCHG</div>
+   </div>
+   <div class="post" id="post-180479">
+    <div class="subject"><a href="#post-180479">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Sure you can.<br />This protocol you are working on has a special purpose for the first four bytes, but that doesn&#39;t change anything, other than adding four bytes to each packet you send.<br />When this sent packet is received, the receiver must check the first four bytes, and then strip it from the front of the received data..<br /><br /></div>
+    <div class="meta">Posted on 2006-05-07 03:04:31 by Homer</div>
+   </div>
+   <div class="post" id="post-180481">
+    <div class="subject"><a href="#post-180481">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">XCHG, if you&#39;re using TCP, realize that you are <strong>***NOT***</strong> sending &quot;packets&quot;, you&#39;re sending a <strong>stream</strong> of data. So if you do, say, 5 sends of 100 bytes, it could show up as one read() of 5000 bytes, or sortof any combination of differently sized buffers.<br /></div>
+    <div class="meta">Posted on 2006-05-07 04:32:50 by f0dder</div>
+   </div>
+   <div class="post" id="post-180485">
+    <div class="subject"><a href="#post-180485">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">My experience has shown that this is ALWAYS true, not just of tcp, but of udp, and of raw ethernet. You should ALWAYS &quot;expect the unexpected&quot; (after all, you&#39;re a programmer!) - in your current example, this 4 bytes thing is being used to separate the actual DATA PAYLOADS being sent in the &#39;tcp stream&#39; - use them to determine whetehr you just received (for example) 2 and a HALF packets, instead of the amount you maybe expected.<br />ITS COMMON TO RECEIVE INCOMPLETE DATA and unless you know how many bytes are EXPECTED, you have no way to verify this !! THAT is the purpose of your 4 bytes in your given example, regardless of whether it contains just a protocol identifier that identifies the start of each packet, or whether it contains the #bytes in the packet, it serves the same purpose. Typically, such headers are larger than 4 bytes, but theres NO standard here, you are &quot;inventing your own protocol that sits on top of tcp&quot; and as such you are making up the rules to suit yourself - whatever works, eh? :)<br /><br />PS : Don&#39;t use &quot;network peek&quot; methods to check how much data is available to receive, because for various reasons they are unreliable and inefficient.. just receive ALL incoming data into a &quot;First In, First Out) (FIFO) buffer and then process any COMPLETE packets as you see fit.<br /><br />PPS : I can qualify that last statement apon request.<br /></div>
+    <div class="meta">Posted on 2006-05-07 07:06:30 by Homer</div>
+   </div>
+   <div class="post" id="post-180486">
+    <div class="subject"><a href="#post-180486">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Network peek == bad, indeed.<br /><br />If your &quot;4 bytes&quot; is just some ID, then that won&#39;t be sufficient, if your data stream is binary - you&#39;ll need to either prefix a length as well (whether it be dword or qword :p), unless you can 100% guarantee your ID won&#39;t show up in the raw binary data.<br /><br />Or well, if you send fixed-size structures you might not need to send the length, but just keep in mind you can get incomplete as well as too large results with read().<br /></div>
+    <div class="meta">Posted on 2006-05-07 08:01:09 by f0dder</div>
+   </div>
+   <div class="post" id="post-180698">
+    <div class="subject"><a href="#post-180698">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">Well the data is not having a fixed length. but the thing is that all the receiving actions take place in one single thread in the client. Thus i just made it peek at the first four bytes of each incoming stream to realize what that stream of data is made for.<br />But sometimes the stream i am sending grows as big as 500 KB thus makes all the packets but the first one to lose their four bytes signature which could only be attached to the beginning of the stream. and i dont think it is a good idea to attach the four bytes to each of the streams.<br /><br />Right now i have done a little bit of a trick. i have attached another four bytes after the four-byte signature at the beginning of the stream, which indicates the size of the data that is to follow, and inside the client thread i start another thread for downloading the data and suspend the main thread until the data is completely read.</div>
+    <div class="meta">Posted on 2006-05-15 23:05:49 by XCHG</div>
+   </div>
+   <div class="post" id="post-180704">
+    <div class="subject"><a href="#post-180704">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">XCHG, once again: TCP is not packet-based, it&#39;s stream-based. You *need* to prefix a length (your &quot;hack&quot;) if you&#39;re not dealing with fixed-size items. Using two threads for this sounds like bad design...<br /></div>
+    <div class="meta">Posted on 2006-05-16 04:30:54 by f0dder</div>
+   </div>
+   <div class="post" id="post-180780">
+    <div class="subject"><a href="#post-180780">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">I just fixed that one, 4 bytes for the signature, 4 bytes the length of the *stream* and the rest is the data<br /><br />stream stream stream, i&#39;ve gotta keep saying this&nbsp; :)</div>
+    <div class="meta">Posted on 2006-05-20 22:50:50 by XCHG</div>
+   </div>
+   <div class="post" id="post-187735">
+    <div class="subject"><a href="#post-187735">Re: Transferring big chunks of data with Winsock</a></div>
+    <div class="body">How the client should handle the data received by a TransmitFile call from the server?<br />Can anyone post an example of usage of this API?<br /><br />Thanks</div>
+    <div class="meta">Posted on 2007-01-23 16:37:05 by lectus</div>
+   </div>
+  </div>
+ </body>
+</html>

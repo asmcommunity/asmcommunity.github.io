@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Finding the stack bottom - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21129" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=21129">Finding the stack bottom</a></p>
+   <div class="post" id="post-159985">
+    <div class="subject"><a href="#post-159985">Finding the stack bottom</a></div>
+    <div class="body">Okay, I needed to find a method of determining the stack bottom.&nbsp; By using the forum&#39;s <strong>Search</strong> feature, I eventually got myself into a post by <strong>Maverick</strong> regarding the &quot;TIB&quot; (haven&#39;t figured out what TIB is yet, but I&#39;ll try).&nbsp; Apparently, the &quot;TIB&quot; is referenced via the FS segment register and contains information on the what I hope is the thread:<br />FS:[0] - Exception list<br />FS:[1 *4] - Stack base (bottom of stack, highest-numbered address)<br />FS:[2 *4] - Stack limit (topmost limit of stack, lowest-numbered address)<br />.<br />. other stuff that was commented as &quot;?&quot;<br />.<br />Gosh, I forgot to get the address of Maverick&#39;s post.&nbsp; Oh well.&nbsp; Anyway, is my understanding correct?&nbsp; I need to determine the stack base since my garbage collector needs to take a look at pointers in the stack.&nbsp; Can I assume that unless I specifically re-target those two pointers, the limits I get will be the stack area that Windows has deigned to give me?&nbsp; Thanks.<br /><br />BTW threads within a process have the same address space right?&nbsp; So I presume a new process will be given a different virtual address for the stack?<br /><br /></div>
+    <div class="meta">Posted on 2005-05-12 05:59:00 by AmkG</div>
+   </div>
+   <div class="post" id="post-159987">
+    <div class="subject"><a href="#post-159987">Re: Finding the stack bottom</a></div>
+    <div class="body"><br /><div class="quote"><br />BTW threads within a process have the same address space right?? So I presume a new process will be given a different virtual address for the stack?<br /></div><br />Yes. Yes. Each process has its own stack. Standard architecture is for the stack to start at the top of your address space and fill downwards, while your data area starts at the end of your executable code and fills upwards, till the two of them meet&nbsp; :D</div>
+    <div class="meta">Posted on 2005-05-12 06:05:21 by sluggy</div>
+   </div>
+   <div class="post" id="post-159988">
+    <div class="subject"><a href="#post-159988">Re: Finding the stack bottom</a></div>
+    <div class="body">TIB = Thread Information Block. Those three fields should be available on all windows versions, but otherwise it&#39;s pretty system-specific (especially between 9x and NT).<br /><br /><strong>As far as I know</strong> it&#39;s not really the stack upper/lower bounds you can read from that structure, though - it&#39;s the *allowed* values. Upon a context switch, a thread with esp outside those values will be automatically terminated, without warning.<br /><br />All threads within a process have the same address space, yes (a process is nothing more than a &quot;container&quot;, which among other things includes the address space). Different threads, obviously, have different stacks though.<br /></div>
+    <div class="meta">Posted on 2005-05-12 06:09:32 by f0dder</div>
+   </div>
+   <div class="post" id="post-160045">
+    <div class="subject"><a href="#post-160045">Re: Finding the stack bottom</a></div>
+    <div class="body">Okay, from how I understand <strong>f0dder</strong>, the &quot;allowed&quot; values are read from the structure, not necessarily the actual limits of the stack of the process (or thread?).&nbsp; From <strong>Maverick</strong>&#39;s post I gathered that the stack limits can be set to any value, and if I ever wanted to change my stack, I can allocate space using, say, VirtualAlloc, and set FS:[1 *4] and FS:[2 *4] to the limits of that newly allocated space.<br /><br />So if I have a brand-new thread, the esp for that thread, without any calls etc. is equal to FS:[1 *4] (or a couple dwords down it)?&nbsp; Can my garbage collector mark any structures found on the stack from esp to FS:1[ *4]?&nbsp; This assumes that the program the GC is GC&#39;ing for does not do any tricks with esp (since I AM writing the program).<br /><br />BTW the last question in the original post should have been &quot;I presume a new <strong>thread (within a process)</strong> will be given a different virtual address for the stack?&quot;<br /><br />A little OT, I read somewhere on the forum that GlobalAlloc and company are no longer very stable for Win32?&nbsp; Dang.&nbsp; No wonder I kept getting problems with it, especially with GlobalReAlloc.<br /></div>
+    <div class="meta">Posted on 2005-05-13 00:59:19 by AmkG</div>
+   </div>
+   <div class="post" id="post-160146">
+    <div class="subject"><a href="#post-160146">Re: Finding the stack bottom</a></div>
+    <div class="body"><div class="quote"><br />A little OT, I read somewhere on the forum that GlobalAlloc and company are no longer very stable for Win32?&nbsp; Dang.&nbsp; No wonder I kept getting problems with it, especially with GlobalReAlloc.<br /></div><br />They&#39;re &quot;deprecated&quot;, but still work (on NT internally they end up calling the Heap* functions). I would suggest using Heap* functions except where PlatformSDK says you have to use Global* (clipboard routines, for instance).<br /><br />If you&#39;ve had problems with the Global* functions, it&#39;s probably because you&#39;ve accidentally overwritten some heap control structures. This can happen if you blindly treat all return values from Global/Local* functions as pointers - iirc, if you haven&#39;t specified the GMEM_FIXED flag, there&#39;s a few dwords of information prepended before the actual memory you&#39;ve requested.<br /></div>
+    <div class="meta">Posted on 2005-05-17 08:15:13 by f0dder</div>
+   </div>
+   <div class="post" id="post-160160">
+    <div class="subject"><a href="#post-160160">Re: Finding the stack bottom</a></div>
+    <div class="body">Hrm, I don&#39;t remember exactly what problems I kept getting on Global*, I just vaguely remember it being with GlobalReAlloc.&nbsp; As far as I can remember, I needed to extend a memory area and when I do, it succeeds, but further GlobalAlloc&#39;s would crash me.&nbsp; Happened on an XP system too IIRC.&nbsp; Still I haven&#39;t been programming in Win32 for quite some time now and I&#39;m most definitely not 100% sure on what happened.&nbsp; Since then I&#39;ve just allocated one big memory area and allocated little sections from it myself.<br /><br />I think I also tried using Heap* functions directly but I couldn&#39;t remember if I solved it that way or if the problem persisted.<br /></div>
+    <div class="meta">Posted on 2005-05-17 21:05:34 by AmkG</div>
+   </div>
+   <div class="post" id="post-160167">
+    <div class="subject"><a href="#post-160167">Re: Finding the stack bottom</a></div>
+    <div class="body"><div class="quote"><br />I think I also tried using Heap* functions directly but I couldn&#39;t remember if I solved it that way or if the problem persisted.<br /></div><br />If it didn&#39;t, there&#39;s basically two things that could be wrong... either HeapRealloc fails, which means you&#39;re out of heap memory (probably because of fragmentation). Or it succeeds, and subsequent allocations crash, which means you&#39;re overwriting memory somewhere :)<br /></div>
+    <div class="meta">Posted on 2005-05-18 01:02:50 by f0dder</div>
+   </div>
+   <div class="post" id="post-160171">
+    <div class="subject"><a href="#post-160171">Re: Finding the stack bottom</a></div>
+    <div class="body">Hmm I&#39;ll try to see if I haven&#39;t overwritten the code that failed on Global* allocation, and see what happened to my Heap* code... anyway now I either put up a little heap of my own in the .DATA? section or I call VirtualAlloc once (or at most, twice).&nbsp; I then manage the &quot;heap&quot; myself.<br /></div>
+    <div class="meta">Posted on 2005-05-18 02:30:28 by AmkG</div>
+   </div>
+   <div class="post" id="post-160198">
+    <div class="subject"><a href="#post-160198">Re: Finding the stack bottom</a></div>
+    <div class="body">to get the &quot;physicall&quot; stack limits you can do a VirtualQuery with a local variable, for example:<br /><br />GetStackInfo proc<br /><br />local mbi:MEMORY_BASIC_INFORMATION<br /><br />&nbsp; &nbsp; &nbsp;  invoke VirtualQuery, addr mbi, addr mbi, sizeof mbi<br /><br />After the call in mbi.AllocationBase should be the stack bottom, in mbi.RegionSize the stack size.<br /><br /><br /><br /><br /><br /></div>
+    <div class="meta">Posted on 2005-05-18 12:16:02 by japheth</div>
+   </div>
+   <div class="post" id="post-160217">
+    <div class="subject"><a href="#post-160217">Re: Finding the stack bottom</a></div>
+    <div class="body">Presumably I can also call VirtualQuery with my stack pointer instead of a pointer to a local variable?&nbsp; Thanks <strong>japheth</strong>, I think I&#39;d be more comfortable with that technique.<br /></div>
+    <div class="meta">Posted on 2005-05-18 21:12:04 by AmkG</div>
+   </div>
+   <div class="post" id="post-160227">
+    <div class="subject"><a href="#post-160227">Re: Finding the stack bottom</a></div>
+    <div class="body"><br />Yes, esp as 1. parameter will work fine<br /><br />My previous reply wasn&#39;t quite accurate. It is:<br /><br />mbi.AllocationBase: stack bottom<br />mbi.RegionSize: stack committed so far<br />mbi.BaseAddress: start of committed stack region<br /><br />so to get stack top add BaseAddress and RegionSize<br /><br /></div>
+    <div class="meta">Posted on 2005-05-19 02:33:42 by japheth</div>
+   </div>
+   <div class="post" id="post-160233">
+    <div class="subject"><a href="#post-160233">Re: Finding the stack bottom</a></div>
+    <div class="body"><div class="quote"><br /><strong>As far as I know</strong> it&#39;s not really the stack upper/lower bounds you can read from that structure, though - it&#39;s the *allowed* values. Upon a context switch, a thread with esp outside those values will be automatically terminated, without warning.<br /></div><br /><br />In a graphics algorithm, I have used esp as a spare register and it ran fine! Thread was not terminated. How do you explain that?</div>
+    <div class="meta">Posted on 2005-05-19 07:17:39 by comrade</div>
+   </div>
+   <div class="post" id="post-160236">
+    <div class="subject"><a href="#post-160236">Re: Finding the stack bottom</a></div>
+    <div class="body">comrade, probably because your routine was never switched? Or perhaps the check isn&#39;t done on context switch but on some API calls? I haven&#39;t checked it myself, it was maverick who brought it up quite a while ago.<br /></div>
+    <div class="meta">Posted on 2005-05-19 07:46:38 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

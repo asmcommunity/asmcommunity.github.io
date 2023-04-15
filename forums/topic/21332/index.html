@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Graphics routine - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=21332" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=21332">Graphics routine</a></p>
+   <div class="post" id="post-161321">
+    <div class="subject"><a href="#post-161321">Graphics routine</a></div>
+    <div class="body">Its disneat because im not arranged yet. I place it here as a backup and for you to share. You are allowed to modify or do anything for commercial purpose or not.</div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=704" target="_blank">Copy of GT2.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-06-20 07:56:41 by realvampire</div>
+   </div>
+   <div class="post" id="post-161322">
+    <div class="subject"><a href="#post-161322">Re: Graphics routine</a></div>
+    <div class="body">Here is the latest example. But the source is above 256 Kbytes I cannot give it to you rigth now.<br /><img src="http://www.geocities.com/realvampire2001/Clipboard.jpg" /><br /><br />Here is the very basic function to made a circle. Unfortunately FPU is very slow. Im still find another way to make it fast and this is what I know to make it fast.<br /><br />*Note: The clock information on this code is wrong*<br /><br />If this code <br /><pre><code><br />	push eax				<br />		fld dword ptr	<br />	pop eax					<br />	fimul delta				<br />	fistp r_cos<br /></code></pre><br />replaced with this code<br /><pre><code><br />;	xor edx,edx<br />;	mov ecx,delta<br />;	mul ecx<br />;	mov ecx,1000<br />;	div ecx<br />;	mov eax,r_cos<br /></code></pre><br />I can save time until 15 times on 1.7 GHz celeron machine. I tried it but it crashed. I dont know what causing it. When I debug it with ollydbg, it stop at this function.<br /><br /><pre><code><br />GetSin proc uses esi deg:dword						; 3 Clock cycle<br />	<br />	mov esi,SCTbl					; 1 Clock cycle<br />	mov ecx,deg						; 1 Clock cycle<br />	mov eax,dword ptr	; 1 Clock cycle<br />	<br />	ret<br />GetSin endp<br /></code></pre><br /><br />Ecx register on GetSin procedure point to a wrong place and reported access violation. Maybe someone here understand and can solve this?<br /><br /><pre><code><br />Phase1 proc uses esi 	; 28.8 Kbyte needed<br />	LOCAL deg,sin,cos,tan:dword<br />	<br />	<br />	invoke GlobalAlloc,LMEM_DISCARDABLE,28800+14400 + 16*10000 +768<br />	invoke GlobalLock,eax<br />	mov SCTbl,eax<br />	<br />	<br />	mov esi,eax					; 1 Clock cycle<br />	xor ecx,ecx					; 1 Clock cycle<br />	mov deg,ecx					; 1 Clock cycle<br />	<br />	mov edx,3600				; 1 Clock cycle<br />	shl edx,2					; 2 Clock cycle<br />	<br />	<br />	@@:<br />	finit						; 17 Clock cycle<br />	pushad<br />	invoke Deg2Rad,deg			; 104 Clock cycle<br />	popad<br />	fsincos						; 365 Clock cycle<br />	fstp sin					; 8 Clock cycle<br />	fstp cos					; 8 Clock cycle<br />	<br />;	push 1000<br />;	fimul dword ptr	<br />;	fistp sin					<br />;	pop eax<br />;	push 1000<br />;	fimul dword ptr<br />;	fistp cos					<br />;	pop eax<br />	<br />	mov eax,sin					; 1 Clock cycle<br />	mov dword ptr,eax		; 1 Clock cycle<br />	mov eax,cos					; 1 Clock cycle<br />	mov dword ptr,eax	; 1 Clock cycle<br />	<br />	add deg,1					; 3 Clock cycle<br />	add esi,4					; 1 Clock cycle<br />	add ecx,4					; 1 Clock cycle<br />	cmp deg,3600				; 2 Clock cycle<br />	jl @b						; 3 Clock cycle<br />								; 513 Clock cycle Each loop<br />	; 1846800 Clock cycle total loop<br />	; 1846806 Clock cycle<br />	mov esi,SCTbl<br />	add esi,28800<br />	;Tan<br />	mov edx,3600				; 1 Clock cycle<br />	shl edx,2					; 2 Clock cycle<br />	<br />	xor ecx,ecx<br />	mov deg,ecx<br />	<br />	@@:<br />	finit						; 17 Clock cycle<br />	pushad<br />	invoke Deg2Rad,deg			; 104 Clock cycle<br />	popad<br />	fptan						; 273 Clock cycle<br />	fstp tan<br />;	push 1000<br />;	fimul dword ptr<br />;	fistp tan<br />;	pop eax<br />;	<br />	push tan<br />	pop <br />	add deg,1					; 3 Clock cycle<br />	add esi,4					; 1 Clock cycle<br />	add ecx,4					; 1 Clock cycle<br />	cmp deg,3600				; 2 Clock cycle<br />	jl @b						; 3 Clock cycle<br />	<br />	<br />	mov esi,SCTbl<br />	add esi,28800+14400<br />	mov Line_Table,esi<br />	mov eax,16*10000<br />	mov nLLimit,eax<br />	mov nLPtr,0<br />	<br />	add esi,eax<br />	mov SCR_TBL,esi<br />	<br />	mov ecx,768<br />	xor eax,eax<br />	xor edx,edx<br />	@@:<br />	mov ,eax<br />	add eax,1024<br />	dec ecx<br />	jnz @b<br />	<br />	ret<br />Phase1 endp<br /><br /><br />UMGetPosRound proc uses esi delta:dword,deg:dword 	; 138 Clock cycle<br />	LOCAL r_sin,r_cos:dword<br />	<br />	<br />	cmp deg,3600<br />	jl @f<br />		sub deg,3600<br />	@@:<br />	invoke GetSin,deg		<br />	push eax				<br />		fld dword ptr	<br />	pop eax					<br />	fimul delta				<br />	fistp r_sin<br />					<br />;	xor edx,edx<br />;	mov ecx,delta<br />;	mul ecx<br />;	mov ecx,1000<br />;	div ecx<br />;	mov eax,r_sin<br />	<br />	invoke GetCos,deg		<br />	push eax				<br />		fld dword ptr	<br />	pop eax					<br />	fimul delta				<br />	fistp r_cos<br />		<br />;	xor edx,edx<br />;	mov ecx,delta<br />;	mul ecx<br />;	mov ecx,1000<br />;	div ecx<br />;	mov eax,r_cos<br />	<br />	mov edx,r_sin			<br />	mov eax,r_cos			<br />							<br />	<br />	ret<br />UMGetPosRound endp<br /><br />GetSin proc uses esi deg:dword						; 3 Clock cycle<br />	<br />	mov esi,SCTbl					; 1 Clock cycle<br />	mov ecx,deg						; 1 Clock cycle<br />	mov eax,dword ptr	; 1 Clock cycle<br />	<br />	ret<br />GetSin endp<br /><br />GetCos proc uses esi deg:dword						; 4 Clock cycle<br />	<br />	mov esi,SCTbl					; 1 Clock cycle<br />	add esi,14400					; 1 Clock cycle<br />	mov ecx,deg						; 1 Clock cycle<br />	mov eax,dword ptr	; 1 Clock cycle<br />	<br />	ret<br />GetCos endp<br /><br />GetTan proc uses esi deg:dword						; 4 Clock cycle<br />	<br />	mov esi,SCTbl					; 1 Clock cycle<br />	add esi,28800					; 1 Clock cycle<br />	mov ecx,deg						; 1 Clock cycle<br />	mov eax,dword ptr	; 1 Clock cycle<br />	<br />	ret<br />GetTan endp<br /></code></pre><br /><br /> </div>
+    <div class="attachments">Attachments:
+     <ul>
+      <li><a href="../../attachments/?id=705" target="_blank">GT2.zip</a></li>
+     </ul>
+    </div>
+    <div class="meta">Posted on 2005-06-20 08:00:04 by realvampire</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Memory Management and WinAPI - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=13070" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=13070">Memory Management and WinAPI</a></p>
+   <div class="post" id="post-101482">
+    <div class="subject"><a href="#post-101482">Memory Management and WinAPI</a></div>
+    <div class="body">I've some problems understanding the way API calls are made in Windows.<br /><br />1. Each process runs in his own 4 GB adress-space. It would be a waste of resources to put a copy of all API-Functions into the space of each process. Or does Windows only change the allocation of the physical memory (where the implementation of the API resides) to the virtual adress-space. So lots of processes should be able to access the same physical memory (only the code).<br /><br />2. How does the program know where to find the entry point of an API-Function. Is there a fixed location in (virtual of course) memory. When I debug my programms I realize that the function call jumps to a jump-instruction at the end of my Programm which leads to the function entry point.<br /><br />I hope my questions have been understandable. I'm not quite sure how to express them.<br />Thanks</div>
+    <div class="meta">Posted on 2003-05-06 05:58:55 by Compuholic</div>
+   </div>
+   <div class="post" id="post-101485">
+    <div class="subject"><a href="#post-101485">Re: Memory Management and WinAPI</a></div>
+    <div class="body"><div class="quote"><em>2. How does the program know where to find the entry point of an API-Function. Is there a fixed location in (virtual of course) memory. When I debug my programms I realize that the function call jumps to a jump-instruction at the end of my Programm which leads to the function entry point.</em></div>As you probably know, dlls are fully relocatable, and each function in that dll starts at a certain offset. Each dll also has what is called a &quot;base address&quot;, this is where the dll gets loaded to (this can be configured by the developer). If the kernel cannot load the dll at that base address, it relocates it to another position. The kernel then searches all other modules already loaded into that process space for references to functions within that dll, and then &quot;fixes&quot; those modules to point to the correct location of those referenced functions (the address for the function is the dll base address + the function offset).<br /><br />The reason why your exe does a call to the end of itself before jumping to the referenced function is the reason why dlls and relocation work in the first place. The area that jmp instruction resides in can be called the &quot;vector table&quot; or &quot;jump table&quot;, and there is one vector per referenced function. So, when the dll is loaded, only the addresses within the vector table need to be fixed and the whole exe just works. Without that vector table, the kernel would have to scan the whole exe looking for references to functions in the newly loaded dll, and would have to fix up 100's or 1000's of call statements to point to the right address.</div>
+    <div class="meta">Posted on 2003-05-06 06:25:45 by sluggy</div>
+   </div>
+   <div class="post" id="post-101492">
+    <div class="subject"><a href="#post-101492">Memory Management and WinAPI</a></div>
+    <div class="body">For your question #1...<br /><br />(note I'm talking about NT here - 9x is somewhat different because it sucks ;)).<br /><br />DLLs are shared across processes. A DLL is only mapped into your process if you use it (&quot;use&quot; defined as use it directly, or use a DLL that uses it. recursive). As you guessed, memory is shared via the x86 paging mechanism - however, both data and code is shared. Modification is handled via Copy On Write.<br /><br />You should find yourself a copy of &quot;inside windows 2000&quot;, it's a very interesting book - but of course feel free to ask further questions :)</div>
+    <div class="meta">Posted on 2003-05-06 07:08:02 by f0dder</div>
+   </div>
+   <div class="post" id="post-101515">
+    <div class="subject"><a href="#post-101515">Memory Management and WinAPI</a></div>
+    <div class="body">Thank you very much...</div>
+    <div class="meta">Posted on 2003-05-06 08:30:56 by Compuholic</div>
+   </div>
+   <div class="post" id="post-101517">
+    <div class="subject"><a href="#post-101517">Memory Management and WinAPI</a></div>
+    <div class="body">no problem - and be sure to ask if there's anything that remains unclear or if you have further questions.</div>
+    <div class="meta">Posted on 2003-05-06 08:35:25 by f0dder</div>
+   </div>
+   <div class="post" id="post-107158">
+    <div class="subject"><a href="#post-107158">Memory Management and WinAPI</a></div>
+    <div class="body">I just ran into another question. In order to understand the layout of an executable in Memory I looked a little bit closer into a PE-Header.<br /><br />Address of Entry Point 00016514<br /><br />This seems to be the offset to the File, where the CPU should begin execution. Althought i'm wondering why no virtual address is referenced I can imagine that the position of the executable is relocateable in memory, so it wouldn't make much sense to use a VA here. I compare it to the ELF-Header which is used in *NIX operating systems where it is possible to describe the whole layout of the Program in Memory.<br /><br /><pre><code><br />Section VirtSize RVA      PhysSize PhysOfs  Flags    Info Percent of file<br />------- -------- -------- -------- -------- -------- ---- ---------------<br />CODE    00015588 00001000 00015600 00000400 60000020 CER            39,6%<br /></code></pre><br /><br />But this piece of the section header is very confusing.<br />1. Why is VirtSize not aligned but PhysSize is? IMHO the opposite would be right.<br />2. What does PhysOffset describe?</div>
+    <div class="meta">Posted on 2003-06-15 06:20:41 by Compuholic</div>
+   </div>
+   <div class="post" id="post-107161">
+    <div class="subject"><a href="#post-107161">Memory Management and WinAPI</a></div>
+    <div class="body"><pre><code><br />Section VirtSize RVA      PhysSize PhysOfs  Flags    Info Percent of file<br />------- -------- -------- -------- -------- -------- ---- ---------------<br />CODE    00015588 00001000 00015600 00000400 60000020 CER            39,6%<br /></code></pre><br />The naming is extremely confusing. I prefer to call it<br /><pre><code>Section VirtSize RVA      RawSize FileOffset  Flags    Info Percent of file<br />------- -------- -------- -------- -------- -------- ---- ---------------<br />CODE    00015588 00001000 00015600 00000400 60000020 CER            39,6%<br /></code></pre><br /><br /><div class="quote">1. Why is VirtSize not aligned but PhysSize is? IMHO the opposite would be right.</div><br />No. VirtualSize is the acutal size of the code. RawSize is size of the section when mapped (aligned to 200h).<br /><div class="quote">2. What does PhysOffset describe?</div><br />Just call it the file offset and you will understand what it does.</div>
+    <div class="meta">Posted on 2003-06-15 06:57:49 by roticv</div>
+   </div>
+  </div>
+ </body>
+</html>

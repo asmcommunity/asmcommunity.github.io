@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Read Sector Code. - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=14672" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=34">OS Development</a> &raquo; <a href="../?id=14672">Read Sector Code.</a></p>
+   <div class="post" id="post-113667">
+    <div class="subject"><a href="#post-113667">Read Sector Code.</a></div>
+    <div class="body"><pre><code><br />HDReadSector32 proc<br />	<br />	pop d.&#91;ebp+#16&#93;<br />	<br />	pop d.&#91;ebp+#12&#93;			; Sector Count<br />	pop d.&#91;ebp+#8&#93;			; Sector Number<br />	pop d.&#91;ebp+#4&#93;			; Cylinder<br />	pop d.&#91;ebp&#93;				; Head and drive<br />	pop edi					; Buffer address<br />	<br />	push d.&#91;ebp+#16&#93;<br />	<br />	mov edx,1f2			; 1f2<br />	mov eax,&#91;ebp+#12&#93;<br />	out					; Sector Count send.<br />	<br />	inc dx				; 1f3<br />	mov eax,&#91;ebp+#8&#93;	; Sector number.<br />	out<br />	<br />	inc dx				; Cylinder<br />	mov eax,&#91;ebp+#4&#93;<br />	out<br />	inc dx<br />	mov al,ah<br />	out<br />	<br />	inc dx				; 1f6<br />	mov eax,&#91;ebp&#93;<br />	out <br />	<br />	inc dx				; 1f7<br />	mov al,#20<br />	out<br />hdrs32 &#58;				; label for jump<br />	in<br />	test al,8<br />	jnz hdrs32			; Dont continue until buffer ready<br />	<br />	mov ecx,512<br />	mov edx,1f0<br />	rep insb<br />	<br />	ret<br />HDReadSector32 endp<br /><br /></code></pre><br /><br />It only give me value -1. Can you try it and tell me whats wrong with it? or maybe a working function ?</div>
+    <div class="meta">Posted on 2003-08-11 22:38:17 by realvampire</div>
+   </div>
+   <div class="post" id="post-113668">
+    <div class="subject"><a href="#post-113668">Read Sector Code.</a></div>
+    <div class="body">I am not certain, but I would look here:<br /><a target="_blank" href="http://board.flatassembler.net/viewtopic.php?t=25">http://board.flatassembler.net/viewtopic.php?t=25</a></div>
+    <div class="meta">Posted on 2003-08-11 22:44:13 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-114358">
+    <div class="subject"><a href="#post-114358">Read Sector Code.</a></div>
+    <div class="body">Hi, <br /><br />this works fine (atleast for me :-)<br /><br />the calculation of cylinder head and sector from LBA needs <br />some drive metric information which needs to be gathered first.<br /><br />but as long as you ask to read a only sector ..<br /><br /><div class="quote"><br />DEV_IDE0	equ	01F0h<br />DEV_IDE1	equ	0170h<br />DEV_IDE2	equ	01E8h<br />DEV_IDE3	equ	0168h<br /><br /><br />ioReadHardDrive	PROC	USES edi esi, lpBuffer:DWORD, dwLba:DWORD<br />	LOCAL	dwSect:DWORD, dwCyl:DWORD, dwHead:DWORD<br /><br />	mov	esi, DEV_IDE0<br /><br />	mov	dwCyl, 0<br />	mov	dwSect, 1<br />	mov	dwHead, 0<br /><br />	mov	dx, DEV_IDE0 + 6<br />	mov	al, 0A0h		; Drive 0, head 0<br />	out	dx, al<br /><br />	mov	dx, DEV_IDE0 + 2<br />	mov	al, 1		; Read one sector<br />	out	dx, al<br /><br />	mov	dx, DEV_IDE0 + 3<br />	mov	eax, dwSect<br />	out	dx, al<br /><br />	mov	dx, DEV_IDE0 + 4<br />	mov	al, 0		; cylinder 0 low<br />	out	dx, al<br /><br />	mov	dx, DEV_IDE0 + 5<br />	mov	al, 0		; cylinder 0 high<br />	out	dx, al<br /><br />	mov	dx, DEV_IDE0 + 7<br />	mov	al, 20h		; read with retry<br />	out	dx, al<br /><br />irhdLoop:	in	al, dx<br />	test	al, 8<br />	jz	irhdLoop<br /><br />	mov	cx, 512 / 2<br />	mov	edi, lpBuffer<br />	mov	dx, DEV_IDE0<br />	rep	insw<br /><br />	ret<br /></div><br /><br />Bye Miracle</div>
+    <div class="meta">Posted on 2003-08-19 04:26:10 by miracle</div>
+   </div>
+   <div class="post" id="post-124643">
+    <div class="subject"><a href="#post-124643">Hi  Miracle,</a></div>
+    <div class="body">I see there are 4 Port for IDE control. But my HD size is 20GB. 4 port can only read to max 4GB. How to handle the rest?</div>
+    <div class="meta">Posted on 2003-11-17 22:46:47 by realvampire</div>
+   </div>
+   <div class="post" id="post-124644">
+    <div class="subject"><a href="#post-124644">Read Sector Code.</a></div>
+    <div class="body">i think its 4 ports because you can only have 4 ide devices on the standard motherboard (without getting extra ide cards etc that is), so i dont think the<br />ports limit it to 4gig, rather its the fat system that limits the size<br />fat32 limit is 4gig, and from the code i see cylinders ,heads, sector format is used and<br />its a dword, which would imply that 4gig is definately not a limit for it<br /><br />then again i might be wrong ;)</div>
+    <div class="meta">Posted on 2003-11-17 23:14:37 by evlncrn8</div>
+   </div>
+   <div class="post" id="post-124648">
+    <div class="subject"><a href="#post-124648">hi, evlncrn8</a></div>
+    <div class="body">You are right. It worst, 1 port only for 8 MB. 4 Port only for handle 32MB. How we access the rest?</div>
+    <div class="meta">Posted on 2003-11-18 00:36:22 by realvampire</div>
+   </div>
+   <div class="post" id="post-124649">
+    <div class="subject"><a href="#post-124649">Read Sector Code.</a></div>
+    <div class="body">cant be, cos the c/h/s along with the lba should allow for more than that, afterall its what the bios uses isnt it</div>
+    <div class="meta">Posted on 2003-11-18 00:38:34 by evlncrn8</div>
+   </div>
+   <div class="post" id="post-124667">
+    <div class="subject"><a href="#post-124667">Hi .</a></div>
+    <div class="body"><div class="quote"><br />cant be, cos the c/h/s along with the lba should allow for more than that, afterall its what the bios uses isnt it </div><br /><br />You're Right.<br />;	Tech Info.<br />; 	HDReadSector, Only read a Sector.<br />;	1 Port Handle	:	2 Drive<br />;	1 Drive Handle	:	2097152 sector 	(8 Head,1024 cylinder,255 Sector)<br />;	1 Sector Handle :	512-Bytes.<br />;	1 Port handle	:	1,073,741,824	(1-GB)	*	2	= 2 GB<br />:o , Mis Calculate.</div>
+    <div class="meta">Posted on 2003-11-18 08:21:23 by realvampire</div>
+   </div>
+   <div class="post" id="post-124714">
+    <div class="subject"><a href="#post-124714">Read Sector Code.</a></div>
+    <div class="body">Realvampire,<br /><br />You seem to ignore that modern hardware is able to expose a series of internal registers and/or stack with complex logic just behind a single 8bit port<br /><br />For example i could send:<br />1) an command_byte1 THEN <br />2) addres_byte1 THEN <br />3)an address byte_2 and THEN <br />4)address_byte3 <br />...and so on... ALL to the same 8bit port.<br /><br />And the hardware's internal logic will know what to do with them and how to reassemble them in the needed order.<br /><br />Of course above is hypotetical but i am pretty sure the &quot;old&quot; 8272 FDC controller works this way; ie. using just a single status 8 bits port to receive up to 8 succesive command bytes/description and a extra data port for sector bytes in/out<br /><br />HDD controllers also might work this way ... and many other controllers actually ...<br /><br />So the number of ports and their size is not always relevant, well at least not in such simple ways... instead you must study and understand EACH hardware port description and usage recommended by producer and/or any standards available</div>
+    <div class="meta">Posted on 2003-11-18 18:25:55 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

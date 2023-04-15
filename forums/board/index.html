@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <meta name="robots" content="noindex" />
+  <script type="text/javascript">
+    const params = new URLSearchParams(window.location.search);
+    const topic = params.get('topic');
+    var match = topic ? topic.match(/^(\d+)(\.\d+)?$/) : [];
+    if (match.length > 0) {
+      window.location.replace('../forums/topic/?id=' + match[1]);
+    } else {
+      var board = params.get('board');
+      match = board ? board.match(/^(\d+)(\.\d+)?$/) : [];
+      if (match.length > 0) {
+        window.location.replace('../forums/board/?id=' + match[1]);
+      } else {
+        window.location.replace('../');
+      }
+      
+    }
+  </script>
+ </head>
+ <body>
+ </body>
+</html>

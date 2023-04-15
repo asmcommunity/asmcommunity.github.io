@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>vc++ inline asm: verr/verw ?? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7378" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=7378">vc++ inline asm: verr/verw ??</a></p>
+   <div class="post" id="post-53601">
+    <div class="subject"><a href="#post-53601">vc++ inline asm: verr/verw ??</a></div>
+    <div class="body">hello all.  i'm new to the board, so i'm not really sure where to post this question, so i figure here is as good a place as any.<br /><br />i'm using inline asm with vc++ which runs a thread in a remote process that patches sections of it's memory... it's for a <strong>PROGRAM</strong>... my problem is that the  code needs to search priveleged segments of the .code /.data and i would like to be able to check before a mov to see if the instruction will except.  here is an example of a mov that will except:<br /><br />mov ecx, 0x0010000<br />mov eax, <br /><br />i need some way to check to see if the above will except and prevent the mov.  i am aware of verr/verw, but i'm kinda new to using asm in windows/protected mode.  any code example would be greatly appreciated.<br /><br />thanks in advance,<br />sulu</div>
+    <div class="meta">Posted on 2002-08-16 08:46:40 by mistersulu</div>
+   </div>
+   <div class="post" id="post-53621">
+    <div class="subject"><a href="#post-53621">vc++ inline asm: verr/verw ??</a></div>
+    <div class="body">Just leave the &quot;boo-boo-words&quot; out next time. :)</div>
+    <div class="meta">Posted on 2002-08-16 09:12:05 by bazik</div>
+   </div>
+   <div class="post" id="post-54110">
+    <div class="subject"><a href="#post-54110">vc++ inline asm: verr/verw ??</a></div>
+    <div class="body">Maybe I misunderstood your question but if it's like I think it is then you want you find which sections (not segments) in the PE file which are readable/writable. Instead of scanning the whole process I would rather read the PE header and scan the section table. If you process the section table you will find out where you can read/write data and if there's any restrictions.<br /><br />Iczelion's PE tutorials are good for this along with LUEVELSMEYER's document <a target="_blank" href="http://webster.cs.ucr.edu/Page_TechDocs/pe.txt">http://webster.cs.ucr.edu/Page_TechDocs/pe.txt</a><br /><br />If this wasn't what you were thinking of maybe you should be more clear.<br />A linear search of the whole memory to see if a address is readable/writeable or not could take alot time. This might be worth considering depending on if your app is somewhat timecritical.<br /><br />I hope this helps.<br /><br />// CyberHeg</div>
+    <div class="meta">Posted on 2002-08-19 08:28:00 by CyberHeg</div>
+   </div>
+   <div class="post" id="post-54247">
+    <div class="subject"><a href="#post-54247">vc++ inline asm: verr/verw ??</a></div>
+    <div class="body">Thanks CyberHeg...<br /><br />Your right about the PE file (I can definitely learn some new stuff from that link :) ), but I'm sorry I wasn't real clear.  I'm really only looking for data that has been malloc'd: heap space.  Many regions will be locked and read/write instructions will except at the default privelege level.  You're definitely right about linear scans being time intensive, but I really don't see a way around it.  Here is a quick example of my problem below.  In this example, I have a crude dword scan for a heap value in an inline function.<br /><br />void ASMCrudeDWordSearch()<br />{<br />   DWORD *pVal = (DWORD *) malloc(sizeof(DWORD));<br />   *pVal = 0x12345678;<br />   __asm<br />   {<br />      // search 0x00200000 - ?? for the DWORD 0x12345678 above<br />   search_loop_start:   <br />      mov ecx, 0x00200000<br />      mov eax,                // this will throw an exception<br />      cmp eax, 0x12345678<br />      jnz search_loop_start<br />   }<br />   free(pVal);<br />}<br /><br />My true code is a good deal more involved, but the problem boils down to the same general principal.  I need to insert some code in that loop that will bypass locked areas of memory to avoid nasty crashes.  It has to be pretty simple... or maybe I'm not seeing a better solution.  I'm open to any suggestions.<br /><br />Thanks again,<br />sulu</div>
+    <div class="meta">Posted on 2002-08-20 08:44:04 by mistersulu</div>
+   </div>
+   <div class="post" id="post-54260">
+    <div class="subject"><a href="#post-54260">vc++ inline asm: verr/verw ??</a></div>
+    <div class="body">Maybe this is what you're looking for?<br />Edit: Oh yeah and there is &quot;IsBadReadPtr&quot; which works the same way<br /><br /><br /><pre><code>&#91;b&#93;IsBadWritePtr&#91;/b&#93;&#91;size=12&#93;<br />The IsBadWritePtr function verifies that the calling process has write <br />access to the specified range of memory. <br /><br />&#91;b&#93; BOOL IsBadWritePtr&#40;<br />     LPVOID&#91;/b&#93; &#91;color=blue&#93;&#91;i&#93;lp&#91;/i&#93;&#91;/color&#93;,     // memory address<br />     &#91;b&#93;UINT_PTR&#91;/b&#93; &#91;color=blue&#93;&#91;i&#93;ucb&#91;/i&#93;&#91;/color&#93;   // size of memory block<br /> &#41;;<br /><br /><br />&#91;b&#93;Parameters&#91;/b&#93;<br /><br />     &#91;i&#93;lp&#91;/i&#93;<br />          &#91;in&#93; Pointer to the first byte of the memory block. <br />     &#91;i&#93;ucb&#91;/i&#93;<br />          &#91;in&#93; Specifies the size, in bytes, of the memory block. If this<br />           parameter is zero, the return value is zero.<br /><br /><br />&#91;b&#93;Return Values&#91;/b&#93;<br /><br />     If the calling process has write access to all bytes in the specified <br />     memory range, the return value is zero.<br /><br />     If the calling process does not have write access to all bytes in the <br />     specified memory range, the return value is nonzero. <br /><br />     If the application is compiled as a debugging version, and the process <br />     does not have write access to all bytes in the specified memory range,<br />     the function causes an assertion and breaks into the debugger. Leaving<br />     the debugger, the function continues as usual, and returns a nonzero <br />     value This behavior is by design, as a debugging aid. <br /><br />     If the calling process has write access to some, but not all, of the <br />     bytes in the specified memory range, the return value is nonzero. <br /><br /><br />&#91;b&#93;Requirements&#91;/b&#93;<br /><br />  &#91;b&#93;Windows NT/2000/XP&#58;&#91;/b&#93; Included in Windows NT 3.1 and later.<br />  &#91;b&#93;Windows 95/98/Me&#58;&#91;/b&#93; Included in Windows 95 and later.<br />  &#91;b&#93;Header&#58;&#91;/b&#93; Declared in Winbase.h; include Windows.h.<br />  &#91;b&#93;Library&#58;&#91;/b&#93; Use Kernel32.lib.<br />&#91;/size&#93;</code></pre></div>
+    <div class="meta">Posted on 2002-08-20 10:51:35 by iblis</div>
+   </div>
+   <div class="post" id="post-54499">
+    <div class="subject"><a href="#post-54499">vc++ inline asm: verr/verw ??</a></div>
+    <div class="body">perfect iblis!!  thanks a lot everyone :)<br /><br />sulu</div>
+    <div class="meta">Posted on 2002-08-22 13:42:37 by mistersulu</div>
+   </div>
+  </div>
+ </body>
+</html>

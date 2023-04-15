@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>nt service and hooks - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28485" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28485">nt service and hooks</a></p>
+   <div class="post" id="post-201515">
+    <div class="subject"><a href="#post-201515">nt service and hooks</a></div>
+    <div class="body">Take a look at the following code. It's part of an NT service that is trying to install a WH_JOURNALRECORD hook. The problem is that after installing the service, I went to the service manager to start it manually. Well, all the windows locked up until I pressed ctrl-alt-del, which terminates the hook. When I commented out the call to SetWindowsHookEx, the service started without problems, so the problem is the hook.
+Does anyone have any suggestions as to what is going wrong?
+By the way, as you can see from my code, I tried this with my hook procedure doing nothing, except calling CallNextHookEx, and it still froze.
+Thread is the procedure called by the service, once it is running.
+
+<pre><code>
+Thread	PROC param:DWORD
+	mov	eax, 1F4h
+	invoke	GlobalAlloc, GMEM_MOVEABLE or GMEM_ZEROINIT, eax
+	.IF	eax == 0
+		mov	MemFlag, 0
+	.ELSE
+		mov	hMemory, eax
+		invoke	GlobalLock, hMemory
+		.IF	eax == 0
+			mov	MemFlag, 0
+		.ELSE
+			mov	MemFlag, 1
+			mov	pMemory, eax
+			mov	MemPTR, eax
+			add	eax, 1F4h
+			mov	MemTopPTR, eax
+		.ENDIF
+	.ENDIF
+	invoke	InstallHook
+loop1:
+	invoke	Sleep, 1000
+	jmp	loop1
+	xor	eax, eax
+	ret
+Thread	ENDP
+InstallHook	PROC
+	invoke	SetWindowsHookEx, WH_JOURNALRECORD, ADDR hookproc, hInstance, 0
+	mov	hHook, eax
+	ret
+InstallHook	ENDP
+hookproc    PROC	code:DWORD, wParam:DWORD, lParam:DWORD
+	invoke	CallNextHookEx, hHook, code, wParam, lParam
+	ret
+hookproc	ENDP
+</code></pre>
+
+This message was edited by Hel, on 6/21/2001 11:11:34 AM
+
+This message was edited by Hel, on 6/21/2001 11:17:19 AM</div>
+    <div class="meta">Posted on 2001-06-21 11:02:00 by Hel</div>
+   </div>
+   <div class="post" id="post-201516">
+    <div class="subject"><a href="#post-201516">nt service and hooks</a></div>
+    <div class="body">Hey there Hel,
+   Had the same problem. Wrote a simple keyboard hook, tested it from an app and it worked fine. Called it from a service and nothing seems to happen. I checked the SetWindowsHookEx function and it returns no error. But then the callback hook function never gets called. I haven't received any input regarding this from anyone. So, let's hope somebody knows something about this.
+
+Clark</div>
+    <div class="meta">Posted on 2001-06-25 00:29:00 by Superman_San</div>
+   </div>
+   <div class="post" id="post-201517">
+    <div class="subject"><a href="#post-201517">nt service and hooks</a></div>
+    <div class="body">With this jmp loop1 it sleeps forever...</div>
+    <div class="meta">Posted on 2001-06-25 08:23:00 by buliaNaza</div>
+   </div>
+   <div class="post" id="post-201518">
+    <div class="subject"><a href="#post-201518">nt service and hooks</a></div>
+    <div class="body">The interesting part is that this only happens with the journal hook. Before this, I tried a simple WH_KEYBOARD hook through a DLL and it worked fine except that every thread would get its own copy of the DLL and therefore it didn't work. That's when I realized why I should use a journal hook.
+The jmp loop1 doesn't make it sleep forever. That's the thing: that proc must not terminate. It gets terminated only when I terminate the service. That is just how nt services should be. It came straight from the NT service tutorial on Iczelion's page.
+
+Anyone, HELPPPPPPPPPPPPPPPPPPPPP!!!!!!
+
+Would it work if I revert back to the WH_KEYBOARD hook and instead of writing to a file, I create a memory mapped file by calling the MapViewOfFileEx API and let every instance of the DLL access this one memory mapped file?
+Of course, I would have to use the registry or some other method to share the handle to the memory mapped file with every instance of the DLL.</div>
+    <div class="meta">Posted on 2001-06-26 10:31:00 by Hel</div>
+   </div>
+   <div class="post" id="post-201519">
+    <div class="subject"><a href="#post-201519">nt service and hooks</a></div>
+    <div class="body">Hi
+
+Iczelions tut 24 states pretty clear that you have to share the memory betwwe all hook DLL's and any hook needs a method to comunicate with the main application (the one that sets the hook)
+
+That main Application should (only once write to the file) etc
+and also Uninstall the HOOK ;)
+
+InterCommunication between Hook DLL and the main App can be done in diffrent ways ...but the easy one involves sending an USER message w/wo parameters</div>
+    <div class="meta">Posted on 2001-06-26 21:52:00 by BogdanOntanu</div>
+   </div>
+  </div>
+ </body>
+</html>

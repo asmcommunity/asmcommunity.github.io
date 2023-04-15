@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>unstable summation problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=12006" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=12006">unstable summation problem</a></p>
+   <div class="post" id="post-92129">
+    <div class="subject"><a href="#post-92129">unstable summation problem</a></div>
+    <div class="body">I have n 3d-vectors (in 32-bit floating point), v.<br />All v have length &lt;= 1, and n &gt; 50.<br />What is the fastest (<strong>and numerically stable</strong>) way to sum all 1/(v.v)?<br />(v.v == dotproduct of v with itself)<br /><br />SSE/3dnow! can do a fast 1/x, can't it? wonder if that's useful.. (vanilla routine is more important though). Ideas more important than source code - keeping numerically stable is an especially important point.<br /><br />With about 50 vectors, the following (pseudo)code wasn't numerically stable.<br /><pre><code><br />dividend = 1.0f, divisor = 1.0f;<br /><br />for each v&#91;n&#93; &#123;<br />  dist = v&#91;n&#93;.v&#91;n&#93;<br />  dividend *= dist;<br />  dividend += divisor;<br />  divisor  *= dist;<br />&#125;<br /><br />result = dividend/divisor;<br /></code></pre></div>
+    <div class="meta">Posted on 2003-03-31 12:42:16 by f0dder</div>
+   </div>
+   <div class="post" id="post-92166">
+    <div class="subject"><a href="#post-92166">unstable summation problem</a></div>
+    <div class="body">For numerical stability, you should use FPU and never consider SSE as a way to go.  That is because using SSE may result in overflow/underflow even if the final result is representable in single precision.  This cannot happen on FPU with single precision numbers (even with double precision numbers!) as long as you set PC to the default value.  I mean, the default value by Intel.  And, most OSes set PC to double precision, and this is perfectly fine with single precision numbers.<br /><br /><br />You mean, result = (dividend - divisor)/divisor = (dividend/divisor) - 1, right?  Then, numerical stability of each formula will depend on the magnitude of each component.  Otherwise, FPU should give you exactly what you want for single precision.  If you were not using FPU register as a temporary storage, do so.  Popping out FPU register to memory for temporary data storage defeats the advantage of FPU over SSE.<br /></div>
+    <div class="meta">Posted on 2003-03-31 14:52:52 by Starless</div>
+   </div>
+   <div class="post" id="post-92245">
+    <div class="subject"><a href="#post-92245">unstable summation problem</a></div>
+    <div class="body">You do realize that if any one of the v(n) values is zero, the result of the reciprocal will be &quot;infinity&quot; and the eventual sum will also be infinity. If a value of zero is not possible, I would suggest the following code if all the v(n) values are in a continuous array. <br />(If a value of zero is possible, I would have to verify what would happen when trying to use the generated &quot;infinity&quot; value with the other FPU instructions before recommending that code.)<br /><br />finit                            ;clear the FPU<br />fldz                            ;zero the summation<br />mov ecx,number_of_vectors    ;use for count<br />lea eax,vector_array    ;use for array pointer<br />@@:<br />fld1                           ;load 1 on FPU<br />fdiv dword ptr   ;get the reciprocal<br />add eax,4                 ;adjust for next vector<br />fmul st,st(0)              ;get the square of the reciprocal <br />                                 ;(much faster than another div by a memory value)<br />dec ecx<br />fadd                          ;add new result to summation<br />jnz @B                      ;FPU instructions don't affect CPU flags<br /><br />;your sum result is now in st(0)<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-03-31 21:22:06 by Raymond</div>
+   </div>
+   <div class="post" id="post-92272">
+    <div class="subject"><a href="#post-92272">unstable summation problem</a></div>
+    <div class="body">Raymond, your code does not look faster than a direct translation of f0dder's algorithm into FPU instructions.  Frankly, your code was exactly what I thought when I first replied to his posting.<br /><br />Then, later, I realized that his algorithm was much faster because the main loop would contain <strong>fmul</strong> and <strong>fadd</strong> only.  There is no way to overflow/undeflow an FPU register by his algorithm (with his intended single precision numbers) under 32-bit OS with 32-bit addres-space full of memory.  So the numerical stability is secured, unless some pathological series of |x| values come in (including what you pointed out, |x| = 0).</div>
+    <div class="meta">Posted on 2003-04-01 00:17:20 by Starless</div>
+   </div>
+   <div class="post" id="post-92359">
+    <div class="subject"><a href="#post-92359">unstable summation problem</a></div>
+    <div class="body">I checked out the code I suggested with one or more embedded 0's in an array. The code still works fine.<br /><br />Just make sure to check the resulting sum for a value of INFINITY before you use it elsewhere.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-04-01 09:41:35 by Raymond</div>
+   </div>
+   <div class="post" id="post-93037">
+    <div class="subject"><a href="#post-93037">unstable summation problem</a></div>
+    <div class="body">With f0dder's algo you can just check 'divisor'. If it's zero, the result is infinite and the division is not needed.<br /><br />Do you know that this sounds like metaballs?</div>
+    <div class="meta">Posted on 2003-04-04 01:32:17 by gliptic</div>
+   </div>
+   <div class="post" id="post-93045">
+    <div class="subject"><a href="#post-93045">unstable summation problem</a></div>
+    <div class="body">it is, gliptic. And the method I presented did give numerical instability - not with intels compiler, though. Guess one ought to have a look at the instructions produced.</div>
+    <div class="meta">Posted on 2003-04-04 02:01:10 by f0dder</div>
+   </div>
+   <div class="post" id="post-93434">
+    <div class="subject"><a href="#post-93434">unstable summation problem</a></div>
+    <div class="body">F0dder used:<br /><br />(1/a)+(b/c)=(c+a*b)/(a*c)<br /><br />The problem is that your divisor grows faster than your dividend.<br /><br />The only obvious way to solve the overflow problem is to normalize your v, predivide all your v by the max value of the v[] array.<br /><br />JC</div>
+    <div class="meta">Posted on 2003-04-05 06:20:37 by MCoder</div>
+   </div>
+   <div class="post" id="post-93508">
+    <div class="subject"><a href="#post-93508">unstable summation problem</a></div>
+    <div class="body">Could the vectors be quantized to, for example, 32-bit triplets? That would probably require 64-bit number processing though.</div>
+    <div class="meta">Posted on 2003-04-05 14:39:56 by gliptic</div>
+   </div>
+   <div class="post" id="post-93523">
+    <div class="subject"><a href="#post-93523">unstable summation problem</a></div>
+    <div class="body">Another (dumb) idea.<br /><br />You need to compute something like:<br /><br />1/A + 1/B + 1/C + 1/D<br /><br />This gives:<br />(A*B*C + A*B*D + A*C*D + B*C*D) / (A*B*C*D)<br /><br />11 multiplications and 1 division instead of 4 divisions, and I think there is no overflow in this case.<br />We may reduce the number of divisions even further.<br /><br />Suppose you have to add between 50 and 100 inverses, you can perhaps have routines for every case ?<br />If you don't know the maximum number of inverse to add, I guess this method is useless.</div>
+    <div class="meta">Posted on 2003-04-05 16:28:00 by MCoder</div>
+   </div>
+   <div class="post" id="post-93526">
+    <div class="subject"><a href="#post-93526">unstable summation problem</a></div>
+    <div class="body">No, it's not equivalent to the first code.<br /><br />The first code is based on:<br /><br />(1/a)+(b/c)=(c+a*b)/(a*c)<br /><br />and dividend=c+a*b, divisor=a*c<br />The error cumulates, since c is bigger than a*b, thus you loose precision on the dividend.<br /><br />In this case:<br />(A*B*C + A*B*D + A*C*D + B*C*D) / (A*B*C*D)<br /><br />you don't loose precision.<br /><br />BTW, another suggestion (which is useful when we are trying to multiply or divide):<br />why not using log ?<br />log(1/a)=-log(a)<br />If you can store the logs in a second table, you'll simply have to add them.</div>
+    <div class="meta">Posted on 2003-04-05 16:40:56 by MCoder</div>
+   </div>
+   <div class="post" id="post-93607">
+    <div class="subject"><a href="#post-93607">unstable summation problem</a></div>
+    <div class="body">Ok, I found a way to make the computation stable.<br /><br />Suppose f0dder's code is stable for 4 terms (this can be checked easily).<br />You can use the usual trick of subdivising your problem in smaller problems:<br /><br /><pre><code><br />i=0;<br />result=0;<br />while&#40;n&gt;=4&#41;<br />&#123;<br /> dividend = 1.0f, divisor = 1.0f;<br /> repeat 4 times&#58;<br />  dist = v&#91;i&#93;.v&#91;i&#93;;<br />  dividend *= dist;<br />  dividend += divisor;<br />  divisor  *= dist;<br /> ++i;<br /> end repeat<br /> result+= dividend/divisor;<br /> n-=4;<br />&#125;<br />while&#40;n&#41;<br />&#123;<br /> dist=v&#91;i&#93;*v&#91;i&#93;;<br /> result += 1/dist;<br /> ++i;<br /> --n;<br />&#125;<br /></code></pre><br /><br />This gives 8 multiplications and 1 division for 4 values.<br /><br />If you want better numerical stability, you can use 3 terms with:<br />1/a + 1/b + 1/c = (a*b+a*c+b*c)/(a*b*c)<br />This can be done in 4 multiplications and 1 division.<br /><br />With 4 terms:<br />1/a+1/b+1/c+1/d=(a*b*c+a*b*d+a*c*d+b*c*d)/(a*b*c*d)<br />I'm curious to know: in how much multiplications can you compute that ?</div>
+    <div class="meta">Posted on 2003-04-06 04:35:11 by MCoder</div>
+   </div>
+   <div class="post" id="post-93617">
+    <div class="subject"><a href="#post-93617">unstable summation problem</a></div>
+    <div class="body">Ok, you can save one multiplication with:<br /><br />1/a+1/b+1/c+1/d=(a*b*c+a*b*d+a*c*d+b*c*d)/(a*b*c*d)<br /><br />if you pose:<br />K=a*b<br />L=c*d<br /><br />(a*b*c+a*b*d+a*c*d+b*c*d)/(a*b*c*d)<br />=<br />(K*c+K*d+a*L+b*L)/(K*L)<br /><br />=<br />(K*(c+d) + L*(a+b)) / (K*L)<br /><br />5 multiplications, 2 additions and 1 division !</div>
+    <div class="meta">Posted on 2003-04-06 05:33:04 by MCoder</div>
+   </div>
+   <div class="post" id="post-93646">
+    <div class="subject"><a href="#post-93646">unstable summation problem</a></div>
+    <div class="body">Here's MCoders suggestion knocked up in Perl (it ain't a million miles from C code). I generalised the method suggested in the last few posts. 2 N Muls, N Adds and 1 Division :) <pre><code>$size = scalar @numbers;<br />$num1 = @numbers&#91;$idx-1&#93; + @numbers&#91;$idx-2&#93;;<br />$num2 = @numbers&#91;$idx-1&#93; * @numbers&#91;$idx-2&#93;;<br /><br />for &#40;$idx = $size - 3; $idx &gt;= 0; $idx = $idx - 1&#41; &#123;<br /><br />	$num1 = $num1 * @numbers&#91;$idx&#93; + $num2;<br />	$num2 = $num2 * @numbers&#91;$idx&#93;;<br />&#125;<br /><br />$ans = $num1/$num2;</code></pre></div>
+    <div class="meta">Posted on 2003-04-06 07:51:57 by Eóin</div>
+   </div>
+   <div class="post" id="post-93652">
+    <div class="subject"><a href="#post-93652">unstable summation problem</a></div>
+    <div class="body">Sorry, wasn't paying attention :rolleyes:</div>
+    <div class="meta">Posted on 2003-04-06 08:04:20 by Eóin</div>
+   </div>
+  </div>
+ </body>
+</html>

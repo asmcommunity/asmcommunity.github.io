@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>How to use Waitable Timer Objects? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=29326" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=29326">How to use Waitable Timer Objects?</a></p>
+   <div class="post" id="post-207116">
+    <div class="subject"><a href="#post-207116">How to use Waitable Timer Objects?</a></div>
+    <div class="body">Having problems getting a clock to run. The clock starts and stops. If I sit and click on the window, it will continue to run as if the message loop is shutting down and needs a trigger. Here is the excerpts from the code and thanks...<br /><br />In the message loop:<br /><pre><code>.while TRUE<br />	<br />		invoke WaitForSingleObject,hTimer,500<br />		invoke DisplayTimeProc<br />		<br />		invoke GetMessage,addr msg,NULL,0,0<br />	&nbsp; .BREAK .if !eax<br />		invoke TranslateMessage,addr msg<br />		invoke DispatchMessage,addr msg<br />	.endw<br /></code></pre><br />In WndProc:<br /><pre><code>.if uMsg==WM_INITDIALOG<br />		mov hSTC_TIMER,rv(GetDlgItem,hWin,STC_TIMER)<br />		mov hTimer,rv(CreateWaitableTimer,NULL,FALSE,NULL)<br />		invoke SetWaitableTimer,hTimer,0,500,NULL,NULL,0	<br /></code></pre><br />The clock:<br /><pre><code><br />DisplayTimeProc proc<br />	LOCAL systime:SYSTEMTIME<br />	LOCAL pBuf :DWORD<br />	invoke GetSystemTime,addr systime<br />	mov pBuf,ptr$(buffer)<br />	movzx eax, systime.wDayOfWeek<br />	mov ebx,4<br />	mul ebx<br />	mov wDayOfWeek,cat$(pBuf,arrayDayOfWeek,SADD(13,10))<br />	movzx eax, systime.wMonth<br />	mov ebx,4<br />	mul ebx<br />	mov wMonth,cat$(wDayOfWeek,arrayMonth,&quot; &quot;)<br />	movzx eax, systime.wDay<br />	mov wDay,cat$(wMonth,sstr$(eax),&quot;,&quot;)<br />	movzx eax, systime.wYear<br />	mov wYear,cat$(wDay,sstr$(eax),SADD(13,10))<br />	movzx eax, systime.wHour<br />	mov wHour,cat$(wYear,sstr$(eax),&quot;:&quot;)<br />	movzx eax, systime.wMinute<br />	mov wMin,cat$(wHour,sstr$(eax),&quot;:&quot;)<br />	movzx eax, systime.wSecond<br />	mov wSec,cat$(wMin,sstr$(eax),&quot;:&quot;)<br />	movzx eax, systime.wMilliseconds<br />	mov wMSec,cat$(wSec,sstr$(eax))<br />	invoke SetWindowText,hSTC_TIMER,pBuf<br />;		invoke MessageBox,0,pBuf,0,MB_OK<br />	xor eax,eax	<br />	ret<br />DisplayTimeProc endp<br /></code></pre></div>
+    <div class="meta">Posted on 2009-03-21 17:52:21 by green</div>
+   </div>
+   <div class="post" id="post-207117">
+    <div class="subject"><a href="#post-207117">Re: How to use Waitable Timer Objects?</a></div>
+    <div class="body">OffTopic sorry...<br /><br />What&#039;s cat$ and sstr$() ? Looks useful but totally escapes me.</div>
+    <div class="meta">Posted on 2009-03-21 19:02:22 by JimmyClif</div>
+   </div>
+   <div class="post" id="post-207118">
+    <div class="subject"><a href="#post-207118">Re: How to use Waitable Timer Objects?</a></div>
+    <div class="body">cat$ is a part of MASM32 Macro High Level Reference. Here is the prototype:<br /><br />cat$: mov lpbuffer, cat$(lpBuffer,)<br /><br />sstr$ is Preprocessor code for high level language simulation in MASM32. macros.asm that comes with MASM32. Here is the macro:<br /><pre><code>&nbsp; &nbsp; &nbsp; sstr$ MACRO DDvalue&nbsp;  ;; signed integer from string<br />&nbsp; &nbsp; &nbsp; &nbsp; LOCAL rvstring<br />&nbsp; &nbsp; &nbsp; &nbsp; .data<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; rvstring db 20 dup (0)<br />&nbsp; &nbsp; &nbsp; &nbsp; align 4<br />&nbsp; &nbsp; &nbsp; &nbsp; .code<br />&nbsp; &nbsp; &nbsp; &nbsp; invoke dwtoa,DDvalue,ADDR rvstring<br />&nbsp; &nbsp; &nbsp; &nbsp; ;; invoke ltoa,DDvalue,ADDR rvstring<br />&nbsp; &nbsp; &nbsp; &nbsp; EXITM &lt;OFFSET rvstring&gt;<br />&nbsp; &nbsp; &nbsp; ENDM<br /></code></pre><br />Another thing that I have found out is the GetSystemTime is a 24 hour clock and at 20 (8:00 PM) hours, it dumps the first digit. I changed the PC clock to 9:00 PM and the first digit was still missing. Changed to GetLocalTime to get the hours to work.</div>
+    <div class="meta">Posted on 2009-03-21 19:36:00 by green</div>
+   </div>
+   <div class="post" id="post-207119">
+    <div class="subject"><a href="#post-207119">Re: How to use Waitable Timer Objects?</a></div>
+    <div class="body">Putting a delay in your messageloop isn&#039;t such a good idea, since it will slow down processing of your messages. Also, because you&#039;re setting up the timer object in your WM_INITDIALOG handler, but you&#039;re using it before it&#039;s initialized which is bad.<br /><br />For a simple clock, I&#039;d suggest you use SetTimer() and process WM_TIMER messages (or use a callback - just keep in mind that even with callbacks, SetTimer() still requires a message loop).<br /><br />If you insist on using waitable timers, create a background thread that does the waiting, and calls RedrawWindow() on your main HWND - it&#039;s then up to the WM_PAINT to, well, paint your clock :)</div>
+    <div class="meta">Posted on 2009-03-22 05:21:12 by f0dder</div>
+   </div>
+   <div class="post" id="post-207120">
+    <div class="subject"><a href="#post-207120">Re: How to use Waitable Timer Objects?</a></div>
+    <div class="body">Thanks f0dder. Not totally familiar with this threading stuff, but I did use SetTimer for the clock and it worked well.</div>
+    <div class="meta">Posted on 2009-03-22 05:30:14 by green</div>
+   </div>
+   <div class="post" id="post-207121">
+    <div class="subject"><a href="#post-207121">Re: How to use Waitable Timer Objects?</a></div>
+    <div class="body"><div class="quote"><br />Thanks f0dder. Not totally familiar with this threading stuff, but I did use SetTimer for the clock and it worked well.<br /></div>Threading would be overkill for this, I only mentioned it for completeness&#039; sake :)<br /><br />SetTimer() is indeed the sensible thing to use when you don&#039;t need super-tight timing - it&#039;s simple and efficient, and accuracy should be OK as long as you don&#039;t need millisecond accuracy.</div>
+    <div class="meta">Posted on 2009-03-22 05:36:39 by f0dder</div>
+   </div>
+  </div>
+ </body>
+</html>

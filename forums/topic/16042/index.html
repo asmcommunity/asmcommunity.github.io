@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>help with bitblt - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=16042" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=16042">help with bitblt</a></p>
+   <div class="post" id="post-124318">
+    <div class="subject"><a href="#post-124318">help with bitblt</a></div>
+    <div class="body">hi<br /><br />i'm trying to bitblt an area of a dc into another area of the same dc.<br />the original area consists of a bitmap.<br /><br />however, all i get is a black area being bitblted.<br /><br />what went wrong? can't i use CreateCompitableBitmap to create a new bitmap based on the dc?<br /><br />CODE:<br /><br />;##############################  WndProc  ##############################<br /><br />    WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM<br />        LOCAL ps:PAINTSTRUCT<br />        LOCAL hdc:HDC<br />        LOCAL hMemDC:HDC<br />        LOCAL rect:RECT<br /><br />        .if uMsg==WM_CREATE<br />            invoke LoadBitmap,hInstance,IDB_MAIN<br />            mov hBitmap,eax<br />        .elseif uMsg==WM_PAINT<br />            invoke BeginPaint,hWnd,addr ps<br />            mov hdc,eax<br />            invoke CreateCompatibleDC,hdc<br />            mov hMemDC,eax<br />            invoke SelectObject,hMemDC,hBitmap<br />            invoke GetClientRect,hWnd,addr rect<br />            invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY<br />            invoke DeleteDC,hMemDC<br />            invoke EndPaint,hWnd,addr ps<br />        .elseif uMsg==WM_COMMAND<br />            mov eax, wParam<br />            .if ax==IDM_DUPLICATE<br />                invoke DuplicateBM, hWnd, addr bInfo<br />            .else<br />                invoke DestroyWindow, hWnd<br />            .endif<br />        .elseif uMsg==WM_DESTROY<br />            invoke DeleteObject,hBitmap<br />            invoke PostQuitMessage,NULL<br />        .else<br />            invoke DefWindowProc,hWnd,uMsg,wParam,lParam		<br />            ret<br />        .ENDIF<br />        xor eax,eax<br />        ret<br />    WndProc endp<br /><br />;##############################  DuplicateBM  ##############################<br /><br />    DuplicateBM proc hWnd:HWND, bInfoPtr:DWORD<br />        local   memDC           :DWORD<br />        local   cmpBM           :DWORD<br />        local	cmpDC			:DWORD<br />        local   prvObj          :DWORD<br /><br />        invoke GetDC, hWnd<br />        mov memDC, eax<br /><br />        invoke CreateCompatibleDC, memDC<br />        mov cmpDC, eax<br />		<br />        invoke CreateCompatibleBitmap, memDC, 334, 207<br />        mov cmpBM, eax<br />		<br />        invoke SelectObject, cmpDC, cmpBM<br />        mov prvObj, eax<br />		<br />        invoke BitBlt,memDC,350,0,334,207,cmpDC,0,0,SRCCOPY<br /><br />        invoke DeleteDC,cmpDC        <br />        invoke DeleteDC,memDC        <br />        ret<br />    DuplicateBM endp</div>
+    <div class="meta">Posted on 2003-11-14 03:30:08 by trexxz</div>
+   </div>
+   <div class="post" id="post-124319">
+    <div class="subject"><a href="#post-124319">help with bitblt</a></div>
+    <div class="body">In DuplicateBM you create a blank (black) bitmap , and you blt it onto the window, and you don't <strong>ReleaseDC</strong>. Thus, the window gets locked for WM_PAINT, and the blackness stays . Add that ReleaseDC at the end of the function, and maybe you should beforehand fill the new bitmap with some data, blt-ing from a DC with hBitmap</div>
+    <div class="meta">Posted on 2003-11-14 04:11:02 by Ultrano</div>
+   </div>
+   <div class="post" id="post-124377">
+    <div class="subject"><a href="#post-124377">help with bitblt</a></div>
+    <div class="body">Instead of your <strong>invoke DuplicateBM, hWnd, addr bInfo</strong> instruction, how about simply trying<pre><code>invoke BitBlt,hdc,350,0,334,207,hcd,0,0,SRCCOPY</code></pre>(or whatever other section you want to duplicate.)<br /><br />I have to assume that the DuplicateBM proc which you posted is only a portion of the intended one; otherwise, the bInfo parameter would seem useless. <br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-11-14 14:08:25 by Raymond</div>
+   </div>
+   <div class="post" id="post-124572">
+    <div class="subject"><a href="#post-124572">help with bitblt</a></div>
+    <div class="body">&gt; Ultrano<br /><br />Do you mean like this? <br /><br /><strong>invoke ReleaseDC, cmpDC</strong> <br /><strong>invoke ReleaseDC, memDC</strong> <br /><br />&gt; Raymond<br /><br />You are right! It's useless! :tongue: <br /><br /><br />What i'm trying to do here is to see if i can create a &quot;screen capture / a copy&quot; of the original bitmap from the DC and BitBlt it into another area of the DC. I do not want to use back the hBitmap.<br /><br />How can i do that?</div>
+    <div class="meta">Posted on 2003-11-17 00:43:24 by trexxz</div>
+   </div>
+   <div class="post" id="post-124584">
+    <div class="subject"><a href="#post-124584">help with bitblt</a></div>
+    <div class="body"><div class="quote">if i can create a &quot;screen capture / a copy&quot; of the original bitmap from the DC and BitBlt it into another area of the DC</div> My suggested line of code should do exactly that. Written in another way<br /><br />invoke BitBlt,hdc,Xi,Yi,Wt,Ht,hdc,Xo,Yo,SRCCOPY<br /><br />Wt and Ht would be the size of the area to be copied.<br />Xo and Yo would be the top left corner coordinates of the area to be copied.<br />Xi and Yi would be the top left corner coordinates of the area where you want to copy it to.<br /><br />Raymond</div>
+    <div class="meta">Posted on 2003-11-17 08:01:46 by Raymond</div>
+   </div>
+   <div class="post" id="post-124752">
+    <div class="subject"><a href="#post-124752">help with bitblt</a></div>
+    <div class="body">Thanks Raymond<br /><br />Your code somehow does the job. :alright: <br />But i want to BitBlt to the compatibleDC without using the original bitmap. (hBitmap)  :(</div>
+    <div class="meta">Posted on 2003-11-19 01:18:57 by trexxz</div>
+   </div>
+   <div class="post" id="post-124755">
+    <div class="subject"><a href="#post-124755">help with bitblt</a></div>
+    <div class="body"><strong>trexxz</strong><br /><em>without using the original bitmap. (hBitmap)</em><br />Never? Or only once?<br /><br /><pre><code>...<br />invoke GetDC, hWnd<br />mov memDC, eax<br />...<br />invoke DeleteDC,memDC  ; !!! wrong, need invoke ReleaseDC, hWnd, memDC<br />...</code></pre></div>
+    <div class="meta">Posted on 2003-11-19 02:37:18 by P2M</div>
+   </div>
+   <div class="post" id="post-124758">
+    <div class="subject"><a href="#post-124758">help with bitblt</a></div>
+    <div class="body">use hBitmap once during BitBlt to the DC.<br />subsequently no.<br /><br />do you mean i 'll have to release the DC before deleting or release DC is enough. (there is no need to delete DC?)</div>
+    <div class="meta">Posted on 2003-11-19 02:48:05 by trexxz</div>
+   </div>
+   <div class="post" id="post-124759">
+    <div class="subject"><a href="#post-124759">help with bitblt</a></div>
+    <div class="body">Hi,<br /><br />The device context for your control is owned by Windows, so you cannot delete it, as a matter of fact under some circumstances it can lead to a GPF. For all device contexts handles obtained from GetDC you must use ReleaseDC but never delete them. This also applies to those that are passed to your program from Windows in structures such as PAINTSTRUCT. The only DC's that you delete are those that you create via CreateDC and CreateCompatibleDC.</div>
+    <div class="meta">Posted on 2003-11-19 02:54:08 by donkey</div>
+   </div>
+   <div class="post" id="post-124760">
+    <div class="subject"><a href="#post-124760">help with bitblt</a></div>
+    <div class="body">thanks <strong>donkey</strong> ! :grin:</div>
+    <div class="meta">Posted on 2003-11-19 02:57:17 by trexxz</div>
+   </div>
+   <div class="post" id="post-124763">
+    <div class="subject"><a href="#post-124763">help with bitblt</a></div>
+    <div class="body"><strong>trexxz</strong><br /><em>use hBitmap once during BitBlt to the DC. subsequently no.</em><br />Don't care has not understood.<br /><br /><br /><pre><code>...<br />  .elseif uMsg==WM_PAINT<br />    invoke BeginPaint,hWnd,addr ps<br />    mov hdc,eax<br />    invoke CreateCompatibleDC,hdc<br />    mov hMemDC,eax<br />    invoke SelectObject,hMemDC,hBitmap<br /><br />; !!! need to restore prev bitmap<br />    push eax<br /><br />    invoke GetClientRect,hWnd,addr rect<br />    invoke BitBlt,hdc,0,0,rect.right,rect.bottom,hMemDC,0,0,SRCCOPY<br /><br />; !!! restore prev bitmap<br />    pop eax<br />    invoke SelectObject, hMemDC, eax<br /><br />    invoke DeleteDC,hMemDC<br />    invoke EndPaint,hWnd,addr ps<br />...</code></pre><br /><br /><pre><code>DuplicateBM proc hWnd&#58;HWND, bInfoPtr&#58;DWORD<br />  local memDC &#58;DWORD<br />  local cmpBM &#58;DWORD<br />  local cmpDC &#58;DWORD<br />  local prvObj &#58;DWORD<br /><br />  invoke GetDC, hWnd<br />  mov memDC, eax<br /><br />  invoke CreateCompatibleDC, memDC<br />  mov cmpDC, eax<br /><br />  invoke CreateCompatibleBitmap, memDC, 334, 207<br />  mov cmpBM, eax<br /><br />  invoke SelectObject, cmpDC, cmpBM<br />  mov prvObj, eax<br /><br />; cmpDC is empty<br />; why memDC is destination<br />  invoke BitBlt,memDC,350,0,334,207,cmpDC,0,0,SRCCOPY<br /><br />; !!! need to restore prev bitmap<br />  invoke SelectObject, cmpDC, prvObj<br /><br />  invoke DeleteDC,cmpDC<br />  invoke ReleaseDC,memDC <br />  ret<br />DuplicateBM endp</code></pre></div>
+    <div class="meta">Posted on 2003-11-19 03:22:03 by P2M</div>
+   </div>
+   <div class="post" id="post-124765">
+    <div class="subject"><a href="#post-124765">help with bitblt</a></div>
+    <div class="body">I apologize for writing unclear codes.<br />This is what i was trying to:<br /><br />1. <strong>BitBlt</strong> a bitmap file onto the DC.<br />2. I want to create a duplicate of the bitmap object loaded onto the DC.<br />3. Therefore i used <strong>CreateCompatibleDC</strong> to create a compatibleDC. I thought that the compatibleDC contains the bitmap object / info in it.<br />4. Next, i created a bitmap with <strong>CreateCompatibleBitmap</strong> based on the compatibleDC.<br />5. Lastly, i <strong>BitBlt</strong> the created compatiblebitmap onto the original DC, on the right hand side of the original bitmap.<br />6. But in the end, only a black area appeared.<br /><br />Guess, i was wrong to do it this way..??<br />How should i do it????<br />:confused:</div>
+    <div class="meta">Posted on 2003-11-19 03:36:36 by trexxz</div>
+   </div>
+   <div class="post" id="post-124768">
+    <div class="subject"><a href="#post-124768">help with bitblt</a></div>
+    <div class="body">Hi trexxz,<br /><br />Well, I think that there are a few things that need to be explained here.<br /><br />When you want to copy one section of an image to another you select that image into a device context then use BitBlt to copy it into itself. In order to avoid problems Windows copies the specified source portion into a buffer then transfers it back to the DC. This has the advantage that you cannot overwrite a pixel before it is copied. So to do what you want Raymond's method is absolutely correct. If you do not want to alter the original bitmap you have to make a copy of it first, when you call CreateCompatibleBitmap you are creating a blank bitmap that is filled with color 0 of the current system pallette (almost always Black). So you must first copy your reference (origianl) bitmap onto the temporary one, for this you need two device contexts, one to hold the reference bitmap and one to hold the temporary one then you BitBlt the reference bitmap to the temporary one giving you an exact copy.<br /><br /><pre><code>&#91;b&#93;Procedure to copy a bitmap&#91;/b&#93;<br /><br />LOCAL bmp &#58;BITMAP<br />LOCAL memDC1 &#58;DWORD<br />LOCAL memDC2 &#58;DWORD<br />LOCAL oldobj1 &#58;DWORD<br />LOCAL oldobj2 &#58;DWORD<br /><br />; Find the size of the bitmap<br />invoke GetObject,hBmp,SIZEOF BITMAP,ADDR bmp<br />invoke GetDC,hWnd<br />mov hdc,eax<br />; Never create a bitmap using a memory DC, it will be monochrome<br />invoke CreateCompatibleBitmap,hdc,bmp.bmWidth,bmp.bmHeight<br />mov hTempBmp,eax<br /><br />; Create two memory DCs to copy the bitmap<br />invoke CreateCompatibleDC,hdc<br />mov memDC1,eax<br />invoke CreateCompatibleDC,hdc<br />mov memDC2,eax<br />; Release the DC obtained by windows<br />invoke ReleaseDC,hWnd,hdc<br /><br />; Select the bitmaps into the memory DCs<br />invoke SelectObject,memDC1,hBmp ; reference bitmap<br />mov oldobj1,eax ; &lt;- this is very important<br />invoke SelectObject,memDC2,hTempBmp ; temporary bitmap<br />mov oldobj2,eax ; &lt;- this is very important<br /><br />invoke BitBlt,memDC2,0,0,bmp.bmWidth,bmp.bmHeight,memDC1,0,0,SRC_COPY<br /><br />; Select the bitmaps out of the memory DCs and delete the memDCs<br />; failure to select the bitmaps out will cause a massive GDI leak on Win98SE<br />invoke SelectObject,memDC1,oldobj1<br />invoke SelectObject,memDC2,oldobj2<br />invoke DeleteDC,memDC1<br />invoke DeleteDC,memDC2</code></pre></div>
+    <div class="meta">Posted on 2003-11-19 03:50:47 by donkey</div>
+   </div>
+   <div class="post" id="post-124776">
+    <div class="subject"><a href="#post-124776">help with bitblt</a></div>
+    <div class="body">&gt;<strong>donkey</strong><br /><br />thanks for your detailed explanation on the CreateCompatibleDC and CreateCompatibleBitmap functions. i'll have a go to at it.<br /><br />code:<br /><br /><em>SelectObject, tempDC, hBitmap</em><br /><br />If a bitmap (hBitmap) is selected into a DC (tempDC) by SelectObject, the DC will contain the information of the bitmap right? (E.G. the color information, bitmap dimensions, etc...)<br /><br />Is there a way to get the:<br /><br />a. handle to this bitmap from the DC<br />b. color information of this bitmap from the DC<br /><br />without using the original bitmap (hBitmap)?<br /><br />-&gt; Create a new bitmap based on the color information retrieved from the DC.</div>
+    <div class="meta">Posted on 2003-11-19 04:45:31 by trexxz</div>
+   </div>
+   <div class="post" id="post-124800">
+    <div class="subject"><a href="#post-124800">help with bitblt</a></div>
+    <div class="body">Yes, you can use the GetCurrentObject function and specify OBJ_BITMAP to get the bitmap currently selected into a DC.<br /><br />When you select a bitmap into a DC, Windows uses ICM (color management) to convert the bitmap to the color depth of the DC so the color information is useless. If you have used the GetObject function in my procedure the color is available in the bmBitsPixel member of the BITMAP structure. You can get the current object and pass that to GetObject to retrieve the correct color depth.<br /><br />When you create a compatible bitmap it already uses the color information from the DC you specify.</div>
+    <div class="meta">Posted on 2003-11-19 08:26:37 by donkey</div>
+   </div>
+  </div>
+ </body>
+</html>

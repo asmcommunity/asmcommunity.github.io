@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Theory on child window control -- Splitter bar - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=28619" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=28619">Theory on child window control -- Splitter bar</a></p>
+   <div class="post" id="post-202295">
+    <div class="subject"><a href="#post-202295">Theory on child window control -- Splitter bar</a></div>
+    <div class="body">Hi All,
+
+I got my version of a splitter bar to work... but I'm a little annoyed at myself because I can't get it to work the way I think it should... thus breaking the fourth pillar of assembly programming (understanding).
+
+1) For the time being I'm not using a dialog script
+2) My mental model goes...
+   register the splitter window & register the main window
+   create the main window
+   in the WM_CREATE create the splitter... 
+      which is performed before CreateWindowEx gets back
+      but after the winclassex structure is created??
+3) Unfortunately, the only way I can get it to work is...
+   register the splitter window & register the main window
+   create the main window
+   use WM_CREATE to create OTHER child windows
+   then create splitter bar windows after creation of main window
+
+I'm missing an important point here.
+
+Stripped down module follows
+
+<pre><code>
+.686
+.model flat,stdcall
+option casemap:none
+
+include \masm32\include\windows.inc
+include \masm32\include\user32.inc
+include \masm32\include\kernel32.inc
+
+includelib \masm32\lib\user32.lib
+includelib \masm32\lib\kernel32.lib
+
+;###################################################################################
+
+.DATA
+    ;=============================================================================
+    ;Main window class
+    ;=============================================================================
+    hInstance  HINSTANCE   ?
+    hwnd       HWND        ?
+    wcApp      DB   "Get the damn splitter to work!",0
+    wcClass    DB   "WinClass",0
+    wcData     WNDCLASSEX {SIZEOF WNDCLASSEX, CS_HREDRAW or CS_VREDRAW,\
+                           OFFSET WndProc, NULL, NULL, ?, ?, ?,\
+                           COLOR_APPWORKSPACE, NULL, OFFSET wcClass, ?}
+
+    ;=============================================================================
+    ;Splitter windows
+    ;=============================================================================
+    hSplit0    HWND ?
+    hSplit1    HWND ?
+    hSplit2    HWND ?
+    splitClass DB   "SplitClass",0
+    splitData  WNDCLASSEX {SIZEOF WNDCLASSEX, NULL, OFFSET SplitProc, NULL, NULL,\
+                           ?, NULL, ?, COLOR_BTNTEXT, NULL,\
+                           OFFSET splitClass, NULL}
+
+.DATA?
+    msg MSG         <>
+
+;###################################################################################
+
+.CODE
+Start:
+    invoke GetModuleHandle, NULL
+    mov    hInstance, eax
+
+    mov    eax, hInstance
+    mov    splitData.hInstance, eax
+    invoke LoadCursor, NULL, IDC_SIZEWE       ; <--> cursor
+    mov    splitData.hCursor, eax
+    invoke RegisterClassEx, ADDR splitData
+
+    mov    eax, hInstance
+    mov    wcData.hInstance, eax
+    invoke LoadIcon, NULL, IDI_APPLICATION
+    mov    wcData.hIcon, eax
+    mov    wcData.hIconSm, eax
+    invoke LoadCursor, NULL, IDC_ARROW
+    mov    wcData.hCursor, eax
+    invoke RegisterClassEx, ADDR wcData
+
+    invoke CreateWindowEx, WS_EX_CLIENTEDGE, ADDR wcClass, ADDR wcApp,\
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,\
+        CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL
+    mov    hwnd, eax
+    invoke ShowWindow, hwnd, SW_MAXIMIZE
+    ;;invoke UpdateWindow, hwnd
+
+    ;===================================================================
+    ;Why do I have to move this code up to the main flow?
+    ;===================================================================
+         invoke CreateWindowEx, NULL, ADDR splitClass, NULL,\
+            WS_VISIBLE or WS_CHILD, 100, 100, 2, 200,\
+            hwnd, NULL, hInstance, NULL
+        mov    hSplit0, eax
+    ;===============================================================
+    .WHILE TRUE
+        invoke GetMessage, ADDR msg, NULL, 0, 0
+        .BREAK .IF (!eax)
+        invoke TranslateMessage, ADDR msg
+        invoke DispatchMessage,  ADDR msg
+    .ENDW
+
+    mov    eax, msg.wParam
+    invoke ExitProcess, eax
+
+;###################################################################################
+
+WndProc PROC hW</div>
+    <div class="meta">Posted on 2001-07-03 12:32:00 by rafe</div>
+   </div>
+   <div class="post" id="post-202296">
+    <div class="subject"><a href="#post-202296">Theory on child window control -- Splitter bar</a></div>
+    <div class="body">I made this same mistake once and it can be really annoying
+as everything looks correct but the child window just never
+appears??? The answer is a simple typo.
+
+<pre><code>WndProc PROC hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+
+    .IF uMsg == WM_CREATE
+    ;===================================================================
+    ;Why do I have to move this code up?
+    ;===================================================================
+         ;;invoke CreateWindowEx, NULL, ADDR splitClass, NULL,\
+            ;;WS_VISIBLE or WS_CHILD, 100, 100, 2, 200,\
+            ;;hwnd, NULL, hInstance, NULL
+        ;;mov    hSplit0, eax
+
+    .ELSEIF uMsg == WM_DESTROY
+        invoke PostQuitMessage, NULL
+
+    .ELSE
+        invoke DefWindowProc, hWnd, uMsg, wParam, lParam
+        ret
+    .ENDIF
+    xor eax, eax
+    ret
+WndProc ENDP
+</code></pre>
+
+WndProc PROC hWnd:HWND <--- Notice Case Sensitive (hWnd)
+
+And in CreateWindowEx...
+
+         ;;invoke CreateWindowEx, NULL, ADDR splitClass, NULL,\
+            ;;WS_VISIBLE or WS_CHILD, 100, 100, 2, 200,\
+            ;;hwnd, NULL, hInstance, NULL
+        ;;mov    hSplit0, eax
+
+Just change hwnd - To - hWnd (Remember it is case sensitive)
+
+This mistake nearly drove me crazy as everything appears
+correct but it just won't work!
+
+Willie</div>
+    <div class="meta">Posted on 2001-07-03 12:59:00 by WillASM</div>
+   </div>
+   <div class="post" id="post-202297">
+    <div class="subject"><a href="#post-202297">Theory on child window control -- Splitter bar</a></div>
+    <div class="body">WillASM
+
+Thank you!
+
+I've been staring at the obvious... Changed the code so many times to test & retest & I missed the obvious... it's dutifully grabbing the handle I told it to, like a good little assembler should.  I WON'T be making that mistake again (I hope).  
+
+It's was a Bozo typo. Good, because then my understanding is in line.
+
+This leads me to the next question...
+hWnd <> hwnd... mmm... what is the handle being passed to the WndProc in hWnd?  Time to go back to the API reference.
+
+Thanks again.
+
+This message was edited by rafe, on 7/3/2001 1:25:25 PM
+
+This message was edited by rafe, on 7/3/2001 1:28:28 PM</div>
+    <div class="meta">Posted on 2001-07-03 13:23:00 by rafe</div>
+   </div>
+   <div class="post" id="post-202298">
+    <div class="subject"><a href="#post-202298">Theory on child window control -- Splitter bar</a></div>
+    <div class="body">There's a big fat duh on that second post
+
+Just in case this may (i doubt it) help some one else
+
+Aside from efficiency concerns there are at least two situations where
+using the global handles to your object won't work.
+
+1) when the hanle variable hasn't been updated yet... like in the
+WM_CREATE event that happens before CreateWindowEx procedure gets back.
+So, to answer my own question, the local hWnd equals what the 
+global hwnd will equal in a few more instuctions
+
+2) particularly for child contols that use the same set up... (here it's splitters)
+i'm using the local hWnd to ID which splitter sent the message.
+
+now on to more interesting things.</div>
+    <div class="meta">Posted on 2001-07-05 11:20:00 by rafe</div>
+   </div>
+  </div>
+ </body>
+</html>

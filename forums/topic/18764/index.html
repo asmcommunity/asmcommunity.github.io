@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Optimize DefWindowProc - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=18764" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=18764">Optimize DefWindowProc</a></p>
+   <div class="post" id="post-145262">
+    <div class="subject"><a href="#post-145262">Optimize DefWindowProc</a></div>
+    <div class="body">Calls to DefWindowProc take the same parameters as the Callback. So, the values are already on the stack, as well as the return address. So, instead of using<pre><code>invoke DefWindowProc, hWin, uMsg, wParam, lParam</code></pre>Can't you use a JMP instruction instead? Like:<pre><code>jmp DefWindowProc</code></pre>How would I go about achieving this? Is there anything I'm missing? Do I need to patch anything on the stack? Are the windows.inc (or .lib files) etc. setup for me to use this method?<br /><br />Regards<br /><br />NB: I realise sometimes DefWindowProc is called before or after custom code in the Callback, I will probably keep the standard invoke statement, but I'm thinking of the other 'standard' (WM_xxx) calls to my Callback that I don't handle!</div>
+    <div class="meta">Posted on 2004-07-02 01:16:30 by SubEvil</div>
+   </div>
+   <div class="post" id="post-145264">
+    <div class="subject"><a href="#post-145264">Optimize DefWindowProc</a></div>
+    <div class="body">Could someone please show me a breakdown of the call instruction. The documentation says:<div class="quote">Pushes Instruction Pointer (and Code Segment for far calls) onto stack and loads Instruction Pointer with the address of proc-name. Code continues with execution at CS:IP.</div>What are the related assembler instuctions, and which parts do you think I'd nead to achieve my goal? I'm not very familiar with changing things like IP and CS etc.<br /><br />I've tried a simple jmp DefWindowProc instuction but it fails!</div>
+    <div class="meta">Posted on 2004-07-02 01:52:42 by SubEvil</div>
+   </div>
+   <div class="post" id="post-145267">
+    <div class="subject"><a href="#post-145267">Optimize DefWindowProc</a></div>
+    <div class="body">Seems like your trying to save ~6 clocks (4 pushes) in order to more quickly call an API that can take anywhere up to 100,000 clocks depending on the message, some even more such as WM_PAINT. Worse than that, the Dispatch Loop stalls for millions, sometimes 100's of millions of clocks directly upon return while it waits for the next message. This is a useless waste of effort in my opinion.<br /><br />If you really want to save time on the DefWindowProc, find out what messages are being sent to your application and process the most frequently sent ones yourself, completely bypassing the DefWindowProc, the more you do yourself the more time you will potentially save, though I think you will find that even that savings is pretty minimal for the amount of work it entails.</div>
+    <div class="meta">Posted on 2004-07-02 03:43:23 by donkey</div>
+   </div>
+   <div class="post" id="post-145272">
+    <div class="subject"><a href="#post-145272">Optimize DefWindowProc</a></div>
+    <div class="body">Donkey,<br /><br />I just wanna know what it would take! I don't think I've stumbled upon a great mystery or the solution to the Message Pump problem. I just wanna learn, it's just an interesting idea for me, that's all!<br /><br />Anyway, I got it to work at least! Doesn't save 6 clocks though, because I need to restore the stack! So I'm basically doing what the epilogue code of the proc does! Of course, I don't handle LOCAL variables in this WndProc, because I don't use any! But this one still jumps to the jump table! Any idea how I could get it to jump directly to the API? Do I have to convert the .lib file?<br /><br /><pre><code>WndProc PROC hWin &#58;DWORD, uMsg &#58;DWORD, wParam &#58;DWORD, lParam &#58;DWORD<br />  .IF uMsg == WM_CREATE<br />    . . . code<br />  .ELSEIF uMsg == WM_COMMAND<br />    . . . code<br />  .ELSEIF uMsg == WM_LBUTTONDOWN<br />    . . . code<br />  .ELSEIF uMsg == WM_PAINT<br />    . . . code<br />  .ENDIF<br />  mov esp, ebp<br />  pop ebp<br />  jmp DefWindowProc<br />;  invoke DefWindowProc,hWin,uMsg,wParam,lParam<br />;  ret<br />WndProc ENDP</code></pre></div>
+    <div class="meta">Posted on 2004-07-02 05:48:42 by SubEvil</div>
+   </div>
+   <div class="post" id="post-145429">
+    <div class="subject"><a href="#post-145429">Optimize DefWindowProc</a></div>
+    <div class="body">I think you should neither &quot;invoke DefWindowProc&quot; nor &quot;jmp DefWindowProc&quot;, the fully compliant way is to use CallWindowProc with offset DefWindowProc as parameter. This will take even more time, but is (hopefully :) most compliant to Microsoft.<br /><br />I had some wired bugs during window subclassing which could be solved using this indirect way instead calling DefProc directly.</div>
+    <div class="meta">Posted on 2004-07-05 03:35:10 by beaster</div>
+   </div>
+   <div class="post" id="post-145432">
+    <div class="subject"><a href="#post-145432">Optimize DefWindowProc</a></div>
+    <div class="body">Beaster, The Correct (TM) way _is_ to call DefWindowProc(hwnd, umsg, wparam, lparam) :-).<br /><br />As for the jump optimization, it's somewhat meaningless, but it can certainly be done. Visual C++ will often convert the DefWindowProc call to the jmp automatically, and since you can get it to work without stack frames, it doesn't need the &quot;mov esp, ebp + pop ebp&quot; sequence.<br /><br />It's a fun little thing, but your optimization efforts are better spent elsewhere, where it might actually matter :)</div>
+    <div class="meta">Posted on 2004-07-05 03:49:56 by f0dder</div>
+   </div>
+   <div class="post" id="post-145434">
+    <div class="subject"><a href="#post-145434">Optimize DefWindowProc</a></div>
+    <div class="body">ok, so we are both right, using CallWindowProc is necessary only for subclassing.<br />this is what MS says about it<div class="quote">The subclassing process may not use the original window procedure address directly.<br />In Win16, an application could use the window procedure address returned from SetWindowLong or SetClassLong to call the procedure directly. After all, the return value is simply a pointer to a function, so why not just call it? In Win32, this is a definitive no-no. The value returned from SetWindowLong and GetClassLong may not be a pointer to the previous window procedure at all. Win32 may return a pointer to a data structure that it can use to call the actual window procedure. This occurs in Windows NT? when an application subclasses a Unicode? window with a non-Unicode window procedure, or a non-Unicode window with a Unicode window procedure. In this case, the operating system must perform a translation between Unicode and ANSI for the messages the window receives. If an application uses the pointer to this structure to directly call the window procedure, the application will immediately generate an exception. The only way to use the window procedure address returned from SetWindowLong or SetClassLong is as a parameter to CallWindowProc.</div>found at:<br /><br />Safe Subclassing in Win32<br />Kyle Marsh<br />Microsoft Developer Network Technology Group<br /><br />Created: January 25, 1994<br /><br />(quite old fashioned ;) )</div>
+    <div class="meta">Posted on 2004-07-05 04:12:28 by beaster</div>
+   </div>
+   <div class="post" id="post-145435">
+    <div class="subject"><a href="#post-145435">Optimize DefWindowProc</a></div>
+    <div class="body">Yep, you need CallWindowProc for subclassing, as most controls override at least _some_ default behaviour - quite logical when you think about it :)<br /><br />Interesting fact about unicode/ansi conversion in this regard, by the way - that's one thing I had _not_ considered, and a pretty good example of why you must use CallWindowProc and not do tricks of your own, when subclassing things.</div>
+    <div class="meta">Posted on 2004-07-05 04:30:31 by f0dder</div>
+   </div>
+   <div class="post" id="post-145436">
+    <div class="subject"><a href="#post-145436">Optimize DefWindowProc</a></div>
+    <div class="body">This topic is awfully familier...ahh...yes.. it s because ive seen it before. I wipped out my big nasty board search engine, and found a couple of links for you to read;  :alright: <br /><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=9623">http://www.asmcommunity.net/board/index.php?topic=9623</a><br /><a target="_blank" href="http://www.asmcommunity.net/board/index.php?topic=9427">http://www.asmcommunity.net/board/index.php?topic=9427</a></div>
+    <div class="meta">Posted on 2004-07-05 04:51:01 by fisk</div>
+   </div>
+  </div>
+ </body>
+</html>

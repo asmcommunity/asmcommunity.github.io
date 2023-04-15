@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Msg loop &amp; Hidden resources? - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=6822" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=6822">Msg loop &amp; Hidden resources?</a></p>
+   <div class="post" id="post-49235">
+    <div class="subject"><a href="#post-49235">Msg loop &amp; Hidden resources?</a></div>
+    <div class="body">I guess this is a two parter.  I have been slowly going through my code and optimizing here<br />and there just for fun and came up with this for the main message loop.  Since I have not<br />seen another here with quite this style I thought I would post it.<br /><br />Note: the first time through the msg structure wont contain any valid handles so Windows<br />ignores it without error in TranslateMessage and DispatchMessage.  As there is only one<br />jump to consider, it should out perform other looping mechanisms. :alright:<br /><pre><code><br />	local msg &#58;MSG<br />	.<br />	.<br />	.<br />	invoke CreateWindowEx, 0, ...<br /><br />	MsgLoop&#58;<br />		invoke TranslateMessage, addr msg<br />		invoke DispatchMessage, addr msg<br />		invoke GetMessage, addr msg, NULL, 0, 0<br />		dec eax<br />	jns MsgLoop<br /><br />	mov eax, msg.wParam<br />	ret<br /></code></pre><br /><br />Second part is rather odd.  While shuffling around some code in the main proc (looks like this).<br /><pre><code><br />	invoke GetModuleHandle, NULL<br />	mov hInstance, eax<br />	mov wc.hInstance, eax<br />	invoke LoadIcon, hInstance, idRESOURCE_APPLICATION_ICON<br />	mov hIcon, eax<br />	mov wc.hIcon, eax<br /></code></pre><br /><br />I accidentally moved LoadIcon *before* GetModuleHandle like so:<br /><pre><code><br />	invoke LoadIcon, hInstance, idRESOURCE_APPLICATION_ICON<br />	mov hIcon, eax<br />	mov wc.hIcon, eax<br />	invoke GetModuleHandle, NULL<br />	mov hInstance, eax<br />	mov wc.hInstance, eax<br /></code></pre><br /><br />I initialize hInstance in the data section to be zero.  Funny thing is, is that the call<br />worked just not as expected.  I have idRESOURCE_APPLICATION_ICON set at 1000<br />and when hInstance is 0, I get a new icon (exit application icon).  Looks like an<br />open door with an arrow pointing to it.  So I found a new icon rather by accident.<br /><br />Question is, is where is this icon being loaded from?  And, if it is a known resource,<br />are there other &quot;freebie&quot; resources I could use as well?</div>
+    <div class="meta">Posted on 2002-07-21 21:24:52 by Graebel</div>
+   </div>
+   <div class="post" id="post-49244">
+    <div class="subject"><a href="#post-49244">Msg loop &amp; Hidden resources?</a></div>
+    <div class="body">This door wouldn't happen to be blue, would it?<br /><br />You're probably loading resources off one of the OS dll components. Anyone wanna guess which one loads first (hinstance=0)?</div>
+    <div class="meta">Posted on 2002-07-21 22:28:14 by Ernie</div>
+   </div>
+   <div class="post" id="post-49247">
+    <div class="subject"><a href="#post-49247">Msg loop &amp; Hidden resources?</a></div>
+    <div class="body">Actually ya, its a red arrow pointing to an open sky blue door.<br />Hmm its interesting that its being allowed at all imo.  I was<br />mainly just curious.  Its too bad it cant be counted on always<br />being there.  Free resources are cool.<br /><br />At least on my 98 box, its worked on 4 compiles and 3 reboots.<br />So whatever it is, on this machine its always loaded first.</div>
+    <div class="meta">Posted on 2002-07-21 22:43:25 by Graebel</div>
+   </div>
+   <div class="post" id="post-49623">
+    <div class="subject"><a href="#post-49623">Msg loop &amp; Hidden resources?</a></div>
+    <div class="body">Graebal,<br />  1) personally, I use this for my message loop:<br /><br /><pre><code><br />                        invoke CreateWindowEx,NULL,...<br />                        mov hSomeWindow,eax<br />                        jmp @@Start<br />@@MessageLoop&#58;          invoke TranslateMessage,addr msg<br />                        invoke DispatchMessage,addr msg<br />@@Start&#58;                xor eax,eax<br />                        invoke GetMessage,addr msg,eax,eax,eax<br />                        test eax,eax<br />                        jnz @@MessageLoop<br />                        invoke ExitProcess,eax<br /></code></pre><br /><br />couple of reasons:<br /> --test eax,eax doesn't destroy eax. This is handy cause I can pass it straight to ExitProcess instead of using msg.wParam (which is going to be zero anyways, cause I never call PostQuitMessage with anything but zero)<br />--I don't use a WinMain proc, so there's no ret instruction<br />--the xor eax,eax means I can push a bunch registers for a little cheaper than pushing constants (saves me 1 byte) :)<br />--I guess the jmp @@Start can really be left out, but hey, I just saved myself a byte, so I can afford it :D<br /><br />2) The LoadIcon API still works with hInstance == NULL. MSDN says it'll just load a &quot;standard&quot; icon. I'm not sure where these are coming from, but the LoadIcon API comes from user32.dll so that'd be my first guess. However, none of the values listed at MSDN match the icon you describe, so it's quite possible it isn't a guarantee that that icon will be on all machines and all platforms.<br /><br />--Chorus</div>
+    <div class="meta">Posted on 2002-07-23 14:38:14 by chorus</div>
+   </div>
+  </div>
+ </body>
+</html>

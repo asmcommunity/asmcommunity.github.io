@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Opmization problem - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=20204" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=20204">Opmization problem</a></p>
+   <div class="post" id="post-154732">
+    <div class="subject"><a href="#post-154732">Opmization problem</a></div>
+    <div class="body">Hi,<br /><br />    I'm learning asm using Delphi 2005 and using asm to opmise Delphi code. But it seems that Delphi generates faster code than my in asm. Can someone explain why the delphi's code is faster than my that uses rep stosd?<br /><br />Here the code:<br /><br />function LetBitmap(filename: string): TBitmap;<br />var<br />  FDIB: TDIBSection;<br />  src: pointer;<br />  w, h, t1, t2, x, y, i: integer;<br />  p: pinteger;<br />begin<br />  result := TBitmap.Create;<br />  result.LoadFromFile(filename);<br />  result.PixelFormat := pf32bit;<br />  GetObject(result.Handle, sizeof(FDIB), @FDIB);<br />  src := FDIB.dsBm.bmBits;<br />  w := result.Width;<br />  h := result.Height;<br /><br />  t1 := GetTickCount;<br />  for i := 1 to 100 do<br />  for y := 0 to h-1 do<br />  begin<br />    p := result.ScanLine;<br />    for x := 0 to w-1 do<br />    begin<br />      p^ := $ffff00;<br />    end;<br />  end;<br />  t2 := GetTickCount;<br />  ShowMessage(IntToStr(t2-t1));<br /><br />  t1 := GetTickCount;<br />  asm push edi end;<br />  for i := 1 to 100 do<br />  asm<br />    mov edi, src            // Move o ponteiro do array de pixels para EDI<br />    mov edx, h              // que ? utilizado em rep stosd.<br /><br />  @innerloop:<br />    mov ecx, w<br />    mov eax, $ff00ff        // EAX ? o valor do pixel que ? armazenado quando<br />    rep stosd               // rep stosd ? chamado.<br />    dec edx                 // EDX equivale ao y e percorre do h at? zero.<br />    jnz @innerloop          // Se edx for maior que zero, vai para o innerloop<br />  end;<br />  asm pop edi end;<br />  t2 := GetTickCount;<br />  ShowMessage(IntToStr(t2-t1));<br />end;</div>
+    <div class="meta">Posted on 2004-12-24 16:59:49 by brunoavila</div>
+   </div>
+   <div class="post" id="post-154746">
+    <div class="subject"><a href="#post-154746">Opmization problem</a></div>
+    <div class="body">What are the time results?<br />Probably the &quot;for i := 1 to 100 do&quot; part is what slows things down a bit - you should see the asm both versions produce, and include the outer loop in asm, too.</div>
+    <div class="meta">Posted on 2004-12-25 05:10:58 by Ultrano</div>
+   </div>
+   <div class="post" id="post-154747">
+    <div class="subject"><a href="#post-154747">Opmization problem</a></div>
+    <div class="body">I think the value 100 is too small. Also can give us your result? I have no delphi compiler to test out your code.<br /><br />Anyway I can assure you that the delphi compiler does not produce optimised code. I looked at it in disassembler before. yucks.</div>
+    <div class="meta">Posted on 2004-12-25 05:24:32 by roticv</div>
+   </div>
+   <div class="post" id="post-154778">
+    <div class="subject"><a href="#post-154778">Results</a></div>
+    <div class="body">In a pentium 4 3.2GHz with HT, for the first 250ms and the second 937ms.<br /><br />The loop &quot;for i := 1 to 100 do&quot; is only for measuring purposes.<br /><br />Debugging delphi code, it doesn't use rep stosd. It implements the two for's and uses mov , $ff00ff to assign the pixel's color.<br /><br />I just don't understand. :(</div>
+    <div class="meta">Posted on 2004-12-25 21:22:51 by brunoavila</div>
+   </div>
+   <div class="post" id="post-154786">
+    <div class="subject"><a href="#post-154786">Opmization problem</a></div>
+    <div class="body">It could be that rep stosd is slower because the number of iterations is too small. What is the value of 'w' ?<br /><br />The asm code can also be simplified to use one loop :<br /><br /><pre><code>mov edi, src<br />mov ecx, h<br />imul ecx, w ; ecx = w * h<br />mov eax, $ff00ff<br />rep stosd</code></pre></div>
+    <div class="meta">Posted on 2004-12-26 03:46:24 by Dr. Manhattan</div>
+   </div>
+   <div class="post" id="post-154814">
+    <div class="subject"><a href="#post-154814">Opmization problem</a></div>
+    <div class="body">t1 := GetTickCount; <br />for i := 1 to 100 do <br />for y := 0 to h-1 do <br />begin <br />p := result.ScanLine; <br />for x := 0 to w-1 do <br />begin <br />p^ := $ffff00; <br /><strong>inc(p);  // &lt;&lt;&lt;-----------------</strong><br />end; <br />end; <br />t2 := GetTickCount; <br />ShowMessage(IntToStr(t2-t1)); <br /><br /><br />This line was missed, thats caused the big difference of the time. And yes, I also got to the same one iteration code that you proposed.<br /><br />Thanks for the help.<br /><br />Bruno</div>
+    <div class="meta">Posted on 2004-12-26 18:26:00 by brunoavila</div>
+   </div>
+   <div class="post" id="post-154815">
+    <div class="subject"><a href="#post-154815">Opmization problem</a></div>
+    <div class="body">phew :) I was actually getting some (even tiny) doubts about codingspeed(ease) vs codespeed here. Good that this mistery was solved  :-D</div>
+    <div class="meta">Posted on 2004-12-26 18:32:08 by Ultrano</div>
+   </div>
+  </div>
+ </body>
+</html>

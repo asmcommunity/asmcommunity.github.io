@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Transparent image algo, kinda crude but... - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=3913" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=3913">Transparent image algo, kinda crude but...</a></p>
+   <div class="post" id="post-26639">
+    <div class="subject"><a href="#post-26639">Transparent image algo, kinda crude but...</a></div>
+    <div class="body">I was asking about transparent GIFs earlier, and sure enough, the next day, I found this in a Win32 GDI book I just bought.  The example was in C++, but I decided to &quot;assemblize&quot; it here.  <br /><br />I'd imagine this version is sort of slow, since it re-generates the mask on every call.  A better approach might be to split out the mask generating code and have the caller manage the mask DC.  <br /><br />Take a look and tell me what you think.<br /><pre><code>transBlt	PROTO	&#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;DWORD, &#58;COLORREF<br /><br />;yes, that's 11 parameters.<br /><br />transBlt	PROC	hdcDest&#58;DWORD, destX&#58;DWORD, destY&#58;DWORD, destW&#58;DWORD, destH&#58;DWORD, \<br />			hdcSrc&#58;DWORD,  srcX&#58;DWORD,  srcY&#58;DWORD,  srcW&#58;DWORD,  srcH&#58;DWORD, \<br />			transColor&#58;COLORREF<br /><br />	LOCAL hMemDC&#58;HDC, hMask&#58;HBITMAP, hOld&#58;HBITMAP, maskWidth&#58;DWORD, maskHeight&#58;DWORD \<br />              rect&#58;RECT&lt;&gt;, oldBK&#58;COLORREF, oldFG&#58;COLORREF<br />		  <br />; first, create a mask based on the source image and the transparency color<br /><br />	mov eax, srcX<br />	mov rect.left, eax<br />	add eax, srcW<br />	mov rect.right, eax<br />	mov eax, srcY<br />	mov rect.top, eax<br />	add eax, srcH<br />	mov rect.bottom, eax<br />	<br />	invoke	LPtoDP, hSrcDC, ADDR rect, 2<br />	<br />	mov eax, rect.right<br />	sub eax, rect.left<br />	.IF eax &lt; 0<br />	  neg eax<br />	.ENDIF<br />	mov maskWidth, eax<br />	<br />	mov eax, rect.bottom<br />	sub eax, rect.top<br />	.IF eax &lt; 0<br />	  neg eax<br />	.ENDIF<br />	mov maskHeight, eax<br />	<br />	invoke	CreateCompatibleBitmap, hSrcDC<br />	mov hMemDC, eax<br />	invoke	CreateBitmap, maskWidth, maskHeight, 1, 1, NULL<br />	mov hMask, eax<br />	invoke	SelectObject, hMemDC, hMask<br />	mov hOld, eax<br />	<br />	invoke	SetBkColor, hSrcDC, transColor<br />	mov oldBK, eax<br />	<br />	invoke	StretchBlt, hMemDC, 0, 0, maskWidth, maskHeight, hSrcDC, srcX, srcY, srcW, srcH, SRCCOPY<br />	<br />	invoke	SetBkColor, hSrcDC, oldBK<br />	<br />; next xor the soucre onto the destionation.<br /><br />	invoke	StretchBlt, hdcDest, destX, destY, destW, destH, hdcSrc, srcX, srcY, srcW, srcH, SRCINVERT<br /><br />; then apply the mask, which will erase the area where the image needs to go.<br /><br />	RGB&#40;0,0,0&#41;<br />	invoke	SetTextColor, hdcDest, eax<br />	mov oldFG, eax<br />	RGB&#40;255,255,255&#41;<br />	invoke	SetBkColor, hdcDest, eax<br />	mov oldBK, eax<br />	<br />	invoke	StretchBlt, hdcDest, destX, destY, destW, destH, hMemDC, 0, 0, maskWidth, maskHeight, SRCAND<br />	<br />	invoke	SetTextColor, hdcDest, oldFG<br />	invoke	SetBkColor, hdcDest, oldBK<br />	<br />; finally, xor the source image again erasing the transparent parts and putting the <br />; rest of the image into the &quot;hole&quot; left by the mask.<br />	<br />	invoke	StretchBlt, hdcDest, destX, destY, destW, destH, hdcSrc, srcX, srcY, srcW, srcH, SRCINVERT<br /><br />; now clean up our memory DC<br /><br />	invoke	SelectObject, hMemDC, hOld<br />	invoke	Deleteobject, hMemDC<br />	invoke	DeleteObject, hMask<br />	ret<br />	<br />transBlt ENDP</code></pre>:alright:</div>
+    <div class="meta">Posted on 2002-03-01 13:06:16 by The Worrier King</div>
+   </div>
+  </div>
+ </body>
+</html>

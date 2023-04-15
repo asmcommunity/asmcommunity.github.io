@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>Aggregating quadtree (octree) nodes - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=7148" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=5">Algorithms &amp; Source Code</a> &raquo; <a href="../?id=7148">Aggregating quadtree (octree) nodes</a></p>
+   <div class="post" id="post-51684">
+    <div class="subject"><a href="#post-51684">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">Hello all, I am a new guy and this is my first post.<br /><br />I am a reseracher in GIS/CS in Perth, West Oz and I work specifically with spatial data structures. I have been programming all my stuff in C (and later in C++) under both Unix and Windows. It occured to me that many of my algorithms dealt with bit manipulation which led me to thinking in terms of asm, which led me to this forum. An example of the type of stuff I am dealing with follows:<br /><br />A linear quadtree (lqt) node of level 0 is a unit level pixel, level 1 = 2x2 pixels, level 2 = 4x4, etc. You can see then, that an lqt is a means by which to compress 2D images by accumulating homogeneous regions into square tiles. The structures that I have been developing explicitly insert edge information into these essentailly raster structures. Which means that I must account for this edge information when perfoming a boolean operation such as union or intersection on two images stored in my hybrid lqt format.<br /><br />A traditional lqt node has this structure (with possible variations): colour | level stored as a two byte pair.<br />My idea was to modify this structure to encode edge information so I split the level byte into two 4 bit regions:<br />level | edge. The new structure now looks like this colour | (level | edge). As an example the binary rep of the NW corner of a BLACK region (which has both north and west bits set) and covers an 8x8 tile looks like this:<br /><br />0000000100110011<br /><br />where <br />00000001 = BLACK<br />0011         = level 3 (ie 4^3 = 8)<br />0011         = NW  (in the scheme SENW)<br /><br />If I have two input streams (2 edge encoded qts) I need to assess the edge patterns for valid aggregation. By this I mean, if 4 quadrants can be validly promoted to a higher level, that is, say four level 2 tiles into one level 3 tile, I must do so otherwise the output lqt would be sub-optimal. <br /><br />To demonstrate a valid promotion (assume colour is the same):<br />               Q1      Q2      Q3     Q4<br />level 2:  0011   0110  1001  1100      &lt;--edge patterns<br /><br />To demonstrate an invalid promotion (assume colour is the same):<br />               Q1      Q2      Q3     Q4<br />level 2:  1111   0110  1001  1100      &lt;--edge patterns<br /><br />The algorithm I use is this:<br /><br />if (  ( Q1( val ) ADD ( Q4 ( val ) ) AND (  ( Q2( val ) ADD ( Q3 ( val )  )  ) <br />    NodeAgg( Current node, Level++, edges =  ( Q1( val ) ADD ( Q4 ( val ) )<br />else<br />    Output( Q1, Q2, Q3, Q4 )<br /><br />So in  example 1 we have 15   =  15 so NodeAgg is called<br />but in example 2 we have 27  != 15 so the Output function is called.<br /> <br />I am new to asm programming and ask advice on how best to code this algorithm.<br /><br />Thnx (and I apologise for being so windy) <br />rob<br /><br />:)</div>
+    <div class="meta">Posted on 2002-08-05 03:49:21 by gisgeek</div>
+   </div>
+   <div class="post" id="post-51694">
+    <div class="subject"><a href="#post-51694">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">if ( ( Q1( val ) ADD ( Q4 ( val ) ) AND ( ( Q2( val ) ADD ( Q3 ( val ) ) ) <br /><br />I am presuming<br />Q1(val) == 0011b<br />Q2(val) == 0110b<br />Q3(val) == 1001b<br />Q4(val) == 1100b<br /><br />Hence<br />Q1( val ) ADD ( Q4 ( val ) == 1111b<br />Q2( val ) ADD ( Q3 ( val ) == 1111b<br />1111b AND 1111b == 1111b -&gt; This is non zero - hence true!<br /><br />In the invalid case:<br />Q1(val) == 1111<br />Q2(val) == 0110<br />Q3(val) == 1001<br />Q4(val) == 1100<br />Q1( val ) ADD ( Q4 ( val ) == 11011b<br />Q2( val ) ADD ( Q3 ( val ) == 01111b<br />11011b AND 01111b = 1011b -&gt; This is non zero - hence true!<br /><br />They both follow the same code path? I thought that second case was invalid?<br />Is there is an additional case in the if for the overflow (ie A + B is greater than 4 bits long)?<br /><br />Or am I missing something here?<br /><br />Mirno</div>
+    <div class="meta">Posted on 2002-08-05 05:56:30 by Mirno</div>
+   </div>
+   <div class="post" id="post-51705">
+    <div class="subject"><a href="#post-51705">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body"><strong>gisgeek</strong>, I assume you mean == instead of AND, given your following statement.<pre><code>if &#40; &#40; Q1&#40; val &#41; ADD &#40; Q4 &#40; val &#41; &#41; &#91;b&#93;==&#91;/b&#93; &#40; &#40; Q2&#40; val &#41; ADD &#40; Q3 &#40; val &#41; &#41; &#41; <br />    NodeAgg&#40; Current node, Level++, edges = &#40; Q1&#40; val &#41; ADD &#40; Q4 &#40; val &#41; &#41;<br />else<br />    Output&#40; Q1, Q2, Q3, Q4 &#41;<br /><br />So in example 1 we have 15 = 15 so NodeAgg is called<br />but in example 2 we have 27 != 15 so the Output function is called.</code></pre><br />It is hard to say much more than this:<pre><code>   mov eax, Q1.val<br />   mov edx, Q2.val<br />   add eax, Q4.val<br />   add edx, Q3.val<br /><br />   cmp eax, edx<br />   jne output<br /><br />   inc level<br />   invoke current_node, level, edx<br />   jmp continue<br /><br />output&#58;<br />   invoke Output, Q1, Q2, Q3, Q4<br />continue&#58;</code></pre></div>
+    <div class="meta">Posted on 2002-08-05 08:05:25 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-51714">
+    <div class="subject"><a href="#post-51714">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">Thank you both for taking the time,<br /><br />And yes Mirno I mistakenly used AND where == was required.  (which would handle the possible overflow that you pointed out)<br /><br />Thanks bitRake for the solution. I'll try to make the next question more challenging.<br /><br />cheers<br /><br />rob<br />:alright:</div>
+    <div class="meta">Posted on 2002-08-05 08:49:54 by gisgeek</div>
+   </div>
+   <div class="post" id="post-51716">
+    <div class="subject"><a href="#post-51716">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">Is this fractal compression you doing?</div>
+    <div class="meta">Posted on 2002-08-05 08:57:05 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-51726">
+    <div class="subject"><a href="#post-51726">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">No, the compression isn't (necessarily) fractal, though there have been fractal methods applied to region quadtrees. The authors maintain that their solution provides &quot;infinite&quot; resolution but I suspect that this is a bit perpetual motion engine. Having said that, I admit that they have investigated and interesting line of work. Unfortunately the compression is lossy which is unsuitable for spatial science.<br /><br />I am, however, investigating the Hausdorff fractal dimension as a tool to analyse spatial access methods based the regular decomposition of space such as Morton order (also known as Z ordering) (Faloutsos and Gaede: reference if you are interested). Also, there is value in fractal techniques as a complexity measure (ie shape analysis).<br /><br />Cheers (windy again)<br />rob</div>
+    <div class="meta">Posted on 2002-08-05 09:54:45 by gisgeek</div>
+   </div>
+   <div class="post" id="post-53410">
+    <div class="subject"><a href="#post-53410">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">I've seen something similar used to generate octrees , mapping 3d space<br />in terms of three quadtrees, being the triaxial planes xz, xy,zy<br />I thought it was brilliant. Forget where I saw it though <br />:tongue:  strange what sticks, aint it.</div>
+    <div class="meta">Posted on 2002-08-15 01:50:09 by Homer</div>
+   </div>
+   <div class="post" id="post-53490">
+    <div class="subject"><a href="#post-53490">Aggregating quadtree (octree) nodes</a></div>
+    <div class="body">I've seen wavelets do lossless compression,<br /><br />wavelets dont work well on artificial type images, but would be perfect for image, terrain compression.<br /><br />As far as i remember (never actually written any code for this - all theory :)    for lossless you dont discard any of the co-efficients  after the transform.<br /><br /><br />Quality is far better than jpeg at the same file size (for lossy compression)</div>
+    <div class="meta">Posted on 2002-08-15 11:52:39 by Terab</div>
+   </div>
+  </div>
+ </body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="utf-8" />
+  <title>rgb -> bgr  conversion - Forums - ASM Community</title>
+  <link rel="stylesheet" type="text/css" href="../../../style.css" />
+  <link rel="canonical" href="../?id=27996" />
+     </head>
+ <body>
+  <div id="header">
+   <h1><a href="../../../">ASM Community</a></h1>
+  </div>
+  <div id="content">
+   <p class="breadcrumbs"><a href="../../../">Home</a> &raquo; <a href="../../">Forums</a> &raquo; <a href="../../board/?id=3">MAIN</a> &raquo; <a href="../?id=27996">rgb -> bgr  conversion</a></p>
+   <div class="post" id="post-198948">
+    <div class="subject"><a href="#post-198948">rgb -> bgr  conversion</a></div>
+    <div class="body">A quick, unoptimized hack...
+
+<pre><code>
+;rgb -> bgr
+	mov edi, Logical  ;dest
+	mov ecx, 230400
+	lea esi, Image    ;source
+
+l1:
+
+	mov eax, 
+	mov ebx, eax
+	and eax, 0FF00h
+	and ebx, 0FF00FFh
+	rol ebx, 16
+	or  ebx, eax
+	add esi, 3
+	mov , ebx
+	add edi, 4
+	loop l1	
+</code></pre>
+
+I know I did some bad stuff (like use loop).  I was saving my graphic files as raw format from Photoshop. It will only save in rgb order, but my geforce card likes bgra in true color mode.  CAn easily be changed for 24 bit mode.  Comments? Optimizations?</div>
+    <div class="meta">Posted on 2001-05-09 15:51:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198949">
+    <div class="subject"><a href="#post-198949">rgb -> bgr  conversion</a></div>
+    <div class="body"><pre><code>   sub   edi, 4
+l1:
+   mov   eax, 
+
+   add   edi, 4
+   add   esi, 3
+
+   bswap eax
+
+   shr   eax, 8
+
+   mov   , eax
+   dec   ecx
+
+   jne   l1   
+</code></pre>
+I'm at work and didn't look up the pairing - move the instructions around as your see fit. :)  This certainly could be unrolled.
+<pre><code>
+   sub   edi, 8
+l1:
+   mov   eax, 
+   mov   edx, 
+
+   add   edi, 8
+   add   esi, 6
+
+   bswap eax
+   bswap edx
+
+   shr   eax, 8
+   shr   edx, 8
+
+   mov   , eax
+   mov   , edx
+
+   sub   ecx, 2
+   jne   l1   
+</code></pre>
+I don't think <em>bswap</em> or <em>shr</em> pair?
+
+
+This message was edited by bitRAKE, on 5/9/2001 5:28:15 PM</div>
+    <div class="meta">Posted on 2001-05-09 17:15:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198950">
+    <div class="subject"><a href="#post-198950">rgb -> bgr  conversion</a></div>
+    <div class="body">I'm not sure if bswap will work.  The little endian-ness took a little bit of getting used to.  This is what I'm doing:
+
+esi point to my source "RGBRGBRGBRGB...."
+
+My first move is "RGBR" into eax, but what I want to move to edi is "BGR?"  Will bswap change "RGBR" into "BGR?"  Note:the low byte is the alpha which I dont care about.
+
+Copying eax and masking out the part I dont want shfite and or-ing together It the only way I could think of.  My example might not be quite correct because I'm at work too:(</div>
+    <div class="meta">Posted on 2001-05-09 18:08:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198951">
+    <div class="subject"><a href="#post-198951">rgb -> bgr  conversion</a></div>
+    <div class="body"><em>BSWAP</em> changes ABCD -> DCBA.  I think it will work, but my code is untested.  Maybe, I messed it up - I'm just coding from memory.  <em>BSWAP</em> == RGBx -> xBGR.
+
+I'm sure you know that when you load a DWORD from memory into EAX, that the first byte goes in AL, next byte into AH, etc.  <em>{I'm assuming this by the code you presented}</em>  Therefor, if the data is in memory as RGBRGBRGB, and you load a DWORD into EAX.  Then, EAX = xBGR <em>{x being the next byte 'R', that we aren't concerned with right now}</em>  After the <em>BSWAP</em>, EAX = RGBx.  After the shift right, EAX = 0RGB.  When the data is stored back in memory, the memory becomes BGR0BGR0BGR0...
+
+I think it's straight in my head now. :)  Maybe, I don't know what <em>BSWAP</em> does?  Let me go look it up.</div>
+    <div class="meta">Posted on 2001-05-10 12:35:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198952">
+    <div class="subject"><a href="#post-198952">rgb -> bgr  conversion</a></div>
+    <div class="body">Are you trying to convert RGB -> ABGR, or RGB->BGR, or RGB->BGRA?
+
+RGB->BGRA code:
+<pre><code>
+  mov esi, Source ;In RGBRGBRGB...
+  mov ecx, Size   ;Size of source in 3byte chunks
+  mov edi, Dest   ;Destination image in BGRA format
+
+@@:
+  mov eax,      ;Get data
+  add edi, 4         ;Shift edi now for pairing
+  bswap eax          ;RGBr -> rBGR
+  add esi, 3         ;Increment source pointer now for pairing
+  shl eax, 8         ;Remove bogus "R", add 0's for alpha
+  mov , eax ;Store result, -4 to counter early increment
+  dec ecx            ;Decrement counter + set flags
+  jnz @B             ;Loop
+</code></pre>
+
+If you meant another format sorry!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-10 12:59:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-198953">
+    <div class="subject"><a href="#post-198953">rgb -> bgr  conversion</a></div>
+    <div class="body">I tried bswap last night, but the picture loaded really purple.  When I first loaded without swaping bytes, the image loaded really blue.  I looked at the surface descriptor and the format was:
+
+00rrggbb
+
+When I load data into eax "22446688"
+
+I mask and swap so I have "00886644"
+
+Not sure exactly what that means, but it works.</div>
+    <div class="meta">Posted on 2001-05-10 15:18:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198954">
+    <div class="subject"><a href="#post-198954">rgb -> bgr  conversion</a></div>
+    <div class="body">I'm not familiar with the problem you are trying to solve - I just tried to duplicate the functionality of the code you presented at the top of the thread.  If you replace:
+<pre><code>
+   mov ebx, eax
+   and eax, 0FF00h
+   and ebx, 0FF00FFh
+   rol ebx, 16
+   or  ebx, eax
+</code></pre>
+...with...
+<pre><code>
+   bswap eax
+   shr eax,8
+   mov ebx, eax
+</code></pre>
+...the result is the same.  If the function you present at the top is not what you are trying to accomplish, I would just be taking a stab in the dark. :)  <strong>Mirno</strong>, has made a good stab. :)
+
+This message was edited by bitRAKE, on 5/10/2001 3:58:16 PM</div>
+    <div class="meta">Posted on 2001-05-10 15:49:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198955">
+    <div class="subject"><a href="#post-198955">rgb -> bgr  conversion</a></div>
+    <div class="body">Hmmm, missed the shift part.  I need to look up/ test bswap too.  Cant remeber exactly how it works. Esp. with 32 bit.
+I try your code tonight with the shr 8.</div>
+    <div class="meta">Posted on 2001-05-10 17:38:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198956">
+    <div class="subject"><a href="#post-198956">rgb -> bgr  conversion</a></div>
+    <div class="body">Just download the Intel PDFs for the instruction set:
+
+"This instruction reverses the byte order of a 32-bit (deatination) register: bits 0 through 7 are swapped with bits 24 through 31, and bit 8 through 15 are swapped with bits 16 through 23. This instruction is provided for converting little-endian values to big-endian and vice versa."
+
+Working it out on notepad:
+
+22446688 original
+
+88664422 bswap 
+
+22886644 shr eax, 8
+
+22886644 intended (correct) result.
+
+So you optimized algorithm will work. Thanks.</div>
+    <div class="meta">Posted on 2001-05-10 20:16:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198957">
+    <div class="subject"><a href="#post-198957">rgb -> bgr  conversion</a></div>
+    <div class="body">wouldn't shr eax, 8 make it 00886644? use the ror instruction if you need to move the 22 to the front</div>
+    <div class="meta">Posted on 2001-05-10 23:14:00 by Sloat</div>
+   </div>
+   <div class="post" id="post-198958">
+    <div class="subject"><a href="#post-198958">rgb -> bgr  conversion</a></div>
+    <div class="body">Yes shr eax, 8 would add "00".
+The original question (as I could make it out) was to convert RGB to BGRA, where the alpha channel would be 0.
+As this is a 24->32 bit conversion there MUST be pad bits, and as we were reading in a 24bit value into a 32bit register, there would be a single "bogus" byte, so shr-ing it off the end to remove it, while adding the alpha in the appropriate place seemed like a good idea :P
+
+Tell me what you're trying to convert, and I'll change my code!
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-11 06:19:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-198959">
+    <div class="subject"><a href="#post-198959">rgb -> bgr  conversion</a></div>
+    <div class="body">I modified my code last night and
+
+bswap eax
+shr   eax, 8
+
+worked great.  Using shr to clear the upper byte is a side benefit.  My DirX program is in windowed mode, so the alpha byte doesn't really matter.
+
+This message was edited by asm_happy, on 5/11/2001 3:04:10 PM</div>
+    <div class="meta">Posted on 2001-05-11 15:03:00 by asm_happy</div>
+   </div>
+   <div class="post" id="post-198960">
+    <div class="subject"><a href="#post-198960">rgb -> bgr  conversion</a></div>
+    <div class="body">to bitRake
+to remove dependences in:
+   shr   eax, 8
+
+   mov   , eax
+   dec   ecx
+
+   jne   l1   
+-------------
+change it to:
+
+ shr eax,8
+ dec ecx
+ mov ,eax
+ jne    l1
+
+The Svin</div>
+    <div class="meta">Posted on 2001-05-13 16:28:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-198961">
+    <div class="subject"><a href="#post-198961">rgb -> bgr  conversion</a></div>
+    <div class="body">Thanks, <strong>Svin</strong> - missed that one. :)  I was wondering what your ideas on this algo might be, and if you had any ideas to speed it up?</div>
+    <div class="meta">Posted on 2001-05-14 10:39:00 by bitRAKE</div>
+   </div>
+   <div class="post" id="post-198962">
+    <div class="subject"><a href="#post-198962">rgb -> bgr  conversion</a></div>
+    <div class="body">Here is possibility to remove one instruction from
+the main loop as add piointer,4
+Try to figure out how ;)
+The Svin</div>
+    <div class="meta">Posted on 2001-05-15 03:40:00 by The Svin</div>
+   </div>
+   <div class="post" id="post-198963">
+    <div class="subject"><a href="#post-198963">rgb -> bgr  conversion</a></div>
+    <div class="body">Ok, here is <strong>my</strong> code again with your <em>no "add edi, 4" instruction</em> optimisation:
+<pre><code>
+  mov ecx, Size   ;Size of source in 3byte chunks
+  mov edi, Dest   ;Destination image in BGRA format
+  mov esi, Source ;In RGBRGBRGB...
+  lea edi, 
+
+@@:
+  mov eax, 
+  bswap eax
+  add esi, 3
+  shl eax, 8
+  mov , eax
+  dec ecx
+  jnz @B
+</code></pre>
+
+It adds one instruction outside the loop, for removing one inside!
+It does mean that the "mov ,eax" won't pair with its next instruction anymore though :D
+I think my old code should have (thanks to my strange ordering).
+
+But I'm sure The Svin will prove me wrong <strong><u><em>AGAIN!</strong></u></em>
+
+Mirno</div>
+    <div class="meta">Posted on 2001-05-15 06:54:00 by Mirno</div>
+   </div>
+   <div class="post" id="post-198964">
+    <div class="subject"><a href="#post-198964">rgb -> bgr  conversion</a></div>
+    <div class="body">@@:
+  mov eax, 
+  bswap eax     ;bswap is NP anyway
+  shl eax, 8    ;NP
+  mov , eax ;NP
+  add esi, 3 ;pare dec ecx
+  dec ecx    ;
+  jnz @B   ;pare with first inst
+
+
+You can also insert add esi between
+shl eax,8  and   mov 
+
+As for the rest - You are the first who found the
+answer!
+Well done.
+The Svin.</div>
+    <div class="meta">Posted on 2001-05-15 07:42:00 by The Svin</div>
+   </div>
+  </div>
+ </body>
+</html>
