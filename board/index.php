@@ -17,7 +17,6 @@
       } else {
         window.location.replace('../');
       }
-      
     }
   </script>
  </head>
